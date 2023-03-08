@@ -101,6 +101,7 @@ add_compile_definitions(
   VULKAN_HPP_NO_TO_STRING
   IMGUI_DISABLE_DEFAULT_FONT
   USE_CPP17  # Tabulate
+  CURL_STATICLIB
 )
 
 # Prevent ASan error from ImGUI
