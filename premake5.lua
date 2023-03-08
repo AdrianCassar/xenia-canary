@@ -39,6 +39,7 @@ defines({
   "IMGUI_USE_STB_SPRINTF",
   --"IMGUI_ENABLE_FREETYPE",
   "USE_CPP17", -- Tabulate
+  "CURL_STATICLIB",
 })
 
 cdialect("C17")
@@ -319,6 +320,8 @@ workspace("xenia")
   include("third_party/zstd.lua")
   include("third_party/zlib-ng.lua")
   include("third_party/pugixml.lua")
+  include("third_party/libcurl.lua")
+  include("third_party/rapidjson.lua")
 
   if os.istarget("windows") then
     include("third_party/libusb.lua")
