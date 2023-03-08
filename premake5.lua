@@ -29,6 +29,7 @@ includedirs({
 defines({
   "_UNICODE",
   "UNICODE",
+  'CURL_STATICLIB'
 })
 
 cppdialect("C++20")
@@ -270,6 +271,7 @@ workspace("xenia")
   include("third_party/tomlplusplus.lua")
   include("third_party/FFmpeg/premake5.lua")
   include("third_party/fmt.lua")
+  include("third_party/libcurl.lua")
   include("third_party/glslang-spirv.lua")
   include("third_party/imgui.lua")
   include("third_party/mspack.lua")
@@ -279,6 +281,7 @@ workspace("xenia")
   include("third_party/zstd.lua")
   include("third_party/zlib.lua")
   include("third_party/pugixml.lua")
+  include("third_party/rapidjson.lua")
 
   if os.istarget("windows") then
     include("third_party/libusb.lua")
