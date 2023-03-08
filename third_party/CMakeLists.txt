@@ -826,3 +826,18 @@ if(WIN32)
 endif()
 target_link_libraries(libavformat PRIVATE libavutil libavcodec)
 ffmpeg_common(libavformat)
+
+# ==============================================================================
+# libcurl
+# ==============================================================================
+
+file(GLOB_RECURSE CURL_SOURCES 
+    "${CMAKE_CURRENT_SOURCE_DIR}/libcurl/lib/**.c" 
+    "${CMAKE_CURRENT_SOURCE_DIR}/libcurl/lib/**.h"
+)
+add_library(libcurl STATIC ${CURL_SOURCES})
+target_link_libraries(libcurl PRIVATE crypt32 secur32)
+target_include_directories(libcurl PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/libcurl/lib ${CMAKE_CURRENT_SOURCE_DIR}/libcurl/include)
+target_compile_definitions(libcurl PRIVATE
+  BUILDING_LIBCURL HTTP_ONLY USE_SCHANNEL USE_WINDOWS_SSPI
+)
