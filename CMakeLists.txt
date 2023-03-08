@@ -108,6 +108,7 @@ add_compile_definitions(
   IMGUI_DISABLE_OBSOLETE_FUNCTIONS
   IMGUI_USE_WCHAR32  # Characters above U+FFFF
   USE_CPP17  # Tabulate
+  CURL_STATICLIB
 )
 
 # Prevent ASan error from ImGUI
