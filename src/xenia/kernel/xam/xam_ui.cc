@@ -948,6 +948,12 @@ bool xeDrawProfileContent(xe::ui::ImGuiDrawer* imgui_drawer,
           fmt::format("User: {}\n", account->GetGamertagString()).c_str());
       ImGui::TextUnformatted(fmt::format("XUID: {:016X}  \n", xuid).c_str());
       if (is_signed_in) {
+        const std::string live_enabled =
+            fmt::format("Xbox Live Enabled: {}",
+                        account->IsLiveEnabled() ? "True" : "False");
+
+        ImGui::TextUnformatted(live_enabled.c_str());
+
         ImGui::TextColored(
             ImVec4(0.4f, 0.9f, 0.4f, 1.0f), "%s",
             fmt::format("Assigned to slot: {}\n", user_index + 1).c_str());
