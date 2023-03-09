@@ -1028,12 +1028,12 @@ void KernelState::RegisterNotifyListener(XNotifyListener* listener) {
                                   xam_state()->IsUIActive());
     listener->EnqueueNotification(kXNotificationSystemSignInChanged, 1);
   }
+
   if (!has_notified_live_startup_ && listener->mask() & kXNotifyLive) {
     has_notified_live_startup_ = true;
-    // X_ONLINE_S_LOGON_DISCONNECTED
     listener->EnqueueNotification(kXNotificationLiveConnectionChanged,
-                                  0x001510F1L);
-    listener->EnqueueNotification(kXNotificationLiveLinkStateChanged, 0);
+                                  0x1510F0L);
+    listener->EnqueueNotification(kXNotificationLiveLinkStateChanged, 1);
   }
 }
 
