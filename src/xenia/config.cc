@@ -45,7 +45,7 @@ DEFINE_uint32(
     "Config");
 
 namespace config {
-std::string config_name = "xenia-canary.config.toml";
+std::string config_name = "xenia-canary-netplay.config.toml";
 std::filesystem::path config_folder;
 std::filesystem::path config_path;
 std::string game_config_suffix = ".config.toml";

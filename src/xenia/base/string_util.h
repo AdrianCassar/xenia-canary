@@ -113,11 +113,7 @@ inline size_t copy_and_swap_maybe_truncating(char16_t* dest,
 }
 
 inline bool hex_string_to_array(std::vector<uint8_t>& output_array,
-                                std::string_view value) {
-  if (value.rfind("0x", 0) == 0) {
-    value.remove_prefix(2);
-  }
-
+                                const std::string_view value) {
   output_array.reserve((value.size() + 1) / 2);
 
   size_t remaining_length = value.size();
