@@ -327,7 +327,10 @@ void xeObDereferenceObject(PPCContext* context, uint32_t native_ptr) {
 }
 
 void ObDereferenceObject_entry(dword_t native_ptr, const ppc_context_t& ctx) {
-  xeObDereferenceObject(ctx, native_ptr);
+  XELOGI("ObDereferenceObject");
+  return;
+
+  // xeObDereferenceObject(ctx, native_ptr);
 }
 DECLARE_XBOXKRNL_EXPORT1(ObDereferenceObject, kNone, kImplemented);
 
