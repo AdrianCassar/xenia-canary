@@ -216,7 +216,7 @@ dword_result_t XamGetSystemVersion_entry() {
   // we pretend to be old we have less to worry with implementing.
   // 0x200A3200
   // 0x20096B00
-  return 0;
+  return 0x200CE900;
 }
 DECLARE_XAM_EXPORT1(XamGetSystemVersion, kNone, kStub);
 
