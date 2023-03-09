@@ -10,6 +10,9 @@ project("xenia-core")
     "fmt",
     "xenia-base",
   })
+  defines({
+    "CURL_STATICLIB"
+  })
   files({
     "*.h",
     "*.cc",
