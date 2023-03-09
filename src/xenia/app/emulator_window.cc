@@ -168,7 +168,7 @@ using namespace xe::hid;
 using namespace xe::gpu;
 
 constexpr std::string_view kRecentlyPlayedTitlesFilename = "recent.toml";
-constexpr std::string_view kBaseTitle = "Xenia-canary";
+constexpr std::string_view kBaseTitle = "Xenia-canary-netplay";
 
 EmulatorWindow::EmulatorWindow(Emulator* emulator,
                                ui::WindowedAppContext& app_context,

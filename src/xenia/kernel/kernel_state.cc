@@ -872,6 +872,8 @@ void KernelState::RegisterNotifyListener(XNotifyListener* listener) {
   auto global_lock = global_critical_region_.Acquire();
   notify_listeners_.push_back(retain_object(listener));
 
+  listener->EnqueueNotification(0x2000001, 0x1510F0);
+
   // Games seem to expect a few notifications on startup, only for the first
   // listener.
   // https://cs.rin.ru/forum/viewtopic.php?f=38&t=60668&hilit=resident+evil+5&start=375
@@ -886,11 +888,6 @@ void KernelState::RegisterNotifyListener(XNotifyListener* listener) {
 
     listener->EnqueueNotification(kXNotificationDvdDriveTrayStateChanged,
                                   X_DVD_DISC_STATE::XBOX_360_GAME_DISC);
-  }
-  if (listener->mask() & kXNotifyLive) {
-    listener->EnqueueNotification(kXNotificationLiveConnectionChanged,
-                                  0x80151802L);
-    listener->EnqueueNotification(kXNotificationLiveLinkStateChanged, 0);
   }
 }
 

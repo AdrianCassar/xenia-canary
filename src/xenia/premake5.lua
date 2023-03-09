@@ -11,5 +11,6 @@ project("xenia-core")
     "xenia-base",
   })
   defines({
+    "CURL_STATICLIB"
   })
   files({"*.h", "*.cc"})
