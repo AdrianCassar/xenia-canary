@@ -14,6 +14,7 @@
 #include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/util/shim_utils.h"
 #include "xenia/kernel/xam/xam_module.h"
+#include "xenia/kernel/xam/xam_net.h"
 #include "xenia/kernel/xam/xam_private.h"
 #include "xenia/kernel/xboxkrnl/xboxkrnl_error.h"
 #include "xenia/kernel/xboxkrnl/xboxkrnl_threading.h"
@@ -25,13 +26,68 @@
 #ifdef XE_PLATFORM_WIN32
 // NOTE: must be included last as it expects windows.h to already be included.
 #define _WINSOCK_DEPRECATED_NO_WARNINGS  // inet_addr
-#include <winsock2.h>                    // NOLINT(build/include_order)
+#include <WS2tcpip.h>                    // NOLINT(build/include_order)
+#include <comutil.h>
+#include <natupnp.h>
+#include <wrl/client.h>
 #elif XE_PLATFORM_LINUX
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <netinet/ip.h>
 #include <sys/socket.h>
 #endif
+#include <random>
+#include <third_party/libcurl/include/curl/curl.h>
+#define RAPIDJSON_HAS_STDSTRING 1
+#include <third_party/rapidjson/include/rapidjson/document.h>
+#include <third_party/rapidjson/include/rapidjson/prettywriter.h>
+#include <third_party/rapidjson/include/rapidjson/stringbuffer.h>
+
+using namespace rapidjson;
+
+DEFINE_string(api_address, "http://xbl.craftycodie.com", "Xenia Master Server Address", "Live");
+
+// TODO: Remove - Codie
+std::size_t callback(const char* in, std::size_t size, std::size_t num,
+                     char* out) {
+  std::string data(in, (std::size_t)size * num);
+  *((std::stringstream*)out) << data;
+  return size * num;
+} 
+
+xe::be<uint64_t> MacAddresstoUint64(const unsigned char* macAddress) {
+  int i;
+  xe::be<uint64_t> macAddress64 = 0;
+  for (i = 5; i >= 0; --i) {
+    macAddress64 = macAddress64 << 8;
+    macAddress64 |= (uint64_t)macAddress[5 - i];
+  }
+
+  return macAddress64;
+}
+
+xe::be<uint64_t> SessionIdtoUint64(const unsigned char* sessionID) {
+  int i;
+  xe::be<uint64_t> sessionId64 = 0;
+  for (i = 7; i >= 0; --i) {
+    sessionId64 = sessionId64 << 8;
+    sessionId64 |= (uint64_t)sessionID[7 - i];
+  }
+
+  return sessionId64;
+}
+
+void Uint64toSessionId(xe::be<uint64_t> sessionID, unsigned char* sessionIdOut) {
+  for (int i = 0; i < 8; i++) {
+    sessionIdOut[7-i] = ((sessionID >> (8 * i)) & 0XFF);
+  }
+}
+
+void Uint64toMacAddress(xe::be<uint64_t> macAddress, unsigned char* macAddressOut) {
+  for (int i = 0; i < 6; i++) {
+    macAddressOut[5-i] = ((macAddress >> (8 * i)) & 0XFF);
+  }
+}
 
 namespace xe {
 namespace kernel {
@@ -95,24 +151,6 @@ struct X_WSADATA {
   xe::be<uint16_t> max_sockets;
   xe::be<uint16_t> max_udpdg;
   xe::be<uint32_t> vendor_info_ptr;
-};
-
-struct XWSABUF {
-  xe::be<uint32_t> len;
-  xe::be<uint32_t> buf_ptr;
-};
-
-struct XWSAOVERLAPPED {
-  xe::be<uint32_t> internal;
-  xe::be<uint32_t> internal_high;
-  union {
-    struct {
-      xe::be<uint32_t> low;
-      xe::be<uint32_t> high;
-    } offset;  // must be named to avoid GCC error
-    xe::be<uint32_t> pointer;
-  };
-  xe::be<uint32_t> event_handle;
 };
 
 void LoadSockaddr(const uint8_t* ptr, sockaddr* out_addr) {
@@ -214,6 +252,11 @@ dword_result_t NetDll_XNetCleanup_entry(dword_t caller, lpvoid_t params) {
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetCleanup, kNetworking, kImplemented);
 
+dword_result_t XNetLogonGetTitleID_entry(dword_t caller, lpvoid_t params) {
+  return kernel_state()->title_id();
+}
+DECLARE_XAM_EXPORT1(XNetLogonGetTitleID, kNetworking, kImplemented);
+
 dword_result_t NetDll_XNetGetOpt_entry(dword_t one, dword_t option_id,
                                        lpvoid_t buffer_ptr,
                                        lpdword_t buffer_size) {
@@ -236,9 +279,19 @@ DECLARE_XAM_EXPORT1(NetDll_XNetGetOpt, kNetworking, kSketchy);
 
 dword_result_t NetDll_XNetRandom_entry(dword_t caller, lpvoid_t buffer_ptr,
                                        dword_t length) {
-  // For now, constant values.
-  // This makes replicating things easier.
-  std::memset(buffer_ptr, 0xBB, length);
+  std::random_device rd;
+  std::uniform_int_distribution<uint32_t> dist(0, 0xFFFFFFFFu);
+  std::vector<char> data(length);
+  int offset = 0;
+  uint32_t bits = 0;
+
+  for (unsigned int i = 0; i < length; i++) {
+
+    if (offset == 0) bits = dist(rd);
+    *(unsigned char*)(buffer_ptr.host_address() + i) = static_cast<unsigned char>(bits & 0xFF);
+    bits >>= 8;
+    if (++offset >= 4) offset = 0;
+  }
 
   return 0;
 }
@@ -318,31 +371,55 @@ dword_result_t NetDll_WSAGetLastError_entry() {
 DECLARE_XAM_EXPORT1(NetDll_WSAGetLastError, kNetworking, kImplemented);
 
 dword_result_t NetDll_WSARecvFrom_entry(
-    dword_t caller, dword_t socket, pointer_t<XWSABUF> buffers_ptr,
-    dword_t buffer_count, lpdword_t num_bytes_recv, lpdword_t flags_ptr,
-    pointer_t<XSOCKADDR_IN> from_addr, pointer_t<XWSAOVERLAPPED> overlapped_ptr,
-    lpvoid_t completion_routine_ptr) {
-  if (overlapped_ptr) {
-    // auto evt = kernel_state()->object_table()->LookupObject<XEvent>(
-    //    overlapped_ptr->event_handle);
-
-    // if (evt) {
-    //  //evt->Set(0, false);
-    //}
+    dword_t caller, dword_t socket_handle, pointer_t<XWSABUF> buffers,
+    dword_t num_buffers, lpdword_t num_bytes_recv_ptr, lpdword_t flags_ptr,
+    pointer_t<XSOCKADDR> from_ptr, lpdword_t fromlen_ptr,
+    pointer_t<XWSAOVERLAPPED> overlapped_ptr, lpvoid_t completion_routine_ptr) {
+  auto socket =
+      kernel_state()->object_table()->LookupObject<XSocket>(socket_handle);
+  if (!socket) {
+    XThread::SetLastError(uint32_t(X_WSAError::X_WSAENOTSOCK));
+    return -1;
   }
 
-  // we're not going to be receiving packets any time soon
-  // return error so we don't wait on that - Cancerous
-  return -1;
+  int ret =
+      socket->WSARecvFrom(buffers, num_buffers, num_bytes_recv_ptr, flags_ptr,
+                          from_ptr, fromlen_ptr, overlapped_ptr);
+  if (ret < 0) {
+    XThread::SetLastError(socket->GetLastWSAError());
+  }
+
+  return ret;
 }
-DECLARE_XAM_EXPORT2(NetDll_WSARecvFrom, kNetworking, kStub, kHighFrequency);
+DECLARE_XAM_EXPORT2(NetDll_WSARecvFrom, kNetworking, kImplemented,
+                    kHighFrequency);
+
+dword_result_t NetDll_WSAGetOverlappedResult_entry(
+    dword_t caller, dword_t socket_handle,
+    pointer_t<XWSAOVERLAPPED> overlapped_ptr, lpdword_t bytes_transferred,
+    dword_t wait, lpdword_t flags_ptr) {
+  auto socket =
+      kernel_state()->object_table()->LookupObject<XSocket>(socket_handle);
+  if (!socket) {
+    XThread::SetLastError(uint32_t(X_WSAError::X_WSAENOTSOCK));
+    return 0;
+  }
+
+  bool ret = socket->WSAGetOverlappedResult(overlapped_ptr, bytes_transferred,
+                                            wait, flags_ptr);
+  if (!ret) {
+    XThread::SetLastError(socket->GetLastWSAError());
+  }
+  return ret;
+}
+DECLARE_XAM_EXPORT1(NetDll_WSAGetOverlappedResult, kNetworking, kImplemented);
 
 // If the socket is a VDP socket, buffer 0 is the game data length, and buffer 1
 // is the unencrypted game data.
 dword_result_t NetDll_WSASendTo_entry(
     dword_t caller, dword_t socket_handle, pointer_t<XWSABUF> buffers,
     dword_t num_buffers, lpdword_t num_bytes_sent, dword_t flags,
-    pointer_t<XSOCKADDR_IN> to_ptr, dword_t to_len,
+    pointer_t<XSOCKADDR> to_ptr, dword_t to_len,
     pointer_t<XWSAOVERLAPPED> overlapped, lpvoid_t completion_routine) {
   assert(!overlapped);
   assert(!completion_routine);
@@ -370,9 +447,8 @@ dword_result_t NetDll_WSASendTo_entry(
     combined_buffer_offset += buffers[i].len;
   }
 
-  N_XSOCKADDR_IN native_to(to_ptr);
   socket->SendTo(combined_buffer_mem.data(), combined_buffer_size, flags,
-                 &native_to, to_len);
+                 to_ptr, to_len);
 
   // TODO: Instantly complete overlapped
 
@@ -395,7 +471,7 @@ dword_result_t NetDll_WSAWaitForMultipleEvents_entry(dword_t num_events,
   X_STATUS result = 0;
   do {
     result = xboxkrnl::xeNtWaitForMultipleObjectsEx(
-        num_events, events, wait_all, 1, alertable,
+        num_events, events, !wait_all, 1, alertable,
         timeout != -1 ? &timeout_wait : nullptr);
   } while (result == X_STATUS_ALERTED);
 
@@ -472,12 +548,361 @@ struct XnAddrStatus {
   static const uint32_t XNET_GET_XNADDR_TROUBLESHOOT = 0x00008000;
 };
 
+bool upnp_fetched_ = false;
+in_addr local_ip_ = {};
+in_addr online_ip_ = {};
+unsigned char* macAddress = nullptr;
+
+static void FetchUPnP() {
+  auto sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+  if (sock < 0) {
+    return;
+  }
+
+#pragma region CURL, Refactor Out
+  // TODO Codie
+  // Get the external IP via curl in case upnp fails but the user has port-forwarded.
+
+  CURL* curl;
+  CURLcode res;
+
+      std::stringstream url;
+  url << cvars::api_address << "/whoami";
+
+  std::stringstream out;
+
+  curl_global_init(CURL_GLOBAL_ALL);
+  curl = curl_easy_init();
+  if (curl == NULL) {
+    goto no_curl;
+  }
+
+  struct curl_slist* headers = NULL;
+  headers = curl_slist_append(headers, "Content-Type: application/json");
+  headers = curl_slist_append(headers, "Accept: application/json");
+  headers = curl_slist_append(headers, "charset: utf-8");
+
+
+  curl_easy_setopt(curl, CURLOPT_URL, url.str().c_str());
+
+  curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "GET");
+  curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+  curl_easy_setopt(curl, CURLOPT_USERAGENT, "xenia");
+  curl_easy_setopt(curl, CURLOPT_WRITEDATA, &out);
+  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, callback);
+
+  res = curl_easy_perform(curl);
+
+  curl_easy_cleanup(curl);
+  int httpCode(0);
+  curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &httpCode);
+  curl_global_cleanup();
+
+  if (httpCode == 200) {
+    rapidjson::Document d;
+    d.Parse(out.str());
+
+    online_ip_.S_un.S_addr = inet_addr(d["address"].GetString());
+  }
+no_curl:
+#pragma endregion
+
+
+  sockaddr_in addrin;
+  addrin.sin_family = AF_INET;
+  addrin.sin_port = 65535;
+  addrin.sin_addr.s_addr = inet_addr("1.1.1.1");
+  auto ret = connect(sock, (struct sockaddr*)&addrin, sizeof(addrin));
+  if (ret < 0) {
+    auto err = WSAGetLastError();
+    XELOGE("Failed to reach DNS {:08X}", (uint32_t)err);
+    return;
+  }
+
+  upnp_fetched_ = true;
+
+  int socklen = sizeof(addrin);
+  ret = getsockname(sock, (struct sockaddr*)&addrin, &socklen);
+  if (ret < 0) {
+    return;
+  }
+  local_ip_ = addrin.sin_addr;
+
+  closesocket(sock);
+
+#ifdef XE_PLATFORM_WIN32
+  Microsoft::WRL::ComPtr<IUPnPNAT> nat;
+  HRESULT hr =
+      CoCreateInstance(CLSID_UPnPNAT, NULL, CLSCTX_ALL, IID_PPV_ARGS(&nat));
+  if (FAILED(hr)) {
+    XELOGE("Failed to create UPnP instance: {:08X}", (uint32_t)hr);
+    return;
+  }
+
+  Microsoft::WRL::ComPtr<IStaticPortMappingCollection> staticPortMappings;
+  hr = nat->get_StaticPortMappingCollection(&staticPortMappings);
+  if (FAILED(hr) || staticPortMappings.Get() == nullptr) {
+    XELOGE("Failed to get UPnP port mapping collection: {:08X}", (uint32_t)hr);
+    return;
+  }
+
+  wchar_t local_ip_str[INET_ADDRSTRLEN];
+  InetNtopW(AF_INET, &addrin.sin_addr, local_ip_str, INET_ADDRSTRLEN);
+
+  Microsoft::WRL::ComPtr<IStaticPortMapping> portMapping;
+  hr = staticPortMappings->Add(36000, BSTR{L"UDP"}, 36009,
+                               BSTR{local_ip_str}, VARIANT_TRUE,
+                               BSTR{L"Xenia"}, &portMapping);
+  if (FAILED(hr)) {
+    XELOGE("Failed to create UPnP port mapping: {:08X}", (uint32_t)hr);
+    return;
+  }
+#endif
+}
+
+uint32_t xeXOnlineGetNatType() {
+  if (!upnp_fetched_) {
+    // TODO: this should be done ahead of time.
+    FetchUPnP();
+  }
+
+  // 1 = open, 3 = strict
+  return (online_ip_.s_addr != 0) ? 1 : 3;
+}
+
+
+in_addr getOnlineIp() {
+  return online_ip_;
+}
+
+// TODO: This shouldn't be random and probably doesn't belong in this file. - Codie
+const unsigned char* getMacAddress() { 
+  if (macAddress == nullptr) {
+    macAddress = new unsigned char[6];
+    NetDll_XNetRandom_entry(0, macAddress, 6);
+  }
+  return macAddress;
+}
+
+uint64_t getMachineId() {
+  auto macAddress = getMacAddress();
+
+  uint64_t machineId = 0;
+
+  int i;
+  for (i = 5; i >= 0; --i) {
+    machineId = machineId << 8;
+    machineId |= macAddress[5 - i];
+  }
+
+  machineId += 0xFA00000000000000;
+
+  return machineId;
+}
+
+uint16_t getPort() { return 36000; }
+
+void RegisterPlayer() {
+#pragma region Curl
+  /*
+      TODO:
+          - Refactor the CURL out to a separate class.
+          - Use the overlapped task to do this asyncronously.
+  */
+
+  char str[INET_ADDRSTRLEN];
+  inet_ntop(AF_INET, &getOnlineIp(), str, INET_ADDRSTRLEN);
+
+  Document d;
+  d.SetObject();
+
+  Document::AllocatorType& allocator = d.GetAllocator();
+
+  size_t sz = allocator.Size();
+
+            std::stringstream macAddressString;
+  macAddressString << std::hex << std::noshowbase << std::setw(12)
+                   << std::setfill('0') << MacAddresstoUint64(getMacAddress());
+
+  char ipString[INET_ADDRSTRLEN];
+  inet_ntop(AF_INET, &getOnlineIp(), ipString, INET_ADDRSTRLEN);
+
+  std::stringstream machineIdStr;
+  machineIdStr << std::hex << std::noshowbase << std::setw(16)
+               << std::setfill('0') << getMachineId();
+
+  auto xuid = kernel_state()->xam_state()->GetUserProfile((uint32_t)0)->xuid();
+  std::stringstream xuidStr;
+  xuidStr << std::hex << std::noshowbase << std::setw(16)
+               << std::setfill('0') << xuid;
+
+  d.AddMember("xuid", xuidStr.str(), allocator);
+  d.AddMember("machineId", machineIdStr.str(), allocator);
+  d.AddMember("hostAddress", std::string(ipString), allocator);
+  d.AddMember("macAddress", macAddressString.str(), allocator);
+
+  rapidjson::StringBuffer strbuf;
+  PrettyWriter<rapidjson::StringBuffer> writer(strbuf);
+  d.Accept(writer);
+
+  CURL* curl;
+  CURLcode res;
+
+  curl_global_init(CURL_GLOBAL_ALL);
+  curl = curl_easy_init();
+  if (curl == NULL) {
+    return;
+  }
+
+  std::stringstream out;
+
+  struct curl_slist* headers = NULL;
+  headers = curl_slist_append(headers, "Content-Type: application/json");
+  headers = curl_slist_append(headers, "Accept: application/json");
+  headers = curl_slist_append(headers, "charset: utf-8");
+
+  std::stringstream url;
+  url << GetApiAddress() << "/players";
+  curl_easy_setopt(curl, CURLOPT_URL, url.str().c_str());
+
+  curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "POST");
+  curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+  curl_easy_setopt(curl, CURLOPT_USERAGENT, "xenia");
+  curl_easy_setopt(curl, CURLOPT_POSTFIELDS, strbuf.GetString());
+
+  res = curl_easy_perform(curl);
+
+  curl_easy_cleanup(curl);
+  int httpCode(0);
+  curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &httpCode);
+  curl_global_cleanup();
+
+#pragma endregion
+}
+
+std::map<uint16_t, uint16_t> mappedConnectPorts{};
+std::map<uint16_t, uint16_t> mappedBindPorts{};
+
+
+uint16_t GetMappedConnectPort(uint16_t port) {
+  if (mappedConnectPorts.find(port) != mappedConnectPorts.end())
+    return mappedConnectPorts[port];
+  else {
+    if (mappedConnectPorts.find(0) != mappedConnectPorts.end())
+      return mappedConnectPorts[0];
+
+    XELOGW("No mapped connect port found for {}!", port);
+    return port;
+  }
+}
+
+uint16_t GetMappedBindPort(uint16_t port) {
+  if (mappedBindPorts.find(port) != mappedBindPorts.end())
+    return mappedBindPorts[port];
+  else {
+    if (mappedBindPorts.find(0) != mappedBindPorts.end())
+      return mappedBindPorts[0];
+
+    XELOGW("No mapped bind port found for {}!", port);
+    return port;
+  }
+}
+
+std::string GetApiAddress() { return cvars::api_address; }
+
+void DownloadPortMappings() {
+#pragma region Curl
+  /*
+      TODO:
+          - Refactor the CURL out to a separate class.
+          - Use the overlapped task to do this asyncronously.
+  */
+  CURL* curl;
+  CURLcode res;
+
+  curl_global_init(CURL_GLOBAL_ALL);
+  curl = curl_easy_init();
+  if (curl == NULL) {
+    return;
+  }
+
+  std::stringstream out;
+
+  struct curl_slist* headers = NULL;
+  headers = curl_slist_append(headers, "Content-Type: application/json");
+  headers = curl_slist_append(headers, "Accept: application/json");
+  headers = curl_slist_append(headers, "charset: utf-8");
+
+  std::stringstream titleId;
+  titleId << std::hex << std::noshowbase << std::setw(8) << std::setfill('0')
+          << kernel_state()->title_id();
+
+  std::stringstream url;
+  url << cvars::api_address << "/title/" << titleId.str()
+      << "/ports";
+
+  curl_easy_setopt(curl, CURLOPT_URL, url.str().c_str());
+
+  curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "GET");
+  curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+  curl_easy_setopt(curl, CURLOPT_USERAGENT, "xenia");
+  curl_easy_setopt(curl, CURLOPT_WRITEDATA, &out);
+  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, callback);
+
+  res = curl_easy_perform(curl);
+
+  curl_easy_cleanup(curl);
+  int httpCode(0);
+  curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &httpCode);
+  curl_global_cleanup();
+
+  if (httpCode == 200) {
+    rapidjson::Document d;
+    d.Parse(out.str());
+
+    if (d.HasMember("connect")) {
+      for (const auto& mapping : d["connect"].GetArray()) {
+        mappedConnectPorts[mapping["port"].GetInt()] =
+            mapping["mappedTo"].GetInt();
+      }
+    }
+
+    if (d.HasMember("bind")) {
+      for (const auto& mapping : d["bind"].GetArray()) {
+        mappedBindPorts[mapping["port"].GetInt()] =
+            mapping["mappedTo"].GetInt();
+      }
+    }
+  }
+#pragma endregion
+}
+
+
 dword_result_t NetDll_XNetGetTitleXnAddr_entry(dword_t caller,
                                                pointer_t<XNADDR> addr_ptr) {
-  // Just return a loopback address atm.
-  addr_ptr->ina.s_addr = htonl(INADDR_LOOPBACK);
-  addr_ptr->inaOnline.s_addr = 0;
-  addr_ptr->wPortOnline = 0;
+  if (!upnp_fetched_) {
+    // TODO: this should be done ahead of time, or
+    // asynchronously returning XNET_GET_XNADDR_PENDING
+    FetchUPnP();
+    RegisterPlayer();
+    DownloadPortMappings();
+  }
+
+  addr_ptr->ina = online_ip_;
+  addr_ptr->inaOnline = online_ip_;
+  addr_ptr->wPortOnline = getPort();
+  memcpy(addr_ptr->abEnet, getMacAddress(), 6);
+  memcpy(addr_ptr->abOnline, getMacAddress(), 6);
+
+  auto status = XnAddrStatus::XNET_GET_XNADDR_STATIC |
+                XnAddrStatus::XNET_GET_XNADDR_GATEWAY |
+                XnAddrStatus::XNET_GET_XNADDR_DNS;
+
+  if (online_ip_.s_addr != 0) {
+    status |= XnAddrStatus::XNET_GET_XNADDR_ONLINE;
+  } else {
+    addr_ptr->inaOnline.S_un.S_addr = 0;
+  }
 
   // TODO(gibbed): A proper mac address.
   // RakNet's 360 version appears to depend on abEnet to create "random" 64-bit
@@ -490,11 +915,8 @@ dword_result_t NetDll_XNetGetTitleXnAddr_entry(dword_t caller,
   // https://github.com/facebookarchive/RakNet/blob/master/Source/RakPeer.cpp#L4467
   // "Mac address is a poor solution because you can't have multiple connections
   // from the same system"
-  std::memset(addr_ptr->abEnet, 0xCC, 6);
 
-  std::memset(addr_ptr->abOnline, 0, 20);
-
-  return XnAddrStatus::XNET_GET_XNADDR_STATIC;
+  return status;
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetGetTitleXnAddr, kNetworking, kStub);
 
@@ -507,13 +929,138 @@ dword_result_t NetDll_XNetGetDebugXnAddr_entry(dword_t caller,
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetGetDebugXnAddr, kNetworking, kStub);
 
+// TODO: Move - Codie
+bool StringToHex(const std::string& inStr, unsigned char* outStr) {
+  size_t len = inStr.length();
+  for (size_t i = 0; i < len; i += 2) {
+    sscanf(inStr.c_str() + i, "%2hhx", outStr);
+    ++outStr;
+  }
+  return true;
+}
+
+// TODO: Move - Codie
+std::map<xe::be<uint32_t>, xe::be<uint64_t>> machineIdCache{};
+std::map<xe::be<uint32_t>, xe::be<uint64_t>> sessionIdCache{};
+std::map<xe::be<uint32_t>, xe::be<uint64_t>> macAddressCache{};
+
+void clearXnaddrCache() { 
+    sessionIdCache.clear();
+    macAddressCache.clear();
+}
+
+// this works dont touch it
 dword_result_t NetDll_XNetXnAddrToMachineId_entry(dword_t caller,
                                                   pointer_t<XNADDR> addr_ptr,
-                                                  lpdword_t id_ptr) {
+                                                  pointer_t<be<uint64_t>> id_ptr) {
   // Tell the caller we're not signed in to live (non-zero ret)
-  return 1;
+  //if (addr_ptr->inaOnline.S_un.S_un_b.s_b4 == 170) *id_ptr = 0xFA000000049B679F;
+  //else
+  //  *id_ptr = 0xFA000000039E7542;
+
+      #pragma region Curl
+  /*
+      TODO:
+          - Refactor the CURL out to a separate class.
+          - Use the overlapped task to do this asyncronously.
+  */
+
+    if (machineIdCache.find(addr_ptr->inaOnline.S_un.S_addr) != machineIdCache.end()) {
+        *id_ptr = machineIdCache[addr_ptr->inaOnline.S_un.S_addr];
+        return 0;
+    }
+
+  Document d;
+  d.SetObject();
+
+  Document::AllocatorType& allocator = d.GetAllocator();
+
+  size_t sz = allocator.Size();
+
+  char ipString[INET_ADDRSTRLEN];
+  inet_ntop(AF_INET, &addr_ptr->inaOnline, ipString, INET_ADDRSTRLEN);
+
+  d.AddMember("hostAddress", std::string(ipString), allocator);
+
+  rapidjson::StringBuffer strbuf;
+  PrettyWriter<rapidjson::StringBuffer> writer(strbuf);
+  d.Accept(writer);
+
+  CURL* curl;
+  CURLcode res;
+
+  curl_global_init(CURL_GLOBAL_ALL);
+  curl = curl_easy_init();
+  if (curl == NULL) {
+    return 128;
+  }
+
+  std::stringstream out;
+
+  struct curl_slist* headers = NULL;
+  headers = curl_slist_append(headers, "Content-Type: application/json");
+  headers = curl_slist_append(headers, "Accept: application/json");
+  headers = curl_slist_append(headers, "charset: utf-8");
+
+  std::stringstream url;
+  url << cvars::api_address << "/players/find";
+
+  curl_easy_setopt(curl, CURLOPT_URL, url.str().c_str());
+
+  curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "POST");
+  curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+  curl_easy_setopt(curl, CURLOPT_USERAGENT, "xenia");
+  curl_easy_setopt(curl, CURLOPT_WRITEDATA, &out);
+  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, callback);
+  curl_easy_setopt(curl, CURLOPT_POSTFIELDS, strbuf.GetString());
+
+  res = curl_easy_perform(curl);
+
+  curl_easy_cleanup(curl);
+  int httpCode(0);
+  curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &httpCode);
+  curl_global_cleanup();
+
+  if (httpCode == 201) {
+    rapidjson::Document d;
+    d.Parse(out.str());
+
+    unsigned char machineId[8];
+
+    StringToHex(d["machineId"].GetString(), machineId);
+
+    *id_ptr = SessionIdtoUint64(machineId);
+    machineIdCache.emplace(addr_ptr->inaOnline.S_un.S_addr, SessionIdtoUint64(machineId));
+  }
+#pragma endregion
+
+  //*id_ptr = htonl(addr_ptr->inaOnline.S_un.S_addr);
+  return 0;
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetXnAddrToMachineId, kNetworking, kStub);
+
+dword_result_t NetDll_XNetConnect_entry(dword_t caller, dword_t) {
+  //XELOGI("XNetConnect({:08X}:{})", addr->ina.S_un.S_addr, addr->wPortOnline);
+  return 0;
+}
+DECLARE_XAM_EXPORT1(NetDll_XNetConnect, kNetworking, kImplemented);
+
+dword_result_t NetDll_XNetGetConnectStatus_entry(dword_t caller,
+                                                 dword_t addr) {
+  XELOGI("XNetGetConnectStatus({:08X})", addr.value());
+  return 2;
+}
+DECLARE_XAM_EXPORT1(NetDll_XNetGetConnectStatus, kNetworking, kImplemented);
+
+dword_result_t NetDll_XNetServerToInAddr_entry(dword_t caller, dword_t addr,
+                                               dword_t serviceId,
+                                               pointer_t<in_addr> pina) {
+  XELOGI("XNetServerToInAddr({:08X} {:08X})", addr.value(),
+         pina.guest_address());
+  pina->S_un.S_addr = htonl(addr);
+  return 0;
+}
+DECLARE_XAM_EXPORT1(NetDll_XNetServerToInAddr, kNetworking, kImplemented);
 
 void NetDll_XNetInAddrToString_entry(dword_t caller, dword_t in_addr,
                                      lpstring_t string_out,
@@ -526,25 +1073,136 @@ DECLARE_XAM_EXPORT1(NetDll_XNetInAddrToString, kNetworking, kStub);
 // subsequent socket calls (like a handle to a XNet address)
 dword_result_t NetDll_XNetXnAddrToInAddr_entry(dword_t caller,
                                                pointer_t<XNADDR> xn_addr,
-                                               lpvoid_t xid, lpvoid_t in_addr) {
+                                               lpvoid_t xid,
+                                               pointer_t<in_addr> in_addr) {
+  if (xn_addr->inaOnline.s_addr != 0) {
+    in_addr->s_addr = xn_addr->inaOnline.s_addr;
+
+    return 0;
+  }
+
   return 1;
 }
-DECLARE_XAM_EXPORT1(NetDll_XNetXnAddrToInAddr, kNetworking, kStub);
+DECLARE_XAM_EXPORT1(NetDll_XNetXnAddrToInAddr, kNetworking, kSketchy);
 
+//static const unsigned char codieSession[] = {0xC0, 0xDE, 0xC0, 0xDE,
+//                                           0xC0, 0xDE, 0xC0, 0xDE};
 // Does the reverse of the above.
 // FIXME: Arguments may not be correct.
-dword_result_t NetDll_XNetInAddrToXnAddr_entry(dword_t caller, lpvoid_t in_addr,
+dword_result_t NetDll_XNetInAddrToXnAddr_entry(dword_t caller, dword_t in_addr,
                                                pointer_t<XNADDR> xn_addr,
-                                               lpvoid_t xid) {
-  return 1;
+                                               dword_t xid_ptr) {
+  xn_addr->ina.S_un.S_addr = ntohl(in_addr);
+
+  //xn_addr->ina.S_un.S_un_b.s_b1 = 0;
+
+
+  xn_addr->inaOnline.S_un.S_addr = ntohl(in_addr);
+  xn_addr->wPortOnline = 36020;
+
+  if (macAddressCache.find(xn_addr->inaOnline.S_un.S_addr) == macAddressCache.end()) {
+#pragma region Curl
+    /*
+        TODO:
+            - Refactor the CURL out to a separate class.
+            - Use the overlapped task to do this asyncronously.
+    */
+
+    Document d;
+    d.SetObject();
+
+    Document::AllocatorType& allocator = d.GetAllocator();
+
+    size_t sz = allocator.Size();
+
+    char ipString[INET_ADDRSTRLEN];
+    inet_ntop(AF_INET, &xn_addr->inaOnline, ipString, INET_ADDRSTRLEN);
+
+    d.AddMember("hostAddress", std::string(ipString), allocator);
+
+    rapidjson::StringBuffer strbuf;
+    PrettyWriter<rapidjson::StringBuffer> writer(strbuf);
+    d.Accept(writer);
+
+    CURL* curl;
+    CURLcode res;
+
+    curl_global_init(CURL_GLOBAL_ALL);
+    curl = curl_easy_init();
+    if (curl == NULL) {
+      return 128;
+    }
+
+    std::stringstream out;
+
+    struct curl_slist* headers = NULL;
+    headers = curl_slist_append(headers, "Content-Type: application/json");
+    headers = curl_slist_append(headers, "Accept: application/json");
+    headers = curl_slist_append(headers, "charset: utf-8");
+
+    std::stringstream url;
+    url << cvars::api_address << "/players/find";
+
+    curl_easy_setopt(curl, CURLOPT_URL, url.str().c_str());
+
+    curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "POST");
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, "xenia");
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &out);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, callback);
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, strbuf.GetString());
+
+    res = curl_easy_perform(curl);
+
+    curl_easy_cleanup(curl);
+    int httpCode(0);
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &httpCode);
+    curl_global_cleanup();
+
+    if (httpCode == 201) {
+      rapidjson::Document d;
+      d.Parse(out.str());
+
+      unsigned char macAddress[6];
+      unsigned char sessionId[8];
+
+      StringToHex(d["sessionId"].GetString(), sessionId);
+      StringToHex(d["macAddress"].GetString(), macAddress);
+
+      sessionIdCache.emplace(xn_addr->inaOnline.S_un.S_addr, SessionIdtoUint64(sessionId));
+      macAddressCache.emplace(xn_addr->inaOnline.S_un.S_addr, MacAddresstoUint64(macAddress));
+    }
+#pragma endregion
+  }
+
+  Uint64toMacAddress(macAddressCache[xn_addr->inaOnline.S_un.S_addr], xn_addr->abEnet);
+  Uint64toMacAddress(macAddressCache[xn_addr->inaOnline.S_un.S_addr], xn_addr->abOnline);
+
+  if (xid_ptr != 0) {
+    auto sessionIdPtr = kernel_memory()->TranslateVirtual<unsigned char*>(xid_ptr);
+    auto sessionId = sessionIdCache[xn_addr->inaOnline.S_un.S_addr];
+
+    std::stringstream sessionIdStr;
+    sessionIdStr << std::hex << std::noshowbase << std::setw(16)
+                 << std::setfill('0') << sessionId;
+
+
+    Uint64toSessionId(sessionId, sessionIdPtr);
+
+
+    // old
+    //memcpy(kernel_memory()->TranslateVirtual<unsigned char*>(xid_ptr), mySessionId, 8);
+  }
+  return 0;
+
 }
-DECLARE_XAM_EXPORT1(NetDll_XNetInAddrToXnAddr, kNetworking, kStub);
+DECLARE_XAM_EXPORT1(NetDll_XNetInAddrToXnAddr, kNetworking, kImplemented);
 
 // https://www.google.com/patents/WO2008112448A1?cl=en
 // Reserves a port for use by system link
 dword_result_t NetDll_XNetSetSystemLinkPort_entry(dword_t caller,
                                                   dword_t port) {
-  return 1;
+  return 0;
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetSetSystemLinkPort, kNetworking, kStub);
 
@@ -558,18 +1216,37 @@ struct XEthernetStatus {
 };
 
 dword_result_t NetDll_XNetGetEthernetLinkStatus_entry(dword_t caller) {
-  return 0;
+  return 1 | 2 | 8;
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetGetEthernetLinkStatus, kNetworking, kStub);
 
 dword_result_t NetDll_XNetDnsLookup_entry(dword_t caller, lpstring_t host,
                                           dword_t event_handle,
                                           lpdword_t pdns) {
-  // TODO(gibbed): actually implement this
   if (pdns) {
+    hostent* ent = gethostbyname(host);
+
     auto dns_guest = kernel_memory()->SystemHeapAlloc(sizeof(XNDNS));
     auto dns = kernel_memory()->TranslateVirtual<XNDNS*>(dns_guest);
-    dns->status = 1;  // non-zero = error
+
+    if (ent == nullptr) {
+#ifdef XE_PLATFORM_WIN32
+      dns->status = WSAGetLastError();
+#else
+      dns->status = (int32_t)X_WSAError::X_WSAENETDOWN;
+#endif
+    } else if (ent->h_addrtype != AF_INET) {
+      dns->status = (int32_t)X_WSAError::X_WSANO_DATA;
+    } else {
+      dns->status = 0;
+      int i = 0;
+      while (ent->h_addr_list[i] != nullptr && i < 8) {
+        dns->aina[i] = *reinterpret_cast<in_addr*>(ent->h_addr_list[i]);
+        i++;
+      }
+      dns->cina = i;
+    }
+
     *pdns = dns_guest;
   }
   if (event_handle) {
@@ -580,7 +1257,7 @@ dword_result_t NetDll_XNetDnsLookup_entry(dword_t caller, lpstring_t host,
   }
   return 0;
 }
-DECLARE_XAM_EXPORT1(NetDll_XNetDnsLookup, kNetworking, kStub);
+DECLARE_XAM_EXPORT1(NetDll_XNetDnsLookup, kNetworking, kImplemented);
 
 dword_result_t NetDll_XNetDnsRelease_entry(dword_t caller,
                                            pointer_t<XNDNS> dns) {
@@ -595,11 +1272,25 @@ DECLARE_XAM_EXPORT1(NetDll_XNetDnsRelease, kNetworking, kStub);
 dword_result_t NetDll_XNetQosServiceLookup_entry(dword_t caller, dword_t flags,
                                                  dword_t event_handle,
                                                  lpdword_t pqos) {
-  // Set pqos as some games will try accessing it despite non-successful result
+  XELOGI("XNetQosServiceLookup({:08X}, {:08X}, {:08X}, {:08X})", caller.value(),
+         flags.value(), event_handle.value(), pqos.guest_address());
+
   if (pqos) {
     auto qos_guest = kernel_memory()->SystemHeapAlloc(sizeof(XNQOS));
     auto qos = kernel_memory()->TranslateVirtual<XNQOS*>(qos_guest);
-    qos->count = qos->count_pending = 0;
+    qos->count = 1;
+
+    qos->info[0].probes_xmit = 4;
+    qos->info[0].probes_recv = 4;
+    qos->info[0].data_len = 1;
+    qos->info[0].data_ptr = *(BYTE*)"A";
+    qos->info[0].rtt_min_in_msecs = 4;
+    qos->info[0].rtt_med_in_msecs = 10;
+    qos->info[0].up_bits_per_sec = 13125;
+    qos->info[0].down_bits_per_sec = 21058;
+    qos->info[0].flags = 1 | 2 | 3;
+    qos->count_pending = 0;
+
     *pqos = qos_guest;
   }
   if (event_handle) {
@@ -608,6 +1299,7 @@ dword_result_t NetDll_XNetQosServiceLookup_entry(dword_t caller, dword_t flags,
     assert_not_null(ev);
     ev->Set(0, false);
   }
+
   return 0;
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetQosServiceLookup, kNetworking, kStub);
@@ -622,12 +1314,201 @@ dword_result_t NetDll_XNetQosRelease_entry(dword_t caller,
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetQosRelease, kNetworking, kStub);
 
-dword_result_t NetDll_XNetQosListen_entry(dword_t caller, lpvoid_t id,
+dword_result_t NetDll_XNetQosListen_entry(dword_t caller, lpvoid_t sessionId,
                                           lpvoid_t data, dword_t data_size,
                                           dword_t r7, dword_t flags) {
-  return X_ERROR_FUNCTION_FAILED;
+
+  XELOGI("XNetQosListen({:08X}, {:016X}, {:016X}, {}, {:08X}, {:08X})",
+         caller.value(), sessionId.host_address(), data.host_address(),
+         data_size.value(), r7.value(), flags.value());
+
+    if (data_size <= 0) return 0;
+
+  const void* data_ptr = (void*)data.host_address();
+    const xe::be<uint64_t>* sessionId_ptr =
+        (xe::be<uint64_t>*)sessionId.host_address();
+
+
+  
+                  #pragma region Curl
+  /*
+      TODO:
+          - Refactor the CURL out to a separate class.
+          - Use the overlapped task to do this asyncronously.
+  */
+
+  std::stringstream sessionIdStr;
+  sessionIdStr << std::hex << std::noshowbase << std::setw(16)
+               << std::setfill('0') << *sessionId_ptr;
+
+  CURL* curl;
+  CURLcode res;
+
+  curl_global_init(CURL_GLOBAL_ALL);
+  curl = curl_easy_init();
+  if (curl == NULL) {
+    return 128;
+  }
+
+  std::stringstream out;
+
+  struct curl_slist* headers = NULL;
+
+  std::stringstream titleId;
+  titleId << std::hex << std::noshowbase << std::setw(8) << std::setfill('0')
+          << kernel_state()->title_id();
+
+  std::stringstream url;
+  url << cvars::api_address << "/title/" << titleId.str() << "/sessions/" << sessionIdStr.str() << "/qos";
+  
+  curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, (curl_off_t)data_size);
+  curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data_ptr);
+  curl_easy_setopt(curl, CURLOPT_URL, url.str().c_str());
+
+  /* enable verbose for easier tracing */
+  curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
+  //curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "POST");
+
+  res = curl_easy_perform(curl);
+
+  curl_easy_cleanup(curl);
+  curl_global_cleanup();
+#pragma endregion
+
+
+  return X_ERROR_SUCCESS;
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetQosListen, kNetworking, kStub);
+
+dword_result_t NetDll_XNetQosLookup_entry(dword_t caller, dword_t sessionsCount, dword_t unk2, lpvoid_t sessionIdPtrsPtr,
+    dword_t unk4,
+                                          dword_t unk5, dword_t unk6,
+                                          dword_t service_id, dword_t probes_count,
+                                          dword_t bits_per_second, dword_t flags,
+                                          dword_t event_handle, lpdword_t qos_ptr) {
+  if (qos_ptr) {
+    auto qos_guest = kernel_memory()->SystemHeapAlloc(sizeof(XNQOS));
+    auto qos = kernel_memory()->TranslateVirtual<XNQOS*>(qos_guest);
+    qos->count = 1;
+
+    const xe::be<uint32_t> sessionId_ptrs_ptr = *(xe::be<uint32_t>*)sessionIdPtrsPtr.host_address();
+
+    const xe::be<uint64_t>* sessionId_ptr =
+        kernel_memory()->TranslateVirtual<xe::be<uint64_t>*>(sessionId_ptrs_ptr);
+
+
+        #pragma region Curl
+    /*
+        TODO:
+            - Refactor the CURL out to a separate class.
+            - Use the overlapped task to do this asyncronously.
+    */
+
+    std::stringstream sessionIdStr;
+    sessionIdStr << std::hex << std::noshowbase << std::setw(16)
+                 << std::setfill('0') << *sessionId_ptr;
+
+    CURL* curl;
+    CURLcode res;
+
+    curl_global_init(CURL_GLOBAL_ALL);
+    curl = curl_easy_init();
+    if (curl == NULL) {
+      return 128;
+    }
+
+    std::stringstream out;
+
+    struct curl_slist* headers = NULL;
+
+    std::stringstream titleId;
+    titleId << std::hex << std::noshowbase << std::setw(8) << std::setfill('0')
+            << kernel_state()->title_id();
+
+    std::stringstream url;
+    url << cvars::api_address << "/title/" << titleId.str() << "/sessions/" << sessionIdStr.str() << "/qos";
+
+    curl_easy_setopt(curl, CURLOPT_URL, url.str().c_str());
+
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, "xenia");
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &out);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, callback);
+
+    res = curl_easy_perform(curl);
+
+    curl_easy_cleanup(curl);
+    int httpCode(0);
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &httpCode);
+    curl_global_cleanup();
+
+    if (httpCode == 200) {
+      auto data_ptr = kernel_memory()->SystemHeapAlloc((uint32_t)out.str().length());
+      auto data = kernel_memory()->TranslateVirtual<int32_t*>(data_ptr);
+
+      qos->info[0].data_ptr = data_ptr;
+      memcpy(data, out.str().c_str(), out.str().length());
+      qos->info[0].data_len = (uint16_t)out.str().length();
+    }
+
+#pragma endregion
+
+
+
+
+    qos->info[0].probes_xmit = 4;
+    qos->info[0].probes_recv = 4;
+    qos->info[0].rtt_min_in_msecs = 4;
+    qos->info[0].rtt_med_in_msecs = 10;
+    qos->info[0].up_bits_per_sec = 13125;
+    qos->info[0].down_bits_per_sec = 21058;
+    qos->info[0].flags = 1 | 2 | 0x8;
+    qos->count_pending = 0;
+
+    *qos_ptr = qos_guest;
+  }
+  if (event_handle) {
+    auto ev =
+        kernel_state()->object_table()->LookupObject<XEvent>(event_handle);
+    assert_not_null(ev);
+    ev->Set(0, false);
+  }
+
+  return ERROR_SUCCESS;
+}
+DECLARE_XAM_EXPORT1(NetDll_XNetQosLookup, kNetworking, kImplemented);
+
+typedef struct {
+  DWORD size_of_struct;
+  DWORD requests_received_count;
+  DWORD probes_received_count;
+  DWORD unk;
+  DWORD data_replies_sent_count;
+  DWORD data_reply_bytes_sent;
+  DWORD probe_replies_sent_count;
+} XNQOSLISTENSTATS;
+
+
+dword_result_t NetDll_XNetQosGetListenStats_entry(
+    dword_t caller, dword_t unk, dword_t pxnkid, lpdword_t pQosListenStats) {
+  XELOGI("XNetQosGetListenStats({:08X}, {:08X}, {:08X}, {:08X})",
+         caller.value(), unk.value(), caller.value(), unk.value(),
+         pxnkid.value(), pQosListenStats.guest_address());
+
+  if (pQosListenStats) {
+    auto qos =
+        kernel_memory()->TranslateVirtual<XNQOSLISTENSTATS*>(pQosListenStats.guest_address());
+    
+    qos->requests_received_count = 1;
+    qos->probes_received_count = 1;
+    qos->unk = 1;
+    qos->data_replies_sent_count = 1;
+    qos->data_reply_bytes_sent = 1;
+    qos->probe_replies_sent_count = 1;
+  }
+
+  return ERROR_SUCCESS;
+}
+DECLARE_XAM_EXPORT1(NetDll_XNetQosGetListenStats, kNetworking, kImplemented);
 
 dword_result_t NetDll_inet_addr_entry(lpstring_t addr_ptr) {
   if (!addr_ptr) {
@@ -646,6 +1527,7 @@ dword_result_t NetDll_inet_addr_entry(lpstring_t addr_ptr) {
 }
 DECLARE_XAM_EXPORT1(NetDll_inet_addr, kNetworking, kImplemented);
 
+BOOL optEnable = TRUE;
 dword_result_t NetDll_socket_entry(dword_t caller, dword_t af, dword_t type,
                                    dword_t protocol) {
   XSocket* socket = new XSocket(kernel_state());
@@ -659,6 +1541,10 @@ dword_result_t NetDll_socket_entry(dword_t caller, dword_t af, dword_t type,
     XThread::SetLastError(socket->GetLastWSAError());
     return -1;
   }
+
+  //socket->SetOption(SOL_SOCKET, 0x5801, &optEnable, sizeof(BOOL));
+  //if (type == SOCK_STREAM)
+  //  socket->SetOption(SOL_SOCKET, 0x5802, &optEnable, sizeof(BOOL));
 
   return socket->handle();
 }
@@ -708,7 +1594,12 @@ dword_result_t NetDll_setsockopt_entry(dword_t caller, dword_t socket_handle,
   }
 
   X_STATUS status = socket->SetOption(level, optname, optval_ptr, optlen);
-  return XSUCCEEDED(status) ? 0 : -1;
+  if (XFAILED(status)) {
+    XThread::SetLastError(socket->GetLastWSAError());
+    return -1;
+  }
+
+  return 0;
 }
 DECLARE_XAM_EXPORT1(NetDll_setsockopt, kNetworking, kImplemented);
 
@@ -724,7 +1615,12 @@ dword_result_t NetDll_getsockopt_entry(dword_t caller, dword_t socket_handle,
 
   int native_len = *optlen;
   X_STATUS status = socket->GetOption(level, optname, optval_ptr, &native_len);
-  return XSUCCEEDED(status) ? 0 : -1;
+  if (XFAILED(status)) {
+    XThread::SetLastError(socket->GetLastWSAError());
+    return -1;
+  }
+
+  return 0;
 }
 DECLARE_XAM_EXPORT1(NetDll_getsockopt, kNetworking, kImplemented);
 
@@ -749,8 +1645,7 @@ dword_result_t NetDll_ioctlsocket_entry(dword_t caller, dword_t socket_handle,
 DECLARE_XAM_EXPORT1(NetDll_ioctlsocket, kNetworking, kImplemented);
 
 dword_result_t NetDll_bind_entry(dword_t caller, dword_t socket_handle,
-                                 pointer_t<XSOCKADDR_IN> name,
-                                 dword_t namelen) {
+                                 pointer_t<XSOCKADDR> name, dword_t namelen) {
   auto socket =
       kernel_state()->object_table()->LookupObject<XSocket>(socket_handle);
   if (!socket) {
@@ -758,8 +1653,7 @@ dword_result_t NetDll_bind_entry(dword_t caller, dword_t socket_handle,
     return -1;
   }
 
-  N_XSOCKADDR_IN native_name(name);
-  X_STATUS status = socket->Bind(&native_name, namelen);
+  X_STATUS status = socket->Bind(name, namelen);
   if (XFAILED(status)) {
     XThread::SetLastError(socket->GetLastWSAError());
     return -1;
@@ -779,8 +1673,7 @@ dword_result_t NetDll_connect_entry(dword_t caller, dword_t socket_handle,
     return -1;
   }
 
-  N_XSOCKADDR native_name(name);
-  X_STATUS status = socket->Connect(&native_name, namelen);
+  X_STATUS status = socket->Connect(name, namelen);
   if (XFAILED(status)) {
     XThread::SetLastError(socket->GetLastWSAError());
     return -1;
@@ -824,16 +1717,14 @@ dword_result_t NetDll_accept_entry(dword_t caller, dword_t socket_handle,
     return -1;
   }
 
-  N_XSOCKADDR native_addr(addr_ptr);
   int native_len = *addrlen_ptr;
-  auto new_socket = socket->Accept(&native_addr, &native_len);
+  auto new_socket = socket->Accept(addr_ptr, &native_len);
   if (new_socket) {
-    addr_ptr->address_family = native_addr.address_family;
-    std::memcpy(addr_ptr->sa_data, native_addr.sa_data, *addrlen_ptr - 2);
     *addrlen_ptr = native_len;
 
     return new_socket->handle();
   } else {
+    XThread::SetLastError(socket->GetLastWSAError());
     return -1;
   }
 }
@@ -956,14 +1847,18 @@ dword_result_t NetDll_recv_entry(dword_t caller, dword_t socket_handle,
     return -1;
   }
 
-  return socket->Recv(buf_ptr, buf_len, flags);
+  int ret = socket->Recv(buf_ptr, buf_len, flags);
+  if (ret < 0) {
+    XThread::SetLastError(socket->GetLastWSAError());
+  }
+  return ret;
 }
 DECLARE_XAM_EXPORT1(NetDll_recv, kNetworking, kImplemented);
 
 dword_result_t NetDll_recvfrom_entry(dword_t caller, dword_t socket_handle,
                                      lpvoid_t buf_ptr, dword_t buf_len,
                                      dword_t flags,
-                                     pointer_t<XSOCKADDR_IN> from_ptr,
+                                     pointer_t<XSOCKADDR> from_ptr,
                                      lpdword_t fromlen_ptr) {
   auto socket =
       kernel_state()->object_table()->LookupObject<XSocket>(socket_handle);
@@ -972,20 +1867,9 @@ dword_result_t NetDll_recvfrom_entry(dword_t caller, dword_t socket_handle,
     return -1;
   }
 
-  N_XSOCKADDR_IN native_from;
-  if (from_ptr) {
-    native_from = *from_ptr;
-  }
   uint32_t native_fromlen = fromlen_ptr ? fromlen_ptr.value() : 0;
-  int ret = socket->RecvFrom(buf_ptr, buf_len, flags, &native_from,
+  int ret = socket->RecvFrom(buf_ptr, buf_len, flags, from_ptr,
                              fromlen_ptr ? &native_fromlen : 0);
-
-  if (from_ptr) {
-    from_ptr->sin_family = native_from.sin_family;
-    from_ptr->sin_port = native_from.sin_port;
-    from_ptr->sin_addr = native_from.sin_addr;
-    std::memset(from_ptr->x_sin_zero, 0, sizeof(from_ptr->x_sin_zero));
-  }
   if (fromlen_ptr) {
     *fromlen_ptr = native_fromlen;
   }
@@ -1008,14 +1892,17 @@ dword_result_t NetDll_send_entry(dword_t caller, dword_t socket_handle,
     return -1;
   }
 
-  return socket->Send(buf_ptr, buf_len, flags);
+  int ret = socket->Send(buf_ptr, buf_len, flags);
+  if (ret < 0) {
+    XThread::SetLastError(socket->GetLastWSAError());
+  }
+  return ret;
 }
 DECLARE_XAM_EXPORT1(NetDll_send, kNetworking, kImplemented);
 
 dword_result_t NetDll_sendto_entry(dword_t caller, dword_t socket_handle,
                                    lpvoid_t buf_ptr, dword_t buf_len,
-                                   dword_t flags,
-                                   pointer_t<XSOCKADDR_IN> to_ptr,
+                                   dword_t flags, pointer_t<XSOCKADDR> to_ptr,
                                    dword_t to_len) {
   auto socket =
       kernel_state()->object_table()->LookupObject<XSocket>(socket_handle);
@@ -1024,8 +1911,11 @@ dword_result_t NetDll_sendto_entry(dword_t caller, dword_t socket_handle,
     return -1;
   }
 
-  N_XSOCKADDR_IN native_to(to_ptr);
-  return socket->SendTo(buf_ptr, buf_len, flags, &native_to, to_len);
+  int ret = socket->SendTo(buf_ptr, buf_len, flags, to_ptr, to_len);
+  if (ret < 0) {
+    XThread::SetLastError(socket->GetLastWSAError());
+  }
+  return ret;
 }
 DECLARE_XAM_EXPORT1(NetDll_sendto, kNetworking, kImplemented);
 
@@ -1042,13 +1932,20 @@ dword_result_t NetDll___WSAFDIsSet_entry(dword_t socket_handle,
 }
 DECLARE_XAM_EXPORT1(NetDll___WSAFDIsSet, kNetworking, kImplemented);
 
+
 void NetDll_WSASetLastError_entry(dword_t error_code) {
   XThread::SetLastError(error_code);
 }
 DECLARE_XAM_EXPORT1(NetDll_WSASetLastError, kNetworking, kImplemented);
 
-dword_result_t NetDll_getsockname_entry(dword_t caller, dword_t socket_handle,
-                                        lpvoid_t buf_ptr, lpdword_t len_ptr) {
+dword_result_t NetDll_getpeername_entry(dword_t caller, dword_t socket_handle,
+                                        pointer_t<XSOCKADDR> addr_ptr,
+                                        lpdword_t addrlen_ptr) {
+  if (!addr_ptr) {
+    XThread::SetLastError(uint32_t(X_WSAError::X_WSAEFAULT));
+    return -1;
+  }
+
   auto socket =
       kernel_state()->object_table()->LookupObject<XSocket>(socket_handle);
   if (!socket) {
@@ -1056,15 +1953,41 @@ dword_result_t NetDll_getsockname_entry(dword_t caller, dword_t socket_handle,
     return -1;
   }
 
-  int buffer_len = *len_ptr;
-
-  X_STATUS status = socket->GetSockName(buf_ptr, &buffer_len);
+  int native_len = *addrlen_ptr;
+  X_STATUS status = socket->GetPeerName(addr_ptr, &native_len);
   if (XFAILED(status)) {
     XThread::SetLastError(socket->GetLastWSAError());
     return -1;
   }
 
-  *len_ptr = buffer_len;
+  *addrlen_ptr = native_len;
+  return 0;
+}
+DECLARE_XAM_EXPORT1(NetDll_getpeername, kNetworking, kImplemented);
+
+dword_result_t NetDll_getsockname_entry(dword_t caller, dword_t socket_handle,
+                                        pointer_t<XSOCKADDR> addr_ptr,
+                                        lpdword_t addrlen_ptr) {
+  if (!addr_ptr) {
+    XThread::SetLastError(uint32_t(X_WSAError::X_WSAEFAULT));
+    return -1;
+  }
+
+  auto socket =
+      kernel_state()->object_table()->LookupObject<XSocket>(socket_handle);
+  if (!socket) {
+    XThread::SetLastError(uint32_t(X_WSAError::X_WSAENOTSOCK));
+    return -1;
+  }
+
+  int native_len = *addrlen_ptr;
+  X_STATUS status = socket->GetSockName(addr_ptr, &native_len);
+  if (XFAILED(status)) {
+    XThread::SetLastError(socket->GetLastWSAError());
+    return -1;
+  }
+
+  *addrlen_ptr = native_len;
   return 0;
 }
 DECLARE_XAM_EXPORT1(NetDll_getsockname, kNetworking, kImplemented);
