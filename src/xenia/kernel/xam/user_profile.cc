@@ -10,9 +10,15 @@
 #include "xenia/kernel/xam/user_profile.h"
 
 #include <ranges>
+#include <random>
 #include <sstream>
 
 #include "third_party/fmt/include/fmt/format.h"
+#include "xenia/base/clock.h"
+#include "xenia/base/cvar.h"
+#include "xenia/base/filesystem.h"
+#include "xenia/base/logging.h"
+#include "xenia/base/mapped_memory.h"
 #include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/util/shim_utils.h"
 #include "xenia/kernel/xam/xdbf/gpd_info.h"
