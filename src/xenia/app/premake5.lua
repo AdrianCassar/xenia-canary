@@ -66,7 +66,7 @@ project("xenia-app")
   -- `lib` prefix, as Gradle uses LOCAL_MODULE_FILENAME, not a derivative of
   -- LOCAL_MODULE, to specify the targets to build when executing ndk-build.
   filter("platforms:not Android-*")
-    targetname("xenia_canary")
+    targetname("xenia_canary_netplay")
 
   filter("architecture:x86_64")
     links({
