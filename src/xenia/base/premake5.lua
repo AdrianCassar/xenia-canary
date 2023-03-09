@@ -8,6 +8,9 @@ project("xenia-base")
   links({
     "fmt",
   })
+  defines({
+    "CURL_STATICLIB"
+  })
   local_platform_files()
   removefiles({
     "console_app_main_*.cc",

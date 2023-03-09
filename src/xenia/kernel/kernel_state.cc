@@ -920,11 +920,12 @@ void KernelState::RegisterNotifyListener(XNotifyListener* listener) {
     listener->EnqueueNotification(kXNotificationSystemTrayStateChanged,
                                   X_DVD_DISC_STATE::XBOX_360_GAME_DISC);
   }
+
   if (!has_notified_live_startup_ && listener->mask() & kXNotifyLive) {
     has_notified_live_startup_ = true;
     listener->EnqueueNotification(kXNotificationLiveConnectionChanged,
-                                  0x80151802L);
-    listener->EnqueueNotification(kXNotificationLiveLinkStateChanged, 0);
+                                  0x1510F0L);
+    listener->EnqueueNotification(kXNotificationLiveLinkStateChanged, 1);
   }
 }
 
