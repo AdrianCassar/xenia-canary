@@ -406,8 +406,18 @@ std::filesystem::path ProfileManager::GetProfilePath(
 }
 
 bool ProfileManager::CreateProfile(const std::string gamertag,
-                                   bool default_xuid) {
-  const auto xuid = !default_xuid ? GenerateXuid() : 0xB13EBABEBABEBABE;
+                                   bool default_xuid, uint32_t reserved_flags) {
+  uint64_t xuid = 0;
+
+  // We don't fully support offline and online XUIDs.
+  if (default_xuid) {
+    xuid = 0xB13EBABEBABEBABE;
+  } else {
+    const bool live_enabled =
+        reserved_flags & X_XAMACCOUNTINFO::AccountReservedFlags::kLiveEnabled;
+
+    xuid = live_enabled ? GenerateXuidOnline() : GenerateXuid();
+  }
 
   if (!std::filesystem::create_directories(GetProfilePath(xuid))) {
     return false;
@@ -417,7 +427,7 @@ bool ProfileManager::CreateProfile(const std::string gamertag,
     return false;
   }
 
-  const bool is_account_created = CreateAccount(xuid, gamertag);
+  const bool is_account_created = CreateAccount(xuid, gamertag, reserved_flags);
   if (is_account_created && default_xuid) {
     Login(xuid);
   }
@@ -425,7 +435,8 @@ bool ProfileManager::CreateProfile(const std::string gamertag,
 }
 
 bool ProfileManager::CreateAccount(const uint64_t xuid,
-                                   const std::string gamertag) {
+                                   const std::string gamertag,
+                                   uint32_t reserved_flags) {
   const std::string guest_path =
       xe::string_util::to_hex_string(xuid) + ":\\Account";
 
@@ -447,6 +458,15 @@ bool ProfileManager::CreateAccount(const uint64_t xuid,
 
   string_util::copy_truncating(account.gamertag, gamertag_u16,
                                sizeof(account.gamertag));
+
+  const bool live_enabled =
+      reserved_flags & X_XAMACCOUNTINFO::AccountReservedFlags::kLiveEnabled;
+
+  account.reserved_flags = reserved_flags;
+
+  if (live_enabled) {
+    account.xuid_online = xuid;
+  }
 
   std::vector<uint8_t> encrypted_data;
   encrypted_data.resize(sizeof(X_XAMACCOUNTINFO) + 0x18);

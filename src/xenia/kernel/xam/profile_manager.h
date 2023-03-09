@@ -79,7 +79,8 @@ class ProfileManager {
 
   ~ProfileManager();
 
-  bool CreateProfile(const std::string gamertag, bool default_xuid = false);
+  bool CreateProfile(const std::string gamertag, bool default_xuid = false,
+                     uint32_t reserved_flags = 0);
   // bool CreateProfile(const X_XAMACCOUNTINFO* account_info);
   bool DeleteProfile(const uint64_t xuid);
 
@@ -110,9 +111,17 @@ class ProfileManager {
 
   static bool IsGamertagValid(const std::string gamertag);
 
+  uint64_t GenerateXuidOnline() const {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+
+    return (0x9ULL << 48) + (gen() % (1 << 31));
+  }
+
  private:
   void UpdateConfig(const uint64_t xuid, const uint8_t slot);
-  bool CreateAccount(const uint64_t xuid, const std::string gamertag);
+  bool CreateAccount(const uint64_t xuid, const std::string gamertag,
+                     uint32_t reserved_flags);
 
   std::filesystem::path GetProfilePath(const uint64_t xuid) const;
   std::filesystem::path GetProfilePath(const std::string xuid) const;

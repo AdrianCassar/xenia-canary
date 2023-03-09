@@ -592,7 +592,7 @@ struct X_XAMACCOUNTINFO {
                              AccountReservedFlags::kPasswordProtected);
   }
 
-  bool IsLiveEnabled() {
+  bool IsLiveEnabled() const {
     return static_cast<bool>(reserved_flags &
                              AccountReservedFlags::kLiveEnabled);
   }

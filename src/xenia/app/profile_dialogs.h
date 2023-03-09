@@ -35,6 +35,7 @@ class CreateProfileDialog final : public ui::ImGuiDialog {
 
   bool migration = false;
   char gamertag[16] = "";
+  bool live_enabled = true;
   EmulatorWindow* emulator_window_;
 };
 

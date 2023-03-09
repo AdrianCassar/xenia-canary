@@ -45,11 +45,20 @@ void CreateProfileDialog::OnDraw(ImGuiIO& io) {
   ImGui::TextUnformatted("Gamertag:");
   ImGui::InputText("##Gamertag", gamertag, sizeof(gamertag));
 
+  ImGui::Checkbox("Xbox Live Enabled", &live_enabled);
+
   const std::string gamertag_string = std::string(gamertag);
 
   if (profile_manager->IsGamertagValid(gamertag_string)) {
     if (ImGui::Button("Create")) {
-      if (profile_manager->CreateProfile(gamertag_string, migration) &&
+      uint32_t reserved_flags = 0;
+
+      if (live_enabled) {
+        reserved_flags |= X_XAMACCOUNTINFO::AccountReservedFlags::kLiveEnabled;
+      }
+
+      if (profile_manager->CreateProfile(gamertag_string, migration,
+                                         reserved_flags) &&
           migration) {
         emulator_window_->emulator()->DataMigration(0xB13EBABEBABEBABE);
       }
@@ -319,10 +328,18 @@ bool ProfileConfigDialog::DrawProfileContent(const uint64_t xuid,
   ImGui::SetCursorPosY(position.y + ImGui::GetTextLineHeight());
   ImGui::TextUnformatted(fmt::format("XUID: {:016X}\n", xuid).c_str());
 
+  const std::string live_enabled = fmt::format(
+      "Xbox Live Enabled: {}", account->IsLiveEnabled() ? "True" : "False");
+
+  ImGui::SameLine();
+  ImGui::SetCursorPos(position);
+  ImGui::SetCursorPosY(position.y + 2 * ImGui::GetTextLineHeight());
+  ImGui::TextUnformatted(live_enabled.c_str());
+
   if (user_index != static_cast<uint8_t>(-1)) {
     ImGui::SameLine();
     ImGui::SetCursorPos(position);
-    ImGui::SetCursorPosY(position.y + 2 * ImGui::GetTextLineHeight());
+    ImGui::SetCursorPosY(position.y + 3 * ImGui::GetTextLineHeight());
     ImGui::TextUnformatted(
         fmt::format("Assigned to slot: {}\n", user_index).c_str());
   }
