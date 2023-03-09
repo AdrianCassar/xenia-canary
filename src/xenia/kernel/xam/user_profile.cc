@@ -7,17 +7,54 @@
  ******************************************************************************
  */
 
-#include "xenia/kernel/xam/user_profile.h"
-
+#include <random>
 #include <sstream>
 
 #include "third_party/fmt/include/fmt/format.h"
+#include "xenia/base/clock.h"
+#include "xenia/base/cvar.h"
+#include "xenia/base/filesystem.h"
+#include "xenia/base/logging.h"
+#include "xenia/base/mapped_memory.h"
 #include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/util/shim_utils.h"
+#include "xenia/kernel/xam/user_profile.h"
 
 namespace xe {
 namespace kernel {
 namespace xam {
+
+uint64_t GetRandomXuid() {
+  auto xuidBytes = new unsigned char[8];
+
+  std::random_device rd;
+  std::uniform_int_distribution<uint32_t> dist(0, 0xFFFFFFFFu);
+  std::vector<char> data(8);
+  int offset = 0;
+  uint32_t bits = 0;
+
+  for (unsigned int i = 0; i < 7; i++) {
+    if (offset == 0) bits = dist(rd);
+    *(unsigned char*)(xuidBytes + i) =
+        static_cast<unsigned char>(bits & 0xFF);
+    bits >>= 8;
+    if (++offset >= 4) offset = 0;
+  }
+
+  return *(uint64_t*)xuidBytes;
+}
+
+DEFINE_uint64(user_0_xuid, GetRandomXuid(), "XUID for user 0", "User");
+DEFINE_uint64(user_1_xuid, GetRandomXuid(), "XUID for user 1", "User");
+DEFINE_uint64(user_2_xuid, GetRandomXuid(), "XUID for user 2", "User");
+DEFINE_uint64(user_3_xuid, GetRandomXuid(), "XUID for user 3", "User");
+
+DEFINE_string(user_0_name, "XeniaUser" + std::to_string(user_0_xuid & 0xFFFF), "Gamertag for user 0", "User");
+DEFINE_string(user_1_name, "XeniaUser" + std::to_string(user_1_xuid & 0xFFFF), "Gamertag for user 1", "User");
+DEFINE_string(user_2_name, "XeniaUser" + std::to_string(user_2_xuid & 0xFFFF), "Gamertag for user 2", "User");
+DEFINE_string(user_3_name, "XeniaUser" + std::to_string(user_3_xuid & 0xFFFF), "Gamertag for user 3", "User");
+
+constexpr uint32_t kDashboardID = 0xFFFE07D1;
 
 UserProfile::UserProfile(uint8_t index) {
   // 58410A1F checks the user XUID against a mask of 0x00C0000000000000 (3<<54),
@@ -27,6 +64,29 @@ UserProfile::UserProfile(uint8_t index) {
   name_ = "User";
   if (index) {
     name_ = "User_" + std::to_string(index);
+  }
+
+  switch (index) {
+    case 0: {
+      xuid_ = cvars::user_0_xuid;
+      name_ = cvars::user_0_name;
+      break;
+    }
+    case 1: {
+      xuid_ = cvars::user_1_xuid;
+      name_ = cvars::user_1_name;
+      break;
+    }
+    case 2: {
+      xuid_ = cvars::user_2_xuid;
+      name_ = cvars::user_2_name;
+      break;
+    }
+    case 3: {
+      xuid_ = cvars::user_3_xuid;
+      name_ = cvars::user_3_name;
+      break;
+    }
   }
 
   // https://cs.rin.ru/forum/viewtopic.php?f=38&t=60668&hilit=gfwl+live&start=195
