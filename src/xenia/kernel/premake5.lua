@@ -11,6 +11,7 @@ project("xenia-kernel")
     "fmt",
     "zlib",
     "pugixml",
+    "libcurl",
     "xenia-apu",
     "xenia-base",
     "xenia-cpu",

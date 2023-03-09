@@ -52,14 +52,22 @@ void CreateProfileDialog::OnDraw(ImGuiIO& io) {
   ImGui::TextUnformatted("Gamertag:");
   ImGui::InputText("##Gamertag", gamertag_, sizeof(gamertag_));
 
+  ImGui::Checkbox("Xbox Live Enabled", &live_enabled);
+
   const std::string gamertag_string = std::string(gamertag_);
   bool valid = profile_manager->IsGamertagValid(gamertag_string);
 
   ImGui::BeginDisabled(!valid);
   if (ImGui::Button("Create")) {
     bool autologin = (profile_manager->GetAccountCount() == 0);
-    if (profile_manager->CreateProfile(gamertag_string, autologin,
-                                       migration_) &&
+    uint32_t reserved_flags = 0;
+
+    if (live_enabled) {
+      reserved_flags |= X_XAMACCOUNTINFO::AccountReservedFlags::kLiveEnabled;
+    }
+
+    if (profile_manager->CreateProfile(gamertag_string, autologin, migration_,
+                                       reserved_flags) &&
         migration_) {
       emulator_window_->emulator()->DataMigration(0xB13EBABEBABEBABE);
     }
