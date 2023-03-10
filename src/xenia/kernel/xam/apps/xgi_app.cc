@@ -273,6 +273,9 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
         xe::be<uint16_t> dwMaxPrivateSlots;
       }* data = reinterpret_cast<message_data*>(buffer);
 
+      // Hacky fix for qos problem.
+      resetQosCache();
+
       XELOGI("XSessionModify({:08X} {:08X} {:08X} {:08X})",
              data->hSession.get(), data->dwFlags.get(),
              data->dwMaxPublicSlots.get(), data->dwMaxPrivateSlots.get());
