@@ -45,7 +45,7 @@
 
 using namespace rapidjson;
 
-DEFINE_string(api_address, "http://xbl.craftycodie.com", "Xenia Master Server Address", "Live");
+DEFINE_string(api_address, "http://xbl.craftycodie.com:36000", "Xenia Master Server Address", "Live");
 
 // TODO: Remove - Codie
 std::size_t callback(const char* in, std::size_t size, std::size_t num,
@@ -799,8 +799,10 @@ uint16_t GetMappedConnectPort(uint16_t port) {
   if (mappedConnectPorts.find(port) != mappedConnectPorts.end())
     return mappedConnectPorts[port];
   else {
-    if (mappedConnectPorts.find(0) != mappedConnectPorts.end())
+    if (mappedConnectPorts.find(0) != mappedConnectPorts.end()) {
+      XELOGI("Using wildcard connect port for guest port {}!", port);
       return mappedConnectPorts[0];
+    }
 
     XELOGW("No mapped connect port found for {}!", port);
     return port;
@@ -811,8 +813,10 @@ uint16_t GetMappedBindPort(uint16_t port) {
   if (mappedBindPorts.find(port) != mappedBindPorts.end())
     return mappedBindPorts[port];
   else {
-    if (mappedBindPorts.find(0) != mappedBindPorts.end())
+    if (mappedBindPorts.find(0) != mappedBindPorts.end()) {
+      XELOGI("Using wildcard bind port for guest port {}!", port);
       return mappedBindPorts[0];
+    }
 
     XELOGW("No mapped bind port found for {}!", port);
     return port;
@@ -1325,6 +1329,11 @@ dword_result_t NetDll_XNetQosRelease_entry(dword_t caller,
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetQosRelease, kNetworking, kStub);
 
+// Because qos is handled synronously right now and does a curl,
+// and this would be called every second in game for some titles,
+// we cache the first request and clear the cache on session modification.
+//std::list<xe::be<uint64_t>> qosSentList{};
+bool qosSent;
 dword_result_t NetDll_XNetQosListen_entry(dword_t caller, lpvoid_t sessionId,
                                           lpvoid_t data, dword_t data_size,
                                           dword_t r7, dword_t flags) {
@@ -1339,57 +1348,63 @@ dword_result_t NetDll_XNetQosListen_entry(dword_t caller, lpvoid_t sessionId,
     const xe::be<uint64_t>* sessionId_ptr =
         (xe::be<uint64_t>*)sessionId.host_address();
 
+  if (!qosSent) {
+#pragma region Curl
+      /*
+          TODO:
+              - Refactor the CURL out to a separate class.
+              - Use the overlapped task to do this asyncronously.
+      */
 
-  
-                  #pragma region Curl
-  /*
-      TODO:
-          - Refactor the CURL out to a separate class.
-          - Use the overlapped task to do this asyncronously.
-  */
+      std::stringstream sessionIdStr;
+      sessionIdStr << std::hex << std::noshowbase << std::setw(16)
+                   << std::setfill('0') << *sessionId_ptr;
 
-  std::stringstream sessionIdStr;
-  sessionIdStr << std::hex << std::noshowbase << std::setw(16)
-               << std::setfill('0') << *sessionId_ptr;
+      CURL* curl;
+      CURLcode res;
 
-  CURL* curl;
-  CURLcode res;
+      curl_global_init(CURL_GLOBAL_ALL);
+      curl = curl_easy_init();
+      if (curl == NULL) {
+        return 128;
+      }
 
-  curl_global_init(CURL_GLOBAL_ALL);
-  curl = curl_easy_init();
-  if (curl == NULL) {
-    return 128;
-  }
+      std::stringstream out;
 
-  std::stringstream out;
+      struct curl_slist* headers = NULL;
 
-  struct curl_slist* headers = NULL;
+      std::stringstream titleId;
+      titleId << std::hex << std::noshowbase << std::setw(8)
+              << std::setfill('0') << kernel_state()->title_id();
 
-  std::stringstream titleId;
-  titleId << std::hex << std::noshowbase << std::setw(8) << std::setfill('0')
-          << kernel_state()->title_id();
+      std::stringstream url;
+      url << cvars::api_address << "/title/" << titleId.str() << "/sessions/"
+          << sessionIdStr.str() << "/qos";
 
-  std::stringstream url;
-  url << cvars::api_address << "/title/" << titleId.str() << "/sessions/" << sessionIdStr.str() << "/qos";
-  
-  curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, (curl_off_t)data_size);
-  curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data_ptr);
-  curl_easy_setopt(curl, CURLOPT_URL, url.str().c_str());
+      curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE,
+                       (curl_off_t)data_size);
+      curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data_ptr);
+      curl_easy_setopt(curl, CURLOPT_URL, url.str().c_str());
 
-  /* enable verbose for easier tracing */
-  curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
-  //curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "POST");
+      /* enable verbose for easier tracing */
+      curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
+      // curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "POST");
 
-  res = curl_easy_perform(curl);
+      res = curl_easy_perform(curl);
 
-  curl_easy_cleanup(curl);
-  curl_global_cleanup();
+      curl_easy_cleanup(curl);
+      curl_global_cleanup();
+
+      qosSent = true;
 #pragma endregion
+    }
 
 
   return X_ERROR_SUCCESS;
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetQosListen, kNetworking, kStub);
+
+void resetQosCache() { qosSent = false; }
 
 dword_result_t NetDll_XNetQosLookup_entry(dword_t caller, dword_t sessionsCount, dword_t unk2, lpvoid_t sessionIdPtrsPtr,
     dword_t unk4,
