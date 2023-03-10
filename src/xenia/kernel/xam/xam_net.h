@@ -28,6 +28,8 @@ uint16_t GetMappedConnectPort(uint16_t port);
 uint16_t GetMappedBindPort(uint16_t port);
 std::string GetApiAddress();
 
+void resetQosCache();
+
 }  // namespace xam
 }  // namespace kernel
 }  // namespace xe

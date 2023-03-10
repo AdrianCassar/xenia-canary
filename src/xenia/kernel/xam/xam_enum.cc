@@ -176,6 +176,8 @@ dword_result_t XamCreateEnumeratorHandle_entry(
         memcpy(item->server_description, server["description"].GetString(),
                strlen(server["description"].GetString()));
       }
+    } else {
+        return 1;
     }
 
 #pragma endregion
