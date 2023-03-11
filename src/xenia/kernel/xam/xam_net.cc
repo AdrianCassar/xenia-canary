@@ -45,7 +45,7 @@
 
 using namespace rapidjson;
 
-DEFINE_string(api_address, "http://xbl.craftycodie.com:36000", "Xenia Master Server Address", "Live");
+DEFINE_string(api_address, "http://xbl.craftycodie.com:36001", "Xenia Master Server Address", "Live");
 
 // TODO: Remove - Codie
 std::size_t callback(const char* in, std::size_t size, std::size_t num,
