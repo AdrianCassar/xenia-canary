@@ -153,6 +153,186 @@ struct X_WSADATA {
   xe::be<uint32_t> vendor_info_ptr;
 };
 
+
+void RegisterPlayer() {
+#pragma region Curl
+  /*
+      TODO:
+          - Refactor the CURL out to a separate class.
+          - Use the overlapped task to do this asyncronously.
+  */
+
+  in_addr ip_online = getOnlineIp();
+
+  char str[INET_ADDRSTRLEN];
+  inet_ntop(AF_INET, &ip_online, str, INET_ADDRSTRLEN);
+
+  Document d;
+  d.SetObject();
+
+  Document::AllocatorType& allocator = d.GetAllocator();
+
+  size_t sz = allocator.Size();
+
+  std::stringstream macAddressString;
+  macAddressString << std::hex << std::noshowbase << std::setw(12)
+                   << std::setfill('0') << MacAddresstoUint64(getMacAddress());
+
+  char ipString[INET_ADDRSTRLEN];
+  inet_ntop(AF_INET, &ip_online, ipString, INET_ADDRSTRLEN);
+
+  std::stringstream machineIdStr;
+  machineIdStr << std::hex << std::noshowbase << std::setw(16)
+               << std::setfill('0') << getMachineId();
+
+  auto xuid = kernel_state()->xam_state()->GetUserProfile((uint32_t)0)->xuid();
+  std::stringstream xuidStr;
+  xuidStr << std::hex << std::noshowbase << std::setw(16) << std::setfill('0')
+          << xuid;
+
+  d.AddMember("xuid", xuidStr.str(), allocator);
+  d.AddMember("machineId", machineIdStr.str(), allocator);
+  d.AddMember("hostAddress", std::string(ipString), allocator);
+  d.AddMember("macAddress", macAddressString.str(), allocator);
+
+  rapidjson::StringBuffer strbuf;
+  PrettyWriter<rapidjson::StringBuffer> writer(strbuf);
+  d.Accept(writer);
+
+  CURL* curl;
+  CURLcode res;
+
+  curl_global_init(CURL_GLOBAL_ALL);
+  curl = curl_easy_init();
+  if (curl == NULL) {
+    return;
+  }
+
+  std::stringstream out;
+
+  struct curl_slist* headers = NULL;
+  headers = curl_slist_append(headers, "Content-Type: application/json");
+  headers = curl_slist_append(headers, "Accept: application/json");
+  headers = curl_slist_append(headers, "charset: utf-8");
+
+  std::stringstream url;
+  url << GetApiAddress() << "/players";
+  curl_easy_setopt(curl, CURLOPT_URL, url.str().c_str());
+
+  curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "POST");
+  curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+  curl_easy_setopt(curl, CURLOPT_USERAGENT, "xenia");
+  curl_easy_setopt(curl, CURLOPT_POSTFIELDS, strbuf.GetString());
+
+  res = curl_easy_perform(curl);
+
+  curl_easy_cleanup(curl);
+  int httpCode(0);
+  curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &httpCode);
+  curl_global_cleanup();
+
+#pragma endregion
+}
+
+std::map<uint16_t, uint16_t> mappedConnectPorts{};
+std::map<uint16_t, uint16_t> mappedBindPorts{};
+
+uint16_t GetMappedConnectPort(uint16_t port) {
+  if (mappedConnectPorts.find(port) != mappedConnectPorts.end())
+    return mappedConnectPorts[port];
+  else {
+    if (mappedConnectPorts.find(0) != mappedConnectPorts.end()) {
+      XELOGI("Using wildcard connect port for guest port {}!", port);
+      return mappedConnectPorts[0];
+    }
+
+    XELOGW("No mapped connect port found for {}!", port);
+    return port;
+  }
+}
+
+uint16_t GetMappedBindPort(uint16_t port) {
+  if (mappedBindPorts.find(port) != mappedBindPorts.end())
+    return mappedBindPorts[port];
+  else {
+    if (mappedBindPorts.find(0) != mappedBindPorts.end()) {
+      XELOGI("Using wildcard bind port for guest port {}!", port);
+      return mappedBindPorts[0];
+    }
+
+    XELOGW("No mapped bind port found for {}!", port);
+    return port;
+  }
+}
+
+std::string GetApiAddress() { return cvars::api_address; }
+
+void DownloadPortMappings() {
+#pragma region Curl
+  /*
+      TODO:
+          - Refactor the CURL out to a separate class.
+          - Use the overlapped task to do this asyncronously.
+  */
+  CURL* curl;
+  CURLcode res;
+
+  curl_global_init(CURL_GLOBAL_ALL);
+  curl = curl_easy_init();
+  if (curl == NULL) {
+    return;
+  }
+
+  std::stringstream out;
+
+  struct curl_slist* headers = NULL;
+  headers = curl_slist_append(headers, "Content-Type: application/json");
+  headers = curl_slist_append(headers, "Accept: application/json");
+  headers = curl_slist_append(headers, "charset: utf-8");
+
+  std::stringstream titleId;
+  titleId << std::hex << std::noshowbase << std::setw(8) << std::setfill('0')
+          << kernel_state()->title_id();
+
+  std::stringstream url;
+  url << cvars::api_address << "/title/" << titleId.str() << "/ports";
+
+  curl_easy_setopt(curl, CURLOPT_URL, url.str().c_str());
+
+  curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "GET");
+  curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+  curl_easy_setopt(curl, CURLOPT_USERAGENT, "xenia");
+  curl_easy_setopt(curl, CURLOPT_WRITEDATA, &out);
+  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, callback);
+
+  res = curl_easy_perform(curl);
+
+  curl_easy_cleanup(curl);
+  int httpCode(0);
+  curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &httpCode);
+  curl_global_cleanup();
+
+  if (httpCode == 200) {
+    rapidjson::Document d;
+    d.Parse(out.str());
+
+    if (d.HasMember("connect")) {
+      for (const auto& mapping : d["connect"].GetArray()) {
+        mappedConnectPorts[mapping["port"].GetInt()] =
+            mapping["mappedTo"].GetInt();
+      }
+    }
+
+    if (d.HasMember("bind")) {
+      for (const auto& mapping : d["bind"].GetArray()) {
+        mappedBindPorts[mapping["port"].GetInt()] =
+            mapping["mappedTo"].GetInt();
+      }
+    }
+  }
+#pragma endregion
+}
+
 void LoadSockaddr(const uint8_t* ptr, sockaddr* out_addr) {
   out_addr->sa_family = xe::load_and_swap<uint16_t>(ptr + 0);
   switch (out_addr->sa_family) {
@@ -299,6 +479,9 @@ DECLARE_XAM_EXPORT1(NetDll_XNetRandom, kNetworking, kStub);
 
 dword_result_t NetDll_WSAStartup_entry(dword_t caller, word_t version,
                                        pointer_t<X_WSADATA> data_ptr) {
+  DownloadPortMappings();
+  RegisterPlayer();
+
 // TODO(benvanik): abstraction layer needed.
 #ifdef XE_PLATFORM_WIN32
   WSADATA wsaData;
@@ -711,186 +894,8 @@ uint64_t getMachineId() {
 
 uint16_t getPort() { return 36000; }
 
-void RegisterPlayer() {
-#pragma region Curl
-  /*
-      TODO:
-          - Refactor the CURL out to a separate class.
-          - Use the overlapped task to do this asyncronously.
-  */
-
-  in_addr online_ip = getOnlineIp();
-
-  char str[INET_ADDRSTRLEN];
-  inet_ntop(AF_INET, &online_ip, str, INET_ADDRSTRLEN);
-
-  Document d;
-  d.SetObject();
-
-  Document::AllocatorType& allocator = d.GetAllocator();
-
-  size_t sz = allocator.Size();
-
-            std::stringstream macAddressString;
-  macAddressString << std::hex << std::noshowbase << std::setw(12)
-                   << std::setfill('0') << MacAddresstoUint64(getMacAddress());
-
-  char ipString[INET_ADDRSTRLEN];
-  inet_ntop(AF_INET, &online_ip, ipString, INET_ADDRSTRLEN);
-
-  std::stringstream machineIdStr;
-  machineIdStr << std::hex << std::noshowbase << std::setw(16)
-               << std::setfill('0') << getMachineId();
-
-  auto xuid = kernel_state()->xam_state()->GetUserProfile((uint32_t)0)->xuid();
-  std::stringstream xuidStr;
-  xuidStr << std::hex << std::noshowbase << std::setw(16)
-               << std::setfill('0') << xuid;
-
-  d.AddMember("xuid", xuidStr.str(), allocator);
-  d.AddMember("machineId", machineIdStr.str(), allocator);
-  d.AddMember("hostAddress", std::string(ipString), allocator);
-  d.AddMember("macAddress", macAddressString.str(), allocator);
-
-  rapidjson::StringBuffer strbuf;
-  PrettyWriter<rapidjson::StringBuffer> writer(strbuf);
-  d.Accept(writer);
-
-  CURL* curl;
-  CURLcode res;
-
-  curl_global_init(CURL_GLOBAL_ALL);
-  curl = curl_easy_init();
-  if (curl == NULL) {
-    return;
-  }
-
-  std::stringstream out;
-
-  struct curl_slist* headers = NULL;
-  headers = curl_slist_append(headers, "Content-Type: application/json");
-  headers = curl_slist_append(headers, "Accept: application/json");
-  headers = curl_slist_append(headers, "charset: utf-8");
-
-  std::stringstream url;
-  url << GetApiAddress() << "/players";
-  curl_easy_setopt(curl, CURLOPT_URL, url.str().c_str());
-
-  curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "POST");
-  curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-  curl_easy_setopt(curl, CURLOPT_USERAGENT, "xenia");
-  curl_easy_setopt(curl, CURLOPT_POSTFIELDS, strbuf.GetString());
-
-  res = curl_easy_perform(curl);
-
-  curl_easy_cleanup(curl);
-  int httpCode(0);
-  curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &httpCode);
-  curl_global_cleanup();
-
-#pragma endregion
-}
-
-std::map<uint16_t, uint16_t> mappedConnectPorts{};
-std::map<uint16_t, uint16_t> mappedBindPorts{};
 
 
-uint16_t GetMappedConnectPort(uint16_t port) {
-  if (mappedConnectPorts.find(port) != mappedConnectPorts.end())
-    return mappedConnectPorts[port];
-  else {
-    if (mappedConnectPorts.find(0) != mappedConnectPorts.end()) {
-      XELOGI("Using wildcard connect port for guest port {}!", port);
-      return mappedConnectPorts[0];
-    }
-
-    XELOGW("No mapped connect port found for {}!", port);
-    return port;
-  }
-}
-
-uint16_t GetMappedBindPort(uint16_t port) {
-  if (mappedBindPorts.find(port) != mappedBindPorts.end())
-    return mappedBindPorts[port];
-  else {
-    if (mappedBindPorts.find(0) != mappedBindPorts.end()) {
-      XELOGI("Using wildcard bind port for guest port {}!", port);
-      return mappedBindPorts[0];
-    }
-
-    XELOGW("No mapped bind port found for {}!", port);
-    return port;
-  }
-}
-
-std::string GetApiAddress() { return cvars::api_address; }
-
-void DownloadPortMappings() {
-#pragma region Curl
-  /*
-      TODO:
-          - Refactor the CURL out to a separate class.
-          - Use the overlapped task to do this asyncronously.
-  */
-  CURL* curl;
-  CURLcode res;
-
-  curl_global_init(CURL_GLOBAL_ALL);
-  curl = curl_easy_init();
-  if (curl == NULL) {
-    return;
-  }
-
-  std::stringstream out;
-
-  struct curl_slist* headers = NULL;
-  headers = curl_slist_append(headers, "Content-Type: application/json");
-  headers = curl_slist_append(headers, "Accept: application/json");
-  headers = curl_slist_append(headers, "charset: utf-8");
-
-  std::stringstream titleId;
-  titleId << std::hex << std::noshowbase << std::setw(8) << std::setfill('0')
-          << kernel_state()->title_id();
-
-  std::stringstream url;
-  url << cvars::api_address << "/title/" << titleId.str()
-      << "/ports";
-
-  curl_easy_setopt(curl, CURLOPT_URL, url.str().c_str());
-
-  curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "GET");
-  curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-  curl_easy_setopt(curl, CURLOPT_USERAGENT, "xenia");
-  curl_easy_setopt(curl, CURLOPT_WRITEDATA, &out);
-  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, callback);
-
-  res = curl_easy_perform(curl);
-
-  curl_easy_cleanup(curl);
-  int httpCode(0);
-  curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &httpCode);
-  curl_global_cleanup();
-
-  if (httpCode == 200) {
-    rapidjson::Document d;
-    d.Parse(out.str());
-
-    if (d.HasMember("connect")) {
-      for (const auto& mapping : d["connect"].GetArray()) {
-        mappedConnectPorts[mapping["port"].GetInt()] =
-            mapping["mappedTo"].GetInt();
-      }
-    }
-
-    if (d.HasMember("bind")) {
-      for (const auto& mapping : d["bind"].GetArray()) {
-        mappedBindPorts[mapping["port"].GetInt()] =
-            mapping["mappedTo"].GetInt();
-      }
-    }
-  }
-#pragma endregion
-}
 
 
 dword_result_t NetDll_XNetGetTitleXnAddr_entry(dword_t caller,
@@ -899,8 +904,6 @@ dword_result_t NetDll_XNetGetTitleXnAddr_entry(dword_t caller,
     // TODO: this should be done ahead of time, or
     // asynchronously returning XNET_GET_XNADDR_PENDING
     FetchUPnP();
-    RegisterPlayer();
-    DownloadPortMappings();
   }
 
   addr_ptr->ina = online_ip_;
@@ -1342,62 +1345,65 @@ dword_result_t NetDll_XNetQosListen_entry(dword_t caller, lpvoid_t sessionId,
          caller.value(), sessionId.host_address(), data.host_address(),
          data_size.value(), r7.value(), flags.value());
 
-    if (data_size <= 0) return 0;
+    if (data_size <= 0) return X_ERROR_SUCCESS;
 
-  const void* data_ptr = (void*)data.host_address();
-    const xe::be<uint64_t>* sessionId_ptr =
-        (xe::be<uint64_t>*)sessionId.host_address();
 
-  if (!qosSent) {
+    if (flags & 4) {
+      const void* data_ptr = (void*)data.host_address();
+      const xe::be<uint64_t>* sessionId_ptr =
+            (xe::be<uint64_t>*)sessionId.host_address();
+
+        if (!qosSent) {
 #pragma region Curl
-      /*
-          TODO:
-              - Refactor the CURL out to a separate class.
-              - Use the overlapped task to do this asyncronously.
-      */
+        /*
+            TODO:
+                - Refactor the CURL out to a separate class.
+                - Use the overlapped task to do this asyncronously.
+        */
 
-      std::stringstream sessionIdStr;
-      sessionIdStr << std::hex << std::noshowbase << std::setw(16)
-                   << std::setfill('0') << *sessionId_ptr;
+        std::stringstream sessionIdStr;
+        sessionIdStr << std::hex << std::noshowbase << std::setw(16)
+                     << std::setfill('0') << *sessionId_ptr;
 
-      CURL* curl;
-      CURLcode res;
+        CURL* curl;
+        CURLcode res;
 
-      curl_global_init(CURL_GLOBAL_ALL);
-      curl = curl_easy_init();
-      if (curl == NULL) {
-        return 128;
-      }
+        curl_global_init(CURL_GLOBAL_ALL);
+        curl = curl_easy_init();
+        if (curl == NULL) {
+          return 128;
+        }
 
-      std::stringstream out;
+        std::stringstream out;
 
-      struct curl_slist* headers = NULL;
+        struct curl_slist* headers = NULL;
 
-      std::stringstream titleId;
-      titleId << std::hex << std::noshowbase << std::setw(8)
-              << std::setfill('0') << kernel_state()->title_id();
+        std::stringstream titleId;
+        titleId << std::hex << std::noshowbase << std::setw(8)
+                << std::setfill('0') << kernel_state()->title_id();
 
-      std::stringstream url;
-      url << cvars::api_address << "/title/" << titleId.str() << "/sessions/"
-          << sessionIdStr.str() << "/qos";
+        std::stringstream url;
+        url << cvars::api_address << "/title/" << titleId.str() << "/sessions/"
+            << sessionIdStr.str() << "/qos";
 
-      curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE,
-                       (curl_off_t)data_size);
-      curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data_ptr);
-      curl_easy_setopt(curl, CURLOPT_URL, url.str().c_str());
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE,
+                         (curl_off_t)data_size);
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data_ptr);
+        curl_easy_setopt(curl, CURLOPT_URL, url.str().c_str());
 
-      /* enable verbose for easier tracing */
-      curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
-      // curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "POST");
+        /* enable verbose for easier tracing */
+        curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
+        // curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "POST");
 
-      res = curl_easy_perform(curl);
+        res = curl_easy_perform(curl);
 
-      curl_easy_cleanup(curl);
-      curl_global_cleanup();
+        curl_easy_cleanup(curl);
+        curl_global_cleanup();
 
-      qosSent = true;
+        qosSent = true;
 #pragma endregion
-    }
+      }
+  }
 
 
   return X_ERROR_SUCCESS;
@@ -1423,7 +1429,7 @@ dword_result_t NetDll_XNetQosLookup_entry(dword_t caller, dword_t sessionsCount,
         kernel_memory()->TranslateVirtual<xe::be<uint64_t>*>(sessionId_ptrs_ptr);
 
 
-        #pragma region Curl
+    #pragma region Curl
     /*
         TODO:
             - Refactor the CURL out to a separate class.
