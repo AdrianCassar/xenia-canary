@@ -382,6 +382,9 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
       return X_E_SUCCESS;
     }
     case 0x000B001C: {
+      resetQosCache();
+
+
       XELOGI("XSessionSearchEx");
 
       int i = 0;
@@ -1098,6 +1101,7 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
     case 0x000B0006: {
       assert_true(!buffer_length ||
                   buffer_length == sizeof(XGI_XUSER_SET_CONTEXT));
+      resetQosCache();
       const XGI_XUSER_SET_CONTEXT* xgi_context =
           reinterpret_cast<const XGI_XUSER_SET_CONTEXT*>(buffer);
 
@@ -1177,6 +1181,9 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
         // - XamSessionRefObjByHandle
         // - [this]
         // - CloseHandle
+        resetQosCache();
+
+
         uint32_t session_handle = xe::load_and_swap<uint32_t>(buffer + 0x0);
         uint32_t flags = xe::load_and_swap<uint32_t>(buffer + 0x4);
         uint32_t num_slots_public = xe::load_and_swap<uint32_t>(buffer + 0x8);
@@ -1295,6 +1302,8 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
     #pragma endregion
         } else {
     #pragma region Curl
+          resetQosCache();
+
             /*
                 TODO:
                     - Refactor the CURL out to a separate class.
@@ -1405,6 +1414,9 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
       XELOGD("XGISessionDelete({:08X}, {:08X}), implemented in netplay",
              buffer_ptr, buffer_length);
 
+            resetQosCache();
+
+
       struct message_data {
         xe::be<uint32_t> session_handle;
       }* data = reinterpret_cast<message_data*>(buffer);
@@ -1469,6 +1481,9 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
       uint32_t xuid_array = xe::load_and_swap<uint32_t>(buffer + 0x8);
       uint32_t user_index_array = xe::load_and_swap<uint32_t>(buffer + 0xC);
       uint32_t private_slots_array = xe::load_and_swap<uint32_t>(buffer + 0x10);
+
+            resetQosCache();
+
 
       // Local uses user indices, remote uses XUIDs
       if (xuid_array == 0) {
@@ -1568,6 +1583,9 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
       return X_E_SUCCESS;
     }
     case 0x000B0013: {
+      resetQosCache();
+
+
       assert_true(buffer_length == 0x14);
       uint32_t session_ptr = xe::load_and_swap<uint32_t>(buffer + 0x0);
       uint32_t array_count = xe::load_and_swap<uint32_t>(buffer + 0x4);
