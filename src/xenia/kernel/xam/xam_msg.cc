@@ -34,7 +34,7 @@ DECLARE_XAM_EXPORT1(XMsgInProcessCall, kNone, kImplemented);
 dword_result_t XMsgSystemProcessCall_entry(dword_t app, dword_t message,
                                            dword_t buffer,
                                            dword_t buffer_length) {
-  auto result = kernel_state()->app_manager()->DispatchMessageAsync(
+  auto result = kernel_state()->app_manager()->DispatchMessageSync(
       app, message, buffer, buffer_length);
   if (result == X_ERROR_NOT_FOUND) {
     XELOGE("XMsgSystemProcessCall: app {:08X} undefined", app);
@@ -53,15 +53,14 @@ X_HRESULT xeXMsgStartIORequestEx(uint32_t app, uint32_t message,
                                  uint32_t buffer_length,
                                  XMSGSTARTIOREQUEST_UNKNOWNARG* unknown) {
   auto result = kernel_state()->app_manager()->DispatchMessageAsync(
-      app, message, buffer_ptr, buffer_length);
+      app, message, buffer_ptr, buffer_length, overlapped_ptr);
   if (result == X_E_NOTFOUND) {
     XELOGE("XMsgStartIORequestEx: app {:08X} undefined", app);
     result = X_E_INVALIDARG;
     XThread::SetLastError(X_ERROR_NOT_FOUND);
   }
   if (overlapped_ptr) {
-    kernel_state()->CompleteOverlappedImmediate(overlapped_ptr, result);
-    result = X_ERROR_IO_PENDING;
+      result = X_ERROR_IO_PENDING;
   }
   if (result == X_ERROR_SUCCESS || result == X_ERROR_IO_PENDING) {
     XThread::SetLastError(0);
