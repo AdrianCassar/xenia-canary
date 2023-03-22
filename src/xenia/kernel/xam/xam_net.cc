@@ -1320,11 +1320,57 @@ dword_result_t NetDll_XNetQosRelease_entry(dword_t caller,
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetQosRelease, kNetworking, kStub);
 
-// Because qos is handled synronously right now and does a curl,
-// and this would be called every second in game for some titles,
-// we cache the first request and clear the cache on session modification.
-//std::list<xe::be<uint64_t>> qosSentList{};
-bool qosSent;
+void sendqos(uint64_t sessionId, void* qosData, size_t qosLength) {
+
+
+            /*
+  TODO:
+      - Refactor the CURL out to a separate class.
+      - Use the overlapped task to do this asyncronously.
+*/
+
+  std::stringstream sessionIdStr;
+  sessionIdStr << std::hex << std::noshowbase << std::setw(16)
+               << std::setfill('0') << sessionId;
+
+  CURL* curl;
+  CURLcode res;
+
+  curl_global_init(CURL_GLOBAL_ALL);
+  curl = curl_easy_init();
+  if (curl == NULL) {
+    return;
+  }
+
+  std::stringstream out;
+
+  struct curl_slist* headers = NULL;
+
+  std::stringstream titleId;
+  titleId << std::hex << std::noshowbase << std::setw(8) << std::setfill('0')
+          << kernel_state()->title_id();
+
+  std::stringstream url;
+  url << cvars::api_address << "/title/" << titleId.str() << "/sessions/"
+      << sessionIdStr.str() << "/qos";
+
+  curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, (curl_off_t)qosLength);
+  curl_easy_setopt(curl, CURLOPT_POSTFIELDS, qosData);
+  curl_easy_setopt(curl, CURLOPT_URL, url.str().c_str());
+
+  /* enable verbose for easier tracing */
+  curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
+  // curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "POST");
+
+  res = curl_easy_perform(curl);
+
+  curl_easy_cleanup(curl);
+  curl_global_cleanup();
+
+  free(qosData);
+
+}
+
 dword_result_t NetDll_XNetQosListen_entry(dword_t caller, lpvoid_t sessionId,
                                           lpvoid_t data, dword_t data_size,
                                           dword_t r7, dword_t flags) {
@@ -1340,66 +1386,19 @@ dword_result_t NetDll_XNetQosListen_entry(dword_t caller, lpvoid_t sessionId,
     if (flags & 4) {
       const void* data_ptr = (void*)data.host_address();
       const xe::be<uint64_t>* sessionId_ptr =
-            (xe::be<uint64_t>*)sessionId.host_address();
+          (xe::be<uint64_t>*)sessionId.host_address();
 
-        if (!qosSent) {
-#pragma region Curl
-        /*
-            TODO:
-                - Refactor the CURL out to a separate class.
-                - Use the overlapped task to do this asyncronously.
-        */
+      auto thread_buffer = malloc(data_size);
+      memcpy(thread_buffer, data_ptr, data_size);
 
-        std::stringstream sessionIdStr;
-        sessionIdStr << std::hex << std::noshowbase << std::setw(16)
-                     << std::setfill('0') << *sessionId_ptr;
-
-        CURL* curl;
-        CURLcode res;
-
-        curl_global_init(CURL_GLOBAL_ALL);
-        curl = curl_easy_init();
-        if (curl == NULL) {
-          return 128;
-        }
-
-        std::stringstream out;
-
-        struct curl_slist* headers = NULL;
-
-        std::stringstream titleId;
-        titleId << std::hex << std::noshowbase << std::setw(8)
-                << std::setfill('0') << kernel_state()->title_id();
-
-        std::stringstream url;
-        url << cvars::api_address << "/title/" << titleId.str() << "/sessions/"
-            << sessionIdStr.str() << "/qos";
-
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE,
-                         (curl_off_t)data_size);
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data_ptr);
-        curl_easy_setopt(curl, CURLOPT_URL, url.str().c_str());
-
-        /* enable verbose for easier tracing */
-        curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
-        // curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "POST");
-
-        res = curl_easy_perform(curl);
-
-        curl_easy_cleanup(curl);
-        curl_global_cleanup();
-
-        qosSent = true;
-#pragma endregion
-      }
-  }
+      std::thread t1(sendqos, *sessionId_ptr, thread_buffer, data_size);
+      t1.detach();
+    }
 
 
   return X_ERROR_SUCCESS;
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetQosListen, kNetworking, kStub);
-
-void resetQosCache() { qosSent = false; }
 
 dword_result_t NetDll_XNetQosLookup_entry(dword_t caller, dword_t sessionsCount, dword_t unk2, lpvoid_t sessionIdPtrsPtr,
     dword_t unk4,

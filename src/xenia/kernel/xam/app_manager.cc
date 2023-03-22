@@ -49,12 +49,38 @@ X_HRESULT AppManager::DispatchMessageSync(uint32_t app_id, uint32_t message,
 
 X_HRESULT AppManager::DispatchMessageAsync(uint32_t app_id, uint32_t message,
                                            uint32_t buffer_ptr,
-                                           uint32_t buffer_length) {
+                                           uint32_t buffer_length,
+                                           uint32_t overlapped_ptr) {
+
   const auto& it = app_lookup_.find(app_id);
   if (it == app_lookup_.end()) {
     return X_E_NOTFOUND;
   }
-  return it->second->DispatchMessageSync(message, buffer_ptr, buffer_length);
+
+  auto buffer_in =
+      it->second->kernel_state_->memory()->SystemHeapAlloc(buffer_length);
+
+  auto hostOldBufferAddr =
+      it->second->kernel_state_->memory()->TranslateVirtual(buffer_ptr);
+  auto hostBufferAddr = it->second->kernel_state_->memory()->TranslateVirtual(buffer_in);
+
+  memcpy(hostBufferAddr, hostOldBufferAddr, buffer_length);
+
+  auto post = [it, buffer_in]() {
+    it->second->kernel_state_->memory()->SystemHeapFree(buffer_in);
+  };
+
+  auto run = [it, message, buffer_in, buffer_length]() -> X_RESULT {
+    return it->second->DispatchMessageSync(message, buffer_in, buffer_length);
+  };
+
+
+  if (overlapped_ptr)
+    it->second->kernel_state_->CompleteOverlappedDeferred(run, overlapped_ptr, nullptr, post);
+  else 
+      DispatchMessageSync(app_id, message, buffer_in, buffer_length);
+
+  return 0;
 }
 
 }  // namespace xam
