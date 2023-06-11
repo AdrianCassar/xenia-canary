@@ -163,7 +163,7 @@ struct clock_time_conversion<::xe::chrono::XSystemClock,
     std::atomic_thread_fence(std::memory_order_acq_rel);
 
     xe::chrono::hundrednanoseconds delta = (t - w_now);
-    if (!::cvars::clock_no_scaling) {
+    if (!xe::cvars::clock_no_scaling) {
       delta = std::chrono::floor<WClock_::duration>(
           delta / xe::Clock::guest_time_scalar());
     }
