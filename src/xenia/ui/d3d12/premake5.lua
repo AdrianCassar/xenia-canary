@@ -24,6 +24,7 @@ project("xenia-ui-window-d3d12-demo")
     "fmt",
     "imgui",
     "xenia-base",
+    "xenia-core",
     "xenia-ui",
     "xenia-ui-d3d12",
   })

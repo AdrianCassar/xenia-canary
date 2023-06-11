@@ -28,6 +28,7 @@ project("xenia-ui-window-vulkan-demo")
     "fmt",
     "imgui",
     "xenia-base",
+    "xenia-core",
     "xenia-ui",
     "xenia-ui-vulkan",
   })

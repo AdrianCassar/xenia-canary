@@ -23,6 +23,7 @@ project("xenia-hid-demo")
     "fmt",
     "imgui",
     "xenia-base",
+    "xenia-core",
     "xenia-hid",
     "xenia-hid-nop",
     "xenia-ui",
