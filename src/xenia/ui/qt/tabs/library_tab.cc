@@ -13,7 +13,7 @@ LibraryTab::LibraryTab() : XTab("Library") {
 
 void LibraryTab::Build() {
   layout_ = new QVBoxLayout();
-  layout_->setMargin(0);
+  layout_->setContentsMargins(0, 0, 0, 0);
   layout_->setSpacing(0);
   setLayout(layout_);
 

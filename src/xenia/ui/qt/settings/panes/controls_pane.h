@@ -10,7 +10,7 @@ namespace qt {
 class ControlsPane : public SettingsPane {
   Q_OBJECT
  public:
-  explicit ControlsPane() : SettingsPane(0xE7FC, "Controls") {}
+  explicit ControlsPane() : SettingsPane(QChar(0xE7FC), "Controls") {}
 
   void Build() override;
 };

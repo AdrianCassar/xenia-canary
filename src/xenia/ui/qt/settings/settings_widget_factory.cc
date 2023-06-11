@@ -144,7 +144,7 @@ QWidget* SettingsWidgetFactory::CreatePathInputWidget(
 
   SettingsLineEdit* line_edit = new SettingsLineEdit(item);
   XPushButton* browse_btn = new XPushButton();
-  browse_btn->SetIconFromGlyph(0xE838);
+  browse_btn->SetIconFromGlyph(QChar(0xE838));
   // TODO: Setup browse button logic
 
   control_layout->addWidget(line_edit);

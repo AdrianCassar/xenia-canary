@@ -23,7 +23,7 @@ XToolBarItem::XToolBarItem(XAction* action, QWidget* parent)
   // SLOT(setDefaultAction(QAction*)));
 }
 
-void XToolBarItem::enterEvent(QEvent* e) {
+void XToolBarItem::enterEvent(QEnterEvent* e) {
   return QToolButton::enterEvent(e);
   // Disable mouseover animation
   // TODO: Animation?

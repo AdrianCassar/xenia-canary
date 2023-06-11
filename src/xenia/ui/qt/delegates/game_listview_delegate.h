@@ -24,7 +24,7 @@ class XGameListViewDelegate : public QStyledItemDelegate {
                  const QStyleOptionViewItem& options,
                  const QModelIndex& index) const;
 
-  QPixmap icon_mask_;
+  QBitmap icon_mask_;
 };
 
 }  // namespace qt

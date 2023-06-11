@@ -12,7 +12,7 @@ class XGroupBox;
 class GeneralPane : public SettingsPane {
   Q_OBJECT
  public:
-  explicit GeneralPane() : SettingsPane(0xE713, "General") {}
+  explicit GeneralPane() : SettingsPane(QChar(0xE713), "General") {}
 
   void Build() override;
 };

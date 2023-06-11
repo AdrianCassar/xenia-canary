@@ -10,6 +10,7 @@
 #include <QCoreApplication>
 #include <QDebug>
 #include <QDirIterator>
+#include <QRegularExpression>
 
 #include "theme_manager.h"
 #include "xenia/base/logging.h"
@@ -37,7 +38,7 @@ const QString& ThemeManager::base_style() const {
   static QString* style = nullptr;
   if (!style) {
     style = new QString(file.readAll());
-    style->remove(QRegExp("[\\n\\t\\r]"));
+    style->remove(QRegularExpression("[\\n\\t\\r]"));
   }
 
   return *style;

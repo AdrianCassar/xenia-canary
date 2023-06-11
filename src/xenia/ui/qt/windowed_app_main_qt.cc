@@ -44,9 +44,6 @@ int main(int argc, char** argv) {
       "Xenia Xbox 360 Emulator Research Project");
   QCoreApplication::setOrganizationDomain("https://xenia.jp");
 
-  // enable high-dpi support
-  QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
-  QCoreApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
   QGuiApplication::setHighDpiScaleFactorRoundingPolicy(
       Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
 

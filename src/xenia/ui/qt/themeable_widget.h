@@ -25,7 +25,7 @@ class Themeable : public T {
 
   void ApplyTheme(const QString& theme_name) {
     if (!theme_name.isNull()) {
-      setObjectName(theme_name);
+      reinterpret_cast<QWidget*>(this)->setObjectName(theme_name);
     }
 
     ThemeManager& manager = ThemeManager::Instance();
@@ -34,15 +34,16 @@ class Themeable : public T {
     QString style = theme.StylesheetForComponent(theme_name);
     QString base_style = manager.base_style();
     if (!style.isNull()) {
-      setStyleSheet(base_style + style);
+      reinterpret_cast<QWidget*>(this)->setStyleSheet(base_style + style);
     }
   };
 
   virtual void paintEvent(QPaintEvent* event) override {
     QStyleOption opt;
-    opt.init(this);
+    opt.initFrom(this);
     QPainter p(this);
-    style()->drawPrimitive(QStyle::PE_Widget, &opt, &p, this);
+    reinterpret_cast<QWidget*>(this)->style()->drawPrimitive(QStyle::PE_Widget,
+                                                             &opt, &p, this);
     T::paintEvent(event);
   }
 };

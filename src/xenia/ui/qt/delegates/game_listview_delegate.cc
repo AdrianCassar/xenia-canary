@@ -12,7 +12,7 @@ namespace qt {
 XGameListViewDelegate::XGameListViewDelegate(QWidget* parent)
     : QStyledItemDelegate(parent) {
   QImage mask_image(":resources/graphics/GameIconMask.png");
-  icon_mask_ = QPixmap::fromImage(mask_image.createAlphaMask());
+  icon_mask_ = QBitmap::fromImage(mask_image.createAlphaMask());
 }
 
 void XGameListViewDelegate::paint(QPainter* painter,

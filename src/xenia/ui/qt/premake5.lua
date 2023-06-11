@@ -11,13 +11,15 @@ project("xenia-ui-qt")
   -- Setup Qt libraries
   qt.enable()
   qtmodules{"core", "gui", "widgets"}
-  qtprefix "Qt5"
+  qtprefix "Qt6"
 
   filter "configurations:Debug"
     qtsuffix "d"
   filter "configurations:Checked"
     qtsuffix "d"
   filter {}
+
+  buildoptions { "/Zc:__cplusplus", "/permissive-" }
 
   links({
     "xenia-base",
@@ -42,7 +44,7 @@ project("xenia-ui-qt-demoapp")
   -- Setup Qt libraries
   qt.enable()
   qtmodules{"core", "gui", "widgets"}
-  qtprefix "Qt5"
+  qtprefix "Qt6"
 
   filter "configurations:Debug"
     qtsuffix "d"
@@ -50,6 +52,8 @@ project("xenia-ui-qt-demoapp")
     qtsuffix "d"
   filter {}
   
+  buildoptions { "/Zc:__cplusplus", "/permissive-" }
+
   links({
     "xenia-base",
     "xenia-app-library",

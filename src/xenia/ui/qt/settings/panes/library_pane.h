@@ -10,7 +10,7 @@ namespace qt {
 class LibraryPane : public SettingsPane {
   Q_OBJECT
  public:
-  explicit LibraryPane() : SettingsPane(0xE8F1, "Library") {}
+  explicit LibraryPane() : SettingsPane(QChar(0xE8F1), "Library") {}
 
   void Build() override;
 };

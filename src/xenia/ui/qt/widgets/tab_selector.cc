@@ -106,7 +106,7 @@ void XTabSelector::mousePressEvent(QMouseEvent* event) {
   XTab* clicked_tab = nullptr;
   for (auto tab : tab_map_) {
     QRectF rect = tab.second;
-    if (rect.contains(event->x(), event->y())) {
+    if (rect.contains(event->pos())) {
       clicked_tab = tab.first;
       break;
     }

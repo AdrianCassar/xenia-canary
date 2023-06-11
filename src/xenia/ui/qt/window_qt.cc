@@ -133,8 +133,8 @@ void QtMenuItem::OnChildAdded(MenuItem* generic_child_item) {
       auto shortcut =
           hotkey.empty() ? 0 : QKeySequence(QString::fromStdString(hotkey));
 
-      qt_menu_->addAction(
-          title, [child_item]() { child_item->OnSelected(); }, shortcut);
+      qt_menu_->addAction(title, shortcut,
+                          [child_item]() { child_item->OnSelected(); });
     } break;
     case Type::kNormal: {
       // TODO?

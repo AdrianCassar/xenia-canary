@@ -55,7 +55,7 @@ void SettingsTab::BuildSidebar() {
   sidebar_container_->setObjectName("sidebarContainer");
 
   QVBoxLayout* sidebar_layout = new QVBoxLayout;
-  sidebar_layout->setMargin(0);
+  sidebar_layout->setContentsMargins(0, 0, 0, 0);
   sidebar_layout->setSpacing(0);
 
   sidebar_container_->setLayout(sidebar_layout);
@@ -80,7 +80,6 @@ void SettingsTab::BuildSidebar() {
   sidebar_title->setObjectName("sidebarTitle");
 
   QVBoxLayout* title_layout = new QVBoxLayout;
-  title_layout->setMargin(0);
   title_layout->setContentsMargins(0, 40, 0, 0);
   title_layout->setSpacing(0);
 

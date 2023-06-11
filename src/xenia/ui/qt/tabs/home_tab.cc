@@ -19,7 +19,7 @@ HomeTab::HomeTab() : XTab("Home", "HomeTab") { Build(); }
 
 void HomeTab::Build() {
   layout_ = new QHBoxLayout();
-  layout_->setMargin(0);
+  layout_->setContentsMargins(0, 0, 0, 0);
   layout_->setSpacing(0);
   setLayout(layout_);
 
@@ -33,7 +33,7 @@ void HomeTab::BuildSidebar() {
   sidebar_->setObjectName("sidebarContainer");
 
   QVBoxLayout* sidebar_layout = new QVBoxLayout;
-  sidebar_layout->setMargin(0);
+  sidebar_layout->setContentsMargins(0, 0, 0, 0);
   sidebar_layout->setSpacing(0);
 
   sidebar_->setLayout(sidebar_layout);
@@ -58,7 +58,6 @@ void HomeTab::BuildSidebar() {
   sidebar_title->setObjectName("sidebarTitle");
 
   QVBoxLayout* title_layout = new QVBoxLayout;
-  title_layout->setMargin(0);
   title_layout->setContentsMargins(0, 40, 0, 0);
   title_layout->setSpacing(0);
 
@@ -83,11 +82,11 @@ void HomeTab::BuildSidebar() {
 
   sidebar_toolbar_->addSpacing(20);
 
-  auto open_file_btn = sidebar_toolbar_->addAction(0xE838, "Open File");
+  auto open_file_btn = sidebar_toolbar_->addAction(QChar(0xE838), "Open File");
   connect(open_file_btn, &XSideBarButton::clicked, this,
           &HomeTab::OpenFileTriggered);
 
-  auto import_folder_btn = sidebar_toolbar_->addAction(0xE8F4, "Import Folder");
+  auto import_folder_btn = sidebar_toolbar_->addAction(QChar(0xE8F4), "Import Folder");
   connect(import_folder_btn, &XSideBarButton::clicked, this,
           &HomeTab::ImportFolderTriggered);
 

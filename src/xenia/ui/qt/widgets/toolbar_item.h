@@ -18,7 +18,7 @@ class XToolBarItem : public Themeable<QToolButton> {
   explicit XToolBarItem(XAction* action, QWidget* parent = nullptr);
 
  protected:
-  void enterEvent(QEvent*) override;
+  void enterEvent(QEnterEvent*) override;
   void mousePressEvent(QMouseEvent*) override;
 
  private:

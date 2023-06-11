@@ -46,7 +46,7 @@ class Theme {
   QString StylesheetForComponent(const QString& compoment);
 
   // Check the return value is valid with color.isValid()
-  QColor ColorForKey(const QString& key, QColor default = QColor()) const;
+  QColor ColorForKey(const QString& key, QColor color = QColor()) const;
 
   const QString& directory() const { return directory_; }
   const ThemeConfiguration& config() const { return config_; }

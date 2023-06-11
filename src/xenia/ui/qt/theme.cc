@@ -11,6 +11,7 @@
 #include <QCoreApplication>
 #include <QDebug>
 #include <QDirIterator>
+#include <QRegularExpression>
 
 namespace xe {
 namespace ui {
@@ -38,13 +39,13 @@ QString Theme::StylesheetForComponent(const QString& component) {
   return *styles_.insert(component, preprocessed_style);
 }
 
-QColor Theme::ColorForKey(const QString& key, QColor default) const {
-  QColor color = config_.ColorForKey(key);
+QColor Theme::ColorForKey(const QString& key, QColor color) const {
+  QColor color_ = config_.ColorForKey(key);
 
-  if (color.isValid()) {
-    return color;
+  if (color_.isValid()) {
+    return color_;
   } else {
-    return default;
+    return color;
   }
 }
 
@@ -59,7 +60,7 @@ QString Theme::PreprocessStylesheet(QString filename) {
   }
 
   QString style = file.readAll();
-  style.remove(QRegExp("[\\n\\t\\r]"));
+  style.remove(QRegularExpression("[\\n\\t\\r]"));
 
   for (const auto& color : config_.colors()) {
     QString macro = color.first;

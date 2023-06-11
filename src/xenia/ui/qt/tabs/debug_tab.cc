@@ -29,10 +29,10 @@ namespace qt {
 
 DebugTab::DebugTab() : XTab("Debug", "DebugTab") {
   sidebar_items_ =
-      QList<SidebarItem>{{0xE90F, "Components", CreateComponentsTab()},
-                         {0xE700, "Navigation", CreateNavigationTab()},
-                         {0xE790, "Theme", CreateThemeTab()},
-                         {0xE8F1, "Library", CreateLibraryTab()}};
+      QList<SidebarItem>{{QChar(0xE90F), "Components", CreateComponentsTab()},
+                         {QChar(0xE700), "Navigation", CreateNavigationTab()},
+                         {QChar(0xE790), "Theme", CreateThemeTab()},
+                         {QChar(0xE8F1), "Library", CreateLibraryTab()}};
 
   Build();
 }
@@ -59,7 +59,7 @@ void DebugTab::BuildSidebar() {
   sidebar_container_->setObjectName("sidebarContainer");
 
   QVBoxLayout* sidebar_layout = new QVBoxLayout;
-  sidebar_layout->setMargin(0);
+  sidebar_layout->setContentsMargins(0, 0, 0, 0);
   sidebar_layout->setSpacing(0);
 
   sidebar_container_->setLayout(sidebar_layout);
@@ -84,7 +84,6 @@ void DebugTab::BuildSidebar() {
   sidebar_title->setObjectName("sidebarTitle");
 
   QVBoxLayout* title_layout = new QVBoxLayout;
-  title_layout->setMargin(0);
   title_layout->setContentsMargins(0, 40, 0, 0);
   title_layout->setSpacing(0);
 
