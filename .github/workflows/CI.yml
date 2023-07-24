@@ -66,7 +66,7 @@ jobs:
       - name: Prepare artifacts
         run: |
           robocopy . build\bin\${{ runner.os }}\Release                                                                LICENSE /r:0 /w:0
-          robocopy   build\bin\${{ runner.os }}\Release artifacts\xenia_canary   xenia_canary.exe   xenia_canary.pdb   LICENSE /r:0 /w:0
+          robocopy   build\bin\${{ runner.os }}\Release artifacts\xenia_canary_netplay   xenia_canary_netplay.exe   xenia_canary_netplay.pdb   LICENSE /r:0 /w:0
           robocopy   build\bin\${{ runner.os }}\Release artifacts\xenia-vfs-dump xenia-vfs-dump.exe xenia-vfs-dump.pdb LICENSE /r:0 /w:0
           If ($LastExitCode -le 7) { echo "LastExitCode = $LastExitCode";$LastExitCode = 0 }
       - name: Upload xenia-vfs-dump artifacts
@@ -79,7 +79,7 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: xenia_canary_${{ matrix.config.vsver }}
-          path: artifacts\xenia_canary
+          path: artifacts\xenia_canary_netplay
           if-no-files-found: error
       - name: Create release
         if: |
@@ -91,9 +91,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $asset="xenia_canary.zip"
-          rm -recurse -force artifacts\xenia_canary\*.pdb # Ideally this would use xr, but I can't get it to work
-          7z a $asset .\artifacts\xenia_canary\*
+          $asset="xenia_canary_netplay.zip"
+          rm -recurse -force artifacts\xenia_canary_netplay\*.pdb # Ideally this would use xr, but I can't get it to work
+          7z a $asset .\artifacts\xenia_canary_netplay\*
           If ($(Get-Item $asset).length -le 100000) {
             Throw "Error: Archive $asset too small!"
           }
