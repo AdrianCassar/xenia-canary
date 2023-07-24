@@ -75,20 +75,20 @@ jobs:
       - name: Prepare artifacts
         id: prepare_artifacts
         run: |
-          foreach ($file in 'build\bin\Windows\Release\xenia_canary.exe','build\bin\Windows\Release\xenia_canary.pdb') {
+          foreach ($file in 'build\bin\Windows\Release\xenia_canary_netplay.exe') {
             if ((get-item $file).Length -le 100000) {
               echo "::error::$file is too small."
             }
           }
-          robocopy . build\bin\Windows\Release                                                                LICENSE /r:0 /w:0
-          robocopy   build\bin\Windows\Release artifacts\xenia_canary   xenia_canary.exe   xenia_canary.pdb   LICENSE /r:0 /w:0
+          robocopy . build\bin\Windows\Release                                                            LICENSE /r:0 /w:0
+          robocopy   build\bin\Windows\Release artifacts\xenia_canary_netplay   xenia_canary_netplay.exe  LICENSE /r:0 /w:0
           If ($LastExitCode -le 7) { echo "LastExitCode = $LastExitCode";$LastExitCode = 0 }
       - name: Upload xenia canary artifacts
         if: steps.prepare_artifacts.outcome == 'success'
         uses: actions/upload-artifact@main
         with:
-          name: xenia_canary_windows
-          path: artifacts\xenia_canary
+          name: xenia_canary_netplay_windows
+          path: artifacts\xenia_canary_netplay
           if-no-files-found: error
 
   create-release:
