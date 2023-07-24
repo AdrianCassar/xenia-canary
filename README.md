@@ -1,6 +1,6 @@
 # Netplay Fork
 
-This is a fork of [Xenia-Canary](https://github.com/xenia-canary/xenia-canary) which implements Online Multiplayer features.
+This is a fork of [Xenia-Canary Netplay](https://github.com/craftycodie/sunrise-xenia-canary-netplay) which implements Online Multiplayer features.
 It has been built from the ground up and tested primarily with Halo 3, though other games are supported.
 In it's current state, the fork is very rough and not PR ready. Check out the [Issues](https://github.com/craftycodie/xenia-canary-netplay/issues) list for more on that.
 Please excuse the mess, I don't use C++ often and rushed this together in a couple of restless weeks. The code will improve in future.
