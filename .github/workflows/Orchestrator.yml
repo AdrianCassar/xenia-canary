@@ -40,11 +40,12 @@ jobs:
     if: ${{ !failure() && !cancelled() }}
     uses: ./.github/workflows/Windows_x86.yml
 
-  build-linux:
-    name: Linux (x86-64)
-    needs: [lint, commit-message]
-    if: ${{ !failure() && !cancelled() }}
-    uses: ./.github/workflows/Linux_x86.yml
+  # Uncomment when platform support is ready:
+  # build-linux:
+  #   name: Linux (x86-64)
+  #   needs: [lint, commit-message]
+  #   if: ${{ !failure() && !cancelled() }}
+  #   uses: ./.github/workflows/Linux_x86.yml
 
   # Uncomment when platform support is ready:
   # build-windows-arm64:
@@ -70,19 +71,20 @@ jobs:
   # ===========================================================================
   # Stage 3: Release
   # ===========================================================================
-  release:
-    name: Create Release
-    needs: [build-windows, build-linux]
-    if: |
-      always() &&
-      github.repository == 'xenia-canary/xenia-canary' &&
-      github.event_name == 'push' &&
-      github.ref == 'refs/heads/canary_experimental' &&
-      (needs.build-windows.result == 'success' && needs.build-linux.result == 'success')
-    uses: ./.github/workflows/Create_release.yml
-    permissions:
-      contents: write
-    secrets: inherit
-    with:
-      tag: ${{ github.sha }}
-      branch: ${{ github.ref_name }}
+  # Uncomment when nightly releases is ready:
+  # release:
+  #   name: Create Release
+  #   needs: [build-windows, build-linux]
+  #   if: |
+  #     always() &&
+  #     github.repository == 'xenia-canary/xenia-canary' &&
+  #     github.event_name == 'push' &&
+  #     github.ref == 'refs/heads/canary_experimental' &&
+  #     (needs.build-windows.result == 'success' && needs.build-linux.result == 'success')
+  #   uses: ./.github/workflows/Create_release.yml
+  #   permissions:
+  #     contents: write
+  #   secrets: inherit
+  #   with:
+  #     tag: ${{ github.sha }}
+  #     branch: ${{ github.ref_name }}

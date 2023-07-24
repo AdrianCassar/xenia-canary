@@ -74,19 +74,19 @@ jobs:
       - name: Prepare artifacts
         id: prepare_artifacts
         run: |
-          if ((Get-Item 'build\bin\Windows\Release\xenia_canary.exe').Length -le 100000) {
+          if ((Get-Item 'build\bin\Windows\Release\xenia_canary_netplay.exe').Length -le 100000) {
             echo "::error:: Executable is too small."
             exit 1
           }
-          robocopy . build\bin\Windows\Release                                             LICENSE /r:0 /w:0
-          robocopy   build\bin\Windows\Release artifacts\xenia_canary   xenia_canary.exe   LICENSE /r:0 /w:0
+          robocopy . build\bin\Windows\Release                                                             LICENSE /r:0 /w:0
+          robocopy   build\bin\Windows\Release artifacts\xenia_canary_netplay   xenia_canary_netplay.exe   LICENSE /r:0 /w:0
           If ($LastExitCode -le 7) { echo "LastExitCode = $LastExitCode";$LastExitCode = 0 }
 
       - name: Upload Xenia Canary artifact
         if: steps.prepare_artifacts.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
-          name: xenia_canary_windows
-          path: artifacts\xenia_canary
+          name: xenia_canary_netplay_windows
+          path: artifacts\xenia_canary_netplay
           if-no-files-found: error
           retention-days: 7

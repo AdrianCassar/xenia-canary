@@ -131,7 +131,7 @@ jobs:
           # Build AppImage with linuxdeploy (requires absolute paths)
           linuxdeploy --appdir $APPDIR \
             --executable $binary \
-            --desktop-file $GITHUB_WORKSPACE/assets/xenia_canary.desktop \
+            --desktop-file $GITHUB_WORKSPACE/assets/xenia_canary_netplay.desktop \
             --icon-file $GITHUB_WORKSPACE/assets/icon/256.png \
             --output appimage
 
@@ -143,14 +143,14 @@ jobs:
           fi
 
           mkdir -p artifacts/release
-          mv "$appimage_file" artifacts/release/xenia_canary_linux.AppImage
-          chmod +x artifacts/release/xenia_canary_linux.AppImage
+          mv "$appimage_file" artifacts/release/xenia_canary_netplay_linux.AppImage
+          chmod +x artifacts/release/xenia_canary_netplay_linux.AppImage
 
       - name: Upload Xenia Canary artifact
         if: steps.prepare_artifacts.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
-          name: xenia_canary_linux
+          name: xenia_canary_netplay_linux
           path: artifacts/release
           if-no-files-found: error
           retention-days: 7
