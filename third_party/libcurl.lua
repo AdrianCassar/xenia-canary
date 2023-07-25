@@ -4,10 +4,13 @@ project("libcurl")
   kind("StaticLib")
   language("C")
   links({
-    "Wldap32"
+    "Wldap32",
+    "crypt32"
   })
   defines({
     "BUILDING_LIBCURL",
+    "USE_SCHANNEL",
+    "USE_WINDOWS_SSPI"
   })
   filter({"configurations:Release", "platforms:Windows"})
     buildoptions({

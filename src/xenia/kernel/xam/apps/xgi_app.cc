@@ -28,6 +28,8 @@
 
 using namespace rapidjson;
 
+DECLARE_bool(logging);
+
 namespace xe {
 namespace kernel {
 namespace xam {
@@ -264,6 +266,11 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
                                       uint32_t buffer_length) {
   // NOTE: buffer_length may be zero or valid.
   auto buffer = memory_->TranslateVirtual(buffer_ptr);
+
+  if (cvars::logging) {
+    XELOGI("DispatchMessageSync: {:X}", message);
+  }
+
   switch (message) {
     case 0x000B0018: {
       struct message_data {
@@ -1227,6 +1234,13 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
             url << GetApiAddress() << "/title/"
                 << titleId.str() << "/sessions";
       
+            if (cvars::logging) {
+                XELOGI("cURL: {}", url.str());
+
+                curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
+                curl_easy_setopt(curl, CURLOPT_STDERR, stderr);
+            }
+
             curl_easy_setopt(curl, CURLOPT_URL, url.str().c_str());
       
             curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "POST");
@@ -1261,40 +1275,11 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
                     - Use the overlapped task to do this asyncronously.
             */
       
-            char str[INET_ADDRSTRLEN];
-            in_addr ip_online = getOnlineIp();
-            inet_ntop(AF_INET, &ip_online, str, INET_ADDRSTRLEN);
-
-            Document d;
-            d.SetObject();
-
-            Document::AllocatorType& allocator = d.GetAllocator();
-
-            size_t sz = allocator.Size();
-
             std::stringstream sessionIdStr;
             sessionIdStr << std::hex << std::noshowbase << std::setw(16)
                          << std::setfill('0')
                          << XNKIDtoUint64(&pSessionInfo->sessionID);
 
-            std::stringstream macAddressString;
-            macAddressString << std::hex << std::noshowbase << std::setw(12)
-                             << std::setfill('0')
-                             << MacAddresstoUint64(getMacAddress());
-
-            d.AddMember("sessionId", sessionIdStr.str(), allocator);
-            d.AddMember("flags", flags, allocator);
-            d.AddMember("publicSlotsCount", num_slots_public, allocator);
-            d.AddMember("privateSlotsCount", num_slots_private, allocator);
-            d.AddMember("userIndex", user_index, allocator);
-            d.AddMember("hostAddress", std::string(str), allocator);
-            d.AddMember("macAddress", macAddressString.str(), allocator);
-            d.AddMember("port", getPort(), allocator);
-
-            rapidjson::StringBuffer strbuf;
-            PrettyWriter<rapidjson::StringBuffer> writer(strbuf);
-            d.Accept(writer);
-      
             CURL* curl;
             CURLcode res;
       
@@ -1316,17 +1301,16 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
                     << std::setfill('0') << kernel_state()->title_id();
       
             std::stringstream url;
-            url << GetApiAddress() << "/title/"
-                << titleId.str() << "/sessions";
+            url << GetApiAddress() << "/title/" << titleId.str() << "/sessions/"
+                << sessionIdStr.str();
       
             curl_easy_setopt(curl, CURLOPT_URL, url.str().c_str());
       
-            curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "POST");
+            curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "GET");
             curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
             curl_easy_setopt(curl, CURLOPT_USERAGENT, "xenia");
             curl_easy_setopt(curl, CURLOPT_WRITEDATA, &out);
             curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, callback);
-            curl_easy_setopt(curl, CURLOPT_POSTFIELDS, strbuf.GetString());
       
             res = curl_easy_perform(curl);
       
@@ -1351,7 +1335,9 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
                 memcpy(&pSessionInfo->hostAddress.abEnet, myMac, 6);
                 memcpy(&pSessionInfo->hostAddress.abOnline, myMac, 6);
       
-                pSessionInfo->hostAddress.wPortOnline = 36020;
+                pSessionInfo->hostAddress.wPortOnline = getPort();
+
+                memcpy(&pSessionInfo->hostAddress.abEnet, myMac, 6);
             }
     #pragma endregion
         }

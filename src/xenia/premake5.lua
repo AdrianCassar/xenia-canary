@@ -9,6 +9,7 @@ project("xenia-core")
   links({
     "fmt",
     "xenia-base",
+    "xenia-gpu", -- Needed for cpu tests??
   })
   defines({
     "CURL_STATICLIB"
