@@ -83,6 +83,7 @@ class EmulatorWindow {
   void ShutdownGraphicsSystemPresenterPainting();
 
   void OnEmulatorInitialized();
+  void DeleteAllSessions();
 
   xe::X_STATUS RunTitle(const std::filesystem::path& path_to_file);
   void UpdateTitle();
