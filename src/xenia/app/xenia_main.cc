@@ -65,6 +65,9 @@
 #include "xenia/hid/xinput/xinput_hid.h"
 #endif  // XE_PLATFORM_WIN32
 
+#include "third_party/fmt/include/fmt/format.h"
+#include "third_party/libcurl/include/curl/curl.h"
+
 #if XE_PLATFORM_WIN32
 #include "xenia/base/main_win.h"
 #endif  // XE_PLATFORM_WIN32
@@ -546,6 +549,13 @@ bool EmulatorApp::OnInitialize() {
     discord::DiscordPresence::NotPlaying();
   }
 
+  // Initialize Curl
+  CURLcode status = curl_global_init(CURL_GLOBAL_DEFAULT);
+  if (status != CURLE_OK) {
+    XELOGE("Cannot initialize CURL! Error code: {}",
+           static_cast<uint32_t>(status));
+  }
+
   // Create the emulator but don't initialize so we can setup the window.
   emulator_ =
       std::make_unique<Emulator>("", storage_root, content_root, cache_root);
@@ -578,6 +588,10 @@ void EmulatorApp::OnDestroy() {
   Profiler::Dump();
   // The profiler needs to shut down before the graphics context.
   Profiler::Shutdown();
+
+  emulator_window_->DeleteAllSessions();
+
+  curl_global_cleanup();
 
   // Write all cvar overrides to the config.
   config::SaveConfig();
