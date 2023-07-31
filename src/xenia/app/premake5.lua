@@ -35,6 +35,7 @@ project("xenia-app")
     "mspack",
     "snappy",
     "xxhash",
+    "libcurl",
   })
   defines({
     "XBYAK_NO_OP_NAMES",
