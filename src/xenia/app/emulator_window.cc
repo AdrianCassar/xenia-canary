@@ -16,6 +16,9 @@
 #include <string>
 #include <utility>
 
+#include "third_party/libcurl/include/curl/curl.h"
+#include "third_party/fmt/include/fmt/chrono.h"
+#include "third_party/fmt/include/fmt/format.h"
 #include "third_party/imgui/imgui.h"
 #include "third_party/stb/stb_image_write.h"
 #include "third_party/tomlplusplus/toml.hpp"
@@ -59,6 +62,8 @@ DECLARE_bool(guide_button);
 DECLARE_bool(clear_memory_page_state);
 
 DECLARE_bool(d3d12_readback_resolve);
+
+DECLARE_string(api_address);
 
 DEFINE_bool(fullscreen, false, "Whether to launch the emulator in fullscreen.",
             "Display");
@@ -2034,9 +2039,36 @@ xe::X_STATUS EmulatorWindow::RunTitle(
             "xam.xex");
 
     xam->loader_data().host_path = xe::path_to_utf8(abs_path);
+    
+    DeleteAllSessions();
   }
 
   return result;
+}
+
+ void EmulatorWindow::DeleteAllSessions() {
+#pragma region CURL, Refactor Out
+  CURL* curl = curl_easy_init();
+
+  if (curl) {
+    std::stringstream url;
+    url << cvars::api_address << "/DeleteSessions";
+
+    struct curl_slist* headers = NULL;
+    headers = curl_slist_append(headers, "Content-Type: application/json");
+    headers = curl_slist_append(headers, "Accept: application/json");
+    headers = curl_slist_append(headers, "charset: utf-8");
+
+    curl_easy_setopt(curl, CURLOPT_URL, url.str().c_str());
+
+    curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "DELETE");
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, "xenia");
+
+    curl_easy_perform(curl);
+    curl_easy_cleanup(curl);
+  }
+#pragma endregion
 }
 
 void EmulatorWindow::RunPreviouslyPlayedTitle() {
