@@ -14,8 +14,6 @@ bool MainWindow::OpenImpl() {
   // Disable for now until windows aero additions are added
   // setWindowFlags(Qt::Window | Qt::FramelessWindowHint);
 
-  QtWindow::OpenImpl();
-
   this->setFocusPolicy(Qt::StrongFocus);
 
   shell_ = new XShell(this);
@@ -32,6 +30,7 @@ bool MainWindow::OpenImpl() {
                            .arg(XE_BUILD_DATE));
   status_bar_->addPermanentWidget(build_label);
 
+  QtWindow::OpenImpl();
   return true;
 }
 
