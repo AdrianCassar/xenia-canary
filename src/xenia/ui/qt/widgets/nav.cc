@@ -44,11 +44,11 @@ void XNav::BuildTabs() {
   // TODO(Wildenhaus): Define tabs in shell?
   // (Razzile): Probably better to move to main window
   // and keep widgets/ for reusable components
-  std::vector<XTab*> tabs;
+  std::vector<XTab*> tabs = {new HomeTab(), new LibraryTab(),
+                             new SettingsTab()};
+
   if (cvars::show_debug_tab) {
-    tabs = {new HomeTab(), new LibraryTab(), new SettingsTab(), new DebugTab()};
-  } else {
-    tabs = {new HomeTab(), new LibraryTab(), new SettingsTab()};
+    tabs.push_back(new DebugTab());
   }
 
   tab_selector_ = new XTabSelector(tabs);
