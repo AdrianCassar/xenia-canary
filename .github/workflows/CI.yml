@@ -1,0 +1,109 @@
+name: CI
+
+on:
+  push:
+    paths-ignore:
+      - '.clang-format'
+      - '.drone.star'
+      - '.gitattributes'
+      - '.gitignore'
+      - '.gdbinit'
+      - '.github/*'
+      - '.github/*_TEMPLATE/**'
+      - '*.md'
+      - '*.yml'
+      - 'docs/**'
+      - 'src/**/*_posix.*'
+      - 'src/**/*_linux.*'
+      - 'src/**/*_gnulinux.*'
+      - 'src/**/*_x11.*'
+      - 'src/**/*_gtk.*'
+      - 'src/**/*_android.*'
+      - 'src/**/*_mac.*'
+      - 'LICENSE'
+  pull_request:
+    paths-ignore:
+      - '.clang-format'
+      - '.drone.star'
+      - '.gitattributes'
+      - '.gitignore'
+      - '.gdbinit'
+      - '.github/*'
+      - '.github/*_TEMPLATE/**'
+      - '*.md'
+      - '*.yml'
+      - 'docs/**'
+      - 'src/**/*_posix.*'
+      - 'src/**/*_linux.*'
+      - 'src/**/*_gnulinux.*'
+      - 'src/**/*_x11.*'
+      - 'src/**/*_gtk.*'
+      - 'src/**/*_android.*'
+      - 'src/**/*_mac.*'
+      - 'LICENSE'
+  workflow_dispatch:
+
+jobs:
+  build-windows-qt:
+    name: Build QT Version (Windows, ${{ matrix.config.vsver }}) #  runner.os can't be used here
+    runs-on: ${{ matrix.config.runs-on }}
+    env:
+      POWERSHELL_TELEMETRY_OPTOUT: 1
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - {vsver: VS2022, runs-on: windows-latest}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Get QT binaries
+        shell: cmd
+        run: |
+          cd third_party/qt_binary
+          aria2c http://qt.mirror.constant.com/online/qtsdkrepository/windows_x86/desktop/qt6_652/qt.qt6.652.win64_msvc2019_64/6.5.2-0-202307080351qtbase-Windows-Windows_10_22H2-MSVC2019-Windows-Windows_10_22H2-X86_64.7z
+          7z x *.7z -o. -r
+          del *.7z
+
+      - name: Setup
+        run: .\xb setup
+
+      - name: Build GUI Test App
+        run: .\xb build --config=Release --target=src\xenia-ui-qt-demoapp
+
+      - name: Prepare artifacts
+        run: |
+          mkdir artifacts\xenia_qt\platforms
+          robocopy . build\bin\${{ runner.os }}\Release                                                                               LICENSE /r:0 /w:0
+          robocopy   build\bin\${{ runner.os }}\Release artifacts\xenia_qt                                   xenia-ui-qt-demoapp.exe  LICENSE /r:0 /w:0
+          robocopy   third_party\qt_binary\6.5.2\msvc2019_64\bin\               artifacts\xenia_qt           Qt6Core.dll                      /r:0 /w:0
+          robocopy   third_party\qt_binary\6.5.2\msvc2019_64\bin\               artifacts\xenia_qt           Qt6Gui.dll                       /r:0 /w:0
+          robocopy   third_party\qt_binary\6.5.2\msvc2019_64\bin\               artifacts\xenia_qt           Qt6Widgets.dll                   /r:0 /w:0
+          robocopy   third_party\qt_binary\6.5.2\msvc2019_64\plugins\platforms\ artifacts\xenia_qt\platforms qwindows.dll                     /r:0 /w:0
+
+          If ($LastExitCode -le 7) { echo "LastExitCode = $LastExitCode";$LastExitCode = 0 }
+
+      - name: Upload xenia artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: xenia_qt_${{ matrix.config.vsver }}
+          path: artifacts\xenia_qt
+          if-no-files-found: error
+
+      - name: Create release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $asset="xenia_qt.zip"
+          rm -recurse -force artifacts\xenia_qt\*.pdb # Ideally this would use xr, but I can't get it to work
+          7z a $asset .\artifacts\xenia_qt\*
+          If ($(Get-Item $asset).length -le 100000) {
+            Throw "Error: Archive $asset too small!"
+          }
+          $tag=$env:GITHUB_SHA.SubString(0,7)
+          $branch=$($env:GITHUB_REF -replace 'refs/heads/')
+          $title="${tag}_$branch"
+          gh release create $tag $asset --target $env:GITHUB_SHA -t $title
