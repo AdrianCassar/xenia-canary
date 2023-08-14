@@ -44,8 +44,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-windows:
-    name: Build (Windows, ${{ matrix.config.vsver }}) #  runner.os can't be used here
+  build-windows-qt:
+    name: Build QT Version (Windows, ${{ matrix.config.vsver }}) #  runner.os can't be used here
     runs-on: ${{ matrix.config.runs-on }}
     env:
       POWERSHELL_TELEMETRY_OPTOUT: 1
@@ -53,11 +53,13 @@ jobs:
       fail-fast: false
       matrix:
         config:
-          - {vsver: VS2019, runs-on: windows-2019}
+          - {vsver: VS2022, runs-on: windows-latest}
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout Repository
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0
+
       - name: Get QT binaries
         shell: cmd
         run: |
@@ -74,8 +76,13 @@ jobs:
 
       - name: Prepare artifacts
         run: |
-          robocopy . build\bin\${{ runner.os }}\Release                                              LICENSE /r:0 /w:0
-          robocopy   build\bin\${{ runner.os }}\Release artifacts\xenia_qt   xenia-ui-qt-demoapp.exe LICENSE /r:0 /w:0
+          mkdir artifacts\xenia_qt\platforms
+          robocopy . build\bin\${{ runner.os }}\Release                                                                               LICENSE /r:0 /w:0
+          robocopy   build\bin\${{ runner.os }}\Release artifacts\xenia_qt                                   xenia-ui-qt-demoapp.exe  LICENSE /r:0 /w:0
+          robocopy   third_party\qt_binary\6.5.2\msvc2019_64\bin\               artifacts\xenia_qt           Qt6Core.dll                      /r:0 /w:0
+          robocopy   third_party\qt_binary\6.5.2\msvc2019_64\bin\               artifacts\xenia_qt           Qt6Gui.dll                       /r:0 /w:0
+          robocopy   third_party\qt_binary\6.5.2\msvc2019_64\bin\               artifacts\xenia_qt           Qt6Widgets.dll                   /r:0 /w:0
+          robocopy   third_party\qt_binary\6.5.2\msvc2019_64\plugins\platforms\ artifacts\xenia_qt\platforms qwindows.dll                     /r:0 /w:0
 
           If ($LastExitCode -le 7) { echo "LastExitCode = $LastExitCode";$LastExitCode = 0 }
 
@@ -87,9 +94,6 @@ jobs:
           if-no-files-found: error
 
       - name: Create release
-        if: |
-          github.repository == 'Gliniak/xenia' &&
-          contains(github.ref, 'refs/heads/qt_new')
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
