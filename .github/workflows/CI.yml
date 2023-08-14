@@ -1,8 +1,5 @@
 name: CI
 
-env:
-  QT_DIR: D:/a/xenia/xenia/third_party/qt_binary/6.5.2/msvc2019_64
-
 on:
   push:
     paths-ignore:
