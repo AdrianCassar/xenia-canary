@@ -55,9 +55,11 @@ jobs:
         config:
           - {vsver: VS2019, runs-on: windows-2019}
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout Repository
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0
+
       - name: Get QT binaries
         shell: cmd
         run: |
@@ -76,6 +78,65 @@ jobs:
         run: |
           robocopy . build\bin\${{ runner.os }}\Release                                              LICENSE /r:0 /w:0
           robocopy   build\bin\${{ runner.os }}\Release artifacts\xenia_qt   xenia-ui-qt-demoapp.exe LICENSE /r:0 /w:0
+
+          If ($LastExitCode -le 7) { echo "LastExitCode = $LastExitCode";$LastExitCode = 0 }
+
+      - name: Upload xenia artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: xenia_qt_${{ matrix.config.vsver }}
+          path: artifacts\xenia_qt
+          if-no-files-found: error
+
+      - name: Create release
+        if: |
+          github.repository == 'Gliniak/xenia' &&
+          contains(github.ref, 'refs/heads/qt_new')
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $asset="xenia_qt.zip"
+          rm -recurse -force artifacts\xenia_qt\*.pdb # Ideally this would use xr, but I can't get it to work
+          7z a $asset .\artifacts\xenia_qt\*
+          If ($(Get-Item $asset).length -le 100000) {
+            Throw "Error: Archive $asset too small!"
+          }
+          $tag=$env:GITHUB_SHA.SubString(0,7)
+          $branch=$($env:GITHUB_REF -replace 'refs/heads/')
+          $title="${tag}_$branch"
+          gh release create $tag $asset --target $env:GITHUB_SHA -t $title
+
+  build-linux-gcc:
+    name: Build (Linux, ${{ matrix.config.vsver }}) #  runner.os can't be used here
+    runs-on: ${{ matrix.config.runs-on }}
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - {vsver: GCC, runs-on: linux}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Get QT binaries
+        shell: cmd
+        run: |
+          cd third_party/qt_binary
+          aria2c http://qt.mirror.constant.com/online/qtsdkrepository/linux_x64/desktop/qt6_652/qt.qt6.652.gcc_64/6.5.2-0-202307080352qtbase-Linux-RHEL_8_4-GCC-Linux-RHEL_8_4-X86_64.7z
+          7z x *.7z -o. -r
+          del *.7z
+
+      - name: Setup
+        run: .\xb setup
+
+      - name: Build GUI Test App
+        run: .\xb build --config=Release --target=src\xenia-ui-qt-demoapp
+
+      - name: Prepare artifacts
+        run: |
+          robocopy . build\bin\${{ runner.os }}\Release                                          LICENSE /r:0 /w:0
+          robocopy   build\bin\${{ runner.os }}\Release artifacts\xenia_qt   xenia-ui-qt-demoapp LICENSE /r:0 /w:0
 
           If ($LastExitCode -le 7) { echo "LastExitCode = $LastExitCode";$LastExitCode = 0 }
 

@@ -10,7 +10,12 @@ project("xenia-ui-qt")
 
   -- Setup Qt libraries
   qt.enable()
-  qtpath "../../../../third_party/qt_binary/6.5.2/msvc2019_64"
+  filter("platforms:Linux")
+    qtpath "../../../../third_party/qt_binary/6.5.2/gcc_64"
+
+  filter("platforms:Windows")
+    qtpath "../../../../third_party/qt_binary/6.5.2/msvc2019_64"
+
   qtmodules{"core", "gui", "widgets"}
   qtprefix "Qt6"
 
@@ -44,7 +49,12 @@ project("xenia-ui-qt-demoapp")
 
   -- Setup Qt libraries
   qt.enable()
-  qtpath "../../../../third_party/qt_binary/6.5.2/msvc2019_64"
+  filter("platforms:Linux")
+    qtpath "../../../../third_party/qt_binary/6.5.2/gcc_64"
+
+  filter("platforms:Windows")
+    qtpath "../../../../third_party/qt_binary/6.5.2/msvc2019_64"
+
   qtmodules{"core", "gui", "widgets"}
   qtprefix "Qt6"
 
