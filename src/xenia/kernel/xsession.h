@@ -10,6 +10,9 @@
 #ifndef XENIA_KERNEL_XSESSION_H_
 #define XENIA_KERNEL_XSESSION_H_
 
+#include "xenia/base/byte_order.h"
+#include "xenia/kernel/xobject.h"
+
 namespace xe {
 namespace kernel {
 
@@ -47,6 +50,17 @@ inline bool IsOfflineSession(const SessionFlags flags) { return !flags; }
 inline bool IsXboxLiveSession(const SessionFlags flags) {
   return !IsOfflineSession(flags) && flags & SessionFlags::LIVE_FEATURES;
 }
+
+class XSession : public XObject {
+ public:
+  static const Type kType = Type::Session;
+
+  XSession(KernelState* kernel_state);
+
+  bool Initialize();
+
+ private:
+};
 
 }  // namespace kernel
 }  // namespace xe
