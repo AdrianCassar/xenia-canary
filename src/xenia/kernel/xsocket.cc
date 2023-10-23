@@ -33,6 +33,7 @@
 #include <unistd.h>
 #endif
 #include <src/xenia/kernel/xam/xam_net.h>
+#include <src/xenia/kernel/XLiveAPI.h>
 using namespace xe::kernel::xam;
 
 namespace xe {
@@ -134,8 +135,6 @@ X_STATUS XSocket::IOControl(uint32_t cmd, uint8_t* arg_ptr) {
 }
 
 X_STATUS XSocket::Connect(const XSOCKADDR* name, int name_len) {
-
-
   sockaddr_storage n_name;
   auto family_size =
       offsetof(sockaddr_storage, ss_family) + sizeof(n_name.ss_family);
@@ -150,7 +149,8 @@ X_STATUS XSocket::Connect(const XSOCKADDR* name, int name_len) {
 
   auto addrin = reinterpret_cast<sockaddr_in*>(&n_name);
 
-  addrin->sin_port = htons(GetMappedConnectPort(ntohs(addrin->sin_port)));
+  addrin->sin_port = htons(
+      XLiveAPI::upnp_handler.get_mapped_connect_port(ntohs(addrin->sin_port)));
 
   int ret = connect(native_handle_, (const sockaddr*)&n_name, name_len);
   if (ret < 0) {
@@ -175,7 +175,8 @@ X_STATUS XSocket::Bind(const XSOCKADDR* name, int name_len) {
 
   auto addrin = reinterpret_cast<sockaddr_in*>(&n_name);
 
-  addrin->sin_port = htons(GetMappedBindPort(ntohs(addrin->sin_port)));
+  addrin->sin_port =
+      htons(XLiveAPI::upnp_handler.get_mapped_bind_port(ntohs(addrin->sin_port)));
 
   int ret = bind(native_handle_, (sockaddr*)&n_name, name_len);
   if (ret < 0) {
@@ -580,12 +581,11 @@ int XSocket::SendTo(uint8_t* buf, uint32_t buf_len, uint32_t flags,
     nto.ss_family = to->address_family;
     std::memcpy(reinterpret_cast<uint8_t*>(&nto) + family_size, to->sa_data,
                 to_len - family_size);
-
-
   }
 
   auto addrin = reinterpret_cast<sockaddr_in*>(&nto);
-  addrin->sin_port = htons(GetMappedBindPort(ntohs(addrin->sin_port)));
+  addrin->sin_port =
+      htons(XLiveAPI::upnp_handler.get_mapped_bind_port(ntohs(addrin->sin_port)));
 
   return sendto(native_handle_, reinterpret_cast<char*>(buf), buf_len, flags,
                 to ? (const sockaddr*)&nto : nullptr, to_len);

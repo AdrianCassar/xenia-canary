@@ -15,6 +15,7 @@
 #include "third_party/fmt/include/fmt/format.h"
 #include "xenia/base/logging.h"
 #include "xenia/emulator.h"
+#include "xenia/kernel/XLiveAPI.h"
 #include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/util/crypto_utils.h"
 #include "xenia/vfs/devices/host_path_device.h"
@@ -291,6 +292,10 @@ void ProfileManager::Login(const uint64_t xuid, const uint8_t user_index) {
   kernel_state_->BroadcastNotification(kXNotificationIDSystemSignInChanged,
                                        GetUsedUserSlots().to_ulong());
   UpdateConfig(xuid, assigned_user_slot);
+
+  if (XLiveAPI::is_active()) {
+    XLiveAPI::RegisterPlayer();
+  }
 }
 
 void ProfileManager::Logout(const uint8_t user_index) {

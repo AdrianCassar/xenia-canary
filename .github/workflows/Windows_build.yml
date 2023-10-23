@@ -71,8 +71,7 @@ jobs:
       - name: Prepare artifacts
         run: |
           robocopy . build\bin\${{ runner.os }}\Release                                                                LICENSE /r:0 /w:0
-          robocopy   build\bin\${{ runner.os }}\Release artifacts\xenia_canary_netplay   xenia_canary_netplay.exe   xenia_canary_netplay.pdb   LICENSE /r:0 /w:0
-          robocopy   build\bin\${{ runner.os }}\Release artifacts\xenia-vfs-dump xenia-vfs-dump.exe xenia-vfs-dump.pdb LICENSE /r:0 /w:0
+          robocopy   build\bin\${{ runner.os }}\Release artifacts\xenia_canary_netplay   xenia_canary_netplay.exe      LICENSE /r:0 /w:0
           If ($LastExitCode -le 7) { echo "LastExitCode = $LastExitCode";$LastExitCode = 0 }
       - name: Upload xenia canary artifacts
         uses: actions/upload-artifact@v4
