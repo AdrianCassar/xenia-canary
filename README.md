@@ -1,11 +1,9 @@
 # Netplay Fork
 
-This is a fork of [Xenia-Canary Netplay](https://github.com/craftycodie/sunrise-xenia-canary-netplay) which implements Online Multiplayer features.
-It has been built from the ground up and tested primarily with Halo 3, though other games are supported.
-In it's current state, the fork is very rough and not PR ready. Check out the [Issues](https://github.com/craftycodie/xenia-canary-netplay/issues) list for more on that.
-Please excuse the mess, I don't use C++ often and rushed this together in a couple of restless weeks. The code will improve in future.
+This is a fork of [Xenia-Canary Netplay](https://github.com/ahnewark/sunrise-xenia-canary-netplay) which implements online multiplayer features.
+It has been built from the ground up and a handful of games found to work, though many games are yet to be tested. Check out the [Issues](https://github.com/ahnewark/sunrise-xenia-canary-netplay/issues) list for more details.
 
-The web API powering this fork can be found [here](https://github.com/craftycodie/Xenia-WebServices)
+The REST API powering this fork can be found [here](https://github.com/AdrianCassar/Xenia-WebServices).
 
 Massive thanks to @SarahGreyWolf for testing this fork with me for about a month, couldn't have done it without her.
 Also, thank you to @Bo98 for creating the burnout5 xenia fork, I used that as a basis for this, and some of the code is still here I think.
@@ -13,6 +11,97 @@ Also, thank you to @Bo98 for creating the burnout5 xenia fork, I used that as a 
 Peace and hair grease
 
 Codie
+
+---
+
+## FAQ:
+
+Is UPnP implemented?
+- Yes, **UPnP** is now implemented therefore manual port forwarding is no longer required.
+
+Is **Systemlink** or **XLink Kai** supported?
+
+- No, Systemlink and XLink Kai are not supported.
+
+Can I host Xenia Web Services?
+
+- Yes, [Xenia Web Services](https://github.com/AdrianCassar/Xenia-WebServices).
+
+Is there a Netplay mousehook build?
+
+- Yes, download it from [Netplay Mousehook](https://github.com/marinesciencedude/xenia-canary-mousehook/releases?q=Netplay).
+
+Are games dependant on servers?
+
+- Yes a lot of games are dependant on servers therefore will not work, unless a server is developed for that game. For example many games requires EA servers, without them netplay will not work. 
+
+Can I use multiple instances for the same game?
+
+- No, you cannot use multiple instances due to the first instance using up ports. You will need to use a VM.
+
+Can I use multiple PCs on the same network?
+
+- No, you currently cannot use different PCs on the same network to connect to a session hosted on the same network. However a VPN will get around this issue.
+
+Where can I **download** the Canary Netplay build?
+
+- You can download it from [releases](https://github.com/AdrianCassar/xenia-canary/releases).
+
+## Config Setup
+
+To connect to a **Xenia WebServices** server you can either privately host it yourself or connect to my server.
+
+```toml
+api_address = "https://xenia-netplay-2a0298c0e3f4.herokuapp.com/"
+```
+
+UPnP is disabled by default, you can enable it in the config.
+```toml
+upnp = true
+```
+
+## Supported Games
+
+| Game | Notes | Patches/Plugins |
+|---|---|---|
+| CS:GO | Mousehook support |
+| CS:GO Beta | Mousehook support |
+| GTA V Beta | [Video 1](https://www.youtube.com/watch?v=nIjZ7sRGZlo), [Video 2](https://www.youtube.com/watch?v=YIBjy5ZJcq4) |
+| GTA V TU 2-13 | Very unstable and will crash often |
+| Gundam Operation Troy | [English patch](https://github.com/Eight-Mansions/MSGOT/releases)
+| Halo 3 ODST v13.2 using [Sunrise Server](https://github.com/ahnewark/Sunrise-Halo3-WebServices) | [Video](https://www.youtube.com/watch?v=amS8OxH3exs), Mousehook support | [Halo 3 Patch](https://github.com/AdrianCassar/Xenia-WebServices/blob/main/patches/4D5307E6%20-%20Halo%203.patch.toml)
+| Left 4 Dead 2 | Mousehook support |
+| Left 4 Dead 2 Demo |
+| Marvel Ultimate Alliance | |
+| Marvel Ultimate Alliance 2 | |
+| Portal 2 | Mousehook support |
+| Saints Row 2 | [Video 1](https://www.youtube.com/watch?v=YTw84keeWfs), [Video 2](https://www.youtube.com/watch?v=nf7TDOtTEIE) |
+| Saints Row the Third / The Full Package | Unplayable due to broken graphics. Requires [Online Pass](https://www.xbox.com/en-GB/games/store/online-pass/BS7JTR0MN356) + license_mask|
+| Saints Row IV | Unplayable due to broken graphics. Requires Online Pass + license_mask|
+| Team Fortress 2 | Mousehook support |
+---
+
+### Non-Supported Games
+
+| Game  | Description  |
+|---|---|
+| Gears of War 3 | Connects online but cannot play with others.  |
+| Grand Theft Auto 4 | Connects online but cannot play with others. |
+| Minecraft | Requires friend lists to invite friends. |
+| Quantum of a Solace | Crashes on start-up.  |
+| Red Dead Redemption  | Connects online but cannot play with others. |
+| Saints Row 1 | Unstable to find sessions to join. |
+
+#### Requires Servers
+- Activision Games
+- EA Games
+- Ubisoft Games
+
+---
+
+### [Netplay Mousehook](https://github.com/marinesciencedude/xenia-canary-mousehook/tree/netplay_canary_experimental#mousehook)
+
+Netplay mousehook is a fork of netplay which adds support for playing games with mouse and keyboard.
 
 ---
 
