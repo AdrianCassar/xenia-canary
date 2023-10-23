@@ -154,6 +154,10 @@ class UserProfile {
  public:
   UserProfile(uint8_t index);
 
+  bool IsXUIDOffline() { return ((xuid_ >> 60) & 0xF) == 0xE; }
+  bool IsXUIDOnline() { return ((xuid_ >> 48) & 0xFFFF) == 0x9; }
+  bool IsXUIDValid() { return IsXUIDOffline() != IsXUIDOnline(); }
+
   uint64_t xuid() const { return xuid_; }
   std::string name() const { return name_; }
   uint32_t signin_state() const { return 2; }
