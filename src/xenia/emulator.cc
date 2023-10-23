@@ -85,11 +85,6 @@ DEFINE_bool(allow_game_relative_writes, false,
             "generating test data to compare with original hardware. ",
             "General");
 
-DEFINE_string(api_address, "127.0.0.1:36000", "Xenia Master Server Address",
-              "Live");
-
-DEFINE_bool(logging, false, "Log Network Activity", "Live");
-
 DECLARE_bool(allow_plugins);
 
 DEFINE_int32(priority_class, 0,

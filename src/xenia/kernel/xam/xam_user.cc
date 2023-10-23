@@ -981,6 +981,8 @@ dword_result_t XamWriteGamerTile_entry(
 DECLARE_XAM_EXPORT1(XamWriteGamerTile, kUserProfiles, kSketchy);
 
 dword_result_t XamSessionCreateHandle_entry(lpdword_t handle_ptr) {
+  // Generate random session id?
+
   std::random_device rd;
   std::uniform_int_distribution<uint32_t> dist(0, 0xFFFFFFFF);
   *handle_ptr = dist(rd);
