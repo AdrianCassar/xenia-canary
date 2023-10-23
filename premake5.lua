@@ -305,6 +305,8 @@ workspace("xenia")
   include("third_party/pugixml.lua")
   include("third_party/libcurl.lua")
   include("third_party/rapidjson.lua")
+  include("third_party/miniupnp.lua")
+  include("third_party/wolfssl.lua")
 
   if os.istarget("windows") then
     include("third_party/libusb.lua")
