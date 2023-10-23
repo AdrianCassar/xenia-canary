@@ -9,8 +9,12 @@ project("libcurl")
   })
   defines({
     "BUILDING_LIBCURL",
+
+    -- "USE_WOLFSSL",
+    -- "WITHOUT_SSL",
+
     "USE_SCHANNEL",
-    "USE_WINDOWS_SSPI"
+    "USE_WINDOWS_SSPI",
   })
   filter({"configurations:Release", "platforms:Windows"})
     buildoptions({
@@ -22,8 +26,14 @@ project("libcurl")
   includedirs({
     "libcurl/lib",
     "libcurl/include",
+
+    -- "wolfssl",
+    -- "wolfssl/src",
+    -- "wolfssl/wolfssl",
+    -- "wolfssl/wolfssl/openssl",
+    -- "wolfssl/wolfssl/wolfcrypt",
   })
   files({
     "libcurl/lib/**.h",
-    "libcurl/lib/**.c"
+    "libcurl/lib/**.c",
   })
