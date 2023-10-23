@@ -61,7 +61,8 @@
 #endif  // XE_PLATFORM_WIN32
 
 #include "third_party/fmt/include/fmt/format.h"
-#include "third_party/libcurl/include/curl/curl.h"
+
+#include "xenia/kernel/XLiveAPI.h"
 
 DEFINE_string(apu, "any", "Audio system. Use: [any, nop, sdl, xaudio2]", "APU");
 DEFINE_string(gpu, "any", "Graphics system. Use: [any, d3d12, vulkan, null]",
@@ -102,6 +103,8 @@ DEFINE_transient_bool(portable, true,
 DECLARE_bool(debug);
 
 DEFINE_bool(discord, true, "Enable Discord rich presence", "General");
+
+DECLARE_bool(upnp);
 
 namespace xe {
 namespace app {
@@ -478,9 +481,17 @@ void EmulatorApp::OnDestroy() {
   // The profiler needs to shut down before the graphics context.
   Profiler::Shutdown();
 
-  emulator_window_->DeleteAllSessions();
+#pragma region NetplayCleanup
+  // UPnP Shutdown
+
+  if (cvars::upnp) {
+    xe::kernel::XLiveAPI::upnp_handler.~upnp();
+  }
+
+  xe::kernel::XLiveAPI::DeleteAllSessions();
 
   curl_global_cleanup();
+#pragma endregion
 
   // Write all cvar overrides to the config.
   config::SaveConfig();

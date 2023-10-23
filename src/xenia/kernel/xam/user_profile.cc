@@ -20,6 +20,10 @@
 #include "xenia/kernel/util/shim_utils.h"
 #include "xenia/kernel/xam/user_profile.h"
 
+#include "xenia/kernel/XLiveAPI.h"
+
+using namespace xe::string_util;
+
 namespace xe {
 namespace kernel {
 namespace xam {
@@ -44,37 +48,39 @@ uint64_t GetRandomXuid() {
   return *(uint64_t*)xuidBytes;
 }
 
- static uint64_t xuid_to_uint64(std::string xuid) {
-  unsigned long long result = strtoull(xuid.c_str(), NULL, 16);
-  return result;
-}
-
  // cpptoml parses uint64_t as int64_t, but XUIDs are uint64_t therefore we must
  // store XUIDs as hex strings to get around this issue.
- DEFINE_string(user_0_xuid, xe::string_util::to_hex_string(GetRandomXuid()),
-               "XUID for user 0", "User");
- DEFINE_string(user_1_xuid, xe::string_util::to_hex_string(GetRandomXuid()),
-               "XUID for user 1", "User");
- DEFINE_string(user_2_xuid, xe::string_util::to_hex_string(GetRandomXuid()),
-               "XUID for user 2", "User");
- DEFINE_string(user_3_xuid, xe::string_util::to_hex_string(GetRandomXuid()),
-               "XUID for user 3", "User");
+DEFINE_string(user_0_xuid, to_hex_string(GetRandomXuid()), "XUID for user 0",
+              "User");
+DEFINE_string(user_1_xuid, to_hex_string(GetRandomXuid()), "XUID for user 1",
+              "User");
+DEFINE_string(user_2_xuid, to_hex_string(GetRandomXuid()), "XUID for user 2",
+              "User");
+DEFINE_string(user_3_xuid, to_hex_string(GetRandomXuid()), "XUID for user 3",
+              "User");
 
- DEFINE_string(user_0_name,
-               "XeniaUser" + std::to_string(xuid_to_uint64(user_0_xuid) & 0xFFFF),
-               "Gamertag for user 0", "User");
- DEFINE_string(user_1_name,
-               "XeniaUser" +
-                   std::to_string((xuid_to_uint64(user_1_xuid) & 0xFFFF)),
-               "Gamertag for user 1", "User");
- DEFINE_string(user_2_name,
-               "XeniaUser" +
-                   std::to_string((xuid_to_uint64(user_2_xuid) & 0xFFFF)),
-               "Gamertag for user 2", "User");
- DEFINE_string(user_3_name,
-               "XeniaUser" +
-                   std::to_string((xuid_to_uint64(user_3_xuid) & 0xFFFF)),
-               "Gamertag for user 3", "User");
+//  DEFINE_string(user_0_name, fmt::format("XeniaUser {}",
+//  xuid_to_uint64(user_0_xuid) & 0xFFFF), "Gamertag for user 0", "User");
+DEFINE_string(user_0_name,
+              "XeniaUser" +
+                  std::to_string((XLiveAPI::hex_to_uint64(user_0_xuid.c_str()) &
+                                  0xFFFF)),
+              "Gamertag for user 0", "User");
+DEFINE_string(user_1_name,
+              "XeniaUser" +
+                  std::to_string((XLiveAPI::hex_to_uint64(user_1_xuid.c_str()) &
+                                  0xFFFF)),
+              "Gamertag for user 1", "User");
+DEFINE_string(user_2_name,
+              "XeniaUser" +
+                  std::to_string((XLiveAPI::hex_to_uint64(user_2_xuid.c_str()) &
+                                  0xFFFF)),
+              "Gamertag for user 2", "User");
+DEFINE_string(user_3_name,
+              "XeniaUser" +
+                  std::to_string((XLiveAPI::hex_to_uint64(user_3_xuid.c_str()) &
+                                  0xFFFF)),
+              "Gamertag for user 3", "User");
 
 constexpr uint32_t kDashboardID = 0xFFFE07D1;
 
@@ -82,30 +88,30 @@ UserProfile::UserProfile(uint8_t index) {
   // 58410A1F checks the user XUID against a mask of 0x00C0000000000000 (3<<54),
   // if non-zero, it prevents the user from playing the game.
   // "You do not have permissions to perform this operation."
-  xuid_ = 0xB13EBABEBABEBABE + index;
-  name_ = "User";
-  if (index) {
-    name_ = "User_" + std::to_string(index);
-  }
+  //xuid_ = 0xB13EBABEBABEBABE + index;
+  //name_ = "User";
+  //if (index) {
+  //  name_ = "User_" + std::to_string(index);
+  //}
 
   switch (index) {
     case 0: {
-      xuid_ = xuid_to_uint64(cvars::user_0_xuid);
+      xuid_ = XLiveAPI::hex_to_uint64(cvars::user_0_xuid.c_str());
       name_ = cvars::user_0_name;
       break;
     }
     case 1: {
-      xuid_ = xuid_to_uint64(cvars::user_1_xuid);
+      xuid_ = XLiveAPI::hex_to_uint64(cvars::user_1_xuid.c_str());
       name_ = cvars::user_1_name;
       break;
     }
     case 2: {
-      xuid_ = xuid_to_uint64(cvars::user_2_xuid);
+      xuid_ = XLiveAPI::hex_to_uint64(cvars::user_2_xuid.c_str());
       name_ = cvars::user_2_name;
       break;
     }
     case 3: {
-      xuid_ = xuid_to_uint64(cvars::user_3_xuid);
+      xuid_ = XLiveAPI::hex_to_uint64(cvars::user_3_xuid.c_str());
       name_ = cvars::user_3_name;
       break;
     }
