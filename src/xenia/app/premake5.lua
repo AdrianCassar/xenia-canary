@@ -36,10 +36,13 @@ project("xenia-app")
     "snappy",
     "xxhash",
     "libcurl",
+    "miniupnp",
   })
   defines({
     "XBYAK_NO_OP_NAMES",
     "XBYAK_ENABLE_OMITTED_OPERAND",
+    "CURL_STATICLIB",
+    "MINIUPNP_STATICLIB"
   })
   local_platform_files()
   files({

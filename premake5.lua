@@ -29,7 +29,6 @@ includedirs({
 defines({
   "_UNICODE",
   "UNICODE",
-  "CURL_STATICLIB",
 })
 
 cppdialect("C++20")
@@ -282,6 +281,8 @@ workspace("xenia")
   include("third_party/zlib.lua")
   include("third_party/pugixml.lua")
   include("third_party/rapidjson.lua")
+  include("third_party/miniupnp.lua")
+  include("third_party/wolfssl.lua")
 
   if os.istarget("windows") then
     include("third_party/libusb.lua")
