@@ -24,7 +24,6 @@ includedirs({
 defines({
   "_UNICODE",
   "UNICODE",
-  "CURL_STATICLIB",
 })
 
 cppdialect("C++17")
@@ -267,6 +266,8 @@ workspace("xenia")
   include("third_party/zlib.lua")
   include("third_party/pugixml.lua")
   include("third_party/rapidjson.lua")
+  include("third_party/miniupnp.lua")
+  include("third_party/wolfssl.lua")
 
   if not os.istarget("android") then
     -- SDL2 requires sdl2-config, and as of November 2020 isn't high-quality on
