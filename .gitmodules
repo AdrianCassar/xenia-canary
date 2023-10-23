@@ -106,3 +106,9 @@
 [submodule "third_party/libcurl"]
 	path = third_party/libcurl
 	url = https://github.com/curl/curl.git
+[submodule "third_party/miniupnp"]
+	path = third_party/miniupnp
+	url = https://github.com/miniupnp/miniupnp.git
+[submodule "third_party/wolfssl"]
+	path = third_party/wolfssl
+	url = https://github.com/wolfssl/wolfssl.git
