@@ -600,8 +600,8 @@ dword_result_t NetDll_XNetGetTitleXnAddr_entry(dword_t caller,
   if (!XLiveAPI::is_active()) {
     XLiveAPI::Init();
 
-    //XELOGE("NetDll_XNetGetTitleXnAddr PENDING XLiveAPI");
-    //return XnAddrStatus::XNET_GET_XNADDR_PENDING;
+    // XELOGE("NetDll_XNetGetTitleXnAddr PENDING XLiveAPI");
+    // return XnAddrStatus::XNET_GET_XNADDR_PENDING;
   }
 
   auto status = XnAddrStatus::XNET_GET_XNADDR_STATIC |
