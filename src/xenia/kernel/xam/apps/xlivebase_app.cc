@@ -20,12 +20,7 @@
 #include <netinet/in.h>
 #endif
 
-struct XONLINE_SERVICE_INFO {
-  xe::be<uint32_t> id;
-  in_addr ip;
-  xe::be<uint16_t> port;
-  xe::be<uint16_t> reserved;
-};
+#include <xenia/kernel/XLiveAPI.h>
 
 namespace xe {
 namespace kernel {
@@ -77,19 +72,27 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
       // XONLINE_SERVICE_INFO structure.
       XELOGD("CXLiveLogon::GetServiceInfo({:08X}, {:08X})", buffer_ptr,
              buffer_length);
-      XONLINE_SERVICE_INFO* service_info =
-          reinterpret_cast<XONLINE_SERVICE_INFO*>(
+      XLiveAPI::XONLINE_SERVICE_INFO* service_info =
+          reinterpret_cast<XLiveAPI::XONLINE_SERVICE_INFO*>(
               memory_->TranslateVirtual(buffer_length));
-      memset(service_info, 0, sizeof(XONLINE_SERVICE_INFO));
-      XELOGD("IP is {}", service_info->ip.s_addr);
-      service_info->id = buffer_ptr;
-      service_info->ip.s_addr = htonl(INADDR_LOOPBACK);
+      memset(service_info, 0, sizeof(XLiveAPI::XONLINE_SERVICE_INFO));
+      XLiveAPI::XONLINE_SERVICE_INFO retrieved_service_info =
+          XLiveAPI::GetServiceInfoById(buffer_ptr);
+      service_info->ip.s_addr = retrieved_service_info.ip.s_addr;
+      service_info->port = retrieved_service_info.port;
+      service_info->reserved = retrieved_service_info.reserved;
       return X_ERROR_SUCCESS;
       // return 0x80151802;  // ERROR_CONNECTION_INVALID
     }
     case 0x00050008: {
       // Required to be successful for 534507D4
       XELOGD("XUserCheckPrivilege({:08x}, {:08x}) unimplemented", buffer_ptr,
+             buffer_length);
+      return X_E_SUCCESS;
+    }
+    case 0x00050079: {
+      // Fixes Xbox Live error for 454107DB
+      XELOGD("XLiveBaseUnk50079({:08X}, {:08X}) unimplemented", buffer_ptr,
              buffer_length);
       return X_E_SUCCESS;
     }
