@@ -56,7 +56,7 @@ std::string XLiveAPI::GetApiAddress() {
 
   CURLUcode error_code =
       curl_url_set(url_handle, CURLUPART_URL, cvars::api_address.c_str(), 0);
-  
+
   if (error_code == CURLUE_OK) {
     // Add forward slash if not already added
     if (cvars::api_address.back() != '/') {
@@ -823,7 +823,7 @@ XLiveAPI::SessionJSON XLiveAPI::XSessionMigration(xe::be<uint64_t> sessionId) {
 
       XELOGE("Cannot migrate session {} not found.", session_id);
     }
-    
+
     // change return type to XLiveAPI::memory?
     return session;
   }
@@ -1056,7 +1056,7 @@ std::vector<XLiveAPI::XTitleServer> XLiveAPI::GetServers() {
 
   memory chunk = Get(endpoint);
 
-  std::vector<XLiveAPI::XTitleServer> servers{};
+  std::vector<XTitleServer> servers{};
 
   if (chunk.http_code != 200) {
     XELOGE("GetServers error code: {}", chunk.http_code);
@@ -1087,6 +1087,38 @@ std::vector<XLiveAPI::XTitleServer> XLiveAPI::GetServers() {
   }
 
   return servers;
+}
+
+XLiveAPI::XONLINE_SERVICE_INFO XLiveAPI::GetServiceInfoById(
+    xe::be<uint32_t> serviceId) {
+  std::string endpoint = fmt::format("title/{:x}/services/{:08x}",
+                                     kernel_state()->title_id(), serviceId);
+
+  memory chunk = Get(endpoint);
+
+  XONLINE_SERVICE_INFO service{};
+
+  if (chunk.http_code != 200) {
+    XELOGE("GetServiceById error code: {}", chunk.http_code);
+    assert_always();
+
+    return service;
+  }
+
+  Document doc;
+  doc.Parse(chunk.response);
+
+  for (const auto& service_info : doc.GetArray()) {
+    inet_pton(AF_INET, service_info["address"].GetString(), &service.ip);
+
+    XELOGD("GetServiceById IP: {}", service_info["address"].GetString());
+
+    service.port = service_info["port"].GetInt();
+    service.reserved = 0;
+    service.id = serviceId;
+  }
+
+  return service;
 }
 
 void XLiveAPI::SessionJoinRemote(xe::be<uint64_t> sessionId, const char* data) {
