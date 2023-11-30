@@ -16,10 +16,13 @@
 #include <unordered_map>
 #include <vector>
 
+#include "xenia/base/cvar.h"
 #include "xenia/kernel/xam/user_property.h"
 #include "xenia/kernel/xam/xam.h"
 #include "xenia/kernel/xam/xdbf/gpd_info_profile.h"
 #include "xenia/kernel/xam/xdbf/gpd_info_title.h"
+
+DECLARE_bool(offline_mode);
 
 namespace xe {
 namespace kernel {
@@ -104,8 +107,12 @@ class UserProfile {
   uint64_t xuid() const { return xuid_; }
   std::string name() const { return account_info_.GetGamertagString(); }
   uint32_t signin_state() const {
-    return static_cast<uint32_t>(SignInState::SignedInLocally);
-  };
+    if (cvars::offline_mode) {
+      return static_cast<uint32_t>(SignInState::SignedInLocally);
+    } else {
+      return static_cast<uint32_t>(SignInState::SignedInToLive);
+    }
+  }
   uint32_t type() const { return 1 | 2; /* local | online profile? */ }
 
   uint32_t GetReservedFlags() const {
