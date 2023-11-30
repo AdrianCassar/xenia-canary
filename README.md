@@ -37,7 +37,7 @@ Are games dependant on servers?
 
 Can I use multiple instances for the same game?
 
-- No, you cannot use multiple instances due to the first instance using up ports. You will need to use a VM.
+- No, you cannot use multiple instances due to the first instance using up ports. You will need to use a VM or a [Shadow PC](https://shadow.tech/).
 
 Can I use multiple PCs on the same network?
 
@@ -52,7 +52,7 @@ Where can I **download** the Canary Netplay build?
 To connect to a **Xenia WebServices** server you can either privately host it yourself or connect to my server.
 
 ```toml
-api_address = "https://xenia-netplay-2a0298c0e3f4.herokuapp.com/"
+api_address = "https://xenia-netplay-2a0298c0e3f4.herokuapp.com"
 ```
 
 UPnP is disabled by default, you can enable it in the config.
@@ -60,25 +60,40 @@ UPnP is disabled by default, you can enable it in the config.
 upnp = true
 ```
 
+## Linux Notes
+
+Binding to privileged ports 1024 and below will usually fail on linux to fix this run this command.
+
+```console
+sudo sysctl net.ipv4.ip_unprivileged_port_start=0 
+```
+
 ## Supported Games
 
-| Game | Notes | Patches/Plugins |
-|---|---|---|
-| CS:GO | Mousehook support |
-| CS:GO Beta | Mousehook support |
-| GTA V Beta | [Video 1](https://www.youtube.com/watch?v=nIjZ7sRGZlo), [Video 2](https://www.youtube.com/watch?v=YIBjy5ZJcq4) |
-| GTA V TU 2-13 | Very unstable and will crash often |
-| Gundam Operation Troy | [English patch](https://github.com/Eight-Mansions/MSGOT/releases)
-| Halo 3 ODST v13.2 using [Sunrise Server](https://github.com/ahnewark/Sunrise-Halo3-WebServices) | [Video](https://www.youtube.com/watch?v=amS8OxH3exs), Mousehook support | [Halo 3 Patch](https://github.com/AdrianCassar/Xenia-WebServices/blob/main/patches/4D5307E6%20-%20Halo%203.patch.toml)
-| Left 4 Dead 2 | Mousehook support |
+| Game | Notes | Gameplay | Patches/Plugins | 
+|---|---|---|---|
+| CS:GO | Mousehook |
+| CS:GO Beta | Mousehook |
+| Call of Duty 2 | ```launch_module = "default_mp.xex"``` | [Deathmatch](https://www.youtube.com/watch?v=DR9Op_f1UUw) |
+| DiRT | | [Race](https://www.youtube.com/watch?v=udMf-MUzpEc) |
+| GTA V Beta | Requires ```protect_zero = false``` | [Beta Showcase](https://www.youtube.com/watch?v=nIjZ7sRGZlo), [Beta Showcase](https://www.youtube.com/watch?v=YIBjy5ZJcq4) |
+| GTA V TU 2-13 | Very unstable and will crash often | [Solo Session](https://www.youtube.com/watch?v=lap7liW6pco) |
+| Gundam Operation Troy | [English Patch](https://github.com/Eight-Mansions/MSGOT/releases)
+| Halo 3 ODST v13.2 using [Sunrise Server](https://github.com/ahnewark/Sunrise-Halo3-WebServices) | Mousehook | [Head to Head](https://www.youtube.com/watch?v=amS8OxH3exs) | [Halo 3 Patch](https://github.com/AdrianCassar/Xenia-WebServices/blob/main/patches/4D5307E6%20-%20Halo%203.patch.toml)
+| Left 4 Dead 2 | Mousehook |
 | Left 4 Dead 2 Demo |
+| Marble Blast Ultra | |
 | Marvel Ultimate Alliance | |
 | Marvel Ultimate Alliance 2 | |
-| Portal 2 | Mousehook support |
-| Saints Row 2 | [Video 1](https://www.youtube.com/watch?v=YTw84keeWfs), [Video 2](https://www.youtube.com/watch?v=nf7TDOtTEIE) |
-| Saints Row the Third / The Full Package | Unplayable due to broken graphics. Requires [Online Pass](https://www.xbox.com/en-GB/games/store/online-pass/BS7JTR0MN356) + license_mask|
-| Saints Row IV | Unplayable due to broken graphics. Requires Online Pass + license_mask|
-| Team Fortress 2 | Mousehook support |
+| MotoGP 15 | Sprint Season only works |
+| OutRun Online Arcade | | [Race](https://www.youtube.com/watch?v=-UqxjFgGvhk) |
+| Portal 2 | Mousehook |
+| Resident Evil 5 | | [Chapter 1](https://www.youtube.com/watch?v=SKgnUVairqs) |
+| Saints Row 2 | | [Co-op](https://www.youtube.com/watch?v=YTw84keeWfs), [Setup Guide](https://www.youtube.com/watch?v=nf7TDOtTEIE) |
+| Saints Row the Third / The Full Package | Unplayable due to broken graphics. Requires [Online Pass](https://www.xbox.com/en-GB/games/store/online-pass/BS7JTR0MN356) + license_mask |
+| Saints Row IV | Unplayable due to broken graphics. Requires Online Pass + license_mask |
+| Star Wars Battlefront III (Unreleased Game) | Alpha, Mar 17 2008 | [Conquest Taoonie](https://www.youtube.com/watch?v=C54jCqFnCmQ), [MP Event Stream](https://www.youtube.com/watch?v=xSpTmsSvP4s) |
+| Team Fortress 2 | Mousehook |
 ---
 
 ### Non-Supported Games
@@ -87,10 +102,10 @@ upnp = true
 |---|---|
 | Gears of War 3 | Connects online but cannot play with others.  |
 | Grand Theft Auto 4 | Connects online but cannot play with others. |
-| Minecraft | Requires friend lists to invite friends. |
-| Quantum of a Solace | Crashes on start-up.  |
+| Minecraft | Requires friend lists to invite friends. Crashes on start-up after TU 11. |
 | Red Dead Redemption  | Connects online but cannot play with others. |
-| Saints Row 1 | Unstable to find sessions to join. |
+| Saints Row 1 | Unable to find sessions to join. |
+| Forza Motorsport 4 | Unable to join sessions. Requires ```protect_zero = false``` |
 
 #### Requires Servers
 - Activision Games
@@ -100,6 +115,7 @@ upnp = true
 ---
 
 ### [Netplay Mousehook](https://github.com/marinesciencedude/xenia-canary-mousehook/tree/netplay_canary_experimental#mousehook)
+- [Releases](https://github.com/marinesciencedude/xenia-canary-mousehook/releases?q=Netplay)
 
 Netplay mousehook is a fork of netplay which adds support for playing games with mouse and keyboard.
 
