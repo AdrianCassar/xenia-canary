@@ -44,6 +44,10 @@ DECLARE_string(api_address);
 
 DECLARE_bool(logging);
 
+DECLARE_bool(log_mask_ips);
+
+DECLARE_bool(offline_mode);
+
 enum XNET_QOS {
   LISTEN_ENABLE = 0x01,
   LISTEN_DISABLE = 0x02,
@@ -536,7 +540,7 @@ dword_result_t NetDll_WSAWaitForMultipleEvents_entry(dword_t num_events,
   X_STATUS result = 0;
   do {
     result = xboxkrnl::xeNtWaitForMultipleObjectsEx(
-        num_events, events, !wait_all, 1, alertable,
+        num_events, events, wait_all, 1, alertable,
         timeout != -1 ? &timeout_wait : nullptr);
   } while (result == X_STATUS_ALERTED);
 
@@ -677,7 +681,8 @@ dword_result_t NetDll_XNetXnAddrToMachineId_entry(
 DECLARE_XAM_EXPORT1(NetDll_XNetXnAddrToMachineId, kNetworking, kStub);
 
 dword_result_t NetDll_XNetUnregisterInAddr_entry(dword_t caller, dword_t addr) {
-  XELOGI("NetDll_XNetUnregisterInAddr({:08X})", addr.value());
+  XELOGI("NetDll_XNetUnregisterInAddr({:08X})",
+         cvars::log_mask_ips ? 0 : addr.value());
 
   return 0;
 }
@@ -686,7 +691,8 @@ DECLARE_XAM_EXPORT1(NetDll_XNetUnregisterInAddr, kNetworking, kStub);
 // https://github.com/pnill/cartographer/blob/28aa77ba9a1062aec4638b34a01c1a4e77e25e04/xlive/xlivedefs.h#L218
 dword_result_t NetDll_XNetConnect_entry(dword_t caller, dword_t addr) {
   // XELOGI("XNetConnect({:08X}:{})", addr->ina.s_addr, addr->wPortOnline);
-  XELOGI("XNetConnect({:08X})", addr.value());
+  XELOGI("XNetConnect({:08X})",
+         cvars::log_mask_ips ? 0 : addr.value());
 
   return X_ERROR_SUCCESS;
 }
@@ -694,7 +700,8 @@ DECLARE_XAM_EXPORT1(NetDll_XNetConnect, kNetworking, kStub);
 
 // https://github.com/pnill/cartographer/blob/28aa77ba9a1062aec4638b34a01c1a4e77e25e04/xlive/xlivedefs.h#L219
 dword_result_t NetDll_XNetGetConnectStatus_entry(dword_t caller, dword_t addr) {
-  XELOGI("XNetGetConnectStatus({:08X})", addr.value());
+  XELOGI("XNetGetConnectStatus({:08X})",
+         cvars::log_mask_ips ? 0 : addr.value());
 
   return STATUS_CONNECTED;
 }
@@ -722,7 +729,7 @@ DECLARE_XAM_EXPORT1(NetDll_XNetInAddrToString, kNetworking, kStub);
 // subsequent socket calls (like a handle to a XNet address)
 dword_result_t NetDll_XNetXnAddrToInAddr_entry(dword_t caller,
                                                pointer_t<XNADDR> xn_addr,
-                                               lpvoid_t xid,
+                                               pointer_t<XLiveAPI::XNKID> xid,
                                                pointer_t<in_addr> in_addr) {
   if (XLiveAPI::IsOnline()) {
     in_addr->s_addr = xn_addr->inaOnline.s_addr;
@@ -734,13 +741,13 @@ dword_result_t NetDll_XNetXnAddrToInAddr_entry(dword_t caller,
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetXnAddrToInAddr, kNetworking, kSketchy);
 
-//  Does the reverse of the above.
-//  FIXME: Arguments may not be correct.
 dword_result_t NetDll_XNetInAddrToXnAddr_entry(dword_t caller, dword_t in_addr,
                                                pointer_t<XNADDR> xn_addr,
-                                               dword_t xid_ptr) {
-  // xn_addr->ina.S_un.S_un_b.s_b1 = 0;
-  // ntohl??
+                                               pointer_t<XLiveAPI::XNKID> xid_ptr) {
+  if (xn_addr == nullptr) {
+    return X_STATUS_SUCCESS;
+  }
+
   xn_addr->inaOnline.s_addr = ntohl(in_addr);
   xn_addr->ina.s_addr = ntohl(in_addr);
   xn_addr->wPortOnline = XLiveAPI::GetPlayerPort();
@@ -763,13 +770,15 @@ dword_result_t NetDll_XNetInAddrToXnAddr_entry(dword_t caller, dword_t in_addr,
   XLiveAPI::Uint64toMacAddress(
       XLiveAPI::macAddressCache[xn_addr->inaOnline.s_addr], xn_addr->abOnline);
 
-  if (xid_ptr != 0) {
-    auto sessionId_ptr =
-        kernel_memory()->TranslateVirtual<unsigned char*>(xid_ptr);
-
-    XLiveAPI::Uint64toSessionId(
-        XLiveAPI::sessionIdCache[xn_addr->inaOnline.s_addr], sessionId_ptr);
+  if (xid_ptr == nullptr) {
+    return X_STATUS_SUCCESS;
   }
+
+  auto sessionId_ptr =
+      kernel_memory()->TranslateVirtual<unsigned char*>(xid_ptr);
+
+  XLiveAPI::Uint64toSessionId(
+      XLiveAPI::sessionIdCache[xn_addr->inaOnline.s_addr], sessionId_ptr);
 
   return X_STATUS_SUCCESS;
 }
@@ -800,9 +809,13 @@ dword_result_t NetDll_XNetGetBroadcastVersionStatus_entry(dword_t caller,
 DECLARE_XAM_EXPORT1(NetDll_XNetGetBroadcastVersionStatus, kNetworking, kStub);
 
 dword_result_t NetDll_XNetGetEthernetLinkStatus_entry(dword_t caller) {
-  return XEthernetStatus::XNET_ETHERNET_LINK_ACTIVE |
-         XEthernetStatus::XNET_ETHERNET_LINK_100MBPS |
-         XEthernetStatus::XNET_ETHERNET_LINK_FULL_DUPLEX;
+  if (cvars::offline_mode) {
+    return 0;
+  } else {
+    return XEthernetStatus::XNET_ETHERNET_LINK_ACTIVE |
+           XEthernetStatus::XNET_ETHERNET_LINK_100MBPS |
+           XEthernetStatus::XNET_ETHERNET_LINK_FULL_DUPLEX;
+  }
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetGetEthernetLinkStatus, kNetworking, kStub);
 
@@ -902,30 +915,53 @@ dword_result_t NetDll_XNetQosRelease_entry(dword_t caller,
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetQosRelease, kNetworking, kStub);
 
-void SendQoSWrapper(uint64_t sessionId, char* qosData, size_t qosLength) {
-  XLiveAPI::QoSPost(sessionId, qosData, qosLength);
+void SendQoSWrapper(uint64_t sessionId, char* qos_payload, size_t qosLength) {
+  XLiveAPI::QoSPost(sessionId, qos_payload, qosLength);
 }
 
-dword_result_t NetDll_XNetQosListen_entry(dword_t caller, lpvoid_t sessionId,
-                                          lpvoid_t data, dword_t data_size,
-                                          dword_t r7, dword_t flags) {
+dword_result_t NetDll_XNetQosListen_entry(
+    dword_t caller, pointer_t<uint64_t> sessionId, pointer_t<uint32_t> data,
+    dword_t data_size, dword_t bits_per_second, dword_t flags) {
   XELOGI("XNetQosListen({:08X}, {:016X}, {:016X}, {}, {:08X}, {:08X})",
          caller.value(), sessionId.host_address(), data.host_address(),
-         data_size.value(), r7.value(), flags.value());
-  if (data_size <= 0) return X_ERROR_SUCCESS;
+         data_size.value(), bits_per_second.value(), flags.value());
+
+  switch (flags) {
+    case LISTEN_ENABLE: {
+      XELOGI("XNetQosListen LISTEN_ENABLE");
+    } break;
+    case LISTEN_DISABLE: {
+      XELOGI("XNetQosListen LISTEN_DISABLE");
+    } break;
+    case LISTEN_SET_BITSPERSEC: {
+      XELOGI("XNetQosListen LISTEN_SET_BITSPERSEC");
+    } break;
+    case XLISTEN_RELEASE: {
+      XELOGI("XNetQosListen LISTEN_RELEASE");
+    }
+  }
+
+  if (data_size <= 0) {
+    return X_ERROR_SUCCESS;
+  }
+
+  if (data == nullptr) {
+    return X_ERROR_SUCCESS;
+  }
+
+  const xe::be<uint64_t> session_id =
+      *kernel_memory()->TranslateVirtual<xe::be<uint64_t>*>(sessionId);
 
   if (flags & LISTEN_SET_DATA) {
-    XELOGI("XNetQosListen LISTEN_SET_DATA");
+    std::vector<char> qos_buffer(data_size);
+    memcpy(qos_buffer.data(), data, data_size);
 
-    const void* data_ptr = (void*)data.host_address();
-    const xe::be<uint64_t>* sessionId_ptr =
-        (xe::be<uint64_t>*)sessionId.host_address();
+    if (XLiveAPI::UpdateQoSCache(session_id, qos_buffer, data_size)) {
+      XELOGI("XNetQosListen LISTEN_SET_DATA"); 
 
-    char* thread_buffer = new char[data_size];
-    memcpy(thread_buffer, data_ptr, data_size);
-
-    std::thread t1(SendQoSWrapper, *sessionId_ptr, thread_buffer, data_size);
-    t1.detach();
+      std::thread t1(SendQoSWrapper, session_id, qos_buffer.data(), data_size);
+      t1.detach();
+    }
   }
 
   return X_ERROR_SUCCESS;
@@ -933,32 +969,40 @@ dword_result_t NetDll_XNetQosListen_entry(dword_t caller, lpvoid_t sessionId,
 DECLARE_XAM_EXPORT1(NetDll_XNetQosListen, kNetworking, kSketchy);
 
 dword_result_t NetDll_XNetQosLookup_entry(
-    dword_t caller, dword_t sessionsCount, dword_t unk2,
-    lpvoid_t sessionIdPtrsPtr, dword_t unk4, dword_t unk5, dword_t unk6,
-    dword_t service_id, dword_t probes_count, dword_t bits_per_second,
-    dword_t flags, dword_t event_handle, lpdword_t qos_ptr) {
-  if (qos_ptr) {
-    auto qos_guest = kernel_memory()->SystemHeapAlloc(sizeof(XNQOS));
-    auto qos = kernel_memory()->TranslateVirtual<XNQOS*>(qos_guest);
-    qos->count = 1;
+    dword_t caller, dword_t sessionsCount,
+    pointer_t<uint32_t> remote_addressesPtrsPtr,
+    pointer_t<uint32_t> sessionIdPtrsPtr,
+    pointer_t<uint32_t> remote_keysPtrsPtr, dword_t num_gateways,
+    pointer_t<uint32_t> gateways_ips_ptr, pointer_t<uint32_t> service_id_ptr,
+    dword_t probes_count, dword_t bits_per_second, dword_t flags,
+    dword_t event_handle, lpdword_t qos_ptr) {
+  if (qos_ptr == nullptr) {
+    return (uint32_t)X_WSAError::X_WSAEACCES;
+  }
 
-    const auto sessionId_ptrs_ptr =
-        *(xe::be<uint32_t>*)sessionIdPtrsPtr.host_address();
+  if (sessionIdPtrsPtr == nullptr) {
+    return X_ERROR_SUCCESS;
+  }
 
-    const auto sessionId_ptr =
-        kernel_memory()->TranslateVirtual<xe::be<uint64_t>*>(
-            sessionId_ptrs_ptr);
+  const auto qos_guest = kernel_memory()->SystemHeapAlloc(sizeof(XNQOS));
+  const auto qos = kernel_memory()->TranslateVirtual<XNQOS*>(qos_guest);
+  qos->count = 1;
 
-    XLiveAPI::memory chunk = XLiveAPI::QoSGet(*sessionId_ptr);
+  const xe::be<uint32_t> sessionId_ptrs_ptr =
+      *kernel_memory()->TranslateVirtual<xe::be<uint32_t>*>(sessionIdPtrsPtr);
 
-    if (chunk.http_code == 200) {
-      auto data_ptr = kernel_memory()->SystemHeapAlloc((uint32_t)chunk.size);
-      auto data = kernel_memory()->TranslateVirtual<int32_t*>(data_ptr);
+  const xe::be<uint64_t> session_Id =
+      *kernel_memory()->TranslateVirtual<xe::be<uint64_t>*>(sessionId_ptrs_ptr);
 
-      qos->info[0].data_ptr = data_ptr;
-      memcpy(data, chunk.response, chunk.size);
-      qos->info[0].data_len = (uint16_t)chunk.size;
-    }
+  XLiveAPI::memory chunk = XLiveAPI::QoSGet(session_Id);
+
+  if (chunk.http_code == 200) {
+    auto data_ptr = kernel_memory()->SystemHeapAlloc((uint32_t)chunk.size);
+    auto data = kernel_memory()->TranslateVirtual<int32_t*>(data_ptr);
+
+    qos->info[0].data_ptr = data_ptr;
+    memcpy(data, chunk.response, chunk.size);
+    qos->info[0].data_len = (uint16_t)chunk.size;
 
     qos->info[0].probes_xmit = 4;
     qos->info[0].probes_recv = 4;
@@ -981,7 +1025,7 @@ dword_result_t NetDll_XNetQosLookup_entry(
     ev->Set(0, false);
   }
 
-  return ERROR_SUCCESS;
+  return X_ERROR_SUCCESS;
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetQosLookup, kNetworking, kImplemented);
 
@@ -1004,7 +1048,7 @@ dword_result_t NetDll_XNetQosGetListenStats_entry(dword_t caller, dword_t unk,
     qos->probe_replies_sent_count = 1;
   }
 
-  return ERROR_SUCCESS;
+  return X_ERROR_SUCCESS;
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetQosGetListenStats, kNetworking, kImplemented);
 

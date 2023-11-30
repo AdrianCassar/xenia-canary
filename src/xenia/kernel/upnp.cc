@@ -94,7 +94,14 @@ void upnp::upnp_init() {
   const UPNPDev* dev = devlist;
 
   for (; dev; dev = dev->pNext) {
-    if (strstr(dev->st, "InternetGatewayDevice")) break;
+    if (dev != NULL) {
+      if (strstr(dev->st, "InternetGatewayDevice")) break;
+    }
+  }
+
+  if (dev == NULL) {
+    XELOGE("No UPNP device was found");
+    return;
   }
 
   int desc_xml_size = 0;
