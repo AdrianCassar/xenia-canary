@@ -7,7 +7,6 @@
  ******************************************************************************
  */
 
-#include <random>
 #include <sstream>
 
 #include "third_party/fmt/include/fmt/format.h"
@@ -28,39 +27,17 @@ namespace xe {
 namespace kernel {
 namespace xam {
 
-uint64_t GetRandomXuid() {
-  auto xuidBytes = new unsigned char[8];
-
-  std::random_device rd;
-  std::uniform_int_distribution<uint32_t> dist(0, 0xFFFFFFFFu);
-  std::vector<char> data(8);
-  int offset = 0;
-  uint32_t bits = 0;
-
-  for (unsigned int i = 0; i < 7; i++) {
-    if (offset == 0) bits = dist(rd);
-    *(unsigned char*)(xuidBytes + i) =
-        static_cast<unsigned char>(bits & 0xFF);
-    bits >>= 8;
-    if (++offset >= 4) offset = 0;
-  }
-
-  return *(uint64_t*)xuidBytes;
-}
-
  // cpptoml parses uint64_t as int64_t, but XUIDs are uint64_t therefore we must
  // store XUIDs as hex strings to get around this issue.
-DEFINE_string(user_0_xuid, to_hex_string(GetRandomXuid()), "XUID for user 0",
-              "User");
-DEFINE_string(user_1_xuid, to_hex_string(GetRandomXuid()), "XUID for user 1",
-              "User");
-DEFINE_string(user_2_xuid, to_hex_string(GetRandomXuid()), "XUID for user 2",
-              "User");
-DEFINE_string(user_3_xuid, to_hex_string(GetRandomXuid()), "XUID for user 3",
-              "User");
+DEFINE_string(user_0_xuid, to_hex_string(UserProfile::GenerateOnlineXUID()),
+              "XUID for user 0", "User");
+DEFINE_string(user_1_xuid, to_hex_string(UserProfile::GenerateOnlineXUID()),
+              "XUID for user 1", "User");
+DEFINE_string(user_2_xuid, to_hex_string(UserProfile::GenerateOnlineXUID()),
+              "XUID for user 2", "User");
+DEFINE_string(user_3_xuid, to_hex_string(UserProfile::GenerateOnlineXUID()),
+              "XUID for user 3", "User");
 
-//  DEFINE_string(user_0_name, fmt::format("XeniaUser {}",
-//  xuid_to_uint64(user_0_xuid) & 0xFFFF), "Gamertag for user 0", "User");
 DEFINE_string(user_0_name,
               "XeniaUser" +
                   std::to_string((XLiveAPI::hex_to_uint64(user_0_xuid.c_str()) &
@@ -98,21 +75,63 @@ UserProfile::UserProfile(uint8_t index) {
     case 0: {
       xuid_ = XLiveAPI::hex_to_uint64(cvars::user_0_xuid.c_str());
       name_ = cvars::user_0_name;
+
+      if (!IsXUIDValid()) {
+        XELOGE("User 0: {} has an invalid XUID of {}", name_,
+               cvars::user_0_xuid);
+
+        // If XUID is empty generate another one.
+        if (cvars::user_0_xuid.empty()) {
+          OVERRIDE_string(user_0_xuid,
+                          to_hex_string(UserProfile::GenerateOnlineXUID()));
+        }
+      }
       break;
     }
     case 1: {
       xuid_ = XLiveAPI::hex_to_uint64(cvars::user_1_xuid.c_str());
       name_ = cvars::user_1_name;
+      
+      if (!IsXUIDValid()) {
+        XELOGE("User 1: {} has an invalid XUID of {}", name_,
+               cvars::user_1_xuid);
+
+        if (cvars::user_1_xuid.empty()) {
+          OVERRIDE_string(user_0_xuid,
+                          to_hex_string(UserProfile::GenerateOnlineXUID()));
+        }
+      }
       break;
     }
     case 2: {
       xuid_ = XLiveAPI::hex_to_uint64(cvars::user_2_xuid.c_str());
       name_ = cvars::user_2_name;
+
+      
+      if (!IsXUIDValid()) {
+        XELOGE("User 2: {} has an invalid XUID of {}", name_,
+               cvars::user_2_xuid);
+
+        if (cvars::user_2_xuid.empty()) {
+          OVERRIDE_string(user_2_xuid,
+                          to_hex_string(UserProfile::GenerateOnlineXUID()));
+        }
+      }
       break;
     }
     case 3: {
       xuid_ = XLiveAPI::hex_to_uint64(cvars::user_3_xuid.c_str());
       name_ = cvars::user_3_name;
+
+      if (!IsXUIDValid()) {
+        XELOGE("User 3: {} has an invalid XUID of {}", name_,
+               cvars::user_3_xuid);
+
+        if (cvars::user_3_xuid.empty()) {
+          OVERRIDE_string(user_3_xuid,
+                          to_hex_string(UserProfile::GenerateOnlineXUID()));
+        }
+      }
       break;
     }
   }
