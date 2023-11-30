@@ -26,6 +26,11 @@ DEFINE_string(api_address, "127.0.0.1:36000", "Xenia Master Server Address",
 
 DEFINE_bool(logging, false, "Log Network Activity", "Live");
 
+DEFINE_bool(log_mask_ips, true, "Do not include P2P IPs inside the log",
+            "Live");
+
+DEFINE_bool(offline_mode, false, "Offline Mode", "Live");
+
 DECLARE_bool(upnp);
 
 using namespace xe::string_util;
@@ -39,7 +44,6 @@ using namespace rapidjson;
 //
 // Use the overlapped task for asynchronous curl requests.
 // asynchronous UPnP
-// Reduce QoS spam
 // JSON deserialization instead of structs
 // XSession Object
 // Fix ObDereferenceObject_entry and XamSessionRefObjByHandle_entry
@@ -52,19 +56,10 @@ namespace kernel {
 bool XLiveAPI::is_active() { return active_; }
 
 std::string XLiveAPI::GetApiAddress() {
-  CURLU* url_handle = curl_url();
-
-  CURLUcode error_code =
-      curl_url_set(url_handle, CURLUPART_URL, cvars::api_address.c_str(), 0);
-
-  if (error_code == CURLUE_OK) {
-    // Add forward slash if not already added
-    if (cvars::api_address.back() != '/') {
-      cvars::api_address = cvars::api_address + '/';
-    }
+  // Add forward slash if not already added
+  if (cvars::api_address.back() != '/') {
+    cvars::api_address = cvars::api_address + '/';
   }
-
-  curl_url_cleanup(url_handle);
 
   return cvars::api_address;
 }
@@ -79,6 +74,10 @@ uint16_t XLiveAPI::GetPlayerPort() { return 36000; }
 int8_t XLiveAPI::GetVersionStatus() { return version_status; }
 
 void XLiveAPI::Init() {
+  if (cvars::offline_mode) {
+    return;
+  }
+
   // Only initialise once
   if (is_active()) {
     return;
@@ -435,7 +434,6 @@ uint64_t XLiveAPI::GetMachineId() {
     machineId |= macAddress[5 - i];
   }
 
-  // Online xuid maybe??
   machineId += 0xFA00000000000000;
 
   return machineId;
@@ -536,6 +534,19 @@ XLiveAPI::Player XLiveAPI::FindPlayers() {
   return data;
 }
 
+bool XLiveAPI::UpdateQoSCache(const xe::be<uint64_t> sessionId,
+                              const std::vector<char> qos_payload,
+                              const uint32_t payload_size) {
+  if (qos_payload_cache[sessionId] != qos_payload) {
+    qos_payload_cache[sessionId] = qos_payload;
+
+    XELOGI("Updated QoS Cache.");
+    return true;
+  }
+
+  return false;
+}
+
 // Send QoS binary data to the server
 void XLiveAPI::QoSPost(xe::be<uint64_t> sessionId, char* qosData,
                        size_t qosLength) {
@@ -549,7 +560,7 @@ void XLiveAPI::QoSPost(xe::be<uint64_t> sessionId, char* qosData,
     return;
   }
 
-  XELOGI("Send QoS data.");
+  XELOGI("Sent QoS data.");
 }
 
 // Get QoS binary data from the server
@@ -971,13 +982,14 @@ void XLiveAPI::DeleteSession(xe::be<uint64_t> sessionId) {
   }
 
   clearXnaddrCache();
+  qos_payload_cache.erase(sessionId);
 }
 
 void XLiveAPI::DeleteAllSessions() {
   memory chunk = Delete("DeleteSessions");
 
   if (chunk.http_code != 200) {
-    XELOGI("Failed to delete session all session");
+    XELOGI("Failed to delete all sessions");
   }
 }
 

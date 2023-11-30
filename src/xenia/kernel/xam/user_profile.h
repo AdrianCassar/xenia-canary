@@ -11,6 +11,7 @@
 #define XENIA_KERNEL_XAM_USER_PROFILE_H_
 
 #include <map>
+#include <random>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -19,6 +20,8 @@
 #include "xenia/base/byte_stream.h"
 #include "xenia/kernel/util/xuserdata.h"
 #include "xenia/xbox.h"
+
+DECLARE_bool(offline_mode);
 
 namespace xe {
 namespace kernel {
@@ -154,13 +157,44 @@ class UserProfile {
  public:
   UserProfile(uint8_t index);
 
+  static uint64_t GenerateXUIDMask(uint8_t randomized_bits) {
+    std::random_device rnd;
+    std::mt19937_64 gen(rnd());
+
+    uint64_t mask = 0;
+
+    std::uniform_int_distribution<int> dist(0x00, 0xFF);
+
+    for (uint8_t bits = 0; bits < randomized_bits; bits++) {
+      mask = (mask << 8) | dist(gen);
+    }
+
+    return mask;
+  }
+
+  static uint64_t GenerateOfflineXUID() {
+    return (0xEULL << 60) | (GenerateXUIDMask(8) & 0x0FFFFFFFFFFFFFFFULL);
+  }
+
+  static uint64_t GenerateOnlineXUID() {
+    return (0x9ULL << 48) | (GenerateXUIDMask(6) & 0x0000FFFFFFFFFFFFULL);
+  }
+
   bool IsXUIDOffline() { return ((xuid_ >> 60) & 0xF) == 0xE; }
   bool IsXUIDOnline() { return ((xuid_ >> 48) & 0xFFFF) == 0x9; }
   bool IsXUIDValid() { return IsXUIDOffline() != IsXUIDOnline(); }
 
   uint64_t xuid() const { return xuid_; }
   std::string name() const { return name_; }
-  uint32_t signin_state() const { return 2; }
+  uint32_t signin_state() const {
+    if (cvars::offline_mode) {
+      // Signed in Locally
+      return 1;
+    } else {
+      // Signed in Online
+      return 2;
+    }
+  }
   uint32_t type() const { return 1 | 2; /* local | online profile? */ }
 
   void AddSetting(std::unique_ptr<UserSetting> setting);

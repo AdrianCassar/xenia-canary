@@ -24,6 +24,9 @@
 
 #include <xenia/kernel/XLiveAPI.h>
 
+DEFINE_bool(stub_xlivebase, false,
+            "Return success for all unimplemented XLiveBase calls.", "Live");
+
 namespace xe {
 namespace kernel {
 namespace xam {
@@ -75,6 +78,11 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
       // XONLINE_SERVICE_INFO structure.
       XELOGD("CXLiveLogon::GetServiceInfo({:08X}, {:08X})", buffer_ptr,
              buffer_length);
+
+      if (buffer_length == NULL) {
+        return X_ERROR_SUCCESS;
+      }
+
       XLiveAPI::XONLINE_SERVICE_INFO* service_info =
           reinterpret_cast<XLiveAPI::XONLINE_SERVICE_INFO*>(
               memory_->TranslateVirtual(buffer_length));
@@ -131,6 +139,24 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
       XELOGD("UserFindUsers({:08X}, {:08X})", buffer_ptr, buffer_length);
       return X_E_SUCCESS;
     }
+    case 0x0005000B: {
+      // Fixes Xbox Live error for 43430821
+      XELOGD("XLiveBaseUnk5000B({:08X}, {:08X}) unimplemented", buffer_ptr,
+             buffer_length);
+      return X_E_SUCCESS;
+    }
+    case 0x0005800E: {
+      // Fixes Xbox Live error for 513107D9
+      XELOGD("XLiveBaseUnk5800E({:08X}, {:08X}) unimplemented", buffer_ptr,
+             buffer_length);
+      return X_E_SUCCESS;
+    }
+    case 0x0005000D: {
+      // Fixes hang when leaving session for 545107D5
+      XELOGD("XLiveBaseUnk5000D({:08X}, {:08X}) unimplemented", buffer_ptr,
+             buffer_length);
+      return X_E_SUCCESS;
+    }
     case 0x00058035: {
       // Fixes Xbox Live error for 513107D9
       // Required for 534507D4
@@ -150,11 +176,20 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
       return X_E_SUCCESS;
     }
   }
-  XELOGE(
-      "Unimplemented XLIVEBASE message app={:08X}, msg={:08X}, arg1={:08X}, "
-      "arg2={:08X}",
-      app_id(), message, buffer_ptr, buffer_length);
-  return X_E_FAIL;
+
+  if (cvars::stub_xlivebase) {
+    XELOGE(
+        "Stubbed XLIVEBASE message app={:08X}, msg={:08X}, arg1={:08X}, "
+        "arg2={:08X}",
+        app_id(), message, buffer_ptr, buffer_length);
+    return X_E_SUCCESS;
+  } else {
+    XELOGE(
+        "Unimplemented XLIVEBASE message app={:08X}, msg={:08X}, arg1={:08X}, "
+        "arg2={:08X}",
+        app_id(), message, buffer_ptr, buffer_length);
+    return X_E_FAIL;
+  }
 }
 
 X_HRESULT XLiveBaseApp::CreateFriendsEnumerator(uint32_t buffer_args) {

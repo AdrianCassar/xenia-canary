@@ -299,7 +299,9 @@ class XLiveAPI {
 
   static unsigned char* GetMACaddress();
 
-  // static void resetQosCache();
+  static bool UpdateQoSCache(const xe::be<uint64_t> sessionId,
+                             const std::vector<char> qos_payload,
+                             const uint32_t payload_size);
 
   static const sockaddr_in LocalIP() { return local_ip_; };
   static const sockaddr_in OnlineIP() { return online_ip_; };
@@ -316,6 +318,8 @@ class XLiveAPI {
   inline static std::map<xe::be<uint32_t>, xe::be<uint64_t>> machineIdCache{};
   inline static std::map<xe::be<uint32_t>, xe::be<uint64_t>> sessionIdCache{};
   inline static std::map<xe::be<uint32_t>, xe::be<uint64_t>> macAddressCache{};
+  inline static std::map<xe::be<uint64_t>, std::vector<char>>
+      qos_payload_cache{};
 
   inline static int8_t version_status;
 
