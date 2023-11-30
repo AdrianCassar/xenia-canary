@@ -17,10 +17,13 @@
 #include <vector>
 
 #include "xenia/base/byte_stream.h"
+#include "xenia/base/cvar.h"
 #include "xenia/kernel/util/property.h"
 #include "xenia/kernel/util/xuserdata.h"
 #include "xenia/kernel/xam/achievement_manager.h"
 #include "xenia/xbox.h"
+
+DECLARE_bool(offline_mode);
 
 namespace xe {
 namespace kernel {
@@ -158,7 +161,15 @@ class UserProfile {
 
   uint64_t xuid() const { return xuid_; }
   std::string name() const { return account_info_.GetGamertagString(); }
-  uint32_t signin_state() const { return 2; }
+  uint32_t signin_state() const {
+    if (cvars::offline_mode) {
+      // Signed in Locally
+      return 1;
+    } else {
+      // Signed in Online
+      return 2;
+    }
+  }
   uint32_t type() const { return 1 | 2; /* local | online profile? */ }
 
   uint32_t GetCachedFlags() const { return account_info_.GetCachedFlags(); };
