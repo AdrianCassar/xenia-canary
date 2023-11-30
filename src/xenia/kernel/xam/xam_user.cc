@@ -25,6 +25,8 @@
 DECLARE_int32(user_language);
 DECLARE_int32(user_country);
 
+DECLARE_bool(offline_mode);
+
 namespace xe {
 namespace kernel {
 namespace xam {
@@ -131,8 +133,10 @@ X_HRESULT_result_t XamUserGetSigninInfo_entry(
     info->xuid = user_profile->xuid();
   }
 
-  // This flag seems to tell the title we're online.
-  info->flags = 1;
+  if (!cvars::offline_mode) {
+    // Tell the title we are online.
+    info->flags = 1;
+  }
 
   info->signin_state = user_profile->signin_state();
   return X_E_SUCCESS;
