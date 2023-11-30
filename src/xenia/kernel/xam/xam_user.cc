@@ -22,6 +22,8 @@
 DECLARE_int32(user_language);
 DECLARE_int32(user_country);
 
+DECLARE_bool(offline_mode);
+
 namespace xe {
 namespace kernel {
 namespace xam {
@@ -130,10 +132,14 @@ X_HRESULT_result_t XamUserGetSigninInfo_entry(
         kernel_state()->xam_state()->GetUserProfile(user_index);
     info->xuid = user_profile->xuid();
     info->signin_state = user_profile->signin_state();
+
+    if (!cvars::offline_mode) {
+      // Tell the title we are online.
+      info->flags = 1;
+    }
+
     xe::string_util::copy_truncating(info->name, user_profile->name(),
                                      xe::countof(info->name));
-    // This flag seems to tell the title we're online.
-    info->flags = 1;
   } else {
     return X_E_NO_SUCH_USER;
   }

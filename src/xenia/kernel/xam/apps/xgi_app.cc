@@ -517,6 +517,10 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
 
       XELOGI("XSessionMigrateHost({:08X});", buffer_length);
 
+      if (data->session_info_ptr == NULL) {
+        return X_E_SUCCESS;
+      }
+
       auto sessionInfo = memory_->TranslateVirtual<XLiveAPI::XSESSION_INFO*>(
           data->session_info_ptr);
 
@@ -613,6 +617,10 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
       doc.Accept(writer);
 
       XLiveAPI::memory chunk = XLiveAPI::LeaderboardsFind(buffer.GetString());
+
+      if (chunk.response == nullptr) {
+        return X_E_SUCCESS;
+      }
 
       Document leaderboards;
       leaderboards.Parse(chunk.response);
