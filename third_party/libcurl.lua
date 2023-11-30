@@ -9,9 +9,9 @@ project("libcurl")
   })
   defines({
     "BUILDING_LIBCURL",
-
     -- "USE_WOLFSSL",
     -- "WITHOUT_SSL",
+    -- "OPENSSL_EXTRA",
 
     "USE_SCHANNEL",
     "USE_WINDOWS_SSPI",
