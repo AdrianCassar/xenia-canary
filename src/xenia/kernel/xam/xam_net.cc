@@ -594,6 +594,7 @@ dword_result_t NetDll_WSASetEvent_entry(dword_t event_handle) {
 }
 DECLARE_XAM_EXPORT1(NetDll_WSASetEvent, kNetworking, kImplemented);
 
+// Sets the console IP address.
 dword_result_t NetDll_XNetGetTitleXnAddr_entry(dword_t caller,
                                                pointer_t<XNADDR> addr_ptr) {
   //  TODO: this should be done ahead of time, or
@@ -620,9 +621,12 @@ dword_result_t NetDll_XNetGetTitleXnAddr_entry(dword_t caller,
 
     status |= XnAddrStatus::XNET_GET_XNADDR_ONLINE;
   } else {
+    // Offline
+    addr_ptr->ina.s_addr = 0;
     addr_ptr->inaOnline.s_addr = 0;
     addr_ptr->wPortOnline = 0;
   }
+
   memcpy(addr_ptr->abEnet, XLiveAPI::mac_address, 6);
   memcpy(addr_ptr->abOnline, XLiveAPI::mac_address,
          6);  // Why mac address of IP?
@@ -664,7 +668,6 @@ dword_result_t NetDll_XNetXnAddrToMachineId_entry(
   if (XLiveAPI::machineIdCache.find(addr_ptr->inaOnline.s_addr) !=
       XLiveAPI::machineIdCache.end()) {
     *id_ptr = XLiveAPI::machineIdCache[addr_ptr->inaOnline.s_addr];
-    //*id_ptr = htonl(addr_ptr->inaOnline.s_addr);
     return X_ERROR_SUCCESS;
   }
 
@@ -684,13 +687,12 @@ dword_result_t NetDll_XNetUnregisterInAddr_entry(dword_t caller, dword_t addr) {
   XELOGI("NetDll_XNetUnregisterInAddr({:08X})",
          cvars::log_mask_ips ? 0 : addr.value());
 
-  return 0;
+  return X_ERROR_SUCCESS;
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetUnregisterInAddr, kNetworking, kStub);
 
 // https://github.com/pnill/cartographer/blob/28aa77ba9a1062aec4638b34a01c1a4e77e25e04/xlive/xlivedefs.h#L218
 dword_result_t NetDll_XNetConnect_entry(dword_t caller, dword_t addr) {
-  // XELOGI("XNetConnect({:08X}:{})", addr->ina.s_addr, addr->wPortOnline);
   XELOGI("XNetConnect({:08X})",
          cvars::log_mask_ips ? 0 : addr.value());
 
@@ -707,23 +709,45 @@ dword_result_t NetDll_XNetGetConnectStatus_entry(dword_t caller, dword_t addr) {
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetGetConnectStatus, kNetworking, kStub);
 
-dword_result_t NetDll_XNetServerToInAddr_entry(dword_t caller, dword_t addr,
+dword_result_t NetDll_XNetServerToInAddr_entry(dword_t caller, dword_t server_addr,
                                                dword_t serviceId,
                                                pointer_t<in_addr> pina) {
-  XELOGI("XNetServerToInAddr({:08X} {:08X})", addr.value(),
+  XELOGI("XNetServerToInAddr({:08X} {:08X})", server_addr.value(),
          pina.guest_address());
-  pina->S_un.S_addr = htonl(addr);
+
+  pina->s_addr = htonl(server_addr);
+
+  XELOGI("Server IP: {}", XLiveAPI::ip_to_string(*pina));
 
   return X_ERROR_SUCCESS;
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetServerToInAddr, kNetworking, kImplemented);
 
-void NetDll_XNetInAddrToString_entry(dword_t caller, dword_t in_addr,
-                                     lpstring_t string_out,
-                                     dword_t string_size) {
-  strncpy(string_out, "666.666.666.666", string_size);
+dword_result_t NetDll_XNetInAddrToServer_entry(dword_t caller,
+                                               dword_t server_addr,
+                                               pointer_t<in_addr> pina) {
+  XELOGI("XNetServerToInAddr({:08X} {:08X})", server_addr.value(),
+         pina.guest_address());
+
+  pina->s_addr = htonl(server_addr);
+
+  XELOGI("Server IP: {}", XLiveAPI::ip_to_string(*pina));
+
+  return X_ERROR_SUCCESS;
 }
-DECLARE_XAM_EXPORT1(NetDll_XNetInAddrToString, kNetworking, kStub);
+DECLARE_XAM_EXPORT1(NetDll_XNetInAddrToServer, kNetworking, kSketchy);
+
+dword_result_t NetDll_XNetInAddrToString_entry(dword_t caller, dword_t ina,
+                                               lpstring_t string_out,
+                                               dword_t string_size) {
+  in_addr addr = in_addr{};
+  addr.s_addr = ina;
+
+  strncpy(string_out, XLiveAPI::ip_to_string(addr).c_str(), string_size);
+
+  return X_ERROR_SUCCESS;
+}
+DECLARE_XAM_EXPORT1(NetDll_XNetInAddrToString, kNetworking, kImplemented);
 
 // This converts a XNet address to an IN_ADDR. The IN_ADDR is used for
 // subsequent socket calls (like a handle to a XNet address)
@@ -733,11 +757,9 @@ dword_result_t NetDll_XNetXnAddrToInAddr_entry(dword_t caller,
                                                pointer_t<in_addr> in_addr) {
   if (XLiveAPI::IsOnline()) {
     in_addr->s_addr = xn_addr->inaOnline.s_addr;
-
-    return X_ERROR_SUCCESS;
   }
 
-  return 1;
+  return X_ERROR_SUCCESS;
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetXnAddrToInAddr, kNetworking, kSketchy);
 
@@ -887,12 +909,14 @@ dword_result_t NetDll_XNetQosServiceLookup_entry(dword_t caller, dword_t flags,
     qos->info[0].rtt_med_in_msecs = 10;
     qos->info[0].up_bits_per_sec = 13125;
     qos->info[0].down_bits_per_sec = 21058;
-    qos->info[0].flags =
-        XNET_XNQOSINFO::COMPLETE | XNET_XNQOSINFO::TARGET_CONTACTED | 3;
+    qos->info[0].flags = XNET_XNQOSINFO::COMPLETE |
+                         XNET_XNQOSINFO::TARGET_CONTACTED |
+                         XNET_XNQOSINFO::DATA_RECEIVED;
     qos->count_pending = 0;
 
     *pqos = qos_guest;
   }
+
   if (event_handle) {
     auto ev =
         kernel_state()->object_table()->LookupObject<XEvent>(event_handle);
