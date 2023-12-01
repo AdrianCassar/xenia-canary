@@ -233,6 +233,8 @@ class XLiveAPI {
 
   static sockaddr_in GetLocalIP();
 
+  static const std::string ip_to_string(in_addr addr);
+
   static const std::string ip_to_string(sockaddr_in sockaddr);
 
   static void DownloadPortMappings();

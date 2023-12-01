@@ -345,7 +345,7 @@ sockaddr_in XLiveAPI::GetLocalIP() {
   addrin.sin_family = AF_INET;
   addrin.sin_port = htons(50);
 
-  inet_pton(AF_INET, "8.8.8.8", &(addrin.sin_addr));
+  inet_pton(AF_INET, "8.8.8.8", &addrin.sin_addr);
 
   if (connect(sock, (sockaddr*)&addrin, sizeof(addrin)) < 0) {
     closesocket(sock);
@@ -360,6 +360,13 @@ sockaddr_in XLiveAPI::GetLocalIP() {
   local_ip_ = addrin;
 
   return addrin;
+}
+
+const std::string XLiveAPI::ip_to_string(in_addr addr) {
+  char ip_str[INET_ADDRSTRLEN];
+  inet_ntop(AF_INET, &addr.s_addr, ip_str, INET_ADDRSTRLEN);
+
+  return ip_str;
 }
 
 const std::string XLiveAPI::ip_to_string(sockaddr_in sockaddr) {
@@ -1100,7 +1107,7 @@ std::vector<XLiveAPI::XTitleServer> XLiveAPI::GetServers() {
     XTitleServer server{};
 
     inet_pton(AF_INET, server_data["address"].GetString(),
-              &(server.server_address));
+              &server.server_address);
 
     server.flags = server_data["flags"].GetInt();
 
