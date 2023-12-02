@@ -235,6 +235,11 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
              data->session_handle, data->flags, data->maxPublicSlots,
              data->maxPrivateSlots);
 
+      if (data->session_handle == NULL) {
+        assert_always();
+        return X_E_SUCCESS;
+      }
+
       XLiveAPI::SessionModify(XLiveAPI::sessionHandleMap[data->session_handle],
                               data);
 
@@ -830,21 +835,26 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
       switch (data->flags) {
         case SINGLEPLAYER_WITH_STATS:
           XELOGI("XSessionCreate SINGLEPLAYER_WITH_STATS");
+          XELOGI("Session is advertised");
           break;
         case LIVE_MULTIPLAYER_STANDARD:
           XELOGI("XSessionCreate LIVE_MULTIPLAYER_STANDARD");
+          XELOGI("Session is advertised");
           break;
         case LIVE_MULTIPLAYER_RANKED:
           XELOGI("XSessionCreate LIVE_MULTIPLAYER_RANKED");
+          XELOGI("Session is advertised");
           break;
         case SYSTEMLINK:
           XELOGI("XSessionCreate SYSTEMLINK");
           break;
         case GROUP_LOBBY:
           XELOGI("XSessionCreate GROUP_LOBBY");
+          XELOGI("Session is advertised");
           break;
         case GROUP_GAME:
           XELOGI("XSessionCreate GROUP_GAME");
+          XELOGI("Session is advertised");
           break;
         default:
           break;
@@ -856,6 +866,7 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
 
       if (data->flags & PRESENCE) {
         XELOGI("PRESENCE Set");
+        XELOGI("Session is advertised");
       }
 
       if (data->flags & STATS) {
@@ -864,6 +875,7 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
 
       if (data->flags & MATCHMAKING) {
         XELOGI("MATCHMAKING Set");
+        XELOGI("Session is advertised");
       }
 
       if (data->flags & ARBITRATION) {
@@ -894,15 +906,7 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
         XELOGI("JOIN_VIA_PRESENCE_FRIENDS_ONLY Set");
       }
 
-      if (data->flags == STATS) {
-        // Update Stats
-        XELOGI("STATS Unimplemented");
-
-        return X_E_SUCCESS;
-      }
-
-      // If host
-      if (data->flags & HOST) {
+      if (data->flags & HOST || data->flags & STATS) {
         if (!cvars::upnp) {
           XELOGI("Hosting while UPnP is disabled!");
         }
@@ -923,10 +927,10 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
 
         pSessionInfo->hostAddress.wPortOnline = XLiveAPI::GetPlayerPort();
       } else {
-        // Check if session is valid
+        // Check if session id is valid
         auto sessionId = XNKIDtoUint64(&pSessionInfo->sessionID);
 
-        if (sessionId == 0) {
+        if (sessionId == NULL) {
           assert_always();
           return X_E_SUCCESS;
         }
@@ -947,7 +951,10 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
         pSessionInfo->hostAddress.wPortOnline = XLiveAPI::GetPlayerPort();
       }
 
-      if (&pSessionInfo->sessionID) {
+      // Check if session id is valid
+      auto sessionId = XNKIDtoUint64(&pSessionInfo->sessionID);
+
+      if (sessionId != NULL) {
         XLiveAPI::sessionHandleMap.emplace(
             data->session_handle, XNKIDtoUint64(&pSessionInfo->sessionID));
       }

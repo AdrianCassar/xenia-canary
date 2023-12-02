@@ -24,7 +24,7 @@
 DEFINE_string(api_address, "127.0.0.1:36000", "Xenia Master Server Address",
               "Live");
 
-DEFINE_bool(logging, false, "Log Network Activity", "Live");
+DEFINE_bool(logging, false, "Log Network Activity & Stats", "Live");
 
 DEFINE_bool(log_mask_ips, true, "Do not include P2P IPs inside the log",
             "Live");
@@ -75,6 +75,7 @@ int8_t XLiveAPI::GetVersionStatus() { return version_status; }
 
 void XLiveAPI::Init() {
   if (cvars::offline_mode) {
+    XELOGI("Offline mode enabled!");
     return;
   }
 
@@ -328,7 +329,6 @@ sockaddr_in XLiveAPI::Getwhoami() {
 
   XELOGI("Requesting Public IP");
 
-  // free(chunk.response);
   return online_ip_;
 }
 
@@ -953,6 +953,10 @@ void XLiveAPI::SessionWriteStats(xe::be<uint64_t> sessionId,
   rapidjson::StringBuffer buffer;
   PrettyWriter<rapidjson::StringBuffer> writer(buffer);
   rootObject.Accept(writer);
+
+  if (cvars::logging) {
+    XELOGI("SessionWriteStats:\n\n{}", buffer.GetString());
+  }
 
   memory chunk = Post(endpoint, buffer.GetString());
 
