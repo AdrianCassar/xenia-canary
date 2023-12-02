@@ -59,23 +59,20 @@ X_HRESULT AppManager::DispatchMessageAsync(uint32_t app_id, uint32_t message,
     return X_E_NOTFOUND;
   }
 
-  auto buffer_in =
-      it->second->kernel_state_->memory()->SystemHeapAlloc(buffer_length);
+  Memory* memory = it->second->kernel_state_->memory();
 
-  auto hostOldBufferAddr =
-      it->second->kernel_state_->memory()->TranslateVirtual(buffer_ptr);
-  auto hostBufferAddr = it->second->kernel_state_->memory()->TranslateVirtual(buffer_in);
+  auto buffer_in = memory->SystemHeapAlloc(buffer_length);
+
+  auto hostOldBufferAddr = memory->TranslateVirtual(buffer_ptr);
+  auto hostBufferAddr = memory->TranslateVirtual(buffer_in);
 
   memcpy(hostBufferAddr, hostOldBufferAddr, buffer_length);
 
-  auto post = [it, buffer_in]() {
-    it->second->kernel_state_->memory()->SystemHeapFree(buffer_in);
-  };
+  auto post = [memory, buffer_in]() { memory->SystemHeapFree(buffer_in); };
 
   auto run = [it, message, buffer_in, buffer_length]() -> X_RESULT {
     return it->second->DispatchMessageSync(message, buffer_in, buffer_length);
   };
-
 
   if (overlapped_ptr)
     it->second->kernel_state_->CompleteOverlappedDeferred(run, overlapped_ptr, nullptr, post);
