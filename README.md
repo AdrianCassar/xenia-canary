@@ -100,12 +100,12 @@ sudo sysctl net.ipv4.ip_unprivileged_port_start=0
 
 | Game  | Description  |
 |---|---|
-| Gears of War 3 | Connects online but cannot play with others.  |
-| Grand Theft Auto 4 | Connects online but cannot play with others. |
-| Minecraft | Requires friend lists to invite friends. Crashes on start-up after TU 11. |
+| Minecraft | Requires friend lists to invite friends. |
 | Red Dead Redemption  | Connects online but cannot play with others. |
-| Saints Row 1 | Unable to find sessions to join. |
 | Forza Motorsport 4 | Unable to join sessions. Requires ```protect_zero = false``` |
+| Grand Theft Auto 4 | Connects online but cannot play with others. |
+| Saints Row 1 | Unable to find sessions to join. |
+| Gears of War 3 | Connects online but cannot play with others.  |
 
 #### Requires Servers
 - Activision Games
