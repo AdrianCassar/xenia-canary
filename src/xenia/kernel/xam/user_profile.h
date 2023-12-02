@@ -157,7 +157,11 @@ class UserProfile {
  public:
   UserProfile(uint8_t index);
 
-  static uint64_t GenerateXUIDMask(uint8_t randomized_bits) {
+  static uint64_t GenerateXUIDMask(uint8_t randomized_bits = 8) {
+    if (randomized_bits > 8) {
+      randomized_bits = 8;
+    }
+
     std::random_device rnd;
     std::mt19937_64 gen(rnd());
 

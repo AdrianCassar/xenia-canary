@@ -593,6 +593,13 @@ dword_result_t NetDll_WSASetEvent_entry(dword_t event_handle) {
 }
 DECLARE_XAM_EXPORT1(NetDll_WSASetEvent, kNetworking, kImplemented);
 
+dword_result_t XamQueryLiveHiveA_entry(lpstring_t name, lpvoid_t out_buf,
+                                       dword_t out_size,
+                                       dword_t type /* guess */) {
+  return X_ERROR_SUCCESS;
+}
+DECLARE_XAM_EXPORT1(XamQueryLiveHiveA, kNone, kStub);
+
 // Sets the console IP address.
 dword_result_t NetDll_XNetGetTitleXnAddr_entry(dword_t caller,
                                                pointer_t<XNADDR> addr_ptr) {
