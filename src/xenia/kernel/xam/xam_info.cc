@@ -221,6 +221,11 @@ dword_result_t XamGetSystemVersion_entry() {
   // 0x20449700 = 2.0.17559.0
 
   auto ver = 0x20449700;
+
+  if (cvars::offline_mode) {
+    ver = 0;
+  }
+
   auto version = fmt::format("Kernel version: {}.{}.{}.{}", (ver >> 28) & 0xF,
                              (ver >> 24) & 0xF, (ver >> 8) & 0xFFFF, ver & 0xF);
 
