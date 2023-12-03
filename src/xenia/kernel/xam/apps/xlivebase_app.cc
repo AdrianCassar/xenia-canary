@@ -257,7 +257,7 @@ X_HRESULT XLiveBaseApp::CreateFriendsEnumerator(uint32_t buffer_args) {
       make_object<XStaticUntypedEnumerator>(kernel_state_, friends_amount, 0);
   auto result = e->Initialize(-1, app_id(), 0x58021, 0x58022, 0, 0x10, nullptr);
 
-  *handle_ptr = (uint32_t)e->handle();
+  *handle_ptr = xe::byte_swap<uint32_t>(e->handle());
   return X_E_SUCCESS;
 }
 
