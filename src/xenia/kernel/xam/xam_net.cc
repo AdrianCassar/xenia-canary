@@ -366,8 +366,6 @@ dword_result_t NetDll_WSAStartup_entry(dword_t caller, word_t version,
   // NetDll_WSAStartup is called multiple times?
   XELOGI("NetDll_WSAStartup");
 
-  XLiveAPI::Init();
-
 // TODO(benvanik): abstraction layer needed.
 #ifdef XE_PLATFORM_WIN32
   WSADATA wsaData;
@@ -608,15 +606,7 @@ dword_result_t NetDll_XNetGetTitleXnAddr_entry(dword_t caller,
   //  asynchronously returning XNET_GET_XNADDR_PENDING
 
   // Halo 3 calls NetDll_XNetGetTitleXnAddr before NetDll_WSAStartup
-
-  // Wait for NetDll_WSAStartup to setup XLiveAPI?
-  if (!XLiveAPI::is_active()) {
-    XLiveAPI::Init();
-
-    // XELOGE("NetDll_XNetGetTitleXnAddr PENDING XLiveAPI");
-    // return XnAddrStatus::XNET_GET_XNADDR_PENDING;
-  }
-
+  
   auto status = XnAddrStatus::XNET_GET_XNADDR_STATIC |
                 XnAddrStatus::XNET_GET_XNADDR_GATEWAY |
                 XnAddrStatus::XNET_GET_XNADDR_DNS;
@@ -840,11 +830,11 @@ DECLARE_XAM_EXPORT1(NetDll_XNetGetBroadcastVersionStatus, kNetworking, kStub);
 dword_result_t NetDll_XNetGetEthernetLinkStatus_entry(dword_t caller) {
   if (cvars::offline_mode) {
     return 0;
-  } else {
-    return XEthernetStatus::XNET_ETHERNET_LINK_ACTIVE |
-           XEthernetStatus::XNET_ETHERNET_LINK_100MBPS |
-           XEthernetStatus::XNET_ETHERNET_LINK_FULL_DUPLEX;
   }
+
+  return XEthernetStatus::XNET_ETHERNET_LINK_ACTIVE |
+         XEthernetStatus::XNET_ETHERNET_LINK_100MBPS |
+         XEthernetStatus::XNET_ETHERNET_LINK_FULL_DUPLEX;
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetGetEthernetLinkStatus, kNetworking, kStub);
 
