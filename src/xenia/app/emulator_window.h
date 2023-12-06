@@ -283,6 +283,7 @@ class EmulatorWindow {
   void GamepadHotKeys();
   void ToggleGPUSetting(gpu::GPUSetting setting);
   void CycleReadbackResolve();
+  void NetplayStatus();
   void DisplayHotKeysConfig();
 
   static std::string CanonicalizeFileExtension(
