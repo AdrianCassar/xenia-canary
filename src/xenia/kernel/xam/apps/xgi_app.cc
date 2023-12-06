@@ -554,7 +554,7 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
 
       doc.AddMember("players", xuidsJsonArray, doc.GetAllocator());
 
-      std::string title_id = fmt::format("{:x}", kernel_state()->title_id());
+      std::string title_id = fmt::format("{:08x}", kernel_state()->title_id());
       doc.AddMember("titleId", title_id, doc.GetAllocator());
 
       Value leaderboardQueryJsonArray(kArrayType);
