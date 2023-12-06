@@ -26,6 +26,8 @@ class XLiveBaseApp : public App {
                                 uint32_t buffer_length) override;
 
 private:
+  X_HRESULT GetServiceInfo(uint32_t service_id, uint32_t service_info);
+
   X_HRESULT CreateFriendsEnumerator(uint32_t buffer_args);
 };
 
