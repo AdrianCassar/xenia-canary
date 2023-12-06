@@ -488,6 +488,7 @@ void EmulatorApp::OnDestroy() {
     xe::kernel::XLiveAPI::upnp_handler.~upnp();
   }
 
+  // Delete sessions on shutdown.
   xe::kernel::XLiveAPI::DeleteAllSessions();
 
   curl_global_cleanup();
