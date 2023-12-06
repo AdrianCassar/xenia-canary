@@ -227,6 +227,7 @@ class EmulatorWindow {
   void ToggleGPUSetting(gpu_cvar index);
   bool IsUseNexusForGameBarEnabled();
   std::string BoolToString(bool value);
+  void NetplayStatus();
   void DisplayHotKeysConfig();
 
   void RunPreviouslyPlayedTitle();

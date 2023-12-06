@@ -213,6 +213,8 @@ class XLiveAPI {
 
   static bool is_active();
 
+  static bool is_intsalised();
+  
   static std::string GetApiAddress();
 
   static uint32_t GetNatType();
@@ -249,7 +251,7 @@ class XLiveAPI {
 
   static uint64_t GetMachineId();
 
-  static void RegisterPlayer();
+  static XLiveAPI::memory RegisterPlayer();
 
   static uint64_t hex_to_uint64(const char* hex);
 
@@ -327,6 +329,7 @@ class XLiveAPI {
 
  private:
   inline static bool active_ = false;
+  inline static bool intsalised_ = false;
 
   // std::shared_mutex mutex_;
 
@@ -353,9 +356,9 @@ class XLiveAPI {
     return realsize;
   };
 
-  inline static sockaddr_in online_ip_;
+  inline static sockaddr_in online_ip_{};
 
-  inline static sockaddr_in local_ip_;
+  inline static sockaddr_in local_ip_{};
 };
 }  // namespace kernel
 }  // namespace xe

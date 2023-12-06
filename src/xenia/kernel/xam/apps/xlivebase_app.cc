@@ -78,22 +78,7 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
       // XONLINE_SERVICE_INFO structure.
       XELOGD("CXLiveLogon::GetServiceInfo({:08X}, {:08X})", buffer_ptr,
              buffer_length);
-
-      if (buffer_length == NULL) {
-        return X_ERROR_SUCCESS;
-      }
-
-      XLiveAPI::XONLINE_SERVICE_INFO* service_info =
-          reinterpret_cast<XLiveAPI::XONLINE_SERVICE_INFO*>(
-              memory_->TranslateVirtual(buffer_length));
-      memset(service_info, 0, sizeof(XLiveAPI::XONLINE_SERVICE_INFO));
-      XLiveAPI::XONLINE_SERVICE_INFO retrieved_service_info =
-          XLiveAPI::GetServiceInfoById(buffer_ptr);
-      service_info->ip.s_addr = retrieved_service_info.ip.s_addr;
-      service_info->port = retrieved_service_info.port;
-      service_info->reserved = retrieved_service_info.reserved;
-      return X_ERROR_SUCCESS;
-      // return 0x80151802;  // ERROR_CONNECTION_INVALID
+      return GetServiceInfo(buffer_ptr, buffer_length);
     }
     case 0x00050008: {
       // Required to be successful for 534507D4
@@ -177,19 +162,36 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
     }
   }
 
-  if (cvars::stub_xlivebase) {
-    XELOGE(
-        "Stubbed XLIVEBASE message app={:08X}, msg={:08X}, arg1={:08X}, "
-        "arg2={:08X}",
-        app_id(), message, buffer_ptr, buffer_length);
-    return X_E_SUCCESS;
-  } else {
-    XELOGE(
-        "Unimplemented XLIVEBASE message app={:08X}, msg={:08X}, arg1={:08X}, "
-        "arg2={:08X}",
-        app_id(), message, buffer_ptr, buffer_length);
-    return X_E_FAIL;
+  auto xlivebase_log = fmt::format(
+      "{} XLIVEBASE message app={:08X}, msg={:08X}, arg1={:08X}, "
+      "arg2={:08X}",
+      cvars::stub_xlivebase ? "Stubbed" : "Unimplemented", app_id(), message,
+      buffer_ptr, buffer_length);
+
+  XELOGE("{}", xlivebase_log);
+
+  return cvars::stub_xlivebase ? X_E_SUCCESS : X_E_FAIL;
+}
+
+X_HRESULT XLiveBaseApp::GetServiceInfo(uint32_t serviceid,
+                                       uint32_t serviceinfo) {
+  if (serviceid == NULL) {
+    return 0x80151802;  // ERROR_CONNECTION_INVALID
   }
+
+  XLiveAPI::XONLINE_SERVICE_INFO* service_info =
+      reinterpret_cast<XLiveAPI::XONLINE_SERVICE_INFO*>(
+          memory_->TranslateVirtual(serviceid));
+
+  memset(service_info, 0, sizeof(XLiveAPI::XONLINE_SERVICE_INFO));
+
+  XLiveAPI::XONLINE_SERVICE_INFO retrieved_service_info =
+      XLiveAPI::GetServiceInfoById(serviceinfo);
+
+  service_info->ip.s_addr = retrieved_service_info.ip.s_addr;
+  service_info->port = retrieved_service_info.port;
+
+  return X_E_SUCCESS;
 }
 
 X_HRESULT XLiveBaseApp::CreateFriendsEnumerator(uint32_t buffer_args) {
