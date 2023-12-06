@@ -66,6 +66,8 @@ DECLARE_bool(d3d12_readback_resolve);
 
 DECLARE_string(api_address);
 
+DECLARE_bool(upnp);
+
 DEFINE_bool(fullscreen, false, "Whether to launch the emulator in fullscreen.",
             "Display");
 
@@ -705,6 +707,15 @@ bool EmulatorWindow::Initialize() {
         std::bind(&EmulatorWindow::DisplayHotKeysConfig, this)));
   }
   main_menu->AddChild(std::move(hid_menu));
+
+  // Netplay menu.
+  auto Netplay_menu = MenuItem::Create(MenuItem::Type::kPopup, "&Netplay");
+  {
+    Netplay_menu->AddChild(
+        MenuItem::Create(MenuItem::Type::kString, "&Status", "",
+                         std::bind(&EmulatorWindow::NetplayStatus, this)));
+  }
+  main_menu->AddChild(std::move(Netplay_menu));
 
   // Help menu.
   auto help_menu = MenuItem::Create(MenuItem::Type::kPopup, "&Help");
@@ -1894,6 +1905,47 @@ bool EmulatorWindow::IsUseNexusForGameBarEnabled() {
 #endif
 }
 
+void EmulatorWindow::NetplayStatus() {
+  std::string msg = "";
+
+  msg += "API Address: " + cvars::api_address;
+  msg += "\n";
+
+  msg += "XLiveAPI Initialised: " +
+         xe::string_util::BoolToString(xe::kernel::XLiveAPI::is_active());
+  msg += "\n";
+
+  if (xe::kernel::XLiveAPI::is_intsalised() && cvars::upnp) {
+    if (xe::kernel::XLiveAPI::upnp_handler.is_active()) {
+      msg += "UPnP: Device found";
+    } else {
+      msg += "UPnP: Device search failed";
+    }
+
+    msg += "\n";
+  } else {
+    msg += "UPnP: " + xe::string_util::BoolToString(cvars::upnp);
+    msg += "\n";
+  }
+
+  msg += "Offline Mode: " + xe::string_util::BoolToString(cvars::offline_mode);
+  msg += "\n";
+
+  if (xe::kernel::XLiveAPI::is_intsalised()) {
+    msg += "\n";
+
+    if (xe::kernel::XLiveAPI::is_active()) {
+      msg += "Communication succeeded with api_address: " + cvars::api_address;
+    } else {
+      msg += "Communication failed with api_address: " + cvars::api_address;
+    }
+  }
+
+  imgui_drawer_.get()->ClearDialogs();
+  xe::ui::ImGuiDialog::ShowMessageBox(imgui_drawer_.get(), "Netplay Status",
+                                      msg);
+}
+
 void EmulatorWindow::DisplayHotKeysConfig() {
   std::string msg = "";
   std::string msg_passthru = "";
@@ -2041,8 +2093,8 @@ xe::X_STATUS EmulatorWindow::RunTitle(
 
     xam->loader_data().host_path = xe::path_to_utf8(abs_path);
     
-    // Delete sessions on start-up
-    xe::kernel::XLiveAPI::DeleteAllSessions();
+    // Initialise XLiveAPI
+    xe::kernel::XLiveAPI::Init();
   }
 
   return result;
