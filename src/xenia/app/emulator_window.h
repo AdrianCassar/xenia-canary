@@ -238,6 +238,7 @@ class EmulatorWindow {
   void GamepadHotKeys();
   void ToggleGPUSetting(gpu_cvar index);
   bool IsUseNexusForGameBarEnabled();
+  void NetplayStatus();
   void DisplayHotKeysConfig();
 
   static std::string CanonicalizeFileExtension(
