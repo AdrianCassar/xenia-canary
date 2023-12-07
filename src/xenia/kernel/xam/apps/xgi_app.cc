@@ -906,7 +906,16 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
         XELOGI("JOIN_VIA_PRESENCE_FRIENDS_ONLY Set");
       }
 
-      if (data->flags & HOST || data->flags & STATS) {
+      // CSGO only uses STATS flag to create a session to POST stats pre round.
+      // Minecraft, Portal 2 uses flags HOST + STATS to POST stats.
+      //
+      // Creating a STATS session when not host but not equal to STATS will
+      // cause L4D2 to fail joining sessions.
+
+      bool create =
+          (data->flags & HOST && data->flags & STATS) || data->flags == STATS;
+
+      if (create) {
         if (!cvars::upnp) {
           XELOGI("Hosting while UPnP is disabled!");
         }
