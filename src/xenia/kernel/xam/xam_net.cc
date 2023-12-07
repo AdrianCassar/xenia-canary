@@ -931,10 +931,6 @@ dword_result_t NetDll_XNetQosRelease_entry(dword_t caller,
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetQosRelease, kNetworking, kStub);
 
-void SendQoSWrapper(uint64_t sessionId, char* qos_payload, size_t qosLength) {
-  XLiveAPI::QoSPost(sessionId, qos_payload, qosLength);
-}
-
 dword_result_t NetDll_XNetQosListen_entry(
     dword_t caller, pointer_t<uint64_t> sessionId, pointer_t<uint32_t> data,
     dword_t data_size, dword_t bits_per_second, dword_t flags) {
@@ -961,6 +957,10 @@ dword_result_t NetDll_XNetQosListen_entry(
     return X_ERROR_SUCCESS;
   }
 
+  if (data_size > xnet_startup_params.cfgQosDataLimitDiv4) {
+    assert_always();
+  }
+
   if (data == nullptr) {
     return X_ERROR_SUCCESS;
   }
@@ -975,8 +975,12 @@ dword_result_t NetDll_XNetQosListen_entry(
     if (XLiveAPI::UpdateQoSCache(session_id, qos_buffer, data_size)) {
       XELOGI("XNetQosListen LISTEN_SET_DATA"); 
 
-      std::thread t1(SendQoSWrapper, session_id, qos_buffer.data(), data_size);
-      t1.detach();
+      auto run = [](uint64_t sessionId, char* qosData, size_t qosLength) {
+        XLiveAPI::QoSPost(sessionId, qosData, qosLength);
+      };
+
+      std::thread qos_thread(run, session_id, qos_buffer.data(), data_size);
+      qos_thread.detach();
     }
   }
 
