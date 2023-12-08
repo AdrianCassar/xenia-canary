@@ -175,21 +175,26 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
 
 X_HRESULT XLiveBaseApp::GetServiceInfo(uint32_t serviceid,
                                        uint32_t serviceinfo) {
-  if (serviceid == NULL) {
-    return 0x80151802;  // ERROR_CONNECTION_INVALID
+  if (serviceinfo == NULL) {
+    return -1;  // ERROR_FUNCTION_FAILED
   }
 
   XLiveAPI::XONLINE_SERVICE_INFO* service_info =
       reinterpret_cast<XLiveAPI::XONLINE_SERVICE_INFO*>(
-          memory_->TranslateVirtual(serviceid));
+          memory_->TranslateVirtual(serviceinfo));
 
   memset(service_info, 0, sizeof(XLiveAPI::XONLINE_SERVICE_INFO));
 
   XLiveAPI::XONLINE_SERVICE_INFO retrieved_service_info =
-      XLiveAPI::GetServiceInfoById(serviceinfo);
+      XLiveAPI::GetServiceInfoById(serviceid);
 
-  service_info->ip.s_addr = retrieved_service_info.ip.s_addr;
-  service_info->port = retrieved_service_info.port;
+  if (retrieved_service_info.ip.s_addr == 0) {
+    return 0x80151100;  // ERROR_SERVICE_NOT_FOUND
+    // return 0x80151802;  // ERROR_CONNECTION_INVALID
+  } else {
+    service_info->ip.s_addr = retrieved_service_info.ip.s_addr;
+    service_info->port = retrieved_service_info.port;
+  }
 
   return X_E_SUCCESS;
 }
