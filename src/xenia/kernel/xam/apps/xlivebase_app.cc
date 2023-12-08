@@ -176,7 +176,7 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
 X_HRESULT XLiveBaseApp::GetServiceInfo(uint32_t serviceid,
                                        uint32_t serviceinfo) {
   if (serviceinfo == NULL) {
-    return -1;  // ERROR_FUNCTION_FAILED
+    return X_E_SUCCESS;
   }
 
   XLiveAPI::XONLINE_SERVICE_INFO* service_info =
@@ -190,11 +190,12 @@ X_HRESULT XLiveBaseApp::GetServiceInfo(uint32_t serviceid,
 
   if (retrieved_service_info.ip.s_addr == 0) {
     return 0x80151100;  // ERROR_SERVICE_NOT_FOUND
-    // return 0x80151802;  // ERROR_CONNECTION_INVALID
-  } else {
-    service_info->ip.s_addr = retrieved_service_info.ip.s_addr;
-    service_info->port = retrieved_service_info.port;
+    // return 0x80151802;   // ERROR_CONNECTION_INVALID
+    // return -1;           // ERROR_FUNCTION_FAILED
   }
+
+  service_info->ip.s_addr = retrieved_service_info.ip.s_addr;
+  service_info->port = retrieved_service_info.port;
 
   return X_E_SUCCESS;
 }
@@ -248,6 +249,9 @@ X_HRESULT XLiveBaseApp::CreateFriendsEnumerator(uint32_t buffer_args) {
   auto e =
       make_object<XStaticUntypedEnumerator>(kernel_state_, friends_amount, 0);
   auto result = e->Initialize(-1, app_id(), 0x58021, 0x58022, 0, 0x10, nullptr);
+  
+  const uint32_t received_friends_count = 0; 
+  *buffer_ptr = xe::byte_swap<uint32_t>(received_friends_count * 0xC4);
 
   *handle_ptr = xe::byte_swap<uint32_t>(e->handle());
   return X_E_SUCCESS;
