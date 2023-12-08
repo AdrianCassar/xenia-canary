@@ -115,19 +115,19 @@ dword_result_t XamCreateEnumeratorHandle_entry(
 
     *out_handle = e->handle();
     return X_ERROR_SUCCESS;
-  } else {
-    auto e = object_ref<XStaticUntypedEnumerator>(
-        new XStaticUntypedEnumerator(kernel_state(), item_count, extra_size));
-
-    auto result =
-        e->Initialize(user_index, app_id, open_message, close_message, flags);
-    if (XFAILED(result)) {
-      return result;
-    }
-
-    *out_handle = e->handle();
-    return X_ERROR_SUCCESS;
   }
+
+  auto e = object_ref<XStaticUntypedEnumerator>(
+  new XStaticUntypedEnumerator(kernel_state(), item_count, extra_size));
+
+  auto result =
+      e->Initialize(user_index, app_id, open_message, close_message, flags);
+  if (XFAILED(result)) {
+    return result;
+  }
+
+  *out_handle = e->handle();
+  return X_ERROR_SUCCESS;
 }
 DECLARE_XAM_EXPORT1(XamCreateEnumeratorHandle, kNone, kImplemented);
 
