@@ -919,15 +919,12 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
       }
 
       // CSGO only uses STATS flag to create a session to POST stats pre round.
-      // Minecraft, Portal 2 uses flags HOST + STATS to POST stats.
+      // Minecraft and Portal 2 use flags HOST + STATS.
       //
-      // Creating a STATS session when not host but not equal to STATS will
-      // cause L4D2 to fail joining sessions.
+      // Creating a session when not host can cause failure in joining sessions
+      // such as L4D2 and Portal 2.
 
-      bool create =
-          (data->flags & HOST && data->flags & STATS) || data->flags == STATS;
-
-      if (create) {
+      if (data->flags & HOST || data->flags == STATS) {
         if (!cvars::upnp) {
           XELOGI("Hosting while UPnP is disabled!");
         }
