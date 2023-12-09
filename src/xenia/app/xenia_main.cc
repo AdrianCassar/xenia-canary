@@ -484,7 +484,6 @@ void EmulatorApp::OnDestroy() {
 
 #pragma region NetplayCleanup
   // UPnP Shutdown
-
   if (cvars::upnp) {
     xe::kernel::XLiveAPI::upnp_handler.~upnp();
   }

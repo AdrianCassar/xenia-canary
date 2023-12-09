@@ -77,7 +77,7 @@ UserProfile::UserProfile(uint8_t index) {
       name_ = cvars::user_0_name;
 
       if (!IsXUIDValid()) {
-        XELOGE("User 0: {} has an invalid XUID of {}", name_,
+        XELOGI("User 0: {} has an invalid XUID of {}", name_,
                cvars::user_0_xuid);
 
         // If XUID is empty generate another one.
@@ -93,7 +93,7 @@ UserProfile::UserProfile(uint8_t index) {
       name_ = cvars::user_1_name;
       
       if (!IsXUIDValid()) {
-        XELOGE("User 1: {} has an invalid XUID of {}", name_,
+        XELOGI("User 1: {} has an invalid XUID of {}", name_,
                cvars::user_1_xuid);
 
         if (cvars::user_1_xuid.empty()) {
@@ -109,7 +109,7 @@ UserProfile::UserProfile(uint8_t index) {
 
       
       if (!IsXUIDValid()) {
-        XELOGE("User 2: {} has an invalid XUID of {}", name_,
+        XELOGI("User 2: {} has an invalid XUID of {}", name_,
                cvars::user_2_xuid);
 
         if (cvars::user_2_xuid.empty()) {
@@ -124,7 +124,7 @@ UserProfile::UserProfile(uint8_t index) {
       name_ = cvars::user_3_name;
 
       if (!IsXUIDValid()) {
-        XELOGE("User 3: {} has an invalid XUID of {}", name_,
+        XELOGI("User 3: {} has an invalid XUID of {}", name_,
                cvars::user_3_xuid);
 
         if (cvars::user_3_xuid.empty()) {
