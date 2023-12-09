@@ -268,6 +268,9 @@ dword_result_t NetDll_XNetStartup_entry(dword_t caller,
     }
   }
 
+  // Must initialize XLiveAPI inside kernel to guarantee timing/race conditions.
+  XLiveAPI::Init();
+
   auto xam = kernel_state()->GetKernelModule<XamModule>("xam.xex");
 
   /*
@@ -305,6 +308,13 @@ dword_result_t NetDll_XNetCleanup_entry(dword_t caller, lpvoid_t params) {
   return X_STATUS_SUCCESS;
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetCleanup, kNetworking, kImplemented);
+
+dword_result_t XNetLogonGetMachineID_entry(lpqword_t machine_id_ptr) {
+  *machine_id_ptr = XLiveAPI::GetMachineId();
+
+  return X_STATUS_SUCCESS;
+}
+DECLARE_XAM_EXPORT1(XNetLogonGetMachineID, kNetworking, kImplemented);
 
 dword_result_t XNetLogonGetTitleID_entry(dword_t caller, lpvoid_t params) {
   return kernel_state()->title_id();
@@ -605,13 +615,10 @@ DECLARE_XAM_EXPORT1(XamQueryLiveHiveA, kNone, kStub);
 // Sets the console IP address.
 dword_result_t NetDll_XNetGetTitleXnAddr_entry(dword_t caller,
                                                pointer_t<XNADDR> addr_ptr) {
-  //  TODO: this should be done ahead of time, or
-  //  asynchronously returning XNET_GET_XNADDR_PENDING
-
-  // Halo 3 calls NetDll_XNetGetTitleXnAddr before NetDll_WSAStartup
-  
-  // Must initialise XLiveAPI inside kernel to guarantee timing/race conditions.
-  XLiveAPI::Init();
+  // Wait for NetDll_WSAStartup or XNetStartup to setup XLiveAPI.
+  if (!XLiveAPI::is_initialized()) {
+    return XnAddrStatus::XNET_GET_XNADDR_NONE;
+  }
 
   auto status = XnAddrStatus::XNET_GET_XNADDR_STATIC |
                 XnAddrStatus::XNET_GET_XNADDR_GATEWAY |
@@ -624,15 +631,13 @@ dword_result_t NetDll_XNetGetTitleXnAddr_entry(dword_t caller,
 
     status |= XnAddrStatus::XNET_GET_XNADDR_ONLINE;
   } else {
-    // Offline
     addr_ptr->ina.s_addr = 0;
     addr_ptr->inaOnline.s_addr = 0;
     addr_ptr->wPortOnline = 0;
   }
 
   memcpy(addr_ptr->abEnet, XLiveAPI::mac_address, 6);
-  memcpy(addr_ptr->abOnline, XLiveAPI::mac_address,
-         6);  // Why mac address of IP?
+  memcpy(addr_ptr->abOnline, XLiveAPI::mac_address, 6);
 
   // TODO(gibbed): A proper mac address.
   // RakNet's 360 version appears to depend on abEnet to create "random" 64-bit

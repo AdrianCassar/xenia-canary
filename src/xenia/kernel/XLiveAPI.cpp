@@ -57,7 +57,7 @@ namespace kernel {
 
 bool XLiveAPI::is_active() { return active_; }
 
-bool XLiveAPI::is_intsalised() { return intsalised_; }
+bool XLiveAPI::is_initialized() { return initialized_; }
 
 std::string XLiveAPI::GetApiAddress() {
   // Add forward slash if not already added
@@ -79,7 +79,7 @@ int8_t XLiveAPI::GetVersionStatus() { return version_status; }
 
 void XLiveAPI::Init() {
   // Only initialise once
-  if (is_intsalised()) {
+  if (is_initialized()) {
     return;
   }
 
@@ -105,7 +105,7 @@ void XLiveAPI::Init() {
 
   if (cvars::offline_mode) {
     XELOGI("Offline mode enabled!");
-    intsalised_ = true;
+    initialized_ = true;
     return;
   }
 
@@ -121,7 +121,7 @@ void XLiveAPI::Init() {
     // cvars::offline_mode = true;
     // XELOGI("Offline mode enabled!");
 
-    intsalised_ = true;
+    initialized_ = true;
 
     return;
   }
@@ -143,7 +143,7 @@ void XLiveAPI::Init() {
     active_ = true;
   }
 
-  intsalised_ = true;
+  initialized_ = true;
 
   // Delete sessions on start-up.
   XLiveAPI::DeleteAllSessions();
