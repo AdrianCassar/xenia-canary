@@ -213,7 +213,7 @@ class XLiveAPI {
 
   static bool is_active();
 
-  static bool is_intsalised();
+  static bool is_initialized();
   
   static std::string GetApiAddress();
 
@@ -329,7 +329,7 @@ class XLiveAPI {
 
  private:
   inline static bool active_ = false;
-  inline static bool intsalised_ = false;
+  inline static bool initialized_ = false;
 
   // std::shared_mutex mutex_;
 
