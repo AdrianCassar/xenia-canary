@@ -1631,9 +1631,6 @@ xe::X_STATUS EmulatorWindow::RunTitle(std::filesystem::path path_to_file) {
         "Failed to launch title.\n\nCheck xenia.log for technical details.");
   } else {
     AddRecentlyLaunchedTitle(path_to_file, emulator_->title_name());
-
-    // Initialise XLiveAPI
-    xe::kernel::XLiveAPI::Init();
   }
 
   return result;
