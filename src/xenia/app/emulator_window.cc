@@ -2148,9 +2148,6 @@ xe::X_STATUS EmulatorWindow::RunTitle(
             "xam.xex");
 
     xam->loader_data().host_path = xe::path_to_utf8(abs_path);
-    
-    // Initialise XLiveAPI
-    xe::kernel::XLiveAPI::Init();
   }
 
   return result;
