@@ -293,7 +293,7 @@ void ProfileManager::Login(const uint64_t xuid, const uint8_t user_index) {
                                        GetUsedUserSlots().to_ulong());
   UpdateConfig(xuid, assigned_user_slot);
 
-  if (XLiveAPI::is_intsalised()) {
+  if (XLiveAPI::is_initialized()) {
     XLiveAPI::RegisterPlayer();
   }
 }
