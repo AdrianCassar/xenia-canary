@@ -109,10 +109,6 @@ void XLiveAPI::Init() {
     return;
   }
 
-  if (cvars::upnp && !upnp_handler.is_active()) {
-    upnp_handler.upnp_init();
-  }
-
   GetLocalIP();
   mac_address = GetMACaddress();
 
@@ -130,8 +126,12 @@ void XLiveAPI::Init() {
     return;
   }
 
-  // Port mapping are optional 
+  // Download ports mappings before initialising UPnP.
   DownloadPortMappings();
+
+  if (cvars::upnp) {
+    upnp_handler.upnp_init();
+  }
 
   // Must get mac address and IP before registering.
   auto reg_result = RegisterPlayer();
@@ -146,7 +146,7 @@ void XLiveAPI::Init() {
   intsalised_ = true;
 
   // Delete sessions on start-up.
-  xe::kernel::XLiveAPI::DeleteAllSessions();
+  XLiveAPI::DeleteAllSessions();
 }
 
 void XLiveAPI::RandomBytes(unsigned char* buffer_ptr, uint32_t length) {
@@ -1043,7 +1043,7 @@ void XLiveAPI::DeleteSession(xe::be<uint64_t> sessionId) {
 }
 
 void XLiveAPI::DeleteAllSessions() {
-  if (!xe::kernel::XLiveAPI::is_active()) return;
+  if (!is_active()) return;
 
   memory chunk = Delete("DeleteSessions");
 
