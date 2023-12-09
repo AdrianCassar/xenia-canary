@@ -166,17 +166,14 @@ void upnp::add_port(std::string_view addr, uint16_t internal_port,
     const auto& is_bound =
         m_port_bindings[std::string(protocol)].find(internal_port);
 
-    if (is_bound == m_port_bindings[std::string(protocol)].end()) {
-      m_port_bindings[std::string(protocol)][internal_port] = external_port;
+    bool update = false;
 
-      XELOGI("Successfully bound {}:{}({}) to IGD:{}", addr, internal_port,
-             protocol, external_port);
-    } else {
-      XELOGI("Successfully updated {}:{}({}) to IGD:{}", addr, internal_port,
-             protocol, external_port);
+    if (update = (is_bound == m_port_bindings[std::string(protocol)].end())) {
+      m_port_bindings[std::string(protocol)][internal_port] = external_port;
     }
 
-    return;
+    XELOGI("Successfully {} {}:{}({}) to IGD:{}", update ? "bound" : "updated",
+           addr, internal_port, protocol, external_port);
   }
 }
 
@@ -250,37 +247,43 @@ void upnp::refresh_ports_timer() {
 
 uint16_t upnp::get_mapped_connect_port(uint16_t external_port) {
   if (m_mapped_connect_ports.find(external_port) !=
-      m_mapped_connect_ports.end())
+      m_mapped_connect_ports.end()) {
     return m_mapped_connect_ports[external_port];
-  else {
-    if (m_mapped_connect_ports.find(0) != m_mapped_connect_ports.end()) {
+  }
+
+  if (m_mapped_connect_ports.find(0) != m_mapped_connect_ports.end()) {
+    if (cvars::logging) {
       XELOGI("Using wildcard connect port for guest port {}!", external_port);
-      return m_mapped_connect_ports[0];
     }
 
-    if (cvars::logging) {
-      XELOGW("No mapped connect port found for {}!", external_port);
-    }
-    
-    return external_port;
+    return m_mapped_connect_ports[0];
   }
+
+  if (cvars::logging) {
+    XELOGW("No mapped connect port found for {}!", external_port);
+  }
+
+  return external_port;
 }
 
 uint16_t upnp::get_mapped_bind_port(uint16_t external_port) {
-  if (m_mapped_bind_ports.find(external_port) != m_mapped_bind_ports.end())
+  if (m_mapped_bind_ports.find(external_port) != m_mapped_bind_ports.end()) {
     return m_mapped_bind_ports[external_port];
-  else {
-    if (m_mapped_bind_ports.find(0) != m_mapped_bind_ports.end()) {
+  }
+
+  if (m_mapped_bind_ports.find(0) != m_mapped_bind_ports.end()) {
+    if (cvars::logging) {
       XELOGI("Using wildcard bind port for guest port {}!", external_port);
-      return m_mapped_bind_ports[0];
     }
 
-    if (cvars::logging) {
-      XELOGW("No mapped bind port found for {}!", external_port);
-    }
-    
-    return external_port;
+    return m_mapped_bind_ports[0];
   }
+
+  if (cvars::logging) {
+    XELOGW("No mapped bind port found for {}!", external_port);
+  }
+
+  return external_port;
 }
 
 bool upnp::is_active() const { return m_active; }
