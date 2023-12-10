@@ -59,6 +59,45 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
   auto buffer = memory_->TranslateVirtual(buffer_ptr);
 
   switch (message) {
+    case 0x00050008: {
+      // Required to be successful for 534507D4
+      XELOGD("XUserCheckPrivilege({:08x}, {:08x}) unimplemented", buffer_ptr,
+             buffer_length);
+      return X_E_SUCCESS;
+    }
+    case 0x00050009: {
+      // Fixes Xbox Live error for 513107D9
+      XELOGD("XLiveBaseUnk50009({:08X}, {:08X}) unimplemented", buffer_ptr,
+             buffer_length);
+      return X_E_SUCCESS;
+    }
+    case 0x0005000B: {
+      // Fixes Xbox Live error for 43430821
+      XELOGD("XLiveBaseUnk5000B({:08X}, {:08X}) unimplemented", buffer_ptr,
+             buffer_length);
+      return X_E_SUCCESS;
+    }
+    case 0x0005000C: {
+      XELOGD("XStringVerify({:08X} {:08X})", buffer_ptr, buffer_length);
+      return XStringVerify(buffer_ptr, buffer_length);
+    }
+    case 0x0005000D: {
+      // Fixes hang when leaving session for 545107D5
+      XELOGD("XLiveBaseUnk5000D({:08X}, {:08X}) unimplemented", buffer_ptr,
+             buffer_length);
+      return X_E_SUCCESS;
+    }
+    case 0x00050036: {
+      XELOGD("XOnlineQuerySearch({:08X}, {:08X}) unimplemented", buffer_ptr,
+             buffer_length);
+      return X_E_SUCCESS;
+    }
+    case 0x00050079: {
+      // Fixes Xbox Live error for 454107DB
+      XELOGD("XLiveBaseUnk50079({:08X}, {:08X}) unimplemented", buffer_ptr,
+             buffer_length);
+      return X_E_SUCCESS;
+    }
     case 0x00058004: {
       // Called on startup, seems to just return a bool in the buffer.
       assert_true(!buffer_length || buffer_length == 4);
@@ -80,15 +119,22 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
              buffer_length);
       return GetServiceInfo(buffer_ptr, buffer_length);
     }
-    case 0x00050008: {
-      // Required to be successful for 534507D4
-      XELOGD("XUserCheckPrivilege({:08x}, {:08x}) unimplemented", buffer_ptr,
+    case 0x0005800E: {
+      // Fixes Xbox Live error for 513107D9
+      XELOGD("XUserMuteListQuery({:08X}, {:08X}) unimplemented", buffer_ptr,
              buffer_length);
       return X_E_SUCCESS;
     }
-    case 0x00050079: {
-      // Fixes Xbox Live error for 454107DB
-      XELOGD("XLiveBaseUnk50079({:08X}, {:08X}) unimplemented", buffer_ptr,
+    case 0x00058017: {
+      XELOGD("UserFindUsers({:08X}, {:08X})", buffer_ptr, buffer_length);
+      return X_E_SUCCESS;
+    }
+    case 0x00058019: {
+      XELOGD("XPresenceCreateEnumerator({:08X}, {:08X})", buffer_ptr, buffer_length);
+      return X_E_SUCCESS;
+    }
+    case 0x0005801E: {
+      XELOGD("XPresenceSubscribe({:08X}, {:08X})", buffer_ptr,
              buffer_length);
       return X_E_SUCCESS;
     }
@@ -108,40 +154,6 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
           buffer_ptr, buffer_length);
       return X_E_FAIL;
     }
-    case 0x00058037: {
-      XELOGD("XPresenceInitialize({:08X}, {:08X})", buffer_ptr, buffer_length);
-      return X_E_SUCCESS;
-    }
-    case 0x00058046: {
-      // Required to be successful for 4D530910 to detect signed-in profile
-      // Doesn't seem to set anything in the given buffer, probably only takes
-      // input
-      XELOGD("XLiveBaseUnk58046({:08X}, {:08X}) unimplemented", buffer_ptr,
-             buffer_length);
-      return X_E_SUCCESS;
-    }
-    case 0x00058017: {
-      XELOGD("UserFindUsers({:08X}, {:08X})", buffer_ptr, buffer_length);
-      return X_E_SUCCESS;
-    }
-    case 0x0005000B: {
-      // Fixes Xbox Live error for 43430821
-      XELOGD("XLiveBaseUnk5000B({:08X}, {:08X}) unimplemented", buffer_ptr,
-             buffer_length);
-      return X_E_SUCCESS;
-    }
-    case 0x0005800E: {
-      // Fixes Xbox Live error for 513107D9
-      XELOGD("XLiveBaseUnk5800E({:08X}, {:08X}) unimplemented", buffer_ptr,
-             buffer_length);
-      return X_E_SUCCESS;
-    }
-    case 0x0005000D: {
-      // Fixes hang when leaving session for 545107D5
-      XELOGD("XLiveBaseUnk5000D({:08X}, {:08X}) unimplemented", buffer_ptr,
-             buffer_length);
-      return X_E_SUCCESS;
-    }
     case 0x00058035: {
       // Fixes Xbox Live error for 513107D9
       // Required for 534507D4
@@ -149,14 +161,19 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
              buffer_length);
       return X_E_SUCCESS;
     }
-    case 0x00050036: {
-      XELOGD("XOnlineQuerySearch({:08X}, {:08X}) unimplemented", buffer_ptr,
-             buffer_length);
+    case 0x00058037: {
+      XELOGD("XPresenceInitialize({:08X}, {:08X})", buffer_ptr, buffer_length);
       return X_E_SUCCESS;
     }
-    case 0x00050009: {
-      // Fixes Xbox Live error for 513107D9
-      XELOGD("XLiveBaseUnk50009({:08X}, {:08X}) unimplemented", buffer_ptr,
+    case 0x00058044: {
+      XELOGD("XPresenceUnsubscribe({:08X}, {:08X})", buffer_ptr, buffer_length);
+      return X_E_SUCCESS;
+    }
+    case 0x00058046: {
+      // Required to be successful for 4D530910 to detect signed-in profile
+      // Doesn't seem to set anything in the given buffer, probably only takes
+      // input
+      XELOGD("XPresenceInitialize({:08X}, {:08X}) unimplemented", buffer_ptr,
              buffer_length);
       return X_E_SUCCESS;
     }
@@ -254,6 +271,21 @@ X_HRESULT XLiveBaseApp::CreateFriendsEnumerator(uint32_t buffer_args) {
   *buffer_ptr = xe::byte_swap<uint32_t>(received_friends_count * 0xC4);
 
   *handle_ptr = xe::byte_swap<uint32_t>(e->handle());
+  return X_E_SUCCESS;
+}
+
+X_HRESULT XLiveBaseApp::XStringVerify(uint32_t buffer_ptr,
+    uint32_t buffer_length) {
+  if (!buffer_ptr) {
+    return X_E_INVALIDARG;
+  }
+
+  uint32_t* data_ptr =
+      kernel_state_->memory()->TranslateVirtual<uint32_t*>(buffer_ptr);
+
+  // TODO(Gliniak): Figure out structure after marshaling.
+  // Based on what game does there must be some structure that
+  // checks if string is proper.
   return X_E_SUCCESS;
 }
 
