@@ -15,6 +15,7 @@
 #include "xenia/base/string_util.h"
 
 #include "xenia/kernel/XLiveAPI.h"
+#include "xenia/kernel/xam/xam_net.h"
 
 #ifdef WIN32
 #include <IPTypes.h>
@@ -36,20 +37,23 @@ DECLARE_bool(upnp);
 using namespace xe::string_util;
 using namespace rapidjson;
 
-// libcurl + wolfssl + TLS Support
-//
 // TODO:
 // LeaderboardsFind
 // XSessionArbitration
-// 
-// How is systemlink state determined?
-// Use the overlapped task for asynchronous curl requests.
-// asynchronous UPnP
+//
+// libcurl + wolfssl + TLS Support
+//
 // JSON deserialization instead of structs
 // XSession Object
 // Fix ObDereferenceObject_entry and XamSessionRefObjByHandle_entry
-// API endpoint lookup table
+// Asynchronous UPnP
+// Use the overlapped task for asynchronous curl requests.
 // Improve GetMACaddress()
+// API endpoint lookup table
+//
+// How is systemlink state determined?
+// Extract stat descriptions from XDBF.
+// Profile have offline and online XUIDs we only use online.
 
 // https://patents.google.com/patent/US20060287099A1
 namespace xe {
@@ -147,21 +151,6 @@ void XLiveAPI::Init() {
 
   // Delete sessions on start-up.
   XLiveAPI::DeleteAllSessions();
-}
-
-void XLiveAPI::RandomBytes(unsigned char* buffer_ptr, uint32_t length) {
-  std::random_device rd;
-  std::uniform_int_distribution<uint32_t> dist(0, 0xFFFFFFFFu);
-  std::vector<char> data(length);
-  int offset = 0;
-  uint32_t bits = 0;
-
-  for (unsigned int i = 0; i < length; i++) {
-    if (offset == 0) bits = dist(rd);
-    *(unsigned char*)(buffer_ptr + i) = static_cast<unsigned char>(bits & 0xFF);
-    bits >>= 8;
-    if (++offset >= 4) offset = 0;
-  }
 }
 
 void XLiveAPI::clearXnaddrCache() {
@@ -1089,7 +1078,7 @@ void XLiveAPI::XSessionCreate(xe::be<uint64_t> sessionId, XSesion* data) {
     return;
   }
 
-  XELOGI("XSessionCreate Success");
+  XELOGI("XSessionCreate POST Success");
 }
 
 XLiveAPI::SessionJSON XLiveAPI::XSessionGet(xe::be<uint64_t> sessionId) {
@@ -1193,12 +1182,30 @@ XLiveAPI::XONLINE_SERVICE_INFO XLiveAPI::GetServiceInfoById(
   return service;
 }
 
-void XLiveAPI::SessionJoinRemote(xe::be<uint64_t> sessionId, const char* data) {
+void XLiveAPI::SessionJoinRemote(xe::be<uint64_t> sessionId,
+                                 const std::vector<std::string> xuids) {
   std::string endpoint =
       fmt::format("title/{:08X}/sessions/{:016x}/join",
                   kernel_state()->title_id(), sessionId.get());
+  Document doc;
+  doc.SetObject();
 
-  memory chunk = Post(endpoint, data);
+  Value xuidsJsonArray(kArrayType);
+
+  for (const auto xuid : xuids) {
+    Value value;
+    value.SetString(xuid.c_str(), 16, doc.GetAllocator());
+
+    xuidsJsonArray.PushBack(value, doc.GetAllocator());
+  }
+
+  doc.AddMember("xuids", xuidsJsonArray, doc.GetAllocator());
+
+  rapidjson::StringBuffer buffer;
+  PrettyWriter<rapidjson::StringBuffer> writer(buffer);
+  doc.Accept(writer);
+
+  memory chunk = Post(endpoint, buffer.GetString());
 
   if (chunk.http_code != 201) {
     XELOGE("SessionJoinRemote error code: {}", chunk.http_code);
@@ -1207,12 +1214,30 @@ void XLiveAPI::SessionJoinRemote(xe::be<uint64_t> sessionId, const char* data) {
 }
 
 void XLiveAPI::SessionLeaveRemote(xe::be<uint64_t> sessionId,
-                                  const char* data) {
+                                  const std::vector<std::string> xuids) {
   std::string endpoint =
       fmt::format("title/{:08X}/sessions/{:016x}/leave",
                   kernel_state()->title_id(), sessionId.get());
 
-  memory chunk = Post(endpoint, data);
+  Document doc;
+  doc.SetObject();
+
+  Value xuidsJsonArray(kArrayType);
+
+  for (const auto xuid : xuids) {
+    Value value;
+    value.SetString(xuid.c_str(), 16, doc.GetAllocator());
+
+    xuidsJsonArray.PushBack(value, doc.GetAllocator());
+  }
+
+  doc.AddMember("xuids", xuidsJsonArray, doc.GetAllocator());
+
+  rapidjson::StringBuffer buffer;
+  PrettyWriter<rapidjson::StringBuffer> writer(buffer);
+  doc.Accept(writer);
+
+  memory chunk = Post(endpoint, buffer.GetString());
 
   if (chunk.http_code != 201) {
     XELOGE("SessionLeaveRemote error code: {}", chunk.http_code);
@@ -1222,7 +1247,7 @@ void XLiveAPI::SessionLeaveRemote(xe::be<uint64_t> sessionId,
 
 unsigned char* XLiveAPI::GenerateMacAddress() {
   unsigned char* mac_address = new unsigned char[6];
-  RandomBytes(mac_address, 6);
+  xam::XNetRandom(mac_address, 6);
 
   return mac_address;
 }
