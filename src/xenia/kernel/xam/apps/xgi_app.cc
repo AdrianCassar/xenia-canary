@@ -1020,20 +1020,23 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
 
       auto data = reinterpret_cast<XLiveAPI::XSessionJoin*>(buffer);
 
-      bool join_local = data->xuid_array_ptr == 0;
+      const bool join_local = data->xuid_array_ptr == 0;
 
       std::string join_type =
           join_local ? "XGISessionJoinLocal" : "XGISessionJoinRemote";
 
       XELOGI("{}({:08X}, {}, {:08X}, {:08X}, {:08X})", join_type,
              data->session_handle.get(), data->array_count.get(),
-             data->xuid_array_ptr.get(), data->private_slots_array_ptr.get(),
-             data->overlapped_ptr.get());
+             data->xuid_array_ptr.get(), data->indices_array_ptr.get(),
+             data->private_slots_array_ptr.get());
 
       std::vector<std::string> xuids{};
 
       const auto xuid_array =
           memory_->TranslateVirtual<xe::be<uint64_t>*>(data->xuid_array_ptr);
+
+      const auto indices_array =
+          memory_->TranslateVirtual<xe::be<uint32_t>*>(data->indices_array_ptr);
 
       const auto private_slots =
           memory_->TranslateVirtual<bool*>(data->private_slots_array_ptr);
@@ -1041,7 +1044,7 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
       // Local uses user indices, remote uses XUIDs
       for (uint32_t i = 0; i < data->array_count; i++) {
         if (join_local) {
-          const uint32_t index = (uint32_t)xuid_array[i];
+          const uint32_t index = (uint32_t)indices_array[i];
           const auto profile =
               kernel_state()->xam_state()->GetUserProfile(index);
 
@@ -1079,23 +1082,26 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
 
       const auto data = reinterpret_cast<XLiveAPI::XSessionLeave*>(buffer);
 
-      bool leavelocal = data->xuid_array == 0;
+      bool leavelocal = data->xuid_array_ptr == 0;
 
       std::string leave_type =
           leavelocal ? "XGISessionLeaveLocal" : "XGISessionLeaveRemote";
 
       XELOGI("{}({:08X}, {}, {:08X}, {:08X})", leave_type,
-             data->session_ptr.get(), data->array_count.get(),
-             data->xuid_array.get(), data->overlapped.get());
+             data->session_handle.get(), data->array_count.get(),
+             data->xuid_array_ptr.get(), data->indices_array_ptr.get());
 
       std::vector<std::string> xuids{};
 
       auto xuid_array =
-          memory_->TranslateVirtual<xe::be<uint64_t>*>(data->xuid_array);
+          memory_->TranslateVirtual<xe::be<uint64_t>*>(data->xuid_array_ptr);
+
+      auto indices_array =
+          memory_->TranslateVirtual<xe::be<uint32_t>*>(data->indices_array_ptr);
 
       for (uint32_t i = 0; i < data->array_count; i++) {
         if (leavelocal) {
-          const uint32_t index = (uint32_t)xuid_array[i];
+          const uint32_t index = (uint32_t)indices_array[i];
           const auto profile =
               kernel_state()->xam_state()->GetUserProfile(index);
 
@@ -1112,7 +1118,7 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
       }
 
       XLiveAPI::SessionLeaveRemote(
-          XLiveAPI::sessionHandleMap[data->session_ptr], xuids);
+          XLiveAPI::sessionHandleMap[data->session_handle], xuids);
 
       XLiveAPI::clearXnaddrCache();
 
