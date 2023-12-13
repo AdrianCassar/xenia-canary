@@ -169,15 +169,16 @@ class XLiveAPI {
     xe::be<uint32_t> session_handle;
     xe::be<uint32_t> array_count;
     xe::be<uint32_t> xuid_array_ptr;
+    xe::be<uint32_t> indices_array_ptr;
     xe::be<uint32_t> private_slots_array_ptr;
-    xe::be<uint32_t> overlapped_ptr;
   };
 
   struct XSessionLeave {
-    xe::be<uint32_t> session_ptr;
+    xe::be<uint32_t> session_handle;
     xe::be<uint32_t> array_count;
-    xe::be<uint32_t> xuid_array;
-    xe::be<uint32_t> overlapped;
+    xe::be<uint32_t> xuid_array_ptr;
+    xe::be<uint32_t> indices_array_ptr;
+    xe::be<uint32_t> unused;
   };
 
   struct XONLINE_SERVICE_INFO {
