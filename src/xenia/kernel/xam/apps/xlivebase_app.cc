@@ -61,8 +61,8 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
   switch (message) {
     case 0x00050008: {
       // Required to be successful for 534507D4
-      XELOGD("XStorageDownloadToMemory({:08x}, {:08x}) unimplemented", buffer_ptr,
-             buffer_length);
+      XELOGD("XStorageDownloadToMemory({:08x}, {:08x}) unimplemented",
+             buffer_ptr, buffer_length);
       return X_E_SUCCESS;
     }
     case 0x00050009: {
@@ -130,12 +130,12 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
       return X_E_SUCCESS;
     }
     case 0x00058019: {
-      XELOGD("XPresenceCreateEnumerator({:08X}, {:08X})", buffer_ptr, buffer_length);
+      XELOGD("XPresenceCreateEnumerator({:08X}, {:08X})", buffer_ptr,
+             buffer_length);
       return X_E_SUCCESS;
     }
     case 0x0005801E: {
-      XELOGD("XPresenceSubscribe({:08X}, {:08X})", buffer_ptr,
-             buffer_length);
+      XELOGD("XPresenceSubscribe({:08X}, {:08X})", buffer_ptr, buffer_length);
       return X_E_SUCCESS;
     }
     case 0x00058020: {
@@ -157,9 +157,9 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
     case 0x00058035: {
       // Fixes Xbox Live error for 513107D9
       // Required for 534507D4
-      XELOGD("XStorageBuildServerPath({:08X}, {:08X}) unimplemented", buffer_ptr,
+      XELOGD("XStorageBuildServerPath({:08X}, {:08X})", buffer_ptr,
              buffer_length);
-      return X_E_SUCCESS;
+      return XStorageBuildServerPath(buffer_ptr);
     }
     case 0x00058037: {
       XELOGD("XPresenceInitialize({:08X}, {:08X})", buffer_ptr, buffer_length);
@@ -266,8 +266,8 @@ X_HRESULT XLiveBaseApp::CreateFriendsEnumerator(uint32_t buffer_args) {
   auto e =
       make_object<XStaticUntypedEnumerator>(kernel_state_, friends_amount, 0);
   auto result = e->Initialize(-1, app_id(), 0x58021, 0x58022, 0, 0x10, nullptr);
-  
-  const uint32_t received_friends_count = 0; 
+
+  const uint32_t received_friends_count = 0;
   *buffer_ptr = xe::byte_swap<uint32_t>(received_friends_count * 0xC4);
 
   *handle_ptr = xe::byte_swap<uint32_t>(e->handle());
@@ -275,7 +275,7 @@ X_HRESULT XLiveBaseApp::CreateFriendsEnumerator(uint32_t buffer_args) {
 }
 
 X_HRESULT XLiveBaseApp::XStringVerify(uint32_t buffer_ptr,
-    uint32_t buffer_length) {
+                                      uint32_t buffer_length) {
   if (!buffer_ptr) {
     return X_E_INVALIDARG;
   }
@@ -286,6 +286,59 @@ X_HRESULT XLiveBaseApp::XStringVerify(uint32_t buffer_ptr,
   // TODO(Gliniak): Figure out structure after marshaling.
   // Based on what game does there must be some structure that
   // checks if string is proper.
+  return X_E_SUCCESS;
+}
+
+struct XStorageBuildServerPathArgs {
+  xe::be<uint32_t> user_index;
+  char unk[12];
+  xe::be<uint32_t> storage_location;  // 2 means title specific storage,
+                                      // something like developers storage.
+  xe::be<uint32_t> storage_location_info_ptr;
+  xe::be<uint32_t> storage_location_info_size;
+  xe::be<uint32_t> file_name_ptr;
+  xe::be<uint32_t> server_path_ptr;
+  xe::be<uint32_t> server_path_length_ptr;
+};
+
+X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
+  if (!buffer_ptr) {
+    return X_E_INVALIDARG;
+  }
+
+  XStorageBuildServerPathArgs* args =
+      kernel_state_->memory()->TranslateVirtual<XStorageBuildServerPathArgs*>(
+          buffer_ptr);
+
+  uint8_t* filename_ptr =
+      kernel_state_->memory()->TranslateVirtual<uint8_t*>(args->file_name_ptr);
+  const std::string filename =
+      xe::to_utf8(load_and_swap<std::u16string>(filename_ptr));
+
+  XELOGI("XStorageBuildServerPath: Requesting file: {} From storage type: {}",
+         filename, args->storage_location);
+
+  if (args->server_path_ptr) {
+    const std::string server_path = fmt::format(
+        "title/{:08X}/storage/{}", kernel_state()->title_id(), filename);
+
+    const std::string endpoint_API =
+        fmt::format("{}{}", XLiveAPI::GetApiAddress(), server_path);
+
+    uint8_t* server_path_ptr =
+        kernel_state_->memory()->TranslateVirtual<uint8_t*>(
+            args->server_path_ptr);
+
+    std::memcpy(server_path_ptr, endpoint_API.c_str(), endpoint_API.size());
+
+    uint32_t* server_path_length =
+        kernel_state_->memory()->TranslateVirtual<uint32_t*>(
+            args->server_path_length_ptr);
+
+    *server_path_length =
+        xe::byte_swap<uint32_t>(uint32_t(endpoint_API.size()));
+  }
+
   return X_E_SUCCESS;
 }
 
