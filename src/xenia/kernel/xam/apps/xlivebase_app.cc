@@ -75,7 +75,7 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
     }
     case 0x00050008: {
       // Required to be successful for 534507D4
-      XELOGD("XUserCheckPrivilege({:08x}, {:08x}) unimplemented", buffer_ptr,
+      XELOGD("XStorageDownloadToMemory({:08x}, {:08x}) unimplemented", buffer_ptr,
              buffer_length);
       return X_E_SUCCESS;
     }
@@ -171,7 +171,7 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
     case 0x00058035: {
       // Fixes Xbox Live error for 513107D9
       // Required for 534507D4
-      XELOGD("XLiveBaseUnk58035({:08X}, {:08X}) unimplemented", buffer_ptr,
+      XELOGD("XStorageBuildServerPath({:08X}, {:08X}) unimplemented", buffer_ptr,
              buffer_length);
       return X_E_SUCCESS;
     }
