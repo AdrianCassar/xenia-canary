@@ -18,6 +18,7 @@
 
 namespace xe {
 namespace kernel {
+
 class XLiveAPI {
  public:
   struct memory {
@@ -164,6 +165,21 @@ class XLiveAPI {
     xe::be<uint32_t> properties_guest_address;
   };
 
+  struct XSessionJoin {
+    xe::be<uint32_t> session_handle;
+    xe::be<uint32_t> array_count;
+    xe::be<uint32_t> xuid_array_ptr;
+    xe::be<uint32_t> private_slots_array_ptr;
+    xe::be<uint32_t> overlapped_ptr;
+  };
+
+  struct XSessionLeave {
+    xe::be<uint32_t> session_ptr;
+    xe::be<uint32_t> array_count;
+    xe::be<uint32_t> xuid_array;
+    xe::be<uint32_t> overlapped;
+  };
+
   struct XONLINE_SERVICE_INFO {
     xe::be<uint32_t> id;
     in_addr ip;
@@ -226,8 +242,6 @@ class XLiveAPI {
   static int8_t GetVersionStatus();
 
   static void Init();
-
-  static void RandomBytes(unsigned char* buffer_ptr, uint32_t length);
 
   static void clearXnaddrCache();
 
@@ -295,9 +309,11 @@ class XLiveAPI {
   static XONLINE_SERVICE_INFO GetServiceInfoById(
       xe::be<uint32_t> serviceId);
 
-  static void SessionJoinRemote(xe::be<uint64_t> sessionId, const char* data);
+  static void SessionJoinRemote(xe::be<uint64_t> sessionId,
+                                const std::vector<std::string> xuids);
 
-  static void SessionLeaveRemote(xe::be<uint64_t> sessionId, const char* data);
+  static void SessionLeaveRemote(xe::be<uint64_t> sessionId,
+                                 std::vector<std::string> xuids);
 
   static unsigned char* GenerateMacAddress();
 
