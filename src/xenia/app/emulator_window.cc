@@ -1911,7 +1911,7 @@ void EmulatorWindow::NetplayStatus() {
   msg += "API Address: " + cvars::api_address;
   msg += "\n";
 
-  msg += "XLiveAPI Initialised: " +
+  msg += "XLiveAPI Initialized: " +
          xe::string_util::BoolToString(xe::kernel::XLiveAPI::is_active());
   msg += "\n";
 
