@@ -30,6 +30,7 @@ private:
 
   X_HRESULT CreateFriendsEnumerator(uint32_t buffer_args);
   X_HRESULT XStringVerify(uint32_t buffer_ptr, uint32_t buffer_length);
+  X_HRESULT XStorageBuildServerPath(uint32_t buffer_ptr);
 };
 
 }  // namespace apps
