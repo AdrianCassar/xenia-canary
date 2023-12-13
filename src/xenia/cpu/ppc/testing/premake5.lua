@@ -13,6 +13,7 @@ project("xenia-cpu-ppc-tests")
     "imgui",
     "xenia-core",
     "xenia-cpu",
+    "xenia-gpu", -- Should probably be removed sometime
     "xenia-base",
     "xenia-kernel",
     "xenia-patcher",

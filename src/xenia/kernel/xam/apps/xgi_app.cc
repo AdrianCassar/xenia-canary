@@ -122,7 +122,7 @@ enum XSESSION_STATE : uint32_t {
   REGISTRATION,
   INGAME,
   REPORTING,
-  DELETED,
+  DELETED
 };
 
 struct XSESSION_LOCAL_DETAILS {
@@ -136,11 +136,11 @@ struct XSESSION_LOCAL_DETAILS {
   xe::be<uint32_t> AvailablePrivateSlots;
   xe::be<uint32_t> ActualMemberCount;
   xe::be<uint32_t> ReturnedMemberCount;
-  // xe::be<uint32_t> eState;
   XSESSION_STATE eState;
   xe::be<uint64_t> Nonce;
   XLiveAPI::XSESSION_INFO sessionInfo;
   XLiveAPI::XNKID xnkidArbitration;
+  // XSESSION_MEMBER* pSessionMembers;
   xe::be<uint32_t> pSessionMembers;
 };
 
@@ -439,18 +439,26 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
       details->UserIndexHost = 0;
       details->GameMode = 0;
       details->GameType = 0;
-      // details->eState = session.state;
-
       details->Flags = session.flags;
       details->MaxPublicSlots = session.publicSlotsCount;
       details->MaxPrivateSlots = session.privateSlotsCount;
-      details->AvailablePrivateSlots = session.openPublicSlotsCount;
-      details->AvailablePublicSlots = session.openPrivateSlotsCount;
-      details->ActualMemberCount =
-          session.filledPublicSlotsCount + session.filledPrivateSlotsCount;
-      details->ReturnedMemberCount = (uint32_t)session.players.size();
 
-      details->Nonce = 0xAAAAAAAAAAAAAAAA;
+      // TODO:
+      // Provide the correct counts.
+      details->AvailablePrivateSlots = session.openPrivateSlotsCount;
+      details->AvailablePublicSlots = session.openPublicSlotsCount;
+      details->ActualMemberCount = session.filledPublicSlotsCount;
+      //details->ActualMemberCount =
+      //    session.filledPublicSlotsCount + session.filledPrivateSlotsCount;
+
+      details->ReturnedMemberCount = (uint32_t)session.players.size();
+      details->eState = XSESSION_STATE::LOBBY;
+
+      std::random_device rnd;
+      std::mt19937_64 gen(rnd());
+      std::uniform_int_distribution<uint64_t> dist(0, 0xFFFFFFFFFFFFFFFFu);
+
+      details->Nonce = dist(rnd);
 
       for (int i = 0; i < 16; i++) {
         details->sessionInfo.keyExchangeKey.ab[i] = i;
@@ -496,7 +504,7 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
           XLiveAPI::sessionHandleMap[data->session_handle]);
 
       // FIX ME:
-      if (result.hostAddress == "") {
+      if (result.hostAddress.empty()) {
         return X_E_SUCCESS;
       }
 
@@ -591,6 +599,12 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
       Document leaderboards;
       leaderboards.Parse(chunk.response);
       const Value& leaderboardsArray = leaderboards.GetArray();
+
+      // Fixed FM4 and RDR GOTY from crashing.
+      // MotoGP 06 infinite loading screen.
+      if (leaderboardsArray.Empty()) {
+        return X_ERROR_IO_PENDING;
+      }
 
       auto leaderboards_guest_address = memory_->SystemHeapAlloc(
           sizeof(XUSER_STATS_VIEW) * leaderboardsArray.Size());
@@ -832,80 +846,6 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
         pSessionInfo->keyExchangeKey.ab[i] = i;
       }
 
-      switch (data->flags) {
-        case SINGLEPLAYER_WITH_STATS:
-          XELOGI("XSessionCreate SINGLEPLAYER_WITH_STATS");
-          XELOGI("Session is advertised");
-          break;
-        case LIVE_MULTIPLAYER_STANDARD:
-          XELOGI("XSessionCreate LIVE_MULTIPLAYER_STANDARD");
-          XELOGI("Session is advertised");
-          break;
-        case LIVE_MULTIPLAYER_RANKED:
-          XELOGI("XSessionCreate LIVE_MULTIPLAYER_RANKED");
-          XELOGI("Session is advertised");
-          break;
-        case SYSTEMLINK:
-          XELOGI("XSessionCreate SYSTEMLINK");
-          break;
-        case GROUP_LOBBY:
-          XELOGI("XSessionCreate GROUP_LOBBY");
-          XELOGI("Session is advertised");
-          break;
-        case GROUP_GAME:
-          XELOGI("XSessionCreate GROUP_GAME");
-          XELOGI("Session is advertised");
-          break;
-        default:
-          break;
-      }
-
-      if (data->flags & HOST) {
-        XELOGI("HOST Set");
-      }
-
-      if (data->flags & PRESENCE) {
-        XELOGI("PRESENCE Set");
-        XELOGI("Session is advertised");
-      }
-
-      if (data->flags & STATS) {
-        XELOGI("STATS Set");
-      }
-
-      if (data->flags & MATCHMAKING) {
-        XELOGI("MATCHMAKING Set");
-        XELOGI("Session is advertised");
-      }
-
-      if (data->flags & ARBITRATION) {
-        XELOGI("ARBITRATION Set");
-      }
-
-      if (data->flags & PEER_NETWORK) {
-        XELOGI("PEER_NETWORK Set");
-      }
-
-      if (data->flags & SOCIAL_MATCHMAKING_ALLOWED) {
-        XELOGI("SOCIAL_MATCHMAKING_ALLOWED Set");
-      }
-
-      if (data->flags & INVITES_DISABLED) {
-        XELOGI("INVITES_DISABLED Set");
-      }
-
-      if (data->flags & JOIN_VIA_PRESENCE_DISABLED) {
-        XELOGI("JOIN_VIA_PRESENCE_DISABLED Set");
-      }
-
-      if (data->flags & JOIN_IN_PROGRESS_DISABLED) {
-        XELOGI("JOIN_IN_PROGRESS_DISABLED Set");
-      }
-
-      if (data->flags & JOIN_VIA_PRESENCE_FRIENDS_ONLY) {
-        XELOGI("JOIN_VIA_PRESENCE_FRIENDS_ONLY Set");
-      }
-
       // CSGO only uses STATS flag to create a session to POST stats pre round.
       // Minecraft and Portal 2 use flags HOST + STATS.
       //
@@ -913,6 +853,83 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
       // such as L4D2 and Portal 2.
 
       if (data->flags & HOST || data->flags == STATS) {
+
+#pragma region SessionLog
+        switch (data->flags) {
+          case SINGLEPLAYER_WITH_STATS:
+            XELOGI("XSessionCreate SINGLEPLAYER_WITH_STATS");
+            XELOGI("Session is advertised");
+            break;
+          case LIVE_MULTIPLAYER_STANDARD:
+            XELOGI("XSessionCreate LIVE_MULTIPLAYER_STANDARD");
+            XELOGI("Session is advertised");
+            break;
+          case LIVE_MULTIPLAYER_RANKED:
+            XELOGI("XSessionCreate LIVE_MULTIPLAYER_RANKED");
+            XELOGI("Session is advertised");
+            break;
+          case SYSTEMLINK:
+            XELOGI("XSessionCreate SYSTEMLINK");
+            break;
+          case GROUP_LOBBY:
+            XELOGI("XSessionCreate GROUP_LOBBY");
+            XELOGI("Session is advertised");
+            break;
+          case GROUP_GAME:
+            XELOGI("XSessionCreate GROUP_GAME");
+            XELOGI("Session is advertised");
+            break;
+          default:
+            break;
+        }
+
+        if (data->flags & HOST) {
+          XELOGI("HOST Set");
+        }
+
+        if (data->flags & PRESENCE) {
+          XELOGI("PRESENCE Set");
+          XELOGI("Session is advertised");
+        }
+
+        if (data->flags & STATS) {
+          XELOGI("STATS Set");
+        }
+
+        if (data->flags & MATCHMAKING) {
+          XELOGI("MATCHMAKING Set");
+          XELOGI("Session is advertised");
+        }
+
+        if (data->flags & ARBITRATION) {
+          XELOGI("ARBITRATION Set");
+        }
+
+        if (data->flags & PEER_NETWORK) {
+          XELOGI("PEER_NETWORK Set");
+        }
+
+        if (data->flags & SOCIAL_MATCHMAKING_ALLOWED) {
+          XELOGI("SOCIAL_MATCHMAKING_ALLOWED Set");
+        }
+
+        if (data->flags & INVITES_DISABLED) {
+          XELOGI("INVITES_DISABLED Set");
+        }
+
+        if (data->flags & JOIN_VIA_PRESENCE_DISABLED) {
+          XELOGI("JOIN_VIA_PRESENCE_DISABLED Set");
+        }
+
+        if (data->flags & JOIN_IN_PROGRESS_DISABLED) {
+          XELOGI("JOIN_IN_PROGRESS_DISABLED Set");
+        }
+
+        if (data->flags & JOIN_VIA_PRESENCE_FRIENDS_ONLY) {
+          XELOGI("JOIN_VIA_PRESENCE_FRIENDS_ONLY Set");
+        }
+#pragma endregion
+
         if (!cvars::upnp) {
           XELOGI("Hosting while UPnP is disabled!");
         }
@@ -920,7 +937,11 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
         Uint64toXNKID(dist(rd), &pSessionInfo->sessionID);
         *memory_->TranslateVirtual<uint64_t*>(data->nonce_ptr) = dist(rd);
 
+        auto sessionid = XNKIDtoUint64(&pSessionInfo->sessionID);
+
         XLiveAPI::XSessionCreate(XNKIDtoUint64(&pSessionInfo->sessionID), data);
+
+        XELOGI("Created session {:016X}", sessionid);
 
         pSessionInfo->hostAddress.inaOnline.s_addr =
             XLiveAPI::OnlineIP().sin_addr.s_addr;
@@ -935,6 +956,8 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
       } else {
         // Check if session id is valid
         auto sessionId = XNKIDtoUint64(&pSessionInfo->sessionID);
+
+        XELOGI("Joining session {:016X}", sessionId);
 
         if (sessionId == NULL) {
           assert_always();
@@ -983,57 +1006,55 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
     case 0x000B0012: {
       assert_true(buffer_length == 0x14);
 
-      struct SessionJoin {
-        xe::be<uint32_t> session_ptr;
-        xe::be<uint32_t> array_count;
-        xe::be<uint32_t> xuid_array;
-        xe::be<uint32_t> user_index_array;
-        xe::be<uint32_t> private_slots_array;
-      }* data = reinterpret_cast<SessionJoin*>(buffer);
+      auto data = reinterpret_cast<XLiveAPI::XSessionJoin*>(buffer);
+
+      bool join_local = data->xuid_array_ptr == 0;
+
+      std::string join_type =
+          join_local ? "XGISessionJoinLocal" : "XGISessionJoinRemote";
+
+      XELOGI("{}({:08X}, {}, {:08X}, {:08X}, {:08X})", join_type,
+             data->session_handle, data->array_count, data->xuid_array_ptr,
+             data->private_slots_array_ptr, data->overlapped_ptr);
+
+      std::vector<std::string> xuids{};
+
+      const auto xuid_array =
+          memory_->TranslateVirtual<xe::be<uint64_t>*>(data->xuid_array_ptr);
+
+      const auto private_slots =
+          memory_->TranslateVirtual<bool*>(data->private_slots_array_ptr);
 
       // Local uses user indices, remote uses XUIDs
-      if (data->xuid_array == 0) {
-        XELOGI("XGISessionJoinLocal({:08X}, {}, {:08X}, {:08X}, {:08X})",
-               data->session_ptr, data->array_count, data->xuid_array,
-               data->user_index_array, data->private_slots_array);
-      } else {
-        XELOGI("XGISessionJoinRemote({:08X}, {}, {:08X}, {:08X}, {:08X})",
-               data->session_ptr, data->array_count, data->xuid_array,
-               data->user_index_array, data->private_slots_array);
+      for (uint32_t i = 0; i < data->array_count; i++) {
+        if (join_local) {
+          const uint32_t index = (uint32_t)xuid_array[i];
+          const auto profile = kernel_state()->user_profile(index);
 
-        struct XSessionJoinRemote {
-          xe::be<uint32_t> session_ptr;
-          xe::be<uint32_t> array_count;
-          xe::be<uint32_t> xuid_array;
-          xe::be<uint32_t> private_slots_array;
-          xe::be<uint32_t> overlapped;
-        }* data = reinterpret_cast<XSessionJoinRemote*>(buffer);
+          if (!profile) {
+            assert_always();
+            return X_E_FAIL;
+          }
 
-        auto xuids =
-            memory_->TranslateVirtual<xe::be<uint64_t>*>(data->xuid_array);
+          const auto xuid = profile->xuid();
 
-        Document doc;
-        doc.SetObject();
-
-        Value xuidsJsonArray(kArrayType);
-
-        for (unsigned int i = 0; i < data->array_count; i++) {
-          std::string xuid = to_hex_string(xuids[i]);
-
-          Value value;
-          value.SetString(xuid.c_str(), 16, doc.GetAllocator());
-          xuidsJsonArray.PushBack(value, doc.GetAllocator());
+          // Convert local user index to xuid.
+          xuids.push_back(to_hex_string(xuid));
+        } else {
+          xuids.push_back(to_hex_string(xuid_array[i]));
         }
 
-        doc.AddMember("xuids", xuidsJsonArray, doc.GetAllocator());
+        const bool private_slot = private_slots[i];
 
-        rapidjson::StringBuffer buffer;
-        PrettyWriter<rapidjson::StringBuffer> writer(buffer);
-        doc.Accept(writer);
-
-        XLiveAPI::SessionJoinRemote(
-            XLiveAPI::sessionHandleMap[data->session_ptr], buffer.GetString());
+        if (private_slot) {
+          XELOGI("Occupying private slot");
+        } else {
+          XELOGI("Occupying public slot");
+        }
       }
+
+      XLiveAPI::SessionJoinRemote(
+          XLiveAPI::sessionHandleMap[data->session_handle], xuids);
 
       XLiveAPI::clearXnaddrCache();
 
@@ -1042,49 +1063,40 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
     case 0x000B0013: {
       assert_true(buffer_length == 0x14);
 
-      struct XSessionLeaveRemote {
-        xe::be<uint32_t> session_ptr;
-        xe::be<uint32_t> array_count;
-        xe::be<uint32_t> xuid_array;
-        xe::be<uint32_t> user_index_array;
-        xe::be<uint32_t> private_slots_array;
-      }* data = reinterpret_cast<XSessionLeaveRemote*>(buffer);
+      const auto data = reinterpret_cast<XLiveAPI::XSessionLeave*>(buffer);
 
-      // Local uses user indices, remote uses XUIDs
-      if (data->xuid_array == 0) {
-        XELOGI("XGISessionLeaveLocal({:08X}, {}, {:08X}, {:08X}, {:08X})",
-               data->session_ptr, data->array_count, data->xuid_array,
-               data->user_index_array, data->private_slots_array);
-      } else {
-        XELOGI("XGISessionLeaveRemote({:08X}, {}, {:08X}, {:08X}, {:08X})",
-               data->session_ptr, data->array_count, data->xuid_array,
-               data->user_index_array, data->private_slots_array);
+      bool leavelocal = data->xuid_array == 0;
 
-        auto xuids =
-            memory_->TranslateVirtual<xe::be<uint64_t>*>(data->xuid_array);
+      std::string leave_type =
+          leavelocal ? "XGISessionLeaveLocal" : "XGISessionLeaveRemote";
 
-        Document doc;
-        doc.SetObject();
+      XELOGI("{}({:08X}, {}, {:08X}, {:08X})", leave_type, data->session_ptr,
+             data->array_count, data->xuid_array, data->overlapped);
 
-        Value xuidsJsonArray(kArrayType);
+      std::vector<std::string> xuids{};
 
-        for (unsigned int i = 0; i < data->array_count; i++) {
-          std::string xuid = to_hex_string(xuids[i]);
+      auto xuid_array =
+          memory_->TranslateVirtual<xe::be<uint64_t>*>(data->xuid_array);
 
-          Value value;
-          value.SetString(xuid.c_str(), 16, doc.GetAllocator());
-          xuidsJsonArray.PushBack(value, doc.GetAllocator());
+      for (uint32_t i = 0; i < data->array_count; i++) {
+        if (leavelocal) {
+          const uint32_t index = (uint32_t)xuid_array[i];
+          const auto profile = kernel_state()->user_profile(index);
+
+          if (!profile) {
+            assert_always();
+            return X_E_FAIL;
+          }
+
+          // Convert local user index to xuid.
+          xuids.push_back(to_hex_string(profile->xuid()));
+        } else {
+          xuids.push_back(to_hex_string(xuid_array[i]));
         }
-
-        doc.AddMember("xuids", xuidsJsonArray, doc.GetAllocator());
-
-        rapidjson::StringBuffer buffer;
-        PrettyWriter<rapidjson::StringBuffer> writer(buffer);
-        doc.Accept(writer);
-
-        XLiveAPI::SessionLeaveRemote(
-            XLiveAPI::sessionHandleMap[data->session_ptr], buffer.GetString());
       }
+
+      XLiveAPI::SessionLeaveRemote(
+          XLiveAPI::sessionHandleMap[data->session_ptr], xuids);
 
       XLiveAPI::clearXnaddrCache();
 

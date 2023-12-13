@@ -62,11 +62,25 @@ upnp = true
 
 ## Linux Notes
 
-Binding to privileged ports 1024 and below will usually fail on linux to fix this run this command.
+<details>
+  <summary>Failure to Bind to Ports</summary>
 
+### Failure to Bind to Ports
+Binding to ports <= 1024 will usually fail on Linux as they are protected by default. To verify this is an issue you are encountering, search your log for the following message:
+`NetDll_WSAGetLastError: 10013`
+
+To fix this run this command:
 ```console
-sudo sysctl net.ipv4.ip_unprivileged_port_start=0 
+sudo sysctl net.ipv4.ip_unprivileged_port_start=999
+echo 'sysctl net.ipv4.ip_unprivileged_port_start=999' | sudo tee /etc/sysctl.d/99-xenia.conf
 ```
+This command configures privileged ports to start at port 999 instead of port 1024 in this logon session and future logons. This should allow for most games to now bind. 
+
+If you are still seeing `NetDll_WSAGetLastError: 10013` in logs after running this, you can try rerunning the previous commands with a number lower than `999`. `23` should solve every case. You can try `0` but it will prevent you from running ssh.
+
+It should also be noted that due to the way Steam Decks handle configuration, you will need to rerun this command on every reboot.
+
+</details>
 
 ## Supported Games
 
@@ -80,7 +94,10 @@ sudo sysctl net.ipv4.ip_unprivileged_port_start=0
 | GTA V TU 2-13 | Very unstable and will crash often | [Solo Session](https://www.youtube.com/watch?v=lap7liW6pco) |
 | Gundam Operation Troy | [English Patch](https://github.com/Eight-Mansions/MSGOT/releases)
 | Halo 3 ODST v13.2 using [Sunrise Server](https://github.com/ahnewark/Sunrise-Halo3-WebServices) | Mousehook | [Head to Head](https://www.youtube.com/watch?v=amS8OxH3exs) | [Halo 3 Patch](https://github.com/AdrianCassar/Xenia-WebServices/blob/main/patches/4D5307E6%20-%20Halo%203.patch.toml)
-| Left 4 Dead 2 | Mousehook |
+| Kung Fu Panda: SLL | |
+| Left 4 Dead | Mousehook | Compatible with GOTY. |
+| Left 4 Dead GOTY | Mousehook | |
+| Left 4 Dead 2 | Mousehook | |
 | Left 4 Dead 2 Demo |
 | Marble Blast Ultra | |
 | Marvel Ultimate Alliance | |
@@ -92,6 +109,7 @@ sudo sysctl net.ipv4.ip_unprivileged_port_start=0
 | Saints Row 2 | | [Co-op](https://www.youtube.com/watch?v=YTw84keeWfs), [Setup Guide](https://www.youtube.com/watch?v=nf7TDOtTEIE) |
 | Saints Row the Third / The Full Package | Unplayable due to broken graphics. Requires [Online Pass](https://www.xbox.com/en-GB/games/store/online-pass/BS7JTR0MN356) + license_mask |
 | Saints Row IV | Unplayable due to broken graphics. Requires Online Pass + license_mask |
+| Splinter Cell: Double Agent | |
 | Star Wars Battlefront III (Unreleased Game) | Alpha, Mar 17 2008 | [Conquest Taoonie](https://www.youtube.com/watch?v=C54jCqFnCmQ), [MP Event Stream](https://www.youtube.com/watch?v=xSpTmsSvP4s) |
 | Team Fortress 2 | Mousehook |
 ---
@@ -102,7 +120,7 @@ sudo sysctl net.ipv4.ip_unprivileged_port_start=0
 |---|---|
 | Minecraft | Requires friend lists to invite friends. |
 | Red Dead Redemption  | Connects online but cannot play with others. |
-| Forza Motorsport 4 | Unable to join sessions. Requires ```protect_zero = false``` |
+| Forza Motorsport 4 | Unable to join sessions. |
 | Grand Theft Auto 4 | Connects online but cannot play with others. |
 | Saints Row 1 | Unable to find sessions to join. |
 | Gears of War 3 | Connects online but cannot play with others.  |
