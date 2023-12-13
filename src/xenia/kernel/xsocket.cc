@@ -11,12 +11,13 @@
 
 #include <cstring>
 
-#include "xenia/base/logging.h"
 #include "xenia/base/platform.h"
 #include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/xam/xam_module.h"
 #include "xenia/kernel/xboxkrnl/xboxkrnl_threading.h"
 // #include "xenia/kernel/xnet.h"
+
+#include <xenia/kernel/XLiveAPI.h>
 
 #ifdef XE_PLATFORM_WIN32
 // clang-format off
@@ -32,9 +33,6 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #endif
-#include <src/xenia/kernel/xam/xam_net.h>
-#include <src/xenia/kernel/XLiveAPI.h>
-using namespace xe::kernel::xam;
 
 namespace xe {
 namespace kernel {
