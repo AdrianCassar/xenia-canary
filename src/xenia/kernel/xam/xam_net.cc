@@ -153,18 +153,18 @@ static_assert_size(X_WSADATA, 0x190);
 // https://github.com/joolswills/mameox/blob/master/MAMEoX/Sources/xbox_Network.cpp#L136
 struct XNetStartupParams {
   uint8_t cfgSizeOfStruct;
-  uint8_t cfgFlags;
-  uint8_t cfgSockMaxDgramSockets;
-  uint8_t cfgSockMaxStreamSockets;
-  uint8_t cfgSockDefaultRecvBufsizeInK;
-  uint8_t cfgSockDefaultSendBufsizeInK;
-  uint8_t cfgKeyRegMax;
-  uint8_t cfgSecRegMax;
-  uint8_t cfgQosDataLimitDiv4;
-  uint8_t cfgQosProbeTimeoutInSeconds;
-  uint8_t cfgQosProbeRetries;
-  uint8_t cfgQosSrvMaxSimultaneousResponses;
-  uint8_t cfgQosPairWaitTimeInSeconds;
+  uint8_t cfgFlags = 0;
+  uint8_t cfgSockMaxDgramSockets = 8;
+  uint8_t cfgSockMaxStreamSockets = 32;
+  uint8_t cfgSockDefaultRecvBufsizeInK = 16;
+  uint8_t cfgSockDefaultSendBufsizeInK = 16;
+  uint8_t cfgKeyRegMax = 8;
+  uint8_t cfgSecRegMax = 32;
+  uint8_t cfgQosDataLimitDiv4 = 64;
+  uint8_t cfgQosProbeTimeoutInSeconds = 2;
+  uint8_t cfgQosProbeRetries = 3;
+  uint8_t cfgQosSrvMaxSimultaneousResponses = 8;
+  uint8_t cfgQosPairWaitTimeInSeconds = 2;
 };
 static_assert_size(XNetStartupParams, 0xD);
 
@@ -201,13 +201,13 @@ struct XEthernetStatus {
 };
 
 typedef struct {
-  DWORD size_of_struct;
-  DWORD requests_received_count;
-  DWORD probes_received_count;
-  DWORD slots_full_discards_count;
-  DWORD data_replies_sent_count;
-  DWORD data_reply_bytes_sent;
-  DWORD probe_replies_sent_count;
+  uint32_t size_of_struct;
+  uint32_t requests_received_count;
+  uint32_t probes_received_count;
+  uint32_t slots_full_discards_count;
+  uint32_t data_replies_sent_count;
+  uint32_t data_reply_bytes_sent;
+  uint32_t probe_replies_sent_count;
 } XNQOSLISTENSTATS;
 
 void LoadSockaddr(const uint8_t* ptr, sockaddr* out_addr) {
@@ -245,13 +245,34 @@ void StoreSockaddr(const sockaddr& addr, uint8_t* ptr) {
   }
 }
 
-XNetStartupParams xnet_startup_params = {0};
+XNetStartupParams xnet_startup_params{};
+
+void Update_XNetStartupParams(XNetStartupParams& dest,
+                                     const XNetStartupParams& src) {
+  uint8_t* dest_ptr = reinterpret_cast<uint8_t*>(&dest);
+  const uint8_t* src_ptr = reinterpret_cast<const uint8_t*>(&src);
+
+  size_t size = sizeof(XNetStartupParams);
+
+  for (size_t i = 0; i < size; i++) {
+    if (src_ptr[i] != 0 && dest_ptr[i] != src_ptr[i]) {
+      dest_ptr[i] = src_ptr[i];
+    }
+  }
+}
 
 dword_result_t NetDll_XNetStartup_entry(dword_t caller,
                                         pointer_t<XNetStartupParams> params) {
+  if (XLiveAPI::is_initialized()) {
+    return 0;
+  }
+
+  // Must initialize XLiveAPI inside kernel to guarantee timing/race conditions.
+  XLiveAPI::Init();
+
   if (params) {
     assert_true(params->cfgSizeOfStruct == sizeof(XNetStartupParams));
-    std::memcpy(&xnet_startup_params, params, sizeof(XNetStartupParams));
+    Update_XNetStartupParams(xnet_startup_params, *params);
 
     switch (params->cfgFlags) {
       case BYPASS_SECURITY:
@@ -270,9 +291,6 @@ dword_result_t NetDll_XNetStartup_entry(dword_t caller,
         break;
     }
   }
-
-  // Must initialize XLiveAPI inside kernel to guarantee timing/race conditions.
-  XLiveAPI::Init();
 
   auto xam = kernel_state()->GetKernelModule<XamModule>("xam.xex");
 
@@ -956,7 +974,7 @@ dword_result_t NetDll_XNetQosListen_entry(
     return X_ERROR_SUCCESS;
   }
 
-  if (data_size > xnet_startup_params.cfgQosDataLimitDiv4) {
+  if (data_size > (uint32_t)(xnet_startup_params.cfgQosDataLimitDiv4 * 4)) {
     assert_always();
   }
 
