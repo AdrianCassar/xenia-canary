@@ -602,6 +602,7 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
 
       // Fixed FM4 and RDR GOTY from crashing.
       // MotoGP 06 infinite loading screen.
+      // MW2 private match stuck joining session.
       if (leaderboardsArray.Empty()) {
         return X_ERROR_IO_PENDING;
       }
@@ -949,9 +950,9 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
         Uint64toXNKID(dist(rd), &pSessionInfo->sessionID);
         *memory_->TranslateVirtual<uint64_t*>(data->nonce_ptr) = dist(rd);
 
-        auto sessionid = XNKIDtoUint64(&pSessionInfo->sessionID);
+        const auto sessionid = XNKIDtoUint64(&pSessionInfo->sessionID);
 
-        XLiveAPI::XSessionCreate(XNKIDtoUint64(&pSessionInfo->sessionID), data);
+        XLiveAPI::XSessionCreate(sessionid, data);
 
         XELOGI("Created session {:016X}", static_cast<uint64_t>(sessionid));
 
@@ -967,7 +968,7 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
         pSessionInfo->hostAddress.wPortOnline = XLiveAPI::GetPlayerPort();
       } else {
         // Check if session id is valid
-        auto sessionId = XNKIDtoUint64(&pSessionInfo->sessionID);
+        const auto sessionId = XNKIDtoUint64(&pSessionInfo->sessionID);
 
         XELOGI("Joining session {:016X}", static_cast<uint64_t>(sessionId));
         
@@ -976,7 +977,7 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
           return X_E_SUCCESS;
         }
 
-        auto session = XLiveAPI::XSessionGet(sessionId);
+        const auto session = XLiveAPI::XSessionGet(sessionId);
 
         pSessionInfo->hostAddress.inaOnline.s_addr =
             inet_addr(session.hostAddress.c_str());
@@ -993,7 +994,7 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
       }
 
       // Check if session id is valid
-      auto sessionId = XNKIDtoUint64(&pSessionInfo->sessionID);
+      const auto sessionId = XNKIDtoUint64(&pSessionInfo->sessionID);
 
       if (sessionId != NULL) {
         XLiveAPI::sessionHandleMap.emplace(
@@ -1082,7 +1083,7 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
 
       const auto data = reinterpret_cast<XLiveAPI::XSessionLeave*>(buffer);
 
-      bool leavelocal = data->xuid_array_ptr == 0;
+      const bool leavelocal = data->xuid_array_ptr == 0;
 
       std::string leave_type =
           leavelocal ? "XGISessionLeaveLocal" : "XGISessionLeaveRemote";
