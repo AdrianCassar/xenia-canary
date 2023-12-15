@@ -75,21 +75,21 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
     }
     case 0x00050008: {
       // Required to be successful for 534507D4
-      XELOGD("XStorageDownloadToMemory({:08x}, {:08x}) unimplemented",
-             buffer_ptr, buffer_length);
+      XELOGD("XLiveBaseUnk50008({:08x}, {:08x}) unimplemented", buffer_ptr,
+             buffer_length);
       return X_E_SUCCESS;
     }
     case 0x00050009: {
       // Fixes Xbox Live error for 513107D9
-      XELOGD("XLiveBaseUnk50009({:08X}, {:08X}) unimplemented", buffer_ptr,
-             buffer_length);
-      return X_E_SUCCESS;
+      XELOGD("XStorageDownloadToMemory({:08X}, {:08X}) unimplemented",
+             buffer_ptr, buffer_length);
+      return XStorageDownloadToMemory(buffer_ptr);
     }
     case 0x0005000B: {
       // Fixes Xbox Live error for 43430821
-      XELOGD("XLiveBaseUnk5000B({:08X}, {:08X}) unimplemented", buffer_ptr,
-             buffer_length);
-      return X_E_SUCCESS;
+      XELOGD("XStorageUploadFromMemory({:08X}, {:08X}) unimplemented",
+             buffer_ptr, buffer_length);
+      return XStorageUploadFromMemory(buffer_ptr);
     }
     case 0x0005000C: {
       XELOGD("XStringVerify({:08X} {:08X})", buffer_ptr, buffer_length);
@@ -167,6 +167,11 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
           "unimplemented",
           buffer_ptr, buffer_length);
       return X_E_FAIL;
+    }
+    case 0x00058032: {
+      XELOGD("XGetTaskProgress({:08X}, {:08X}) unimplemented", buffer_ptr,
+             buffer_length);
+      return X_E_SUCCESS;
     }
     case 0x00058035: {
       // Fixes Xbox Live error for 513107D9
@@ -300,6 +305,22 @@ X_HRESULT XLiveBaseApp::XStringVerify(uint32_t buffer_ptr,
   // TODO(Gliniak): Figure out structure after marshaling.
   // Based on what game does there must be some structure that
   // checks if string is proper.
+  return X_E_SUCCESS;
+}
+
+X_HRESULT XLiveBaseApp::XStorageDownloadToMemory(uint32_t buffer_ptr) {
+  if (!buffer_ptr) {
+    return X_E_INVALIDARG;
+  }
+
+  return X_E_SUCCESS;
+}
+
+X_HRESULT XLiveBaseApp::XStorageUploadFromMemory(uint32_t buffer_ptr) {
+  if (!buffer_ptr) {
+    return X_E_INVALIDARG;
+  }
+
   return X_E_SUCCESS;
 }
 
