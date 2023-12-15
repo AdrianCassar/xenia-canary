@@ -102,6 +102,7 @@ It should also be noted that due to the way Steam Decks handle configuration, yo
 | Marble Blast Ultra | |
 | Marvel Ultimate Alliance | |
 | Marvel Ultimate Alliance 2 | |
+| MotoGP 14 | Sprint Season only works |
 | MotoGP 15 | Sprint Season only works |
 | OutRun Online Arcade | | [Race](https://www.youtube.com/watch?v=-UqxjFgGvhk) |
 | Portal 2 | Mousehook |
@@ -120,10 +121,11 @@ It should also be noted that due to the way Steam Decks handle configuration, yo
 |---|---|
 | Minecraft | Requires friend lists to invite friends. |
 | Red Dead Redemption  | Connects online but cannot play with others. |
-| Forza Motorsport 4 | Unable to join sessions. |
+| Forza Motorsport 4 | Connects online but cannot play with others. |
 | Grand Theft Auto 4 | Connects online but cannot play with others. |
-| Saints Row 1 | Unable to find sessions to join. |
-| Gears of War 3 | Connects online but cannot play with others.  |
+| Saints Row 1 | Connects online but cannot play with others. |
+| Gears of War 3 | Connects online but cannot play with others. |
+| Chromehounds | Requires a file from a dedicated Xbox server. |
 
 #### Requires Servers
 - Activision Games
