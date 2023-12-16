@@ -152,9 +152,7 @@ void upnp::add_port(std::string_view addr, uint16_t internal_port,
 
   const uint16_t external_port = internal_port;
   const std::string internal_port_str = fmt::format("{}", internal_port);
-
   const std::string external_port_str = fmt::format("{}", external_port);
-  std::string lease_duration = fmt::format("{}", 3600);  // 1h
 
   // https://openconnectivity.org/developer/specifications/upnp-resources/upnp/internet-gateway-device-igd-v-2-0/
   // http://upnp.org/specs/gw/UPnP-gw-WANIPConnection-v2-Service.pdf
@@ -163,7 +161,7 @@ void upnp::add_port(std::string_view addr, uint16_t internal_port,
   int res = 0;
 
   auto run = [&]() {
-    res = 0;
+    const std::string lease_duration = m_leases_supported ? "3600" : "0";  // 1h
 
     res = UPNP_AddPortMapping(
         m_igd_urls.controlURL, m_igd_data.first.servicetype,
@@ -173,6 +171,7 @@ void upnp::add_port(std::string_view addr, uint16_t internal_port,
     if (res == OnlyPermanentLeasesSupported) {
       XELOGI("Router only supports permanent lease times on port mappings.");
 
+      m_leases_supported = false;
       return;
     };
 
@@ -200,7 +199,6 @@ void upnp::add_port(std::string_view addr, uint16_t internal_port,
   run();
 
   if (res == OnlyPermanentLeasesSupported) {
-    lease_duration = "0";
     run();
   }
 }
@@ -226,8 +224,8 @@ void upnp::remove_port(uint16_t internal_port, std::string_view protocol) {
 
   remove_port_external(external_port, protocol);
 
-  //assert_true(m_port_bindings.at(str_protocol).erase(internal_port));
-  //assert_true(m_mapped_bind_ports.erase(internal_port));
+  // assert_true(m_port_bindings.at(str_protocol).erase(internal_port));
+  // assert_true(m_mapped_bind_ports.erase(internal_port));
 
   XELOGE("Successfully deleted port mapping {} to IGD:{}({})", internal_port,
          external_port, protocol);
@@ -247,6 +245,10 @@ void upnp::remove_port_external(uint16_t external_port,
 }
 
 void upnp::refresh_ports(std::string_view addr) {
+  if (!m_leases_supported) {
+    return;
+  }
+
   for (const auto& [protocol, m_prot_bindings] : m_port_bindings) {
     for (const auto& [internal_port, external_port] : m_prot_bindings) {
       add_port(addr, external_port, protocol);
