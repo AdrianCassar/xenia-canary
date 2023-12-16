@@ -82,18 +82,12 @@ uint16_t XLiveAPI::GetPlayerPort() { return 36000; }
 int8_t XLiveAPI::GetVersionStatus() { return version_status; }
 
 void XLiveAPI::Init() {
-  // Only initialise once
+  // Only initialize once
   if (is_initialized()) {
     return;
   }
 
   if (cvars::logging) {
-    if (upnp_handler.is_active()) {
-      XELOGI("UPnP Enabled");
-    } else {
-      XELOGI("UPnP Disabled");
-    }
-
     curl_version_info_data* vinfo = curl_version_info(CURLVERSION_NOW);
 
     XELOGI("libcurl version {}.{}.{}\n", (vinfo->version_num >> 16) & 0xFF,
@@ -130,7 +124,7 @@ void XLiveAPI::Init() {
     return;
   }
 
-  // Download ports mappings before initialising UPnP.
+  // Download ports mappings before initializing UPnP.
   DownloadPortMappings();
 
   if (cvars::upnp) {
