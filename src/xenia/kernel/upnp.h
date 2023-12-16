@@ -47,6 +47,7 @@ class upnp {
 
  private:
   std::atomic<bool> m_active = false;
+  std::atomic<bool> m_leases_supported = true;
 
   std::weak_ptr<xe::threading::TimerQueueWaitItem> wait_item_;
 
