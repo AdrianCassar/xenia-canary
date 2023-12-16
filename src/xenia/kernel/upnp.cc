@@ -150,30 +150,58 @@ void upnp::add_port(std::string_view addr, uint16_t internal_port,
 
   internal_port = get_mapped_bind_port(internal_port);
 
-  uint16_t external_port = internal_port;
-  std::string internal_port_str = fmt::format("{}", internal_port);
-  int res = 0;
+  const uint16_t external_port = internal_port;
+  const std::string internal_port_str = fmt::format("{}", internal_port);
 
-  std::string external_port_str = fmt::format("{}", external_port);
+  const std::string external_port_str = fmt::format("{}", external_port);
   std::string lease_duration = fmt::format("{}", 3600);  // 1h
 
-  res = UPNP_AddPortMapping(m_igd_urls.controlURL, m_igd_data.first.servicetype,
-                            external_port_str.c_str(),
-                            internal_port_str.c_str(), addr.data(), "Xenia",
-                            protocol.data(), nullptr, lease_duration.c_str());
+  // https://openconnectivity.org/developer/specifications/upnp-resources/upnp/internet-gateway-device-igd-v-2-0/
+  // http://upnp.org/specs/gw/UPnP-gw-WANIPConnection-v2-Service.pdf
+  const uint32_t OnlyPermanentLeasesSupported = 725;
 
-  if (res == UPNPCOMMAND_SUCCESS) {
-    const auto& is_bound =
-        m_port_bindings[std::string(protocol)].find(internal_port);
+  int res = 0;
 
-    bool update = false;
+  auto run = [&]() {
+    res = 0;
 
-    if (update = (is_bound == m_port_bindings[std::string(protocol)].end())) {
-      m_port_bindings[std::string(protocol)][internal_port] = external_port;
+    res = UPNP_AddPortMapping(
+        m_igd_urls.controlURL, m_igd_data.first.servicetype,
+        external_port_str.c_str(), internal_port_str.c_str(), addr.data(),
+        "Xenia", protocol.data(), nullptr, lease_duration.c_str());
+
+    if (res == OnlyPermanentLeasesSupported) {
+      XELOGI("Router only supports permanent lease times on port mappings.");
+
+      return;
+    };
+
+    if (res == UPNPCOMMAND_SUCCESS) {
+      const auto& is_bound =
+          m_port_bindings[std::string(protocol)].find(internal_port);
+
+      bool update = false;
+
+      if (update = (is_bound == m_port_bindings[std::string(protocol)].end())) {
+        m_port_bindings[std::string(protocol)][internal_port] = external_port;
+      }
+
+      XELOGI("Successfully {} {}:{}({}) to IGD:{}",
+             update ? "bound" : "updated", addr, internal_port, protocol,
+             external_port);
+    } else {
+      XELOGI("Failed to bind port!!! {}:{}({}) to IGD:{}", addr, internal_port,
+             protocol, external_port);
+
+      XELOGI("UPnP Error code {}", res);
     }
+  };
 
-    XELOGI("Successfully {} {}:{}({}) to IGD:{}", update ? "bound" : "updated",
-           addr, internal_port, protocol, external_port);
+  run();
+
+  if (res == OnlyPermanentLeasesSupported) {
+    lease_duration = "0";
+    run();
   }
 }
 
