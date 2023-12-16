@@ -385,7 +385,7 @@ dword_result_t NetDll_WSAStartup_entry(dword_t caller, word_t version,
   // NetDll_WSAStartup is called multiple times?
   XELOGI("NetDll_WSAStartup");
 
-  // Must initialise XLiveAPI inside kernel to guarantee timing/race conditions.
+  // Must initialize XLiveAPI inside kernel to guarantee timing/race conditions.
   XLiveAPI::Init();
 
 // TODO(benvanik): abstraction layer needed.
