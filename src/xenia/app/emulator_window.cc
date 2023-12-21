@@ -1941,6 +1941,17 @@ void EmulatorWindow::NetplayStatus() {
     }
   }
 
+  msg += "\n\n";
+
+  const auto& port_results =
+      *xe::kernel::XLiveAPI::upnp_handler.port_binding_results();
+
+  for (const auto& [protocol, m_port_bindings] : port_results) {
+    for (const auto& [port, error] : m_port_bindings) {
+      msg += fmt::format("{} - {}: {}\n", protocol, port, error);
+    }
+  }
+
   imgui_drawer_.get()->ClearDialogs();
   xe::ui::ImGuiDialog::ShowMessageBox(imgui_drawer_.get(), "Netplay Status",
                                       msg);
