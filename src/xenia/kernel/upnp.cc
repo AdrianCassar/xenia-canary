@@ -192,8 +192,10 @@ void upnp::add_port(std::string_view addr, uint16_t internal_port,
       XELOGI("Failed to bind port!!! {}:{}({}) to IGD:{}", addr, internal_port,
              protocol, external_port);
 
-      XELOGI("UPnP Error code {}", res);
+      XELOGI("UPnP error code {}", res);
     }
+
+    m_port_binding_results[std::string(protocol)][external_port] = res;
   };
 
   run();
