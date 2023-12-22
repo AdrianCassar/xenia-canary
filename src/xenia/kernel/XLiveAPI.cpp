@@ -53,7 +53,7 @@ using namespace rapidjson;
 //
 // How is systemlink state determined?
 // Extract stat descriptions from XDBF.
-// Profile have offline and online XUIDs we only use online.
+// Profiles have offline and online XUIDs we only use online.
 
 // https://patents.google.com/patent/US20060287099A1
 namespace xe {
