@@ -247,168 +247,14 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
     }
     case 0x000B0016: {
       XELOGI("XSessionSearch");
-
-      XLiveAPI::XSessionSearch* data =
-          reinterpret_cast<XLiveAPI::XSessionSearch*>(buffer);
-
-      auto* pSearchContexts =
-          memory_->TranslateVirtual<XUSER_CONTEXT*>(data->ctx_ptr);
-
-      uint32_t results_ptr =
-          data->search_results + sizeof(XSESSION_SEARCHRESULT_HEADER);
-
-      auto* result =
-          memory_->TranslateVirtual<XSESSION_SEARCHRESULT*>(results_ptr);
-
-      auto resultsHeader =
-          memory_->TranslateVirtual<XSESSION_SEARCHRESULT_HEADER*>(
-              data->search_results);
-
-      if (!(data->results_buffer)) {
-        assert_false(!(data->results_buffer));
-
-        data->results_buffer =
-            sizeof(XSESSION_SEARCHRESULT) * data->num_results;
-
-        // return X_E_SUCCESS;
-        return ERROR_INSUFFICIENT_BUFFER;
-      }
-
-      // return a list of session for the title
-      const std::vector<XLiveAPI::SessionJSON> sessions =
-          XLiveAPI::SessionSearch(data);
-
-      uint32_t i = 0;
-      for (const auto& session : sessions) {
-        uint32_t result_guest_address = data->search_results +
-                                        sizeof(XSESSION_SEARCHRESULT_HEADER) +
-                                        (sizeof(XSESSION_SEARCHRESULT) * i);
-
-        auto* resultHostPtr = memory_->TranslateVirtual<XSESSION_SEARCHRESULT*>(
-            result_guest_address);
-
-        // If we have looped through all sessions then exit.
-        if (data->num_results <= i) break;
-
-        result[i].contexts_count = (uint32_t)data->num_ctx;
-        result[i].properties_count = 3;
-        result[i].contexts_ptr = data->ctx_ptr;
-        result[i].properties_ptr = data->props_ptr;
-
-        result[i].filled_priv_slots = session.filledPrivateSlotsCount;
-        result[i].filled_public_slots = session.filledPublicSlotsCount;
-        result[i].open_priv_slots = session.openPrivateSlotsCount;
-        result[i].open_public_slots = session.openPublicSlotsCount;
-
-        memcpy(&result[i].info.sessionID, session.sessionid.c_str(), 8);
-        memcpy(&result[i].info.hostAddress.abEnet, session.macAddress.c_str(),
-               6);
-        memcpy(&result[i].info.hostAddress.abOnline, session.macAddress.c_str(),
-               6);
-
-        for (int j = 0; j < 16; j++) {
-          result[i].info.keyExchangeKey.ab[j] = j;
-        }
-
-        inet_pton(AF_INET, session.hostAddress.c_str(),
-                  &resultHostPtr[i].info.hostAddress.ina.s_addr);
-
-        inet_pton(AF_INET, session.hostAddress.c_str(),
-                  &resultHostPtr[i].info.hostAddress.inaOnline.s_addr);
-
-        resultHostPtr[i].info.hostAddress.wPortOnline = session.port;
-
-        i += 1;
-
-        resultsHeader->search_results_count = i;
-        resultsHeader->search_results_ptr =
-            data->search_results + sizeof(XSESSION_SEARCHRESULT_HEADER);
-      }
-
-      return X_E_SUCCESS;
+      return SessionSearch(buffer);
     }
+
     case 0x000B001C: {
       XELOGI("XSessionSearchEx");
-
-      XLiveAPI::XSessionSearchEx* data =
-          reinterpret_cast<XLiveAPI::XSessionSearchEx*>(buffer);
-
-      auto* pSearchContexts =
-          memory_->TranslateVirtual<XUSER_CONTEXT*>(data->ctx_ptr);
-
-      uint32_t results_ptr =
-          data->search_results + sizeof(XSESSION_SEARCHRESULT_HEADER);
-
-      auto* result =
-          memory_->TranslateVirtual<XSESSION_SEARCHRESULT*>(results_ptr);
-
-      auto resultsHeader =
-          memory_->TranslateVirtual<XSESSION_SEARCHRESULT_HEADER*>(
-              data->search_results);
-
-      if (!(data->results_buffer)) {
-        assert_false(!(data->results_buffer));
-
-        data->results_buffer =
-            sizeof(XSESSION_SEARCHRESULT) * data->num_results;
-
-        // return X_E_SUCCESS;
-        return ERROR_INSUFFICIENT_BUFFER;
-      }
-
-      // return a list of session for the title
-      const std::vector<XLiveAPI::SessionJSON> sessions =
-          XLiveAPI::SessionSearchEx(data);
-
-      uint32_t i = 0;
-      for (const auto& session : sessions) {
-        uint32_t result_guest_address = data->search_results +
-                                        sizeof(XSESSION_SEARCHRESULT_HEADER) +
-                                        (sizeof(XSESSION_SEARCHRESULT) * i);
-
-        auto* resultHostPtr = memory_->TranslateVirtual<XSESSION_SEARCHRESULT*>(
-            result_guest_address);
-
-        // If we have looped through all sessions then exit.
-        if (data->num_results <= i) break;
-
-        result[i].contexts_count = (uint32_t)data->num_ctx;
-        result[i].properties_count = 3;
-        result[i].contexts_ptr = data->ctx_ptr;
-        result[i].properties_ptr = data->props_ptr;
-
-        result[i].filled_priv_slots = session.filledPrivateSlotsCount;
-        result[i].filled_public_slots = session.filledPublicSlotsCount;
-        result[i].open_priv_slots = session.openPrivateSlotsCount;
-        result[i].open_public_slots = session.openPublicSlotsCount;
-
-        memcpy(&result[i].info.sessionID, session.sessionid.c_str(), 8);
-        memcpy(&result[i].info.hostAddress.abEnet, session.macAddress.c_str(),
-               6);
-        memcpy(&result[i].info.hostAddress.abOnline, session.macAddress.c_str(),
-               6);
-
-        for (int j = 0; j < 16; j++) {
-          result[i].info.keyExchangeKey.ab[j] = j;
-        }
-
-        inet_pton(AF_INET, session.hostAddress.c_str(),
-                  &resultHostPtr[i].info.hostAddress.ina.s_addr);
-
-        inet_pton(AF_INET, session.hostAddress.c_str(),
-                  &resultHostPtr[i].info.hostAddress.inaOnline.s_addr);
-
-        resultHostPtr[i].info.hostAddress.wPortOnline = session.port;
-
-        i += 1;
-
-        resultsHeader->search_results_count = i;
-        resultsHeader->search_results_ptr =
-            data->search_results + sizeof(XSESSION_SEARCHRESULT_HEADER);
-      }
-
-      return X_E_SUCCESS;
+      return SessionSearch(buffer, true);
     }
+
     case 0x000B001D: {
       XLiveAPI::XSessionDetails* data =
           reinterpret_cast<XLiveAPI::XSessionDetails*>(buffer);
@@ -448,8 +294,8 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
       details->AvailablePrivateSlots = session.openPrivateSlotsCount;
       details->AvailablePublicSlots = session.openPublicSlotsCount;
       details->ActualMemberCount = session.filledPublicSlotsCount;
-      //details->ActualMemberCount =
-      //    session.filledPublicSlotsCount + session.filledPrivateSlotsCount;
+      // details->ActualMemberCount =
+      //     session.filledPublicSlotsCount + session.filledPrivateSlotsCount;
 
       details->ReturnedMemberCount = (uint32_t)session.players.size();
       details->eState = XSESSION_STATE::LOBBY;
@@ -854,7 +700,6 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
       // such as L4D2 and Portal 2.
 
       if (data->flags & HOST || data->flags == STATS) {
-
 #pragma region SessionLog
         switch (data->flags) {
           case SINGLEPLAYER_WITH_STATS:
@@ -1197,6 +1042,77 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
       app_id(), message, buffer_ptr, buffer_length);
   return X_E_FAIL;
 }
+
+X_HRESULT XgiApp::SessionSearch(uint8_t* buffer_ptr, bool extended) {
+  XLiveAPI::XSessionSearch* data =
+      reinterpret_cast<XLiveAPI::XSessionSearch*>(buffer_ptr);
+
+  if (!data->results_buffer) {
+    data->results_buffer = sizeof(XSESSION_SEARCHRESULT) * data->num_results;
+    return ERROR_INSUFFICIENT_BUFFER;
+  }
+
+  // return a list of session for the title
+  const std::vector<XLiveAPI::SessionJSON> sessions =
+      XLiveAPI::SessionSearch(data);
+
+  const size_t session_count =
+      std::min((size_t)data->num_results, sessions.size());
+
+  const uint32_t session_search_result_data_address =
+      data->search_results + sizeof(XSESSION_SEARCHRESULT_HEADER);
+
+  XSESSION_SEARCHRESULT* result =
+      memory_->TranslateVirtual<XSESSION_SEARCHRESULT*>(
+          data->search_results + sizeof(XSESSION_SEARCHRESULT_HEADER));
+
+  for (size_t i = 0; i < session_count; i++) {
+    const auto session = sessions.at(i);
+
+    const uint32_t result_guest_address =
+        session_search_result_data_address +
+        (sizeof(XSESSION_SEARCHRESULT) * (uint32_t)i);
+
+    XSESSION_SEARCHRESULT* resultHostPtr =
+        memory_->TranslateVirtual<XSESSION_SEARCHRESULT*>(result_guest_address);
+
+    result[i].contexts_count = (uint32_t)data->num_ctx;
+    result[i].properties_count = (uint32_t)data->num_props;
+    result[i].contexts_ptr = data->ctx_ptr;
+    result[i].properties_ptr = data->props_ptr;
+
+    result[i].filled_priv_slots = session.filledPrivateSlotsCount;
+    result[i].filled_public_slots = session.filledPublicSlotsCount;
+    result[i].open_priv_slots = session.openPrivateSlotsCount;
+    result[i].open_public_slots = session.openPublicSlotsCount;
+
+    memcpy(&result[i].info.sessionID, session.sessionid.c_str(), 8);
+    memcpy(&result[i].info.hostAddress.abEnet, session.macAddress.c_str(), 6);
+    memcpy(&result[i].info.hostAddress.abOnline, session.macAddress.c_str(), 6);
+
+    for (int j = 0; j < sizeof(XLiveAPI::XNKEY); j++) {
+      result[i].info.keyExchangeKey.ab[j] = j;
+    }
+
+    inet_pton(AF_INET, session.hostAddress.c_str(),
+              &resultHostPtr[i].info.hostAddress.ina.s_addr);
+
+    inet_pton(AF_INET, session.hostAddress.c_str(),
+              &resultHostPtr[i].info.hostAddress.inaOnline.s_addr);
+
+    resultHostPtr[i].info.hostAddress.wPortOnline = session.port;
+  }
+
+  XSESSION_SEARCHRESULT_HEADER* resultsHeader =
+      memory_->TranslateVirtual<XSESSION_SEARCHRESULT_HEADER*>(
+          data->search_results);
+
+  resultsHeader->search_results_count = (uint32_t)session_count;
+  resultsHeader->search_results_ptr = session_search_result_data_address;
+
+  return X_E_SUCCESS;
+}
+
 }  // namespace apps
 }  // namespace xam
 }  // namespace kernel
