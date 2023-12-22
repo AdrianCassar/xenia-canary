@@ -90,10 +90,11 @@ It should also be noted that due to the way Steam Decks handle configuration, yo
 | CS:GO Beta | Mousehook |
 | Call of Duty 2 | ```launch_module = "default_mp.xex"``` | [Deathmatch](https://www.youtube.com/watch?v=DR9Op_f1UUw) |
 | DiRT | | [Race](https://www.youtube.com/watch?v=udMf-MUzpEc) |
-| GTA V Beta | Requires ```protect_zero = false``` | [Beta Showcase](https://www.youtube.com/watch?v=nIjZ7sRGZlo), [Beta Showcase](https://www.youtube.com/watch?v=YIBjy5ZJcq4) |
-| GTA V TU 2-13 | Must complete prologue. Very unstable and will crash often. | [Solo Session](https://www.youtube.com/watch?v=lap7liW6pco) |
+| GTA V Beta | Requires ```protect_zero = false``` or use patches. | [Beta Showcase](https://www.youtube.com/watch?v=nIjZ7sRGZlo), [Beta Showcase](https://www.youtube.com/watch?v=YIBjy5ZJcq4) | [TU 13](https://github.com/AdrianCassar/Xenia-WebServices/blob/main/patches/545408A7%20-%20Grand%20Theft%20Auto%20V%20(TU13).patch.toml), [TU 10](https://github.com/AdrianCassar/Xenia-WebServices/blob/main/patches/545408A7%20-%20Grand%20Theft%20Auto%20V%20(TU10).patch.toml) |
+| GTA V TU 2-13 | Must complete prologue, download gamesave [here](https://cdn.discordapp.com/attachments/641360906495983616/1101132116441440366/545408A7.rar). Unstable and often crashes. | [Solo Session](https://www.youtube.com/watch?v=lap7liW6pco) |
 | Gundam Operation Troy | [English Patch](https://github.com/Eight-Mansions/MSGOT/releases)
 | Halo 3 ODST v13.2 using [Sunrise Server](https://github.com/ahnewark/Sunrise-Halo3-WebServices) | Mousehook | [Head to Head](https://www.youtube.com/watch?v=amS8OxH3exs) | [Halo 3 Patch](https://github.com/AdrianCassar/Xenia-WebServices/blob/main/patches/4D5307E6%20-%20Halo%203.patch.toml)
+| Juiced 2 | |
 | Kung Fu Panda: SLL | |
 | Left 4 Dead | Mousehook | Compatible with GOTY. |
 | Left 4 Dead GOTY | Mousehook | |
@@ -107,6 +108,7 @@ It should also be noted that due to the way Steam Decks handle configuration, yo
 | OutRun Online Arcade | | [Race](https://www.youtube.com/watch?v=-UqxjFgGvhk) |
 | Portal 2 | Mousehook |
 | Resident Evil 5 | | [Chapter 1](https://www.youtube.com/watch?v=SKgnUVairqs) |
+| Ridge Racer 6 | |
 | Saints Row 2 | | [Co-op](https://www.youtube.com/watch?v=YTw84keeWfs), [Setup Guide](https://www.youtube.com/watch?v=nf7TDOtTEIE) |
 | Saints Row the Third / The Full Package | Unplayable due to broken graphics. Requires [Online Pass](https://www.xbox.com/en-GB/games/store/online-pass/BS7JTR0MN356) + license_mask |
 | Saints Row IV | Unplayable due to broken graphics. Requires Online Pass + license_mask |
