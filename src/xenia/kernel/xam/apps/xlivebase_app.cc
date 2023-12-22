@@ -133,6 +133,11 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
              buffer_length);
       return GetServiceInfo(buffer_ptr, buffer_length);
     }
+    case 0x00058009: {
+      XELOGD("XContentGetMarketplaceCounts({:08X}, {:08X})", buffer_ptr,
+             buffer_length);
+      return X_E_SUCCESS;
+    }
     case 0x0005800E: {
       // Fixes Xbox Live error for 513107D9
       XELOGD("XUserMuteListQuery({:08X}, {:08X}) unimplemented", buffer_ptr,
