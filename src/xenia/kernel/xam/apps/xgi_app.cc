@@ -340,6 +340,7 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
       XELOGI("XSessionMigrateHost({:08X});", buffer_length);
 
       if (data->session_info_ptr == NULL) {
+        XELOGI("XSessionMigrateHost Failed!");
         return X_E_SUCCESS;
       }
 
@@ -354,7 +355,7 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
         return X_E_SUCCESS;
       }
 
-      for (int i = 0; i < 16; i++) {
+      for (int i = 0; i < sizeof(XLiveAPI::XNKEY); i++) {
         sessionInfo->keyExchangeKey.ab[i] = i;
       }
 
