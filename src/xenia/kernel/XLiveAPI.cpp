@@ -1027,8 +1027,12 @@ void XLiveAPI::DeleteSession(xe::be<uint64_t> sessionId) {
 
 void XLiveAPI::DeleteAllSessions() {
   if (!is_active()) return;
+  
+  std::string endpoint =
+      fmt::format("DeleteSessions/{:012x}",
+                  static_cast<uint64_t>(MacAddresstoUint64(mac_address)));
 
-  memory chunk = Delete("DeleteSessions");
+  memory chunk = Delete(endpoint);
 
   if (chunk.http_code != 200) {
     XELOGI("Failed to delete all sessions");
