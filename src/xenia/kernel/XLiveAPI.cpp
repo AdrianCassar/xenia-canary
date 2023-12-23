@@ -101,14 +101,14 @@ void XLiveAPI::Init() {
     }
   }
 
+  GetLocalIP();
+  mac_address = GetMACaddress();
+
   if (cvars::offline_mode) {
     XELOGI("Offline mode enabled!");
     initialized_ = true;
     return;
   }
-
-  GetLocalIP();
-  mac_address = GetMACaddress();
 
   Getwhoami();
 
