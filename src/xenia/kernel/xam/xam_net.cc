@@ -627,7 +627,11 @@ dword_result_t NetDll_XNetGetTitleXnAddr_entry(dword_t caller,
                                                pointer_t<XNADDR> addr_ptr) {
   // Wait for NetDll_WSAStartup or XNetStartup to setup XLiveAPI.
   if (!XLiveAPI::is_initialized()) {
-    return XnAddrStatus::XNET_GET_XNADDR_NONE;
+    // Call of Duty 2 - does not call XNetStartup or WSAStartup before
+    // XNetGetTitleXnAddr.
+    XLiveAPI::Init();
+
+    return XnAddrStatus::XNET_GET_XNADDR_PENDING;
   }
 
   auto status = XnAddrStatus::XNET_GET_XNADDR_STATIC |
