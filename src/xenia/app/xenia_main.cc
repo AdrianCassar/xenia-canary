@@ -489,7 +489,7 @@ void EmulatorApp::OnDestroy() {
   }
 
   // Delete sessions on shutdown.
-  xe::kernel::XLiveAPI::DeleteAllSessions();
+  xe::kernel::XLiveAPI::DeleteAllSessionsByMac();
 
   curl_global_cleanup();
 #pragma endregion
