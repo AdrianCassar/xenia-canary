@@ -144,7 +144,7 @@ void XLiveAPI::Init() {
   initialized_ = true;
 
   // Delete sessions on start-up.
-  XLiveAPI::DeleteAllSessions();
+  DeleteAllSessions();
 }
 
 void XLiveAPI::clearXnaddrCache() {
@@ -1012,11 +1012,23 @@ void XLiveAPI::DeleteSession(xe::be<uint64_t> sessionId) {
   qos_payload_cache.erase(sessionId);
 }
 
+void XLiveAPI::DeleteAllSessionsByMac() {
+  if (!is_active()) return;
+
+  const std::string endpoint =
+      fmt::format("DeleteSessions/{:012x}", MacAddresstoUint64(mac_address));
+
+  memory chunk = Delete(endpoint);
+
+  if (chunk.http_code != 200) {
+    XELOGI("Failed to delete all sessions");
+  }
+}
+
 void XLiveAPI::DeleteAllSessions() {
   if (!is_active()) return;
-  
-  std::string endpoint =
-      fmt::format("DeleteSessions/{:012x}", MacAddresstoUint64(mac_address));
+
+  const std::string endpoint = fmt::format("DeleteSessions");
 
   memory chunk = Delete(endpoint);
 
