@@ -91,6 +91,7 @@ It should also be noted that due to the way Steam Decks handle configuration, yo
 | Call of Duty 2 | ```launch_module = "default_mp.xex"``` | [Deathmatch](https://www.youtube.com/watch?v=DR9Op_f1UUw) |
 | Death Tank | |
 | DiRT | | [Race](https://www.youtube.com/watch?v=udMf-MUzpEc) |
+| GRID | |
 | GTA V Beta | Requires ```protect_zero = false``` or use patches. | [Beta Showcase](https://www.youtube.com/watch?v=nIjZ7sRGZlo), [Beta Showcase](https://www.youtube.com/watch?v=YIBjy5ZJcq4) | [TU 13](https://github.com/AdrianCassar/Xenia-WebServices/blob/main/patches/545408A7%20-%20Grand%20Theft%20Auto%20V%20(TU13).patch.toml), [TU 10](https://github.com/AdrianCassar/Xenia-WebServices/blob/main/patches/545408A7%20-%20Grand%20Theft%20Auto%20V%20(TU10).patch.toml) |
 | GTA V TU 2-13 | Must complete prologue, download gamesave [here](https://cdn.discordapp.com/attachments/641360906495983616/1101132116441440366/545408A7.rar). Unstable and often crashes. | [Solo Session](https://www.youtube.com/watch?v=lap7liW6pco) |
 | Gundam Operation Troy | [English Patch](https://github.com/Eight-Mansions/MSGOT/releases)
