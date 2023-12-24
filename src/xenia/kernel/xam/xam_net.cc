@@ -1098,6 +1098,21 @@ dword_result_t NetDll_XNetQosGetListenStats_entry(dword_t caller, dword_t unk,
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetQosGetListenStats, kNetworking, kImplemented);
 
+dword_result_t NetDll_XHttpStartup_entry(dword_t caller, dword_t reserved,
+                                         dword_t reserved_ptr) {
+  return TRUE;
+}
+DECLARE_XAM_EXPORT1(NetDll_XHttpStartup, kNetworking, kStub);
+
+dword_result_t NetDll_XHttpOpenRequest_entry(
+    dword_t caller, dword_t connect_handle, lpstring_t verb, lpstring_t path,
+    lpstring_t version, lpstring_t referrer, lpstring_t reserved,
+    dword_t flag) {
+  XELOGI("XStorage: Requesting file: {} {}", verb, path);
+  return NULL;
+}
+DECLARE_XAM_EXPORT1(NetDll_XHttpOpenRequest, kNetworking, kStub);
+
 dword_result_t NetDll_inet_addr_entry(lpstring_t addr_ptr) {
   if (!addr_ptr) {
     return -1;
