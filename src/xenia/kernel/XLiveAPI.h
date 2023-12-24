@@ -299,6 +299,8 @@ class XLiveAPI {
 
   static void DeleteSession(xe::be<uint64_t> sessionId);
 
+  static void DeleteAllSessionsByMac();
+
   static void DeleteAllSessions();
 
   static void XSessionCreate(xe::be<uint64_t> sessionId, XSesion* data);
