@@ -30,6 +30,8 @@
 #include "xenia/ui/window.h"
 #include "xenia/ui/windowed_app_context.h"
 
+#include "xenia/kernel/XLiveAPI.h"
+
 DEFINE_int32(internal_display_resolution, 8,
              "Allow game that support different resolutions to be rendered "
              "in specific resolution.\n"
@@ -251,6 +253,7 @@ void GraphicsSystem::OnHostGpuLossFromAnyThread(
   if (host_gpu_loss_reported_.test_and_set(std::memory_order_relaxed)) {
     return;
   }
+  xe::kernel::XLiveAPI::DeleteAllSessionsByMac();
   xe::FatalError("Graphics device lost (probably due to an internal error)");
 }
 
