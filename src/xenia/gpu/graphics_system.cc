@@ -23,6 +23,8 @@
 #include "xenia/ui/window.h"
 #include "xenia/ui/windowed_app_context.h"
 
+#include "xenia/kernel/XLiveAPI.h"
+
 DEFINE_uint32(custom_internal_display_resolution_x, 0,
               "Custom width. See internal_display_resolution. Range 1-1920.",
               "Video");
@@ -257,6 +259,7 @@ void GraphicsSystem::OnHostGpuLossFromAnyThread(
 
   config::SaveConfig();
 
+  xe::kernel::XLiveAPI::DeleteAllSessionsByMac();
   xe::FatalError("Graphics device lost (probably due to an internal error)");
 }
 
