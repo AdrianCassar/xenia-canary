@@ -11,6 +11,7 @@
 #define XENIA_KERNEL_XSOCKET_H_
 
 #include <cstring>
+#include <future>
 #include <queue>
 
 #include "xenia/base/byte_order.h"
@@ -148,7 +149,8 @@ class XSocket : public XObject {
   std::mutex incoming_packet_mutex_;
   std::queue<uint8_t*> incoming_packets_;
 
-  std::thread receive_thread_;
+  std::future<int> pooling_task_;
+
   std::mutex receive_mutex_;
   std::condition_variable receive_cv_;
   std::mutex receive_socket_mutex_;
