@@ -39,6 +39,7 @@
 #include "xenia/gpu/graphics_system.h"
 #include "xenia/hid/input_driver.h"
 #include "xenia/hid/input_system.h"
+#include "xenia/kernel/XLiveAPI.h"
 #include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/title_id_utils.h"
 #include "xenia/kernel/user_module.h"
@@ -1312,6 +1313,8 @@ bool Emulator::ExceptionCallback(Exception* ex) {
       xe::ui::ImGuiDialog::ShowMessageBox(imgui_drawer_, "Uh-oh!", crash_dlg);
     });
   }
+
+  xe::kernel::XLiveAPI::DeleteAllSessionsByMac();
 
   // Now suspend ourself (we should be a guest thread).
   current_thread->Suspend(nullptr);
