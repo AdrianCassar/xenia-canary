@@ -34,6 +34,8 @@
 #include <unistd.h>
 #endif
 
+using namespace std::chrono_literals;
+
 namespace xe {
 namespace kernel {
 
@@ -173,8 +175,8 @@ X_STATUS XSocket::Bind(const XSOCKADDR* name, int name_len) {
 
   auto addrin = reinterpret_cast<sockaddr_in*>(&n_name);
 
-  addrin->sin_port =
-      htons(XLiveAPI::upnp_handler.get_mapped_bind_port(ntohs(addrin->sin_port)));
+  addrin->sin_port = htons(
+      XLiveAPI::upnp_handler.get_mapped_bind_port(ntohs(addrin->sin_port)));
 
   int ret = bind(native_handle_, (sockaddr*)&n_name, name_len);
   if (ret < 0) {
@@ -499,9 +501,17 @@ int XSocket::WSARecvFrom(XWSABUF* buffers, uint32_t num_buffers,
           xboxkrnl::xeNtClearEvent(overlapped_ptr->event_handle);
         }
         active_overlapped_ = overlapped_ptr;
-        receive_thread_ = std::thread(&XSocket::PollWSARecvFrom, this, true,
-                                      receive_async_data);
-        receive_thread_.detach();
+
+        if (!pooling_task_.valid()) {
+          pooling_task_ =
+              std::async(std::launch::async, &XSocket::PollWSARecvFrom, this,
+                         true, receive_async_data);
+        } else {
+          auto status = pooling_task_.wait_for(0ms);
+          if (status == std::future_status::ready) {
+            auto result = pooling_task_.get();
+          }
+        }
         SetLastWSAError(X_WSAError::X_WSA_IO_PENDING);
       }
 
@@ -582,8 +592,8 @@ int XSocket::SendTo(uint8_t* buf, uint32_t buf_len, uint32_t flags,
   }
 
   auto addrin = reinterpret_cast<sockaddr_in*>(&nto);
-  addrin->sin_port =
-      htons(XLiveAPI::upnp_handler.get_mapped_bind_port(ntohs(addrin->sin_port)));
+  addrin->sin_port = htons(
+      XLiveAPI::upnp_handler.get_mapped_bind_port(ntohs(addrin->sin_port)));
 
   return sendto(native_handle_, reinterpret_cast<char*>(buf), buf_len, flags,
                 to ? (const sockaddr*)&nto : nullptr, to_len);
