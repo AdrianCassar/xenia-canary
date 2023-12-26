@@ -2,10 +2,13 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2023 Ben Vanik. All rights reserved.                             *
+ * Copyright 2023 Xenia Emulator. All rights reserved.                        *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
+
+#ifndef XENIA_KERNEL_XLIVEAPI_H_
+#define XENIA_KERNEL_XLIVEAPI_H_
 
 #include "xenia/kernel/upnp.h"
 
@@ -15,9 +18,28 @@
 #include <third_party/rapidjson/include/rapidjson/document.h>
 #include <third_party/rapidjson/include/rapidjson/prettywriter.h>
 #include <third_party/rapidjson/include/rapidjson/stringbuffer.h>
+#include "xenia/base/byte_order.h"
+#include "xenia/kernel/xnet.h"
+#include "xenia/kernel/xsession.h"
+#include "xenia/kernel/util/net_utils.h"
 
 namespace xe {
 namespace kernel {
+
+struct XONLINE_SERVICE_INFO {
+  xe::be<uint32_t> id;
+  in_addr ip;
+  xe::be<uint16_t> port;
+  xe::be<uint16_t> reserved;
+};
+static_assert_size(XONLINE_SERVICE_INFO, 12);
+
+struct XTitleServer {
+  in_addr server_address;
+  uint32_t flags;
+  char server_description[200];
+};
+static_assert_size(XTitleServer, 208);
 
 class XLiveAPI {
  public:
@@ -27,211 +49,6 @@ class XLiveAPI {
     uint64_t http_code;
   };
 
-  struct Player {
-    std::string xuid;
-    // xe::be<uint64_t> xuid;
-    std::string hostAddress;
-    xe::be<uint64_t> machineId;
-    uint16_t port;
-    xe::be<uint64_t> macAddress;  // 6 Bytes
-    xe::be<uint64_t> sessionId;
-  };
-
-  struct SessionJSON {
-    std::string sessionid;
-    xe::be<uint16_t> port;
-    xe::be<uint32_t> flags;
-    std::string hostAddress;
-    std::string macAddress;
-    xe::be<uint32_t> publicSlotsCount;
-    xe::be<uint32_t> privateSlotsCount;
-    xe::be<uint32_t> openPublicSlotsCount;
-    xe::be<uint32_t> openPrivateSlotsCount;
-    xe::be<uint32_t> filledPublicSlotsCount;
-    xe::be<uint32_t> filledPrivateSlotsCount;
-    std::vector<Player> players;
-  };
-
-  struct XSessionArbitrationJSON {
-    xe::be<uint32_t> totalPlayers;
-    std::vector<std::vector<Player>> machines;
-  };
-
-#pragma region XSession Structs
-  struct XNKID {
-    uint8_t ab[8];
-  };
-
-  struct XNKEY {
-    uint8_t ab[16];
-  };
-
-  struct XNADDR {
-    in_addr ina;
-    in_addr inaOnline;
-    xe::be<uint16_t> wPortOnline;
-    uint8_t abEnet[6];
-    uint8_t abOnline[20];
-  };
-
-  struct XSESSION_INFO {
-    XNKID sessionID;
-    XNADDR hostAddress;
-    XNKEY keyExchangeKey;
-  };
-
-  struct XSessionModify {
-    xe::be<uint32_t> session_handle;
-    xe::be<uint32_t> flags;
-    xe::be<uint32_t> maxPublicSlots;
-    xe::be<uint32_t> maxPrivateSlots;
-    xe::be<uint32_t> xoverlapped;
-  };
-
-  struct XSessionSearchEx {
-    xe::be<uint32_t> proc_index;
-    xe::be<uint32_t> user_index;
-    xe::be<uint32_t> num_results;
-    // xe::be<uint32_t> num_users; will break struct
-    xe::be<uint16_t> num_props;
-    xe::be<uint16_t> num_ctx;
-    xe::be<uint32_t> props_ptr;
-    xe::be<uint32_t> ctx_ptr;
-    xe::be<uint32_t> results_buffer;
-    xe::be<uint32_t> search_results;
-    xe::be<uint32_t> xoverlapped;
-  };
-
-  struct XSessionSearch {
-    xe::be<uint32_t> proc_index;
-    xe::be<uint32_t> user_index;
-    xe::be<uint32_t> num_results;
-    xe::be<uint16_t> num_props;
-    xe::be<uint16_t> num_ctx;
-    xe::be<uint32_t> props_ptr;
-    xe::be<uint32_t> ctx_ptr;
-    xe::be<uint32_t> results_buffer;
-    xe::be<uint32_t> search_results;
-    xe::be<uint32_t> xoverlapped;
-  };
-
-  struct XSessionSearchID {
-    XNKID* session_id;
-    xe::be<uint32_t> user_index;
-    xe::be<uint32_t> results_buffer;
-    xe::be<uint32_t> search_results;
-    xe::be<uint32_t> xoverlapped;
-  };
-
-  struct XSessionDetails {
-    xe::be<uint32_t> session_handle;
-    xe::be<uint32_t> details_buffer_size;
-    xe::be<uint32_t> details_buffer;
-    xe::be<uint32_t> pXOverlapped;
-  };
-
-  struct XSessionMigate {
-    xe::be<uint32_t> session_handle;
-    xe::be<uint32_t> user_index;
-    xe::be<uint32_t> session_info_ptr;
-    xe::be<uint32_t> pXOverlapped;
-  };
-
-  struct XSessionArbitrationData {
-    xe::be<uint32_t> session_handle;
-    xe::be<uint32_t> flags;
-    xe::be<uint32_t> unk1;
-    xe::be<uint32_t> unk2;
-    xe::be<uint32_t> session_nonce;
-    xe::be<uint32_t> results_buffer_size;
-    xe::be<uint32_t> results;
-    xe::be<uint32_t> pXOverlapped;
-  };
-
-  struct XSesion {
-    xe::be<uint32_t> session_handle;
-    xe::be<uint32_t> flags;
-    xe::be<uint32_t> num_slots_public;
-    xe::be<uint32_t> num_slots_private;
-    xe::be<uint32_t> user_index;
-    xe::be<uint32_t> session_info_ptr;
-    xe::be<uint32_t> nonce_ptr;
-  };
-
-  struct XSessionWriteStats {
-    xe::be<uint32_t> session_handle;
-    xe::be<uint32_t> unk1;
-    xe::be<uint64_t> xuid;
-    xe::be<uint32_t> number_of_leaderboards;
-    xe::be<uint32_t> leaderboards_guest_address;
-    xe::be<uint32_t> xoverlapped;
-  };
-
-  struct XSessionViewProperties {
-    xe::be<uint32_t> leaderboard_id;
-    xe::be<uint32_t> properties_count;
-    xe::be<uint32_t> properties_guest_address;
-  };
-
-  struct XSessionJoin {
-    xe::be<uint32_t> session_handle;
-    xe::be<uint32_t> array_count;
-    xe::be<uint32_t> xuid_array_ptr;
-    xe::be<uint32_t> indices_array_ptr;
-    xe::be<uint32_t> private_slots_array_ptr;
-  };
-
-  struct XSessionLeave {
-    xe::be<uint32_t> session_handle;
-    xe::be<uint32_t> array_count;
-    xe::be<uint32_t> xuid_array_ptr;
-    xe::be<uint32_t> indices_array_ptr;
-    xe::be<uint32_t> unused;
-  };
-
-  struct XONLINE_SERVICE_INFO {
-    xe::be<uint32_t> id;
-    in_addr ip;
-    xe::be<uint16_t> port;
-    xe::be<uint16_t> reserved;
-  };
-  static_assert_size(XONLINE_SERVICE_INFO, 12);
-
-  struct XUSER_DATA {
-    uint8_t type;
-
-    union {
-      xe::be<uint32_t> dword_data;  // XUSER_DATA_TYPE_INT32
-      xe::be<uint64_t> qword_data;  // XUSER_DATA_TYPE_INT64
-      xe::be<double> double_data;   // XUSER_DATA_TYPE_DOUBLE
-      struct                        // XUSER_DATA_TYPE_UNICODE
-      {
-        xe::be<uint32_t> string_length;
-        xe::be<uint32_t> string_ptr;
-      } string;
-      xe::be<float> float_data;
-      struct {
-        xe::be<uint32_t> data_length;
-        xe::be<uint32_t> data_ptr;
-      } binary;
-      FILETIME filetime_data;
-    };
-  };
-
-  struct XUSER_PROPERTY {
-    xe::be<uint32_t> property_id;
-    XUSER_DATA value;
-  };
-
-  struct XTitleServer {
-    in_addr server_address;
-    uint32_t flags;
-    char server_description[200];
-  };
-  static_assert_size(XTitleServer, 208);
-
-#pragma endregion
-
   //~XLiveAPI() {
   //  // upnp_handler.~upnp();
   //}
@@ -239,7 +56,7 @@ class XLiveAPI {
   static bool is_active();
 
   static bool is_initialized();
-  
+
   static std::string GetApiAddress();
 
   static uint32_t GetNatType();
@@ -258,80 +75,61 @@ class XLiveAPI {
 
   static sockaddr_in GetLocalIP();
 
-  static const std::string ip_to_string(in_addr addr);
-
-  static const std::string ip_to_string(sockaddr_in sockaddr);
-
   static void DownloadPortMappings();
-
-  static xe::be<uint64_t> MacAddresstoUint64(const unsigned char* macAddress);
-
-  static void Uint64toSessionId(xe::be<uint64_t> sessionID,
-                                unsigned char* sessionIdOut);
-
-  static void Uint64toMacAddress(xe::be<uint64_t> macAddress,
-                                 unsigned char* macAddressOut);
 
   static uint64_t GetMachineId();
 
-  static XLiveAPI::memory RegisterPlayer();
+  static memory RegisterPlayer();
 
-  static uint64_t hex_to_uint64(const char* hex);
+  static Player FindPlayers();
 
-  static XLiveAPI::Player FindPlayers();
+  static void QoSPost(uint64_t sessionId, uint8_t* qosData, size_t qosLength);
 
-  static void QoSPost(xe::be<uint64_t> sessionId, char* qosData,
-                      size_t qosLength);
+  static memory QoSGet(uint64_t sessionId);
 
-  static XLiveAPI::memory QoSGet(xe::be<uint64_t> sessionId);
+  static void SessionModify(uint64_t sessionId, XSessionModify* data);
 
-  static void SessionModify(xe::be<uint64_t> sessionId, XSessionModify* data);
+  static const std::vector<SessionJSON> SessionSearchEx(XSessionSearchEx* data);
 
-  static const std::vector<XLiveAPI::SessionJSON> SessionSearchEx(
-      XSessionSearchEx* data);
+  static const std::vector<SessionJSON> SessionSearch(XSessionSearch* data);
 
-  static const std::vector<XLiveAPI::SessionJSON> SessionSearch(
-      XSessionSearch* data);
+  static const SessionJSON SessionDetails(uint64_t sessionId);
 
-  static const XLiveAPI::SessionJSON SessionDetails(xe::be<uint64_t> sessionId);
+  static SessionJSON XSessionMigration(uint64_t sessionId);
 
-  static XLiveAPI::SessionJSON XSessionMigration(xe::be<uint64_t> sessionId);
+  static XSessionArbitrationJSON XSessionArbitration(uint64_t sessionId);
 
-  static char* XSessionArbitration(xe::be<uint64_t> sessionId);
+  static void SessionWriteStats(uint64_t sessionId, XSessionWriteStats* stats,
+                                XSessionViewProperties* probs);
 
-  static void XLiveAPI::SessionWriteStats(xe::be<uint64_t> sessionId,
-                                          XSessionWriteStats* stats,
-                                          XSessionViewProperties* probs);
+  static memory LeaderboardsFind(const uint8_t* data);
 
-  static XLiveAPI::memory LeaderboardsFind(const char* data);
-
-  static void DeleteSession(xe::be<uint64_t> sessionId);
+  static void DeleteSession(uint64_t sessionId);
 
   static void DeleteAllSessionsByMac();
 
   static void DeleteAllSessions();
 
-  static void XSessionCreate(xe::be<uint64_t> sessionId, XSesion* data);
+  static void XSessionCreate(uint64_t sessionId, XSessionData* data);
 
-  static XLiveAPI::SessionJSON XSessionGet(xe::be<uint64_t> sessionId);
+  static SessionJSON XSessionGet(uint64_t sessionId);
 
-  static std::vector<XLiveAPI::XTitleServer> GetServers();
+  static std::vector<XTitleServer> GetServers();
 
-  static XLiveAPI::XONLINE_SERVICE_INFO GetServiceInfoById(
-      xe::be<uint32_t> serviceId);
+  static XONLINE_SERVICE_INFO GetServiceInfoById(uint32_t serviceId);
 
-  static void SessionJoinRemote(xe::be<uint64_t> sessionId,
+  static void SessionJoinRemote(uint64_t sessionId,
                                 const std::vector<std::string> xuids);
 
-  static void SessionLeaveRemote(xe::be<uint64_t> sessionId,
+  static void SessionLeaveRemote(uint64_t sessionId,
                                  std::vector<std::string> xuids);
 
-  static unsigned char* GenerateMacAddress();
+  static const uint8_t* GenerateMacAddress();
 
-  static unsigned char* GetMACaddress();
+  static const uint8_t* GetMACaddress();
 
-  static bool UpdateQoSCache(const xe::be<uint64_t> sessionId,
-                             const std::vector<char> qos_payload,
+  static bool UpdateQoSCache(const uint64_t sessionId,
+                             const std::vector<uint8_t> qos_payload,
                              const uint32_t payload_size);
 
   static const sockaddr_in LocalIP() { return local_ip_; };
@@ -342,15 +140,12 @@ class XLiveAPI {
 
   inline static upnp upnp_handler;
 
-  inline static unsigned char* mac_address = new unsigned char[6];
+  inline static MacAddress* mac_address_ = nullptr;
 
-  inline static std::map<xe::be<uint32_t>, xe::be<uint64_t>> sessionHandleMap{};
-
-  inline static std::map<xe::be<uint32_t>, xe::be<uint64_t>> machineIdCache{};
-  inline static std::map<xe::be<uint32_t>, xe::be<uint64_t>> sessionIdCache{};
-  inline static std::map<xe::be<uint32_t>, xe::be<uint64_t>> macAddressCache{};
-  inline static std::map<xe::be<uint64_t>, std::vector<char>>
-      qos_payload_cache{};
+  inline static std::map<uint32_t, uint64_t> machineIdCache{};
+  inline static std::map<uint32_t, uint64_t> sessionIdCache{};
+  inline static std::map<uint32_t, uint64_t> macAddressCache{};
+  inline static std::map<uint64_t, std::vector<uint8_t>> qos_payload_cache{};
 
   inline static int8_t version_status;
 
@@ -362,7 +157,7 @@ class XLiveAPI {
 
   static memory Get(std::string endpoint);
 
-  static memory Post(std::string endpoint, const char* data,
+  static memory Post(std::string endpoint, const uint8_t* data,
                      size_t data_size = 0);
 
   static memory Delete(std::string endpoint);
@@ -389,3 +184,5 @@ class XLiveAPI {
 };
 }  // namespace kernel
 }  // namespace xe
+
+#endif  // XENIA_KERNEL_XLIVEAPI_H_
