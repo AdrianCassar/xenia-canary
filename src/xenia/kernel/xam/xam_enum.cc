@@ -116,7 +116,7 @@ dword_result_t XamCreateEnumeratorHandle_entry(
 
   switch (open_message) {
     case 0x58039: {
-      auto e = make_object<XStaticEnumerator<XLiveAPI::XTitleServer>>(
+      auto e = make_object<XStaticEnumerator<XTitleServer>>(
           kernel_state(), item_count);
       result = e->Initialize(user_index, app_id, open_message, close_message,
                                   flags, extra_size, nullptr);
