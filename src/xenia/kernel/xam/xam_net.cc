@@ -98,7 +98,6 @@ enum {
   NUM_XNCALLER_TYPES = 0x4,
 };
 
-// https://github.com/pmrowla/hl2sdk-csgo/blob/master/common/xbox/xboxstubs.h
 typedef struct {
   // FYI: IN_ADDR should be in network-byte order.
   in_addr ina;                   // IP address (zero if not static/DHCP)
@@ -245,7 +244,7 @@ void StoreSockaddr(const sockaddr& addr, uint8_t* ptr) {
 XNetStartupParams xnet_startup_params{};
 
 void Update_XNetStartupParams(XNetStartupParams& dest,
-                                     const XNetStartupParams& src) {
+                              const XNetStartupParams& src) {
   uint8_t* dest_ptr = reinterpret_cast<uint8_t*>(&dest);
   const uint8_t* src_ptr = reinterpret_cast<const uint8_t*>(&src);
 
@@ -650,8 +649,8 @@ dword_result_t NetDll_XNetGetTitleXnAddr_entry(dword_t caller,
     addr_ptr->wPortOnline = 0;
   }
 
-  memcpy(addr_ptr->abEnet, XLiveAPI::mac_address, 6);
-  memcpy(addr_ptr->abOnline, XLiveAPI::mac_address, 6);
+  memcpy(addr_ptr->abEnet, XLiveAPI::mac_address_->raw(), 6);
+  memcpy(addr_ptr->abOnline, XLiveAPI::mac_address_->raw(), 6);
 
   // TODO(gibbed): A proper mac address.
   // RakNet's 360 version appears to depend on abEnet to create "random" 64-bit
@@ -693,7 +692,7 @@ dword_result_t NetDll_XNetXnAddrToMachineId_entry(
     return X_ERROR_SUCCESS;
   }
 
-  XLiveAPI::Player session = XLiveAPI::FindPlayers();
+  Player session = XLiveAPI::FindPlayers();
 
   *id_ptr = session.sessionId;
 
@@ -731,7 +730,8 @@ dword_result_t NetDll_XNetGetConnectStatus_entry(dword_t caller, dword_t addr) {
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetGetConnectStatus, kNetworking, kStub);
 
-dword_result_t NetDll_XNetServerToInAddr_entry(dword_t caller, dword_t server_addr,
+dword_result_t NetDll_XNetServerToInAddr_entry(dword_t caller,
+                                               dword_t server_addr,
                                                dword_t serviceId,
                                                pointer_t<in_addr> pina) {
   XELOGI("XNetServerToInAddr({:08X} {:08X})", server_addr.value(),
@@ -740,7 +740,7 @@ dword_result_t NetDll_XNetServerToInAddr_entry(dword_t caller, dword_t server_ad
   pina->s_addr = htonl(server_addr);
 
   if (cvars::logging) {
-    XELOGI("Server IP: {}", XLiveAPI::ip_to_string(*pina));
+    XELOGI("Server IP: {}", ip_to_string(*pina));
   }
 
   return X_ERROR_SUCCESS;
@@ -755,7 +755,7 @@ dword_result_t NetDll_XNetInAddrToServer_entry(dword_t caller,
 
   pina->s_addr = htonl(server_addr);
 
-  XELOGI("Server IP: {}", XLiveAPI::ip_to_string(*pina));
+  XELOGI("Server IP: {}", ip_to_string(*pina));
 
   return X_ERROR_SUCCESS;
 }
@@ -767,7 +767,7 @@ dword_result_t NetDll_XNetInAddrToString_entry(dword_t caller, dword_t ina,
   in_addr addr = in_addr{};
   addr.s_addr = ina;
 
-  strncpy(string_out, XLiveAPI::ip_to_string(addr).c_str(), string_size);
+  strncpy(string_out, ip_to_string(addr).c_str(), string_size);
 
   return X_ERROR_SUCCESS;
 }
@@ -777,7 +777,7 @@ DECLARE_XAM_EXPORT1(NetDll_XNetInAddrToString, kNetworking, kImplemented);
 // subsequent socket calls (like a handle to a XNet address)
 dword_result_t NetDll_XNetXnAddrToInAddr_entry(dword_t caller,
                                                pointer_t<XNADDR> xn_addr,
-                                               pointer_t<XLiveAPI::XNKID> xid,
+                                               pointer_t<XNKID> xid,
                                                pointer_t<in_addr> in_addr) {
   if (XLiveAPI::IsOnline()) {
     in_addr->s_addr = xn_addr->inaOnline.s_addr;
@@ -789,7 +789,7 @@ DECLARE_XAM_EXPORT1(NetDll_XNetXnAddrToInAddr, kNetworking, kSketchy);
 
 dword_result_t NetDll_XNetInAddrToXnAddr_entry(dword_t caller, dword_t in_addr,
                                                pointer_t<XNADDR> xn_addr,
-                                               pointer_t<XLiveAPI::XNKID> xid_ptr) {
+                                               pointer_t<XNKID> xid_ptr) {
   if (xn_addr == nullptr) {
     return X_STATUS_SUCCESS;
   }
@@ -801,7 +801,7 @@ dword_result_t NetDll_XNetInAddrToXnAddr_entry(dword_t caller, dword_t in_addr,
   // Find cached online IP?
   if (XLiveAPI::macAddressCache.find(xn_addr->inaOnline.s_addr) ==
       XLiveAPI::macAddressCache.end()) {
-    XLiveAPI::Player session = XLiveAPI::FindPlayers();
+    Player session = XLiveAPI::FindPlayers();
 
     XLiveAPI::sessionIdCache.emplace(xn_addr->inaOnline.s_addr,
                                      session.sessionId);
@@ -810,21 +810,19 @@ dword_result_t NetDll_XNetInAddrToXnAddr_entry(dword_t caller, dword_t in_addr,
                                       session.macAddress);
   }
 
-  XLiveAPI::Uint64toMacAddress(
-      XLiveAPI::macAddressCache[xn_addr->inaOnline.s_addr], xn_addr->abEnet);
+  MacAddress mac_address =
+      MacAddress(XLiveAPI::macAddressCache[xn_addr->inaOnline.s_addr]);
 
-  XLiveAPI::Uint64toMacAddress(
-      XLiveAPI::macAddressCache[xn_addr->inaOnline.s_addr], xn_addr->abOnline);
+  std::memcpy(xn_addr->abEnet, mac_address.raw(), 6);
+  std::memcpy(xn_addr->abOnline, mac_address.raw(), 6);
 
   if (xid_ptr == nullptr) {
     return X_STATUS_SUCCESS;
   }
 
-  auto sessionId_ptr =
-      kernel_memory()->TranslateVirtual<unsigned char*>(xid_ptr);
-
-  XLiveAPI::Uint64toSessionId(
-      XLiveAPI::sessionIdCache[xn_addr->inaOnline.s_addr], sessionId_ptr);
+  auto sessionId_ptr = kernel_memory()->TranslateVirtual<uint64_t*>(xid_ptr);
+  *sessionId_ptr =
+      xe::byte_swap(XLiveAPI::sessionIdCache[xn_addr->inaOnline.s_addr]);
 
   return X_STATUS_SUCCESS;
 }
@@ -997,17 +995,16 @@ dword_result_t NetDll_XNetQosListen_entry(
     return X_ERROR_SUCCESS;
   }
 
-  const xe::be<uint64_t> session_id =
-      *kernel_memory()->TranslateVirtual<xe::be<uint64_t>*>(sessionId);
+  const uint64_t session_id = xe::byte_swap(*sessionId);
 
   if (flags & LISTEN_SET_DATA) {
-    std::vector<char> qos_buffer(data_size);
+    std::vector<uint8_t> qos_buffer(data_size);
     memcpy(qos_buffer.data(), data, data_size);
 
     if (XLiveAPI::UpdateQoSCache(session_id, qos_buffer, data_size)) {
-      XELOGI("XNetQosListen LISTEN_SET_DATA"); 
+      XELOGI("XNetQosListen LISTEN_SET_DATA");
 
-      auto run = [](uint64_t sessionId, char* qosData, size_t qosLength) {
+      auto run = [](uint64_t sessionId, uint8_t* qosData, size_t qosLength) {
         XLiveAPI::QoSPost(sessionId, qosData, qosLength);
       };
 
