@@ -149,7 +149,7 @@ class XSocket : public XObject {
   std::mutex incoming_packet_mutex_;
   std::queue<uint8_t*> incoming_packets_;
 
-  std::future<int> pooling_task_;
+  std::future<int> polling_task_;
 
   std::mutex receive_mutex_;
   std::condition_variable receive_cv_;
