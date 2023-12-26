@@ -990,7 +990,7 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
     }
     case 0x000B001B: {
       XELOGI("XSessionSearchByID unimplemented");
-      return X_E_SUCCESS;
+      return SessionSearchByID(buffer);
     }
     case 0x000B0065: {
       XELOGI("XSessionSearchWeighted unimplemented");
@@ -1114,6 +1114,71 @@ X_HRESULT XgiApp::SessionSearch(uint8_t* buffer_ptr, bool extended) {
   return X_E_SUCCESS;
 }
 
+X_HRESULT XgiApp::SessionSearchByID(uint8_t* buffer_ptr) {
+  XLiveAPI::XSessionSearchID* data =
+      reinterpret_cast<XLiveAPI::XSessionSearchID*>(buffer_ptr);
+
+  if (!data->results_buffer) {
+    data->results_buffer = sizeof(XSESSION_SEARCHRESULT);
+    return ERROR_INSUFFICIENT_BUFFER;
+  }
+
+  const auto sessionId = XNKIDtoUint64(data->session_id);
+
+  if (!sessionId) {
+    return ERROR_SUCCESS;
+  }
+
+  const XLiveAPI::SessionJSON session = XLiveAPI::XSessionGet(sessionId);
+
+  // FIX ME:
+  if (session.hostAddress.empty()) {
+    return ERROR_SUCCESS;
+  }
+
+  const uint32_t session_search_result_data_address =
+      data->search_results + sizeof(XSESSION_SEARCHRESULT_HEADER);
+
+  XSESSION_SEARCHRESULT* result =
+      memory_->TranslateVirtual<XSESSION_SEARCHRESULT*>(
+          data->search_results + sizeof(XSESSION_SEARCHRESULT_HEADER));
+
+  const uint32_t result_guest_address =
+      session_search_result_data_address + sizeof(XSESSION_SEARCHRESULT);
+
+  XSESSION_SEARCHRESULT* resultHostPtr =
+      memory_->TranslateVirtual<XSESSION_SEARCHRESULT*>(result_guest_address);
+
+  result->filled_priv_slots = session.filledPrivateSlotsCount;
+  result->filled_public_slots = session.filledPublicSlotsCount;
+  result->open_priv_slots = session.openPrivateSlotsCount;
+  result->open_public_slots = session.openPublicSlotsCount;
+
+  memcpy(&result->info.sessionID, session.sessionid.c_str(), 8);
+  memcpy(&result->info.hostAddress.abEnet, session.macAddress.c_str(), 6);
+  memcpy(&result->info.hostAddress.abOnline, session.macAddress.c_str(), 6);
+
+  for (int j = 0; j < sizeof(XLiveAPI::XNKEY); j++) {
+    result->info.keyExchangeKey.ab[j] = j;
+  }
+
+  inet_pton(AF_INET, session.hostAddress.c_str(),
+            &resultHostPtr->info.hostAddress.ina.s_addr);
+
+  inet_pton(AF_INET, session.hostAddress.c_str(),
+            &resultHostPtr->info.hostAddress.inaOnline.s_addr);
+
+  resultHostPtr->info.hostAddress.wPortOnline = session.port;
+
+  XSESSION_SEARCHRESULT_HEADER* resultsHeader =
+      memory_->TranslateVirtual<XSESSION_SEARCHRESULT_HEADER*>(
+          data->search_results);
+
+  resultsHeader->search_results_count = 1;
+  resultsHeader->search_results_ptr = session_search_result_data_address;
+
+  return X_E_SUCCESS;
+}
 }  // namespace apps
 }  // namespace xam
 }  // namespace kernel
