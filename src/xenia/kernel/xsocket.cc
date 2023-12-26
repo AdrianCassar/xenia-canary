@@ -502,14 +502,14 @@ int XSocket::WSARecvFrom(XWSABUF* buffers, uint32_t num_buffers,
         }
         active_overlapped_ = overlapped_ptr;
 
-        if (!pooling_task_.valid()) {
-          pooling_task_ =
+        if (!polling_task_.valid()) {
+          polling_task_ =
               std::async(std::launch::async, &XSocket::PollWSARecvFrom, this,
                          true, receive_async_data);
         } else {
-          auto status = pooling_task_.wait_for(0ms);
+          auto status = polling_task_.wait_for(0ms);
           if (status == std::future_status::ready) {
-            auto result = pooling_task_.get();
+            auto result = polling_task_.get();
           }
         }
         SetLastWSAError(X_WSAError::X_WSA_IO_PENDING);
