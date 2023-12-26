@@ -14,8 +14,8 @@
 #include "xenia/kernel/xam/user_settings.h"
 #include "xenia/kernel/xam/xam_private.h"
 #include "xenia/kernel/xenumerator.h"
+#include "xenia/kernel/xsession.h"
 #include "xenia/xbox.h"
-#include <random>
 
 #include "third_party/stb/stb_image.h"
 
@@ -871,36 +871,28 @@ dword_result_t XamWriteGamerTile_entry(dword_t user_index, dword_t title_id,
 DECLARE_XAM_EXPORT1(XamWriteGamerTile, kUserProfiles, kStub);
 
 dword_result_t XamSessionCreateHandle_entry(lpdword_t handle_ptr) {
-  // Generate random session id?
+  auto e = object_ref<XSession>(new XSession(kernel_state()));
+  auto result = (uint32_t)e->Initialize();
+  if (XFAILED(result)) {
+    return result;
+  }
 
-  std::random_device rd;
-  std::uniform_int_distribution<uint32_t> dist(0, 0xFFFFFFFF);
-  *handle_ptr = dist(rd);
+  *handle_ptr = e->handle();
   return X_ERROR_SUCCESS;
 }
-DECLARE_XAM_EXPORT1(XamSessionCreateHandle, kUserProfiles, kStub);
-
-// This is dirty, we should be creating a local xobject for sessions,
-// but I've not implemented that, so instead I pass the session handle around
-// as if it's a pointer. Fortunately all functions which use that pointer are
-// within xenia anyway, but in future this should actually be a pointer.
-// - Codie
-
-//dword_result_t XamSessionRefObjByHandle_entry(dword_t handle,
-//                                              lpdword_t obj_ptr) {
-//  assert_true(handle == 0xCAFEDEAD);
-//  // TODO(PermaNull): Implement this properly,
-//  // For the time being returning 0xDEADF00D will prevent crashing.
-//  *obj_ptr = 0xDEADF00D;
-//  return X_ERROR_SUCCESS;
-//}
+DECLARE_XAM_EXPORT1(XamSessionCreateHandle, kUserProfiles, kImplemented);
 
 dword_result_t XamSessionRefObjByHandle_entry(dword_t handle,
                                               lpdword_t obj_ptr) {
-  *obj_ptr = (uint32_t)handle;
+  auto object = kernel_state()->object_table()->LookupObject<XSession>(handle);
+  if (!object) {
+    return X_STATUS_INVALID_HANDLE;
+  }
+
+  *obj_ptr = (uint32_t)object->guest_object();
   return X_ERROR_SUCCESS;
 }
-DECLARE_XAM_EXPORT1(XamSessionRefObjByHandle, kUserProfiles, kStub);
+DECLARE_XAM_EXPORT1(XamSessionRefObjByHandle, kUserProfiles, kImplemented);
 
 dword_result_t XamUserIsUnsafeProgrammingAllowed_entry(dword_t user_index,
                                                        dword_t unk,
