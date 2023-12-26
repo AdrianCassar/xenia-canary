@@ -37,7 +37,7 @@ class upnp {
 
   uint16_t upnp::get_mapped_bind_port(uint16_t external_port);
 
-  std::map<std::string, std::map<uint16_t, uint16_t>>* port_binding_results() {
+  std::map<std::string, std::map<uint16_t, int32_t>>* port_binding_results() {
     return &m_port_binding_results;
   };
 
@@ -60,7 +60,7 @@ class upnp {
   UPNPUrls m_igd_urls{};
 
   std::map<std::string, std::map<uint16_t, uint16_t>> m_port_bindings;
-  std::map<std::string, std::map<uint16_t, uint16_t>> m_port_binding_results;
+  std::map<std::string, std::map<uint16_t, int32_t>> m_port_binding_results;
 
   std::map<uint16_t, uint16_t> m_mapped_connect_ports;
   std::map<uint16_t, uint16_t> m_mapped_bind_ports;
