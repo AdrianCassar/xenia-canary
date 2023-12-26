@@ -27,6 +27,7 @@ class XgiApp : public App {
 
 private:
   X_HRESULT SessionSearch(uint8_t* buffer_ptr, bool extended = false);
+  X_HRESULT SessionSearchByID(uint8_t* buffer_ptr);
 };
 
 }  // namespace apps
