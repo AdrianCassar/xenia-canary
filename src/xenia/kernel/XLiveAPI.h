@@ -115,6 +115,14 @@ class XLiveAPI {
     xe::be<uint32_t> xoverlapped;
   };
 
+  struct XSessionSearchID {
+    XNKID* session_id;
+    xe::be<uint32_t> user_index;
+    xe::be<uint32_t> results_buffer;
+    xe::be<uint32_t> search_results;
+    xe::be<uint32_t> xoverlapped;
+  };
+
   struct XSessionDetails {
     xe::be<uint32_t> session_handle;
     xe::be<uint32_t> details_buffer_size;
