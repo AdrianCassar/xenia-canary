@@ -115,6 +115,7 @@ It should also be noted that due to the way Steam Decks handle configuration, yo
 | Saints Row 2 | | [Co-op](https://www.youtube.com/watch?v=YTw84keeWfs), [Setup Guide](https://www.youtube.com/watch?v=nf7TDOtTEIE) |
 | Saints Row the Third / The Full Package | Unplayable due to broken graphics. Requires [Online Pass](https://www.xbox.com/en-GB/games/store/online-pass/BS7JTR0MN356) + license_mask |
 | Saints Row IV | Unplayable due to broken graphics. Requires Online Pass + license_mask |
+| Screwjumper! | |
 | Splinter Cell: Double Agent | |
 | Star Wars Battlefront III (Unreleased Game) | Alpha, Mar 17 2008 | [Conquest Taoonie](https://www.youtube.com/watch?v=C54jCqFnCmQ), [MP Event Stream](https://www.youtube.com/watch?v=xSpTmsSvP4s) |
 | Team Fortress 2 | Mousehook |
