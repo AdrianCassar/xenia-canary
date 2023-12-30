@@ -939,6 +939,11 @@ void XLiveAPI::SessionWriteStats(xe::be<uint64_t> sessionId,
                                statistics[statisticIndex].value.qword_data,
                                rootObject.GetAllocator());
           break;
+        case 3:
+          statObject.AddMember("value",
+                               statistics[statisticIndex].value.double_data,
+                               rootObject.GetAllocator());
+          break;
         default:
           XELOGW("Unimplemented statistic type for write",
                  statistics[statisticIndex].value.type);
