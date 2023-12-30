@@ -880,6 +880,10 @@ void XLiveAPI::SessionWriteStats(uint64_t sessionId, XSessionWriteStats* stats,
           statObject.AddMember("value", statistics[statisticIndex].data.s64,
                                rootObject.GetAllocator());
           break;
+        case X_USER_DATA_TYPE::DOUBLE:
+          statObject.AddMember("value", statistics[statisticIndex].data.f64,
+                               rootObject.GetAllocator());
+          break;
         default:
           XELOGW("Unimplemented statistic type for write {}",
                  static_cast<uint32_t>(statistics[statisticIndex].data.type));
