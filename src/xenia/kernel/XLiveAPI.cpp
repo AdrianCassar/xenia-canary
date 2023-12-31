@@ -1017,6 +1017,63 @@ void XLiveAPI::XSessionCreate(uint64_t sessionId, XSessionData* data) {
   XELOGI("XSessionCreate POST Success");
 }
 
+void XLiveAPI::SessionContextSet(uint64_t session_id,
+                                 std::map<uint32_t, uint32_t> contexts) {
+  std::string endpoint = fmt::format("title/{:08X}/sessions/{:016x}/context",
+                                     kernel_state()->title_id(), session_id);
+
+  Document doc;
+  doc.SetObject();
+
+  Value contextsJson(rapidjson::kArrayType);
+
+  for (const auto& entry : contexts) {
+    Value contextJson(kObjectType);
+    contextJson.AddMember("contextId", entry.first, doc.GetAllocator());
+    contextJson.AddMember("value", entry.second, doc.GetAllocator());
+    contextsJson.PushBack(contextJson.Move(), doc.GetAllocator());
+  }
+  doc.AddMember("contexts", contextsJson, doc.GetAllocator());
+
+  rapidjson::StringBuffer buffer;
+  PrettyWriter<rapidjson::StringBuffer> writer(buffer);
+  doc.Accept(writer);
+
+  memory chunk = Post(endpoint, (uint8_t*)buffer.GetString());
+
+  if (chunk.http_code != HTTP_STATUS_CODE::HTTP_CREATED) {
+    XELOGI("XSessionCreate POST Failed!");
+    assert_always();
+  }
+}
+
+const std::map<uint32_t, uint32_t> XLiveAPI::SessionContextGet(
+    uint64_t session_id) {
+  std::string endpoint = fmt::format("title/{:08X}/sessions/{:016x}/context",
+                                     kernel_state()->title_id(), session_id);
+
+  std::map<uint32_t, uint32_t> result = {};
+  memory chunk = Get(endpoint);
+  if (chunk.http_code != HTTP_STATUS_CODE::HTTP_OK) {
+    XELOGE("XSessionGet error code: {}", chunk.http_code);
+    assert_always();
+
+    return result;
+  }
+
+  rapidjson::Document doc;
+  doc.Parse(chunk.response);
+
+  const Value& contexts = doc["context"];
+
+  for (auto itr = contexts.MemberBegin(); itr != contexts.MemberEnd(); itr++) {
+    const uint32_t context_id =
+        xe::string_util::from_string<uint32_t>(itr->name.GetString(), true);
+    result.insert({context_id, itr->value.GetInt()});
+  }
+
+  return result;
+}
 SessionJSON XLiveAPI::XSessionGet(uint64_t sessionId) {
   std::string endpoint = fmt::format("title/{:08X}/sessions/{:016x}",
                                      kernel_state()->title_id(), sessionId);
@@ -1174,14 +1231,13 @@ void XLiveAPI::SessionLeaveRemote(uint64_t sessionId,
 }
 
 const uint8_t* XLiveAPI::GenerateMacAddress() {
-
   uint8_t* mac_address = new uint8_t[6];
   // MAC OUI part for MS devices.
   mac_address[0] = 0x00;
   mac_address[1] = 0x22;
   mac_address[2] = 0x48;
 
-  xam::XNetRandom(mac_address+3, 3);
+  xam::XNetRandom(mac_address + 3, 3);
 
   return mac_address;
 }
