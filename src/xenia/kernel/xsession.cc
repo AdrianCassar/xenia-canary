@@ -79,12 +79,12 @@ X_RESULT XSession::CreateSession(uint8_t user_index, uint8_t public_slots,
     CreateStatsSession(pSessionInfo, pNonce, user_index, public_slots,
                        private_slots, flags);
   } else if (HasSessionFlag((SessionFlags)flags, HOST)) {
-    CreateHostSession(pSessionInfo, pNonce, user_index, public_slots,
-                      private_slots, flags);
     // Write user contexts. After session creation these are read only!
     contexts_.insert(user_profile->contexts_.cbegin(),
                      user_profile->contexts_.cend());
 
+    CreateHostSession(pSessionInfo, pNonce, user_index, public_slots,
+                      private_slots, flags);
   } else {
     JoinExistingSession(pSessionInfo);
   }
@@ -128,6 +128,9 @@ X_RESULT XSession::CreateHostSession(XSESSION_INFO* session_info,
   XLiveAPI::XSessionCreate(session_id_, session_data);
 
   XELOGI("Created session {:016X}", session_id_);
+
+  XLiveAPI::SessionContextSet(session_id_, contexts_);
+
 
   session_info->hostAddress.inaOnline.s_addr =
       XLiveAPI::OnlineIP().sin_addr.s_addr;
@@ -447,8 +450,8 @@ X_RESULT XSession::GetSessions(Memory* memory, XSessionSearch* search_data) {
           sizeof(XSESSION_SEARCHRESULT_HEADER));
 
   for (uint8_t i = 0; i < session_count; i++) {
-    FillSessionContext(memory, search_data->num_ctx, search_data->ctx_ptr, {},
-                       &result[i]);
+    const auto context = XLiveAPI::SessionContextGet(sessions[i].sessionid);
+    FillSessionContext(memory, context, &result[i]);
     FillSessionProperties(search_data->num_props, search_data->props_ptr,
                           &result[i]);
     FillSessionSearchResult(&sessions.at(i), &result[i]);
@@ -486,7 +489,7 @@ X_RESULT XSession::GetSessionByID(Memory* memory,
           sizeof(XSESSION_SEARCHRESULT_HEADER));
 
   // HUH? How it should be filled in this case?
-  FillSessionContext(memory, 0, 0, {}, result);
+  FillSessionContext(memory, {}, result);
   FillSessionProperties(0, 0, result);
   FillSessionSearchResult(&session, result);
 
@@ -526,11 +529,24 @@ void XSession::FillSessionSearchResult(const SessionJSON* session_info,
   result->info.hostAddress.wPortOnline = session_info->port;
 }
 
-void XSession::FillSessionContext(Memory* memory, uint32_t contexts_count,
-                                  uint32_t context_ptr,
+void XSession::FillSessionContext(Memory* memory,
                                   std::map<uint32_t, uint32_t> contexts,
                                   XSESSION_SEARCHRESULT* result) {
-  result->contexts_count = contexts_count;
+  result->contexts_count = (uint32_t)contexts.size();
+
+  const uint32_t context_ptr = memory->SystemHeapAlloc(
+      uint32_t(sizeof(XUSER_CONTEXT) * contexts.size()));
+
+  XUSER_CONTEXT* contexts_to_get =
+      memory->TranslateVirtual<XUSER_CONTEXT*>(context_ptr);
+
+  uint32_t i = 0;
+  for (const auto context : contexts) {
+    contexts_to_get[i].context_id = context.first;
+    contexts_to_get[i].value = context.second;
+    i++;
+  }
+
   result->contexts_ptr = context_ptr;
 }
 
