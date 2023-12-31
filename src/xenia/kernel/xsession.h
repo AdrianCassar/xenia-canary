@@ -262,6 +262,11 @@ struct XSessionArbitrationJSON {
   std::vector<MachineInfo> machines;
 };
 
+struct XUSER_CONTEXT {
+  xe::be<uint32_t> context_id;
+  xe::be<uint32_t> value;
+};
+
 class XSession : public XObject {
  public:
   static const Type kObjectType = Type::Session;
@@ -307,8 +312,7 @@ class XSession : public XObject {
   static void FillSessionSearchResult(const SessionJSON* session_info,
                                       XSESSION_SEARCHRESULT* result);
 
-  static void FillSessionContext(Memory* memory, uint32_t contexts_count,
-                                 uint32_t context_ptr,
+  static void FillSessionContext(Memory* memory,
                                  std::map<uint32_t, uint32_t> contexts,
                                  XSESSION_SEARCHRESULT* result);
 

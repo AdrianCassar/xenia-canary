@@ -19,9 +19,9 @@
 #include <third_party/rapidjson/include/rapidjson/prettywriter.h>
 #include <third_party/rapidjson/include/rapidjson/stringbuffer.h>
 #include "xenia/base/byte_order.h"
+#include "xenia/kernel/util/net_utils.h"
 #include "xenia/kernel/xnet.h"
 #include "xenia/kernel/xsession.h"
-#include "xenia/kernel/util/net_utils.h"
 
 namespace xe {
 namespace kernel {
@@ -92,6 +92,12 @@ class XLiveAPI {
   static const std::vector<SessionJSON> SessionSearchEx(XSessionSearchEx* data);
 
   static const std::vector<SessionJSON> SessionSearch(XSessionSearch* data);
+
+  static void SessionContextSet(uint64_t session_id,
+                                std::map<uint32_t, uint32_t> contexts);
+
+  static const std::map<uint32_t, uint32_t> SessionContextGet(
+      uint64_t session_id);
 
   static const SessionJSON SessionDetails(uint64_t sessionId);
 
