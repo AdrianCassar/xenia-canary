@@ -2,7 +2,7 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2023 Xenia Emulator. All rights reserved.                        *
+ * Copyright 2024 Xenia Emulator. All rights reserved.                        *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
@@ -13,13 +13,14 @@ namespace xe {
 namespace kernel {
 
 MacAddress::MacAddress(const uint8_t* macaddress) {
-  for (uint8_t i = 0; i < MacAddress::MacAddressSize; i++) {
+  for (uint8_t i = 0; i < MacAddressSize; i++) {
     mac_address_[i] = macaddress[i];
   }
 }
 
 MacAddress::MacAddress(uint64_t macaddress) { 
-    mac_address_[0] = 0; 
+  xe::be<uint64_t> be_macaddress = (macaddress << 0x10);
+  memcpy(mac_address_, &be_macaddress, MacAddressSize);
 }
 MacAddress::~MacAddress() {}
 
@@ -27,8 +28,8 @@ uint8_t* MacAddress::raw() { return mac_address_; }
 
 std::vector<uint8_t> MacAddress::to_array() const {
   std::vector<uint8_t> result = {};
-  result.resize(6);
-  memcpy(result.data(), mac_address_, 6);
+  result.resize(MacAddressSize);
+  memcpy(result.data(), mac_address_, MacAddressSize);
   return result;
 }
 
@@ -44,7 +45,7 @@ std::string MacAddress::to_string() const {
   return result;
 }
 
-std::string_view MacAddress::to_printable_form() const {
+std::string MacAddress::to_printable_form() const {
   std::string mac =
       fmt::format("{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}", mac_address_[0],
                   mac_address_[1], mac_address_[2], mac_address_[3],
