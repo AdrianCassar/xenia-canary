@@ -2,7 +2,7 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2023 Xenia Emulator. All rights reserved.                        *
+ * Copyright 2024 Xenia Emulator. All rights reserved.                        *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
@@ -49,7 +49,7 @@ class MacAddress {
   std::string to_string() const;
 
   // "00:1A:2B:3C:4D:5E" <- Example printable form
-  std::string_view to_printable_form() const;
+  std::string to_printable_form() const;
 
  private:
   uint8_t mac_address_[MacAddressSize];
