@@ -761,6 +761,8 @@ dword_result_t XamSessionRefObjByHandle_entry(dword_t handle,
     return X_STATUS_INVALID_HANDLE;
   }
 
+  object->RetainHandle();
+
   *obj_ptr = (uint32_t)object->guest_object();
   return X_ERROR_SUCCESS;
 }
