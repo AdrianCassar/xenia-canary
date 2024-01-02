@@ -742,8 +742,8 @@ const SessionJSON XLiveAPI::SessionDetails(uint64_t sessionId) {
   for (Value::ConstValueIterator object_ptr = playersArray.Begin();
        object_ptr != playersArray.End(); ++object_ptr) {
     Player Player{};
-
-    Player.xuid = (*object_ptr)["xuid"].GetInt64();
+    Player.xuid = string_util::from_string<uint64_t>(
+        (*object_ptr)["xuid"].GetString(), true);
 
     session.players.push_back(Player);
   }
