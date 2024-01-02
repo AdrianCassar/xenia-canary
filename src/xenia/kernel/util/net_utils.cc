@@ -18,6 +18,13 @@ MacAddress::MacAddress(const uint8_t* macaddress) {
   }
 }
 
+MacAddress::MacAddress(std::string macaddress) {
+  const uint64_t mac =
+      xe::byte_swap(string_util::from_string<uint64_t>(macaddress, true)) >>
+      0x10;
+  memcpy(mac_address_, &mac, MacAddressSize);
+}
+
 MacAddress::MacAddress(uint64_t macaddress) {
   xe::be<uint64_t> be_macaddress = (macaddress << 0x10);
   memcpy(mac_address_, &be_macaddress, MacAddressSize);
