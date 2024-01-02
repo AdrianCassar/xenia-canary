@@ -506,7 +506,7 @@ void XSession::FillSessionSearchResult(const SessionJSON* session_info,
 
   memcpy(&result->info.sessionID, &session_info->sessionid, sizeof(XNKID));
 
-  const MacAddress mac = MacAddress((uint8_t*)session_info->macAddress.c_str());
+  const MacAddress mac = MacAddress(session_info->macAddress);
 
   memcpy(&result->info.hostAddress.abEnet, mac.raw(),
          sizeof(result->info.hostAddress.abEnet));
