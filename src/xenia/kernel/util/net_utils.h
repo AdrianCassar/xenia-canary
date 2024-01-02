@@ -40,6 +40,7 @@ class MacAddress {
   static const uint8_t MacAddressSize = 6;
 
   MacAddress(const uint8_t* macaddress);
+  MacAddress(std::string macaddress);
   MacAddress(uint64_t macaddress);
   ~MacAddress();
 
