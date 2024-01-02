@@ -43,7 +43,7 @@ class MacAddress {
   MacAddress(uint64_t macaddress);
   ~MacAddress();
 
-  uint8_t* raw();
+  const uint8_t* raw() const;
   std::vector<uint8_t> to_array() const;
   uint64_t to_uint64() const;
   std::string to_string() const;
