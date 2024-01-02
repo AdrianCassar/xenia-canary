@@ -18,13 +18,13 @@ MacAddress::MacAddress(const uint8_t* macaddress) {
   }
 }
 
-MacAddress::MacAddress(uint64_t macaddress) { 
+MacAddress::MacAddress(uint64_t macaddress) {
   xe::be<uint64_t> be_macaddress = (macaddress << 0x10);
   memcpy(mac_address_, &be_macaddress, MacAddressSize);
 }
 MacAddress::~MacAddress() {}
 
-uint8_t* MacAddress::raw() { return mac_address_; }
+const uint8_t* MacAddress::raw() const { return mac_address_; }
 
 std::vector<uint8_t> MacAddress::to_array() const {
   std::vector<uint8_t> result = {};
