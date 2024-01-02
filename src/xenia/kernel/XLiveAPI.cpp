@@ -485,8 +485,7 @@ Player XLiveAPI::FindPlayers() {
   data.hostAddress = doc["hostAddress"].GetString();
   data.port = doc["port"].GetUint();
 
-  MacAddress address =
-      MacAddress((const uint8_t*)doc["macAddress"].GetString());
+  MacAddress address = MacAddress(doc["macAddress"].GetString());
   data.macAddress = address.to_uint64();
 
   data.sessionId =
