@@ -505,9 +505,12 @@ void XSession::FillSessionSearchResult(const SessionJSON* session_info,
   result->open_public_slots = session_info->openPublicSlotsCount;
 
   memcpy(&result->info.sessionID, &session_info->sessionid, sizeof(XNKID));
-  memcpy(&result->info.hostAddress.abEnet, session_info->macAddress.c_str(),
+
+  const MacAddress mac = MacAddress((uint8_t*)session_info->macAddress.c_str());
+
+  memcpy(&result->info.hostAddress.abEnet, mac.raw(),
          sizeof(result->info.hostAddress.abEnet));
-  memcpy(&result->info.hostAddress.abOnline, session_info->macAddress.c_str(),
+  memcpy(&result->info.hostAddress.abOnline, mac.raw(),
          sizeof(result->info.hostAddress.abEnet));
 
   for (int j = 0; j < sizeof(XNKEY); j++) {
