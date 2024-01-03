@@ -258,7 +258,7 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
           std::vector<uint8_t> xuid;
           string_util::hex_string_to_array(
               xuid, (*playerObjectPtr)["xuid"].GetString());
-          copy_and_swap_64_aligned(&player[playerIndex].xuid, xuid.data(), 8);
+          memcpy(&player[playerIndex].xuid, xuid.data(), 8);
 
           auto statisticsArray = (*playerObjectPtr)["stats"].GetArray();
           player[playerIndex].NumColumns = statisticsArray.Size();
