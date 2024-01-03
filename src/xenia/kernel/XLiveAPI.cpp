@@ -15,7 +15,6 @@
 #include "xenia/kernel/util/shim_utils.h"
 
 #include "xenia/kernel/XLiveAPI.h"
-#include "xenia/kernel/xam/xam_net.h"
 
 #ifdef XE_PLATFORM_WIN32
 #include <IPTypes.h>
@@ -1228,7 +1227,13 @@ const uint8_t* XLiveAPI::GenerateMacAddress() {
   mac_address[1] = 0x22;
   mac_address[2] = 0x48;
 
-  xam::XNetRandom(mac_address + 3, 3);
+  std::random_device rnd;
+  std::mt19937_64 gen(rnd());
+  std::uniform_int_distribution<uint16_t> dist(0, 0xFF);
+
+  for (int i = 3; i < 6; i++) {
+    mac_address[i] = (uint8_t)dist(rnd);
+  }
 
   return mac_address;
 }
