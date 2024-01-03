@@ -228,7 +228,6 @@ struct XSessionLeave {
 
 struct Player {
   xe::be<uint64_t> xuid;
-  // xe::be<uint64_t> xuid;
   std::string hostAddress;
   xe::be<uint64_t> machineId;
   uint16_t port;
