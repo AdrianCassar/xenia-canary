@@ -693,11 +693,11 @@ dword_result_t NetDll_XNetXnAddrToMachineId_entry(
 
   Player session = XLiveAPI::FindPlayers();
 
-  *id_ptr = session.sessionId;
+  *id_ptr = session.machineId;
 
   // Cache the conversion.
   XLiveAPI::machineIdCache.emplace(addr_ptr->inaOnline.s_addr,
-                                   session.sessionId);
+                                   session.machineId);
 
   return X_ERROR_SUCCESS;
 }
