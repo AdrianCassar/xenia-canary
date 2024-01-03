@@ -15,7 +15,6 @@
 #include "xenia/kernel/util/shim_utils.h"
 
 #include "xenia/kernel/XLiveAPI.h"
-#include "xenia/kernel/xam/xam_net.h"
 
 #ifdef XE_PLATFORM_WIN32
 #include <IPTypes.h>
