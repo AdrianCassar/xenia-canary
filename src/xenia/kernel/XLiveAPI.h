@@ -77,7 +77,7 @@ class XLiveAPI {
 
   static void DownloadPortMappings();
 
-  static uint64_t GetMachineId();
+  static const uint64_t GetMachineId();
 
   static memory RegisterPlayer();
 

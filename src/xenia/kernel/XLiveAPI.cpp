@@ -55,14 +55,13 @@ using namespace rapidjson;
 namespace xe {
 namespace kernel {
 
-uint64_t XLiveAPI::GetMachineId() {
-  auto macAddress = mac_address_->to_uint64();
-  auto macAddressUint = *reinterpret_cast<uint64_t*>(&macAddress);
+const uint64_t XLiveAPI::GetMachineId() {
+  const uint64_t machineIdMask = 0xFA00000000000000;
 
-  uint64_t machineId = 0xFA00000000000000;
-  machineId |= macAddressUint;
-
-  return machineId;
+  const uint64_t macAddress = mac_address_->to_uint64();
+  const uint64_t macAddressUint =
+      *reinterpret_cast<const uint64_t*>(&macAddress);
+  return machineIdMask | macAddressUint;
 }
 
 bool XLiveAPI::is_active() { return active_; }
@@ -110,7 +109,6 @@ void XLiveAPI::Init() {
   GetLocalIP();
 
   mac_address_ = new MacAddress(GetMACaddress());
-  XELOGI("MAC ADDRESS: {}", mac_address_->to_printable_form());
 
   if (cvars::offline_mode) {
     XELOGI("Offline mode enabled!");
