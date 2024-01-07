@@ -81,7 +81,7 @@ class XLiveAPI {
 
   static memory RegisterPlayer();
 
-  static Player FindPlayers();
+  static Player FindPlayer(std::string ip);
 
   static void QoSPost(uint64_t sessionId, uint8_t* qosData, size_t qosLength);
 
