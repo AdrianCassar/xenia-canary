@@ -681,7 +681,7 @@ dword_result_t NetDll_XNetXnAddrToMachineId_entry(
     return X_ERROR_SUCCESS;
   }
 
-  Player session = XLiveAPI::FindPlayers();
+  Player session = XLiveAPI::FindPlayer(ip_to_string(addr_ptr->inaOnline));
 
   *id_ptr = session.machineId;
 
@@ -790,7 +790,7 @@ dword_result_t NetDll_XNetInAddrToXnAddr_entry(dword_t caller, dword_t in_addr,
   // Find cached online IP?
   if (XLiveAPI::macAddressCache.find(xn_addr->inaOnline.s_addr) ==
       XLiveAPI::macAddressCache.end()) {
-    Player session = XLiveAPI::FindPlayers();
+    Player session = XLiveAPI::FindPlayer(ip_to_string(xn_addr->inaOnline));
 
     XLiveAPI::sessionIdCache.emplace(xn_addr->inaOnline.s_addr,
                                      session.sessionId);
