@@ -1045,13 +1045,19 @@ dword_result_t NetDll_XNetQosLookup_entry(
 
   XLiveAPI::memory chunk = XLiveAPI::QoSGet(session_Id);
 
-  if (chunk.http_code == 200) {
-    auto data_ptr = kernel_memory()->SystemHeapAlloc((uint32_t)chunk.size);
-    auto data = kernel_memory()->TranslateVirtual<int32_t*>(data_ptr);
+  if (chunk.http_code == HTTP_STATUS_CODE::HTTP_OK ||
+      chunk.http_code == HTTP_STATUS_CODE::HTTP_NO_CONTENT) {
+    qos->info[0].data_ptr = 0;
+    qos->info[0].data_len = (uint16_t)0;
 
-    qos->info[0].data_ptr = data_ptr;
-    memcpy(data, chunk.response, chunk.size);
-    qos->info[0].data_len = (uint16_t)chunk.size;
+    if (chunk.size) {
+      auto data_ptr = kernel_memory()->SystemHeapAlloc((uint32_t)chunk.size);
+      auto data = kernel_memory()->TranslateVirtual<int32_t*>(data_ptr);
+
+      memcpy(data, chunk.response, chunk.size);
+      qos->info[0].data_ptr = data_ptr;
+      qos->info[0].data_len = (uint16_t)chunk.size;
+    }
 
     qos->info[0].probes_xmit = 4;
     qos->info[0].probes_recv = 4;
