@@ -14,8 +14,6 @@ namespace xe {
 namespace kernel {
 namespace xam {
 
-	void XNetRandom(unsigned char* buffer_ptr, uint32_t length);
-
 }  // namespace xam
 }  // namespace kernel
 }  // namespace xe

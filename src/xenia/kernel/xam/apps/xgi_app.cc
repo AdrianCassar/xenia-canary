@@ -214,8 +214,6 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
       const Value& leaderboardsArray = leaderboards.GetArray();
 
       // Fixed FM4 and RDR GOTY from crashing.
-      // MotoGP 06 infinite loading screen.
-      // MW2 private match stuck joining session.
       if (leaderboardsArray.Empty()) {
         return X_ERROR_IO_PENDING;
       }
