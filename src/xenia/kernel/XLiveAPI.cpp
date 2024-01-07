@@ -134,7 +134,7 @@ void XLiveAPI::Init() {
   auto reg_result = RegisterPlayer();
 
   // If player already exists on server then no need to post it again?
-  auto player = FindPlayers();
+  auto player = FindPlayer(OnlineIP_str());
 
   if (reg_result.http_code == HTTP_STATUS_CODE::HTTP_CREATED &&
       player.xuid != 0) {
@@ -449,12 +449,12 @@ XLiveAPI::memory XLiveAPI::RegisterPlayer() {
 // Request clients player info via IP address
 // This should only be called once on startup no need to request our information
 // more than once.
-Player XLiveAPI::FindPlayers() {
+Player XLiveAPI::FindPlayer(std::string ip) {
   Player data{};
 
   Document doc;
   doc.SetObject();
-  doc.AddMember("hostAddress", OnlineIP_str(), doc.GetAllocator());
+  doc.AddMember("hostAddress", ip, doc.GetAllocator());
 
   rapidjson::StringBuffer buffer;
   PrettyWriter<rapidjson::StringBuffer> writer(buffer);
@@ -484,7 +484,7 @@ Player XLiveAPI::FindPlayers() {
   data.machineId =
       string_util::from_string<uint64_t>(doc["machineId"].GetString(), true);
 
-  XELOGI("Requesting player details.");
+  XELOGI("Requesting {:016X} player details.", data.xuid);
 
   return data;
 }
