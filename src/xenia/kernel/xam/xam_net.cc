@@ -1044,6 +1044,8 @@ dword_result_t NetDll_XNetQosLookup_entry(
       chunk.http_code == HTTP_STATUS_CODE::HTTP_NO_CONTENT) {
     qos->info[0].data_ptr = 0;
     qos->info[0].data_len = (uint16_t)0;
+    qos->info[0].flags =
+        XNET_XNQOSINFO::COMPLETE | XNET_XNQOSINFO::TARGET_CONTACTED;
 
     if (chunk.size) {
       auto data_ptr = kernel_memory()->SystemHeapAlloc((uint32_t)chunk.size);
@@ -1052,6 +1054,7 @@ dword_result_t NetDll_XNetQosLookup_entry(
       memcpy(data, chunk.response, chunk.size);
       qos->info[0].data_ptr = data_ptr;
       qos->info[0].data_len = (uint16_t)chunk.size;
+      qos->info[0].flags |= XNET_XNQOSINFO::DATA_RECEIVED;
     }
 
     qos->info[0].probes_xmit = 4;
@@ -1060,9 +1063,6 @@ dword_result_t NetDll_XNetQosLookup_entry(
     qos->info[0].rtt_med_in_msecs = 10;
     qos->info[0].up_bits_per_sec = 13125;
     qos->info[0].down_bits_per_sec = 21058;
-    qos->info[0].flags = XNET_XNQOSINFO::COMPLETE |
-                         XNET_XNQOSINFO::TARGET_CONTACTED |
-                         XNET_XNQOSINFO::DATA_RECEIVED;
     qos->count_pending = 0;
 
     *qos_ptr = qos_guest;
