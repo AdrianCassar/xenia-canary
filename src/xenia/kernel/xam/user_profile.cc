@@ -73,10 +73,6 @@ UserProfile::UserProfile(uint8_t index) {
 
   switch (index) {
     case 0: {
-      xuid_ =
-          string_util::from_string<uint64_t>(cvars::user_0_xuid.c_str(), true);
-      name_ = cvars::user_0_name;
-
       if (!IsXUIDValid()) {
         XELOGI("User 0: {} has an invalid XUID of {}", name_,
                cvars::user_0_xuid);
@@ -87,13 +83,13 @@ UserProfile::UserProfile(uint8_t index) {
                           to_hex_string(UserProfile::GenerateOnlineXUID()));
         }
       }
+
+      xuid_ =
+          string_util::from_string<uint64_t>(cvars::user_0_xuid.c_str(), true);
+      name_ = cvars::user_0_name;
       break;
     }
     case 1: {
-      xuid_ =
-          string_util::from_string<uint64_t>(cvars::user_1_xuid.c_str(), true);
-      name_ = cvars::user_1_name;
-
       if (!IsXUIDValid()) {
         XELOGI("User 1: {} has an invalid XUID of {}", name_,
                cvars::user_1_xuid);
@@ -103,13 +99,13 @@ UserProfile::UserProfile(uint8_t index) {
                           to_hex_string(UserProfile::GenerateOnlineXUID()));
         }
       }
+
+      xuid_ =
+          string_util::from_string<uint64_t>(cvars::user_1_xuid.c_str(), true);
+      name_ = cvars::user_1_name;
       break;
     }
     case 2: {
-      xuid_ =
-          string_util::from_string<uint64_t>(cvars::user_2_xuid.c_str(), true);
-      name_ = cvars::user_2_name;
-
       if (!IsXUIDValid()) {
         XELOGI("User 2: {} has an invalid XUID of {}", name_,
                cvars::user_2_xuid);
@@ -119,13 +115,13 @@ UserProfile::UserProfile(uint8_t index) {
                           to_hex_string(UserProfile::GenerateOnlineXUID()));
         }
       }
+
+      xuid_ =
+          string_util::from_string<uint64_t>(cvars::user_2_xuid.c_str(), true);
+      name_ = cvars::user_2_name;
       break;
     }
     case 3: {
-      xuid_ =
-          string_util::from_string<uint64_t>(cvars::user_3_xuid.c_str(), true);
-      name_ = cvars::user_3_name;
-
       if (!IsXUIDValid()) {
         XELOGI("User 3: {} has an invalid XUID of {}", name_,
                cvars::user_3_xuid);
@@ -135,6 +131,10 @@ UserProfile::UserProfile(uint8_t index) {
                           to_hex_string(UserProfile::GenerateOnlineXUID()));
         }
       }
+
+      xuid_ =
+          string_util::from_string<uint64_t>(cvars::user_3_xuid.c_str(), true);
+      name_ = cvars::user_3_name;
       break;
     }
   }
