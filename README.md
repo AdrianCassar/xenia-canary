@@ -86,40 +86,60 @@ It should also be noted that due to the way Steam Decks handle configuration, yo
 
 | Game | Notes | Gameplay | Patches/Plugins | 
 |---|---|---|---|
+| Apache: Air Assault | |
+| BattleBlock Theater | |
+| BurgerTime World Tour | |
+| Bloody Good Time | |
+| Breach | |
 | CS:GO | Mousehook |
 | CS:GO Beta | Mousehook |
 | Call of Duty 2 | ```launch_module = "default_mp.xex"``` | [Deathmatch](https://www.youtube.com/watch?v=DR9Op_f1UUw) |
 | Death Tank | |
+| Dragon Ball Z: Burst Limit | |
 | DiRT | | [Race](https://www.youtube.com/watch?v=udMf-MUzpEc) |
+| Earth Defense Force: Insect Armageddon | |
 | GRID | |
+| Iron Brigade | Multiplayer available after completing 2nd tutorial mission. |
 | GTA V Beta | Requires ```protect_zero = false``` or use patches. | [Beta Showcase](https://www.youtube.com/watch?v=nIjZ7sRGZlo), [Beta Showcase](https://www.youtube.com/watch?v=YIBjy5ZJcq4) | [TU 13](https://github.com/AdrianCassar/Xenia-WebServices/blob/main/patches/545408A7%20-%20Grand%20Theft%20Auto%20V%20(TU13).patch.toml), [TU 10](https://github.com/AdrianCassar/Xenia-WebServices/blob/main/patches/545408A7%20-%20Grand%20Theft%20Auto%20V%20(TU10).patch.toml) |
 | GTA V TU 2-13 | Must complete prologue, download gamesave [here](https://cdn.discordapp.com/attachments/641360906495983616/1101132116441440366/545408A7.rar). Unstable and often crashes. | [Solo Session](https://www.youtube.com/watch?v=lap7liW6pco) |
 | Guilty Gear 2: Overture | |
 | Gundam Operation Troy | [English Patch](https://github.com/Eight-Mansions/MSGOT/releases)
 | Halo 3 ODST v13.2 using [Sunrise Server](https://github.com/ahnewark/Sunrise-Halo3-WebServices) | Mousehook | [Head to Head](https://www.youtube.com/watch?v=amS8OxH3exs) | [Halo 3 Patch](https://github.com/AdrianCassar/Xenia-WebServices/blob/main/patches/4D5307E6%20-%20Halo%203.patch.toml)
-| Juiced 2 | |
+| Juiced 2 | `vsync_interval = 16`, `vsync = true` |
 | Kung Fu Panda: SLL | |
-| Left 4 Dead | Mousehook | Compatible with GOTY. |
+| Left 4 Dead | Mousehook, Compatible with GOTY | |
 | Left 4 Dead GOTY | Mousehook | |
 | Left 4 Dead 2 | Mousehook | |
 | Left 4 Dead 2 Demo |
 | Marble Blast Ultra | |
 | Marvel Ultimate Alliance | |
 | Marvel Ultimate Alliance 2 | |
+| MotoGP 06 | |
+| MotoGP 07 | |
 | MotoGP 14 | Sprint Season only works |
 | MotoGP 15 | Sprint Season only works |
 | OutRun Online Arcade | | [Race](https://www.youtube.com/watch?v=-UqxjFgGvhk) |
 | Portal 2 | Mousehook |
+| Pro Evolution Soccer 6 (PES 6) | |
+| Pro Evolution Soccer 8 (PES 8) | |
 | Resident Evil 5 | | [Chapter 1](https://www.youtube.com/watch?v=SKgnUVairqs) |
+| Resident Evil Revelations | |
 | Ridge Racer 6 | |
 | Saints Row 2 | | [Co-op](https://www.youtube.com/watch?v=YTw84keeWfs), [Setup Guide](https://www.youtube.com/watch?v=nf7TDOtTEIE) |
 | Saints Row the Third / The Full Package | Unplayable due to broken graphics. Requires [Online Pass](https://www.xbox.com/en-GB/games/store/online-pass/BS7JTR0MN356) + license_mask |
 | Saints Row IV | Unplayable due to broken graphics. Requires Online Pass + license_mask |
 | Screwjumper! | |
+| Section 8 | |
+| Section 8: Prejudice | |
+| Serious Sam HD The First Encounter | |
+| Serious Sam HD The Second Encounter | |
 | Splinter Cell: Double Agent | |
 | Star Wars Battlefront III (Unreleased Game) | Alpha, Mar 17 2008 | [Conquest Taoonie](https://www.youtube.com/watch?v=C54jCqFnCmQ), [MP Event Stream](https://www.youtube.com/watch?v=xSpTmsSvP4s) |
 | Team Fortress 2 | Mousehook |
 | The Outfit | |
+| WRC 2010 | Connecting sometimes unstable. |
+| WRC 4 | Connecting sometimes unstable. |
+| WRC 5 | |
 ---
 
 ### Non-Supported Games
