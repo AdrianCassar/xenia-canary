@@ -800,7 +800,7 @@ XSessionArbitrationJSON XLiveAPI::XSessionArbitration(uint64_t sessionId) {
   memory chunk = Get(endpoint);
 
   if (chunk.http_code != HTTP_STATUS_CODE::HTTP_OK) {
-    XELOGE("XSessionMigration GET Failed!");
+    XELOGE("XSessionArbitration GET Failed!");
     assert_always();
 
     return result;
@@ -1037,7 +1037,7 @@ void XLiveAPI::SessionContextSet(uint64_t session_id,
   memory chunk = Post(endpoint, (uint8_t*)buffer.GetString());
 
   if (chunk.http_code != HTTP_STATUS_CODE::HTTP_CREATED) {
-    XELOGI("XSessionCreate POST Failed!");
+    XELOGI("SessionContextSet POST Failed!");
     assert_always();
   }
 }
