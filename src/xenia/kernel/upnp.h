@@ -21,9 +21,11 @@ class upnp {
 
   void upnp_init();
 
+  // internal port is in BE notation.
   void add_port(std::string_view addr, uint16_t internal_port,
                 std::string_view protocol);
 
+  // internal port is in BE notation.
   void remove_port(uint16_t internal_port, std::string_view protocol);
 
   void remove_port_external(uint16_t external_port, std::string_view protocol,
