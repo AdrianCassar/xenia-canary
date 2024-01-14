@@ -206,41 +206,6 @@ typedef struct {
   uint32_t probe_replies_sent_count;
 } XNQOSLISTENSTATS;
 
-void LoadSockaddr(const uint8_t* ptr, sockaddr* out_addr) {
-  out_addr->sa_family = xe::load_and_swap<uint16_t>(ptr + 0);
-  switch (out_addr->sa_family) {
-    case AF_INET: {
-      auto in_addr = reinterpret_cast<sockaddr_in*>(out_addr);
-      in_addr->sin_port = xe::load_and_swap<uint16_t>(ptr + 2);
-      // Maybe? Depends on type.
-      in_addr->sin_addr.s_addr = *(uint32_t*)(ptr + 4);
-      break;
-    }
-    default:
-      assert_unhandled_case(out_addr->sa_family);
-      break;
-  }
-}
-
-void StoreSockaddr(const sockaddr& addr, uint8_t* ptr) {
-  switch (addr.sa_family) {
-    case AF_UNSPEC:
-      std::memset(ptr, 0, sizeof(addr));
-      break;
-    case AF_INET: {
-      auto& in_addr = reinterpret_cast<const sockaddr_in&>(addr);
-      xe::store_and_swap<uint16_t>(ptr + 0, in_addr.sin_family);
-      xe::store_and_swap<uint16_t>(ptr + 2, in_addr.sin_port);
-      // Maybe? Depends on type.
-      xe::store_and_swap<uint32_t>(ptr + 4, in_addr.sin_addr.s_addr);
-      break;
-    }
-    default:
-      assert_unhandled_case(addr.sa_family);
-      break;
-  }
-}
-
 XNetStartupParams xnet_startup_params{};
 
 void Update_XNetStartupParams(XNetStartupParams& dest,
@@ -461,7 +426,7 @@ DECLARE_XAM_EXPORT1(NetDll_WSAGetLastError, kNetworking, kImplemented);
 dword_result_t NetDll_WSARecvFrom_entry(
     dword_t caller, dword_t socket_handle, pointer_t<XWSABUF> buffers,
     dword_t num_buffers, lpdword_t num_bytes_recv_ptr, lpdword_t flags_ptr,
-    pointer_t<XSOCKADDR> from_ptr, lpdword_t fromlen_ptr,
+    pointer_t<XSOCKADDR_IN> from_ptr, lpdword_t fromlen_ptr,
     pointer_t<XWSAOVERLAPPED> overlapped_ptr, lpvoid_t completion_routine_ptr) {
   auto socket =
       kernel_state()->object_table()->LookupObject<XSocket>(socket_handle);
@@ -507,7 +472,7 @@ DECLARE_XAM_EXPORT1(NetDll_WSAGetOverlappedResult, kNetworking, kImplemented);
 dword_result_t NetDll_WSASendTo_entry(
     dword_t caller, dword_t socket_handle, pointer_t<XWSABUF> buffers,
     dword_t num_buffers, lpdword_t num_bytes_sent, dword_t flags,
-    pointer_t<XSOCKADDR> to_ptr, dword_t to_len,
+    pointer_t<XSOCKADDR_IN> to_ptr, dword_t to_len,
     pointer_t<XWSAOVERLAPPED> overlapped, lpvoid_t completion_routine) {
   assert(!overlapped);
   assert(!completion_routine);
@@ -1253,7 +1218,8 @@ dword_result_t NetDll_ioctlsocket_entry(dword_t caller, dword_t socket_handle,
 DECLARE_XAM_EXPORT1(NetDll_ioctlsocket, kNetworking, kImplemented);
 
 dword_result_t NetDll_bind_entry(dword_t caller, dword_t socket_handle,
-                                 pointer_t<XSOCKADDR> name, dword_t namelen) {
+                                 pointer_t<XSOCKADDR_IN> name,
+                                 dword_t namelen) {
   auto socket =
       kernel_state()->object_table()->LookupObject<XSocket>(socket_handle);
   if (!socket) {
@@ -1269,14 +1235,14 @@ dword_result_t NetDll_bind_entry(dword_t caller, dword_t socket_handle,
 
   // Can be called multiple times.
   XLiveAPI::upnp_handler.add_port(XLiveAPI::LocalIP_str(),
-                                  ntohs(socket->bound_port()), "UDP");
+                                  socket->bound_port(), "UDP");
 
   return 0;
 }
 DECLARE_XAM_EXPORT1(NetDll_bind, kNetworking, kImplemented);
 
 dword_result_t NetDll_connect_entry(dword_t caller, dword_t socket_handle,
-                                    pointer_t<XSOCKADDR> name,
+                                    pointer_t<XSOCKADDR_IN> name,
                                     dword_t namelen) {
   auto socket =
       kernel_state()->object_table()->LookupObject<XSocket>(socket_handle);
@@ -1315,7 +1281,7 @@ dword_result_t NetDll_listen_entry(dword_t caller, dword_t socket_handle,
 DECLARE_XAM_EXPORT1(NetDll_listen, kNetworking, kImplemented);
 
 dword_result_t NetDll_accept_entry(dword_t caller, dword_t socket_handle,
-                                   pointer_t<XSOCKADDR> addr_ptr,
+                                   pointer_t<XSOCKADDR_IN> addr_ptr,
                                    lpdword_t addrlen_ptr) {
   if (!addr_ptr) {
     XThread::SetLastError(uint32_t(X_WSAError::X_WSAEFAULT));
@@ -1470,7 +1436,7 @@ DECLARE_XAM_EXPORT1(NetDll_recv, kNetworking, kImplemented);
 dword_result_t NetDll_recvfrom_entry(dword_t caller, dword_t socket_handle,
                                      lpvoid_t buf_ptr, dword_t buf_len,
                                      dword_t flags,
-                                     pointer_t<XSOCKADDR> from_ptr,
+                                     pointer_t<XSOCKADDR_IN> from_ptr,
                                      lpdword_t fromlen_ptr) {
   auto socket =
       kernel_state()->object_table()->LookupObject<XSocket>(socket_handle);
@@ -1514,7 +1480,8 @@ DECLARE_XAM_EXPORT1(NetDll_send, kNetworking, kImplemented);
 
 dword_result_t NetDll_sendto_entry(dword_t caller, dword_t socket_handle,
                                    lpvoid_t buf_ptr, dword_t buf_len,
-                                   dword_t flags, pointer_t<XSOCKADDR> to_ptr,
+                                   dword_t flags,
+                                   pointer_t<XSOCKADDR_IN> to_ptr,
                                    dword_t to_len) {
   auto socket =
       kernel_state()->object_table()->LookupObject<XSocket>(socket_handle);
@@ -1550,7 +1517,7 @@ void NetDll_WSASetLastError_entry(dword_t error_code) {
 DECLARE_XAM_EXPORT1(NetDll_WSASetLastError, kNetworking, kImplemented);
 
 dword_result_t NetDll_getpeername_entry(dword_t caller, dword_t socket_handle,
-                                        pointer_t<XSOCKADDR> addr_ptr,
+                                        pointer_t<XSOCKADDR_IN> addr_ptr,
                                         lpdword_t addrlen_ptr) {
   if (!addr_ptr) {
     XThread::SetLastError(uint32_t(X_WSAError::X_WSAEFAULT));
@@ -1577,7 +1544,7 @@ dword_result_t NetDll_getpeername_entry(dword_t caller, dword_t socket_handle,
 DECLARE_XAM_EXPORT1(NetDll_getpeername, kNetworking, kImplemented);
 
 dword_result_t NetDll_getsockname_entry(dword_t caller, dword_t socket_handle,
-                                        pointer_t<XSOCKADDR> addr_ptr,
+                                        pointer_t<XSOCKADDR_IN> addr_ptr,
                                         lpdword_t addrlen_ptr) {
   if (!addr_ptr) {
     XThread::SetLastError(uint32_t(X_WSAError::X_WSAEFAULT));
