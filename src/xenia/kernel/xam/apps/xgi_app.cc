@@ -232,7 +232,7 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
            leaderboardObjectPtr != leaderboardsArray.End();
            ++leaderboardObjectPtr) {
         leaderboard[leaderboardIndex].ViewId =
-            (*leaderboardObjectPtr)["id"].GetInt();
+            (*leaderboardObjectPtr)["id"].GetUint();
         auto playersArray = (*leaderboardObjectPtr)["players"].GetArray();
         leaderboard[leaderboardIndex].NumRows = playersArray.Size();
         leaderboard[leaderboardIndex].TotalViewRows = playersArray.Size();
