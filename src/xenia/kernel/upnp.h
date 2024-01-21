@@ -15,59 +15,71 @@
 
 namespace xe {
 namespace kernel {
-class upnp {
+
+class UPnP {
  public:
-  ~upnp();
+  UPnP();
+  ~UPnP();
 
-  void upnp_init();
-
-  // internal port is in BE notation.
-  void add_port(std::string_view addr, uint16_t internal_port,
-                std::string_view protocol);
+  void Initialize();
+  bool is_active() const { return active_; }
 
   // internal port is in BE notation.
-  void remove_port(uint16_t internal_port, std::string_view protocol);
+  void AddPort(std::string_view addr, uint16_t internal_port,
+               std::string_view protocol);
 
-  void remove_port_external(uint16_t external_port, std::string_view protocol,
-                            bool verbose = true);
+  // internal port is in BE notation.
+  void RemovePort(uint16_t internal_port, std::string_view protocol);
 
-  void refresh_ports(std::string_view addr);
+  void RefreshPorts(std::string_view addr);
 
-  bool is_active() const;
+  void AddMappedConnectPort(uint16_t port, uint16_t mapped_port) {
+    mapped_connect_ports_.insert({port, mapped_port});
+  }
 
-  uint16_t upnp::get_mapped_connect_port(uint16_t port);
+  void AddMappedBindPort(uint16_t port, uint16_t mapped_port) {
+    mapped_bind_ports_.insert({port, mapped_port});
+  }
 
-  uint16_t upnp::get_mapped_bind_port(uint16_t external_port);
+  uint16_t get_mapped_connect_port(uint16_t port);
+
+  uint16_t get_mapped_bind_port(uint16_t external_port);
 
   std::map<std::string, std::map<uint16_t, int32_t>>* port_binding_results() {
-    return &m_port_binding_results;
-  };
-
-  std::map<uint16_t, uint16_t>* mapped_connect_ports() {
-    return &m_mapped_connect_ports;
-  };
-
-  std::map<uint16_t, uint16_t>* mapped_bind_ports() {
-    return &m_mapped_bind_ports;
+    return &port_binding_results_;
   };
 
  private:
-  std::atomic<bool> m_active = false;
-  std::atomic<bool> m_leases_supported = true;
+  // https://openconnectivity.org/developer/specifications/upnp-resources/upnp/internet-gateway-device-igd-v-2-0/
+  // http://upnp.org/specs/gw/UPnP-gw-WANIPConnection-v2-Service.pdf
+  enum UPnPErrorCodes : int { OnlyPermanentLeasesSupported = 725 };
+
+  typedef std::map<uint16_t, uint16_t> port_binding;
+
+  void RemovePortExternal(uint16_t external_port, std::string_view protocol,
+                          bool verbose = true);
+  void RefreshPortsTimer();
+
+  bool LoadSavedUPnPDevice();
+  const UPNPDev* SearchUPnPDevice();
+  const UPNPDev* GetDeviceByName(const UPNPDev* device_list,
+                                 std::string device_name);
+  bool GetAndParseUPnPXmlData(std::string url);
+
+  std::shared_mutex mutex_;
+  std::atomic<bool> active_ = false;
+  std::atomic<bool> leases_supported_ = true;
+
+  IGDdatas* igd_data_ = new IGDdatas();
+  UPNPUrls* igd_urls_ = new UPNPUrls();
 
   std::weak_ptr<xe::threading::TimerQueueWaitItem> wait_item_;
 
-  std::shared_mutex m_mutex;
-  IGDdatas m_igd_data{};
-  UPNPUrls m_igd_urls{};
+  std::map<std::string, port_binding> port_bindings_;
+  std::map<std::string, std::map<uint16_t, int32_t>> port_binding_results_;
 
-  std::map<std::string, std::map<uint16_t, uint16_t>> m_port_bindings;
-  std::map<std::string, std::map<uint16_t, int32_t>> m_port_binding_results;
-
-  std::map<uint16_t, uint16_t> m_mapped_connect_ports;
-  std::map<uint16_t, uint16_t> m_mapped_bind_ports;
-
-  void refresh_ports_timer();
+  port_binding mapped_connect_ports_;
+  port_binding mapped_bind_ports_;
 };
 }  // namespace kernel
 }  // namespace xe
