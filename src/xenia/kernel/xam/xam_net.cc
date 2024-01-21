@@ -1280,7 +1280,7 @@ dword_result_t NetDll_bind_entry(dword_t caller, dword_t socket_handle,
   }
 
   // Can be called multiple times.
-  XLiveAPI::upnp_handler.add_port(XLiveAPI::LocalIP_str(),
+  XLiveAPI::upnp_handler->AddPort(XLiveAPI::LocalIP_str(),
                                   socket->bound_port(), "UDP");
 
   return 0;
