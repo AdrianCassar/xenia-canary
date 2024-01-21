@@ -144,7 +144,7 @@ class XLiveAPI {
   static const std::string LocalIP_str() { return ip_to_string(local_ip_); };
   static const std::string OnlineIP_str() { return ip_to_string(online_ip_); };
 
-  inline static upnp upnp_handler;
+  inline static UPnP* upnp_handler = nullptr;
 
   inline static MacAddress* mac_address_ = nullptr;
 
