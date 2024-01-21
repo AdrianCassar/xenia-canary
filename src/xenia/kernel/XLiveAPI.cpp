@@ -123,12 +123,14 @@ void XLiveAPI::Init() {
     return;
   }
 
-  // Download ports mappings before initializing UPnP.
-  DownloadPortMappings();
+  upnp_handler = new UPnP();
 
   if (cvars::upnp) {
-    upnp_handler.upnp_init();
+    // Download ports mappings before initializing UPnP.
+    DownloadPortMappings();
+    upnp_handler->Initialize();
   }
+  
 
   // Must get mac address and IP before registering.
   auto reg_result = RegisterPlayer();
@@ -387,15 +389,15 @@ void XLiveAPI::DownloadPortMappings() {
 
   if (doc.HasMember("connect")) {
     for (const auto& port : doc["connect"].GetArray()) {
-      auto& mapped = (*upnp_handler.mapped_connect_ports());
-      mapped[port["port"].GetInt()] = port["mappedTo"].GetInt();
+      upnp_handler->AddMappedConnectPort(port["port"].GetInt(),
+                                        port["mappedTo"].GetInt());
     }
   }
 
   if (doc.HasMember("bind")) {
     for (const auto& port : doc["bind"].GetArray()) {
-      auto& mapped = (*upnp_handler.mapped_bind_ports());
-      mapped[port["port"].GetInt()] = port["mappedTo"].GetInt();
+      upnp_handler->AddMappedBindPort(port["port"].GetInt(),
+                                     port["mappedTo"].GetInt());
     }
   }
 
