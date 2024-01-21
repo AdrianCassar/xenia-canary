@@ -124,11 +124,12 @@ void XLiveAPI::Init() {
     return;
   }
 
+  upnp_handler = new UPnP();
   // Download ports mappings before initializing UPnP.
   DownloadPortMappings();
 
   if (cvars::upnp) {
-    upnp_handler.upnp_init();
+    upnp_handler->Initialize();
   }
 
   // Must get mac address and IP before registering.
@@ -388,15 +389,15 @@ void XLiveAPI::DownloadPortMappings() {
 
   if (doc.HasMember("connect")) {
     for (const auto& port : doc["connect"].GetArray()) {
-      auto& mapped = (*upnp_handler.mapped_connect_ports());
-      mapped[port["port"].GetInt()] = port["mappedTo"].GetInt();
+      upnp_handler->AddMappedConnectPort(port["port"].GetInt(),
+                                         port["mappedTo"].GetInt());
     }
   }
 
   if (doc.HasMember("bind")) {
     for (const auto& port : doc["bind"].GetArray()) {
-      auto& mapped = (*upnp_handler.mapped_bind_ports());
-      mapped[port["port"].GetInt()] = port["mappedTo"].GetInt();
+      upnp_handler->AddMappedBindPort(port["port"].GetInt(),
+                                      port["mappedTo"].GetInt());
     }
   }
 
@@ -995,10 +996,10 @@ void XLiveAPI::XSessionCreate(uint64_t sessionId, XSessionData* data) {
   assert_true(sessionId_str.size() == 16);
 
   const auto& media_id = kernel_state()
-                            ->GetExecutableModule()
-                            ->xex_module()
-                            ->opt_execution_info()
-                            ->media_id;
+                             ->GetExecutableModule()
+                             ->xex_module()
+                             ->opt_execution_info()
+                             ->media_id;
 
   const std::string mediaId_str =
       fmt::format("{:08X}", static_cast<uint32_t>(media_id));
