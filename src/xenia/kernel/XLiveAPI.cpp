@@ -12,6 +12,8 @@
 #include "xenia/base/cvar.h"
 #include "xenia/base/logging.h"
 #include "xenia/base/string_util.h"
+#include "xenia/emulator.h"
+#include "xenia/kernel/user_module.h"
 #include "xenia/kernel/util/shim_utils.h"
 
 #include "xenia/kernel/XLiveAPI.h"
@@ -43,7 +45,6 @@ using namespace rapidjson;
 // JSON deserialization instead of structs
 // Asynchronous UPnP
 // Use the overlapped task for asynchronous curl requests.
-// Improve GetMACaddress()
 // API endpoint lookup table
 //
 // How is systemlink state determined?
@@ -987,7 +988,20 @@ void XLiveAPI::XSessionCreate(uint64_t sessionId, XSessionData* data) {
   std::string sessionId_str = fmt::format("{:016x}", sessionId);
   assert_true(sessionId_str.size() == 16);
 
+  const auto& media_id = kernel_state()
+                            ->GetExecutableModule()
+                            ->xex_module()
+                            ->opt_execution_info()
+                            ->media_id;
+
+  const std::string mediaId_str = fmt::format("{:08X}", media_id);
+
   doc.AddMember("sessionId", sessionId_str, doc.GetAllocator());
+  doc.AddMember("title", kernel_state()->emulator()->title_name(),
+                doc.GetAllocator());
+  doc.AddMember("mediaId", mediaId_str, doc.GetAllocator());
+  doc.AddMember("version", kernel_state()->emulator()->title_version(),
+                doc.GetAllocator());
   doc.AddMember("flags", data->flags, doc.GetAllocator());
   doc.AddMember("publicSlotsCount", data->num_slots_public, doc.GetAllocator());
   doc.AddMember("privateSlotsCount", data->num_slots_private,
