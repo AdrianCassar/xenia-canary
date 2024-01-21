@@ -27,126 +27,133 @@ using namespace xe::threading;
 namespace xe {
 namespace kernel {
 
-upnp::~upnp() {
-  std::lock_guard lock(m_mutex);
+UPnP::UPnP() {}
 
-  for (const auto& [protocol, m_prot_bindings] : m_port_bindings) {
-    for (const auto& [internal_port, external_port] : m_prot_bindings) {
-      remove_port_external(external_port, protocol);
+UPnP::~UPnP() {
+  std::lock_guard lock(mutex_);
+
+  for (const auto& [protocol, prot_bindings] : port_bindings_) {
+    for (const auto& [internal_port, external_port] : prot_bindings) {
+      RemovePortExternal(external_port, protocol);
     }
   }
 
-  m_active = false;
+  delete igd_data_;
+  delete igd_urls_;
+
+  active_ = false;
 }
 
-void upnp::upnp_init() {
-  std::lock_guard lock(m_mutex);
-
-  auto check_igd = [&](const char* url) -> bool {
-    int desc_xml_size = 0;
-    int status_code = 0;
-
-    m_igd_data = {};
-    m_igd_urls = {};
-
-    char* desc_xml =
-        static_cast<char*>(miniwget(url, &desc_xml_size, 1, &status_code));
-
-    if (!desc_xml) return false;
-
-    parserootdesc(desc_xml, desc_xml_size, &m_igd_data);
-    free(desc_xml);
-    desc_xml = nullptr;
-    GetUPNPUrls(&m_igd_urls, &m_igd_data, url, 1);
-
-    return true;
-  };
-
-  std::string dev_url = cvars::upnp_root;
-
-  if (!dev_url.empty()) {
-    if (check_igd(dev_url.c_str())) {
-      XELOGI("Saved UPNP({}) enabled", dev_url);
-      refresh_ports_timer();
-
-      m_active = true;
-      return;
-    }
-
-    XELOGI("Saved UPNP({}) isn't available anymore", dev_url);
-  }
-
-  XELOGI("Starting UPNP search");
-
-  int error;
-  UPNPDev* devlist = upnpDiscover(2000, nullptr, nullptr, 0, 0, 2, &error);
-
-  if (error) {
-    XELOGE("UPNP Error Code: {}", error);
-    return;
-  }
-
-  if (!devlist) {
-    XELOGE("No UPNP device was found");
-    return;
-  }
-
-  const UPNPDev* dev = devlist;
-
-  for (; dev; dev = dev->pNext) {
-    if (dev != NULL) {
-      if (strstr(dev->st, "InternetGatewayDevice")) break;
-    }
-  }
-
-  if (dev == NULL) {
-    XELOGE("No UPNP device was found");
-    return;
-  }
-
-  int desc_xml_size = 0;
+bool UPnP::GetAndParseUPnPXmlData(std::string url) {
+  int xml_description_size = 0;
   int status_code = 0;
 
-  char* desc_xml = static_cast<char*>(
-      miniwget(dev->descURL, &desc_xml_size, 1, &status_code));
+  std::memset(igd_data_, 0, sizeof(IGDdatas));
+  std::memset(igd_urls_, 0, sizeof(UPNPUrls));
 
-  if (dev) {
-    int desc_xml_size = 0;
-    int status_code = 0;
-    char* desc_xml = static_cast<char*>(
-        miniwget(dev->descURL, &desc_xml_size, 1, &status_code));
+  const char* xml_description = static_cast<const char*>(
+      miniwget(url.c_str(), &xml_description_size, 1, &status_code));
 
-    if (desc_xml) {
-      m_igd_data = {};
-      m_igd_urls = {};
-      parserootdesc(desc_xml, desc_xml_size, &m_igd_data);
-      free(desc_xml);
-      desc_xml = nullptr;
-      GetUPNPUrls(&m_igd_urls, &m_igd_data, dev->descURL, 1);
-
-      XELOGI("Found UPnP device type : {} at {}", dev->st, dev->descURL);
-
-      cvars::upnp_root = dev->descURL;
-      OVERRIDE_string(upnp_root, cvars::upnp_root);
-
-      refresh_ports_timer();
-
-      m_active = true;
-    } else {
-      XELOGE("Failed to retrieve UPNP xml for {}", dev->descURL);
-    }
-  } else {
-    XELOGE("No UPNP IGD device was found", dev->descURL);
+  if (!xml_description) {
+    return false;
   }
 
-  freeUPNPDevlist(devlist);
+  parserootdesc(xml_description, xml_description_size, igd_data_);
+  GetUPNPUrls(igd_urls_, igd_data_, url.c_str(), 1);
+  delete xml_description;
+  return true;
+}
+
+bool UPnP::LoadSavedUPnPDevice() {
+  const std::string device_url = cvars::upnp_root;
+
+  if (device_url.empty()) {
+    return false;
+  }
+
+  if (!GetAndParseUPnPXmlData(device_url)) {
+    XELOGI("UPnP: Saved UPnP({}) device isn't available anymore", device_url);
+    return false;
+  }
+
+  XELOGI("UPnP: Saved UPnP({}) enabled", device_url);
+  RefreshPortsTimer();
+  active_ = true;
+  return true;
+}
+
+const UPNPDev* UPnP::GetDeviceByName(const UPNPDev* device_list,
+                                     std::string device_name) {
+  const UPNPDev* device = device_list;
+
+  for (; device; device = device->pNext) {
+    // No more devices, we haven't found anything.
+    if (!device) {
+      return device;
+    }
+
+    const std::string current_device_name = std::string(device->st);
+    if (current_device_name.find(device_name) != std::string::npos) {
+      break;
+    }
+  }
+  return device;
+}
+
+const UPNPDev* UPnP::SearchUPnPDevice() {
+  XELOGI("UPnP: Starting UPnP search");
+
+  int error = 0;
+  UPNPDev* device_list = upnpDiscover(2000, nullptr, nullptr, 0, 0, 2, &error);
+  if (error) {
+    XELOGE("UPnP: SearchUPnPDevice Error Code: {}", error);
+    return nullptr;
+  }
+
+  if (!device_list) {
+    XELOGE("UPnP: No UPnP devices were found");
+    return nullptr;
+  }
+
+  const UPNPDev* device = GetDeviceByName(device_list, "InternetGatewayDevice");
+  freeUPNPDevlist(device_list);
+  return device;
+}
+
+void UPnP::Initialize() {
+  std::lock_guard lock(mutex_);
+
+  if (LoadSavedUPnPDevice()) {
+    return;
+  }
+
+  const UPNPDev* device = SearchUPnPDevice();
+  if (!device) {
+    XELOGE("No UPNP device was found");
+    return;
+  }
+
+  if (!GetAndParseUPnPXmlData(device->descURL)) {
+    XELOGE("Failed to retrieve UPNP xml for {}", device->descURL);
+    return;
+  }
+
+  XELOGI("Found UPnP device type : {} at {}", device->st, device->descURL);
+
+  cvars::upnp_root = device->descURL;
+  OVERRIDE_string(upnp_root, cvars::upnp_root);
+
+  RefreshPortsTimer();
+  active_ = true;
 };
 
-void upnp::add_port(std::string_view addr, uint16_t internal_port,
-                    std::string_view protocol) {
-  if (!m_active) return;
+void UPnP::AddPort(std::string_view addr, uint16_t internal_port,
+                   std::string_view protocol) {
+  if (!active_) {
+    return;
+  }
 
-  std::lock_guard lock(m_mutex);
+  std::lock_guard lock(mutex_);
 
   internal_port = get_mapped_bind_port(internal_port);
 
@@ -154,141 +161,132 @@ void upnp::add_port(std::string_view addr, uint16_t internal_port,
   const std::string internal_port_str = fmt::format("{}", internal_port);
   const std::string external_port_str = fmt::format("{}", external_port);
 
-  // https://openconnectivity.org/developer/specifications/upnp-resources/upnp/internet-gateway-device-igd-v-2-0/
-  // http://upnp.org/specs/gw/UPnP-gw-WANIPConnection-v2-Service.pdf
-  const uint32_t OnlyPermanentLeasesSupported = 725;
+  int result = UPNP_AddPortMapping(
+      igd_urls_->controlURL, igd_data_->first.servicetype,
+      external_port_str.c_str(), internal_port_str.c_str(), addr.data(),
+      "Xenia", protocol.data(), nullptr, "3600");
 
-  int res = 0;
-
-  auto run = [&]() {
-    const std::string lease_duration = m_leases_supported ? "3600" : "0";  // 1h
-
-    res = UPNP_AddPortMapping(
-        m_igd_urls.controlURL, m_igd_data.first.servicetype,
+  if (result == OnlyPermanentLeasesSupported) {
+    XELOGI("Router only supports permanent lease times on port mappings.");
+    result = UPNP_AddPortMapping(
+        igd_urls_->controlURL, igd_data_->first.servicetype,
         external_port_str.c_str(), internal_port_str.c_str(), addr.data(),
-        "Xenia", protocol.data(), nullptr, lease_duration.c_str());
-
-    if (res == OnlyPermanentLeasesSupported) {
-      XELOGI("Router only supports permanent lease times on port mappings.");
-
-      m_leases_supported = false;
-      return;
-    };
-
-    if (res == UPNPCOMMAND_SUCCESS) {
-      const auto& is_bound =
-          m_port_bindings[std::string(protocol)].find(internal_port);
-
-      bool update = false;
-
-      if (update = (is_bound == m_port_bindings[std::string(protocol)].end())) {
-        m_port_bindings[std::string(protocol)][internal_port] = external_port;
-      }
-
-      XELOGI("Successfully {} {}:{}({}) to IGD:{}",
-             update ? "bound" : "updated", addr, internal_port, protocol,
-             external_port);
-    } else {
-      XELOGI("Failed to bind port!!! {}:{}({}) to IGD:{}", addr, internal_port,
-             protocol, external_port);
-
-      XELOGI("UPnP error code {}", res);
-    }
-
-    m_port_binding_results[std::string(protocol)][external_port] = res;
-  };
-
-  run();
-
-  if (res == OnlyPermanentLeasesSupported) {
-    run();
+        "Xenia", protocol.data(), nullptr, "0");
   }
+
+  if (result != UPNPCOMMAND_SUCCESS) {
+    XELOGI("Failed to bind port!!! {}:{}({}) to IGD:{}", addr, internal_port,
+           protocol, external_port);
+
+    XELOGI("UPnP error code {}", result);
+    port_binding_results_[std::string(protocol)][external_port] = result;
+    return;
+  }
+
+  const bool is_bound =
+      port_bindings_[std::string(protocol)].find(internal_port) !=
+      port_bindings_[std::string(protocol)].cend();
+
+  std::string message_type = "updated";
+  if (!is_bound) {
+    port_bindings_[std::string(protocol)][internal_port] = external_port;
+    message_type = "bound";
+  }
+
+  XELOGI("Successfully {} {}:{}({}) to IGD:{}", message_type, addr,
+         internal_port, protocol, external_port);
+
+  port_binding_results_[std::string(protocol)][external_port] = result;
 }
 
-void upnp::remove_port(uint16_t internal_port, std::string_view protocol) {
-  if (!m_active) return;
+void UPnP::RemovePort(uint16_t internal_port, std::string_view protocol) {
+  if (!active_) {
+    return;
+  }
 
-  std::lock_guard lock(m_mutex);
+  std::lock_guard lock(mutex_);
 
   internal_port = get_mapped_bind_port(internal_port);
 
   const std::string str_protocol(protocol);
 
-  if (&m_port_bindings.at(str_protocol) ||
-      m_port_bindings.at(str_protocol).at(internal_port)) {
+  if (port_bindings_.find(str_protocol) == port_bindings_.cend()) {
+    return;
+  }
+
+  if (port_bindings_.at(str_protocol).find(internal_port) ==
+      port_bindings_.at(str_protocol).cend()) {
     XELOGE("Tried to unbind port mapping {} to IGD({}) but it isn't bound",
            internal_port, protocol);
     return;
   }
 
   const uint16_t external_port =
-      m_port_bindings.at(str_protocol).at(internal_port);
+      port_bindings_.at(str_protocol).at(internal_port);
 
-  remove_port_external(external_port, protocol);
-
-  // assert_true(m_port_bindings.at(str_protocol).erase(internal_port));
-  // assert_true(m_mapped_bind_ports.erase(internal_port));
+  RemovePortExternal(external_port, protocol);
 
   XELOGE("Successfully deleted port mapping {} to IGD:{}({})", internal_port,
          external_port, protocol);
 }
 
-void upnp::remove_port_external(uint16_t external_port,
-                                std::string_view protocol, bool verbose) {
+void UPnP::RemovePortExternal(uint16_t external_port, std::string_view protocol,
+                              bool verbose) {
   const std::string str_ext_port = fmt::format("{}", external_port);
+  const int result = UPNP_DeletePortMapping(
+      igd_urls_->controlURL, igd_data_->first.servicetype, str_ext_port.c_str(),
+      protocol.data(), nullptr);
 
-  if (int res = UPNP_DeletePortMapping(
-          m_igd_urls.controlURL, m_igd_data.first.servicetype,
-          str_ext_port.c_str(), protocol.data(), nullptr);
-      res != 0 && verbose)
-
+  if (result != 0 && verbose) {
     XELOGE("Failed to delete port mapping IGD:{}({}): {}", str_ext_port,
-           protocol, res);
+           protocol, result);
+  }
 }
 
-void upnp::refresh_ports(std::string_view addr) {
-  if (!m_leases_supported) {
+void UPnP::RefreshPorts(std::string_view addr) {
+  if (!leases_supported_) {
     return;
   }
 
-  for (const auto& [protocol, m_prot_bindings] : m_port_bindings) {
-    for (const auto& [internal_port, external_port] : m_prot_bindings) {
-      add_port(addr, external_port, protocol);
+  for (const auto& [protocol, prot_bindings] : port_bindings_) {
+    for (const auto& [internal_port, external_port] : prot_bindings) {
+      AddPort(addr, external_port, protocol);
     }
   }
 }
 
 // Update the UPnP lease time every 45 minutes
 // Not using HighResolutionTimer because it's only used for small tasks.
-void upnp::refresh_ports_timer() {
+void UPnP::RefreshPortsTimer() {
   // Only setup timer once
-  if (m_active) return;
+  if (active_) {
+    return;
+  }
 
   char lanaddr[64] = "";
   int size = 0;
   miniwget_getaddr(cvars::upnp_root.c_str(), &size, lanaddr, sizeof(lanaddr), 0,
                    NULL);
 
-  // 45 minutes
-  const auto interval = std::chrono::milliseconds(2700 * 1000);
+  const auto interval = std::chrono::minutes(45);
 
   wait_item_ =
-      QueueTimerRecurring([&](void*) { refresh_ports(lanaddr); }, nullptr,
+      QueueTimerRecurring([&](void*) { RefreshPorts(lanaddr); }, nullptr,
                           TimerQueueWaitItem::clock::now(), interval);
 }
 
-uint16_t upnp::get_mapped_connect_port(uint16_t external_port) {
-  if (m_mapped_connect_ports.find(external_port) !=
-      m_mapped_connect_ports.end()) {
-    return m_mapped_connect_ports[external_port];
+uint16_t UPnP::get_mapped_connect_port(uint16_t external_port) {
+  if (mapped_connect_ports_.find(external_port) !=
+      mapped_connect_ports_.end()) {
+    return mapped_connect_ports_[external_port];
   }
 
-  if (m_mapped_connect_ports.find(0) != m_mapped_connect_ports.end()) {
+  if (mapped_connect_ports_.find(0) != mapped_connect_ports_.end()) {
     if (cvars::logging) {
       XELOGI("Using wildcard connect port for guest port {}!", external_port);
     }
 
-    return m_mapped_connect_ports[0];
+    return mapped_connect_ports_[0];
   }
 
   if (cvars::logging) {
@@ -298,17 +296,17 @@ uint16_t upnp::get_mapped_connect_port(uint16_t external_port) {
   return external_port;
 }
 
-uint16_t upnp::get_mapped_bind_port(uint16_t external_port) {
-  if (m_mapped_bind_ports.find(external_port) != m_mapped_bind_ports.end()) {
-    return m_mapped_bind_ports[external_port];
+uint16_t UPnP::get_mapped_bind_port(uint16_t external_port) {
+  if (mapped_bind_ports_.find(external_port) != mapped_bind_ports_.end()) {
+    return mapped_bind_ports_[external_port];
   }
 
-  if (m_mapped_bind_ports.find(0) != m_mapped_bind_ports.end()) {
+  if (mapped_bind_ports_.find(0) != mapped_bind_ports_.end()) {
     if (cvars::logging) {
       XELOGI("Using wildcard bind port for guest port {}!", external_port);
     }
 
-    return m_mapped_bind_ports[0];
+    return mapped_bind_ports_[0];
   }
 
   if (cvars::logging) {
@@ -317,8 +315,6 @@ uint16_t upnp::get_mapped_bind_port(uint16_t external_port) {
 
   return external_port;
 }
-
-bool upnp::is_active() const { return m_active; }
 
 }  // namespace kernel
 }  // namespace xe
