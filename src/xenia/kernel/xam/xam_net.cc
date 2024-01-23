@@ -1097,10 +1097,40 @@ dword_result_t NetDll_XHttpOpenRequest_entry(
     dword_t caller, dword_t connect_handle, lpstring_t verb, lpstring_t path,
     lpstring_t version, lpstring_t referrer, lpstring_t reserved,
     dword_t flag) {
-  XELOGI("XStorage: Requesting file: {} {}", verb.value(), path.value());
-  return NULL;
+
+  std::string http_verb = "";
+  std::string object_name = "";
+
+  if (verb) {
+    http_verb = verb;
+  }
+
+  if (path) {
+    object_name = path;
+  }
+
+  XELOGI("OpenRequest: {} {}", http_verb, object_name);
+
+  // Return invalid handle (not NULL)
+  return 1;
 }
 DECLARE_XAM_EXPORT1(NetDll_XHttpOpenRequest, kNetworking, kStub);
+
+dword_result_t NetDll_XHttpSendRequest_entry(dword_t caller, dword_t hrequest,
+                                             lpstring_t headers,
+                                             dword_t hlength, lpvoid_t unkn1,
+                                             dword_t unkn2, dword_t unk3,
+                                             dword_t unk4) {
+  std::string request_headers = "";
+
+  if (headers) {
+    request_headers = headers;
+  }
+
+  XELOGI("Headers {}", request_headers);
+  return FALSE;
+}
+DECLARE_XAM_EXPORT1(NetDll_XHttpSendRequest, kNetworking, kStub);
 
 dword_result_t NetDll_inet_addr_entry(lpstring_t addr_ptr) {
   if (!addr_ptr) {
