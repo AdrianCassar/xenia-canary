@@ -108,6 +108,7 @@ void XLiveAPI::Init() {
 
   GetLocalIP();
 
+  upnp_handler = new UPnP();
   mac_address_ = new MacAddress(GetMACaddress());
 
   if (cvars::offline_mode) {
@@ -124,7 +125,6 @@ void XLiveAPI::Init() {
     return;
   }
 
-  upnp_handler = new UPnP();
   // Download ports mappings before initializing UPnP.
   DownloadPortMappings();
 
