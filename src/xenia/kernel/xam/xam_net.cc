@@ -974,11 +974,11 @@ dword_result_t NetDll_XNetQosListen_entry(
     if (XLiveAPI::UpdateQoSCache(session_id, qos_buffer, data_size)) {
       XELOGI("XNetQosListen LISTEN_SET_DATA");
 
-      auto run = [](uint64_t sessionId, uint8_t* qosData, size_t qosLength) {
-        XLiveAPI::QoSPost(sessionId, qosData, qosLength);
+      auto run = [](uint64_t sessionId, std::vector<uint8_t> qosData) {
+        XLiveAPI::QoSPost(sessionId, qosData.data(), qosData.size());
       };
 
-      std::thread qos_thread(run, session_id, qos_buffer.data(), data_size);
+      std::thread qos_thread(run, session_id, qos_buffer);
       qos_thread.detach();
     }
   }
