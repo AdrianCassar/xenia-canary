@@ -884,8 +884,9 @@ void XLiveAPI::SessionWriteStats(uint64_t sessionId, XSessionWriteStats* stats,
                                statistics[statisticIndex].data.data.s64,
                                rootObject.GetAllocator());
           break;
-        case X_USER_DATA_TYPE::DOUBLE:
-          statObject.AddMember("value", statistics[statisticIndex].data.f64,
+        case xam::X_USER_DATA_TYPE::DOUBLE:
+          statObject.AddMember("value",
+                               statistics[statisticIndex].data.data.f64,
                                rootObject.GetAllocator());
           break;
         default:
