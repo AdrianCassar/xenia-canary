@@ -161,7 +161,7 @@ XLiveAPI::memory XLiveAPI::Get(std::string endpoint) {
   CURLcode result;
 
   if (!curl_handle) {
-    XELOGE("GET Failed!");
+    XELOGE("XLiveAPI::Get: Cannot initialize CURL");
     return chunk;
   }
 
@@ -192,8 +192,8 @@ XLiveAPI::memory XLiveAPI::Get(std::string endpoint) {
 
   result = curl_easy_perform(curl_handle);
 
-  if (CURLE_OK != result) {
-    XELOGE("GET Failed!");
+  if (result != CURLE_OK) {
+    XELOGE("XLiveAPI::Get: CURL Error Code: {}", result);
     return chunk;
   }
 
@@ -203,11 +203,13 @@ XLiveAPI::memory XLiveAPI::Get(std::string endpoint) {
   curl_easy_cleanup(curl_handle);
   curl_slist_free_all(headers);
 
-  if (CURLE_OK == result && chunk.http_code == HTTP_STATUS_CODE::HTTP_OK) {
+  if (result == CURLE_OK &&
+      (chunk.http_code == HTTP_STATUS_CODE::HTTP_OK ||
+       chunk.http_code == HTTP_STATUS_CODE::HTTP_NO_CONTENT)) {
     return chunk;
   }
 
-  XELOGE("GET Failed!");
+  XELOGE("XLiveAPI::Get: Failed! HTTP Error Code: {}", chunk.http_code);
   return chunk;
 }
 
@@ -219,7 +221,7 @@ XLiveAPI::memory XLiveAPI::Post(std::string endpoint, const uint8_t* data,
   CURLcode result;
 
   if (!curl_handle) {
-    XELOGE("POST Failed.");
+    XELOGE("XLiveAPI::Post: Cannot initialize CURL");
     return chunk;
   }
 
@@ -260,8 +262,8 @@ XLiveAPI::memory XLiveAPI::Post(std::string endpoint, const uint8_t* data,
 
   result = curl_easy_perform(curl_handle);
 
-  if (CURLE_OK != result) {
-    XELOGE("POST Failed!");
+  if (result != CURLE_OK) {
+    XELOGE("XLiveAPI::Post: CURL Error Code: {}", result);
     return chunk;
   }
 
@@ -275,7 +277,7 @@ XLiveAPI::memory XLiveAPI::Post(std::string endpoint, const uint8_t* data,
     return chunk;
   }
 
-  XELOGE("POST Failed!");
+  XELOGE("XLiveAPI::Post: Failed! HTTP Error Code: {}", chunk.http_code);
   return chunk;
 }
 
@@ -286,7 +288,7 @@ XLiveAPI::memory XLiveAPI::Delete(std::string endpoint) {
   CURLcode result;
 
   if (!curl_handle) {
-    XELOGE("DELETE Failed!");
+    XELOGE("XLiveAPI::Delete: Cannot initialize CURL");
     return chunk;
   }
 
@@ -305,8 +307,8 @@ XLiveAPI::memory XLiveAPI::Delete(std::string endpoint) {
 
   result = curl_easy_perform(curl_handle);
 
-  if (CURLE_OK != result) {
-    XELOGE("DELETE Failed!");
+  if (result != CURLE_OK) {
+    XELOGE("XLiveAPI::Delete: CURL Error Code: {}", result);
     return chunk;
   }
 
@@ -316,11 +318,11 @@ XLiveAPI::memory XLiveAPI::Delete(std::string endpoint) {
   curl_easy_cleanup(curl_handle);
   curl_slist_free_all(headers);
 
-  if (CURLE_OK == result && chunk.http_code == HTTP_STATUS_CODE::HTTP_OK) {
+  if (result == CURLE_OK && chunk.http_code == HTTP_STATUS_CODE::HTTP_OK) {
     return chunk;
   }
 
-  XELOGE("DELETE Failed!");
+  XELOGE("XLiveAPI::Delete: Failed! HTTP Error Code: {}", chunk.http_code);
   return chunk;
 }
 
