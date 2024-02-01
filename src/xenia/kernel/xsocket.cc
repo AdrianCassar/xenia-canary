@@ -166,24 +166,23 @@ X_STATUS XSocket::Listen(int backlog) {
 }
 
 object_ref<XSocket> XSocket::Accept(XSOCKADDR_IN* name, int* name_len) {
-  sockaddr* sa = nullptr;
+  sockaddr sa = {};
+  int addrlen = 0;
+  const bool is_name_and_name_len_available = name && name_len;
 
-  if (name) {
-    sockaddr addr = name->to_host();
-    sa = const_cast<sockaddr*>(&addr);
+  if (is_name_and_name_len_available) {
+    addrlen = byte_swap(*name_len);
   }
 
-  uintptr_t ret = accept(native_handle_, sa, name_len);
+  const uint64_t ret = accept(native_handle_, name ? &sa : nullptr,
+                              name_len ? &addrlen : nullptr);
   if (ret == -1) {
-    if (name && name_len) {
-      std::memset((sockaddr*)name, 0, *name_len);
-      *name_len = 0;
-    }
     return nullptr;
   }
 
-  if (name) {
-    name->to_guest(sa);
+  if (is_name_and_name_len_available) {
+    name->to_guest(&sa);
+    *name_len = byte_swap(addrlen);
   }
   // Create a kernel object to represent the new socket, and copy parameters
   // over.
