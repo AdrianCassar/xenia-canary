@@ -1320,11 +1320,6 @@ DECLARE_XAM_EXPORT1(NetDll_listen, kNetworking, kImplemented);
 dword_result_t NetDll_accept_entry(dword_t caller, dword_t socket_handle,
                                    pointer_t<XSOCKADDR_IN> addr_ptr,
                                    lpdword_t addrlen_ptr) {
-  if (!addr_ptr) {
-    XThread::SetLastError(uint32_t(X_WSAError::X_WSAEFAULT));
-    return -1;
-  }
-
   auto socket =
       kernel_state()->object_table()->LookupObject<XSocket>(socket_handle);
   if (!socket) {
@@ -1332,16 +1327,16 @@ dword_result_t NetDll_accept_entry(dword_t caller, dword_t socket_handle,
     return -1;
   }
 
-  int native_len = *addrlen_ptr;
-  auto new_socket = socket->Accept(addr_ptr, &native_len);
-  if (new_socket) {
-    *addrlen_ptr = native_len;
-
-    return new_socket->handle();
-  } else {
+  int* name_len_host_ptr = nullptr;
+  if (addrlen_ptr) {
+    name_len_host_ptr = reinterpret_cast<int*>(addrlen_ptr.host_address());
+  }
+  auto new_socket = socket->Accept(addr_ptr, name_len_host_ptr);
+  if (!new_socket) {
     XThread::SetLastError(socket->GetLastWSAError());
     return -1;
   }
+  return new_socket->handle();
 }
 DECLARE_XAM_EXPORT1(NetDll_accept, kNetworking, kImplemented);
 
