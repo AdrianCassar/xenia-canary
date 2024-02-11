@@ -1,23 +1,18 @@
 # Netplay Fork
 
-This is a fork of [Xenia-Canary Netplay](https://github.com/ahnewark/sunrise-xenia-canary-netplay) which implements online multiplayer features.
-It has been built from the ground up and a handful of games found to work, though many games are yet to be tested. Check out the [Issues](https://github.com/ahnewark/sunrise-xenia-canary-netplay/issues) list for more details.
+This is a fork of [Xenia Canary](https://github.com/xenia-canary/xenia-canary) which implements online multiplayer features. 
+It has been built from the ground up and a handful of games are [working](#Supported-Games).
 
 The REST API powering this fork can be found [here](https://github.com/AdrianCassar/Xenia-WebServices).
 
-Massive thanks to @SarahGreyWolf for testing this fork with me for about a month, couldn't have done it without her.
-Also, thank you to @Bo98 for creating the burnout5 xenia fork, I used that as a basis for this, and some of the code is still here I think.
-
-Peace and hair grease
-
-Codie
+Current online sessions are displayed [here](https://xenia-netplay-2a0298c0e3f4.herokuapp.com/).
 
 ---
 
 ## FAQ:
 
-Is UPnP implemented?
-- Yes, **UPnP** is now implemented therefore manual port forwarding is no longer required.
+Is UPnP Supported?
+- Yes, **UPnP** is supported it must be enabled in the config to host sessions.
 
 Is **Systemlink** or **XLink Kai** supported?
 
@@ -35,13 +30,9 @@ Are games dependant on servers?
 
 - Yes a lot of games are dependant on servers therefore will not work, unless a server is developed for that game. For example many games requires EA servers, without them netplay will not work. 
 
-Can I use multiple instances for the same game?
-
-- No, you cannot use multiple instances due to the first instance using up ports. You will need to use a VM or a [Shadow PC](https://shadow.tech/).
-
 Can I use multiple PCs on the same network?
 
-- No, you currently cannot use different PCs on the same network to connect to a session hosted on the same network. However a VPN will get around this issue.
+- Yes this will require hosting [Xenia Web Services](https://github.com/AdrianCassar/Xenia-WebServices) on your local network. However, connecting to the API via the internet on the same network will require a VPN.
 
 Where can I **download** the Canary Netplay build?
 
@@ -89,28 +80,32 @@ It should also be noted that due to the way Steam Decks handle configuration, yo
 | Apache: Air Assault | |
 | BattleBlock Theater | |
 | BurgerTime World Tour | |
+| Blades of Time | |
 | Bloody Good Time | |
 | Breach | |
 | CS:GO | Mousehook |
 | CS:GO Beta | Mousehook |
 | Call of Duty 2 | ```launch_module = "default_mp.xex"``` | [Deathmatch](https://www.youtube.com/watch?v=DR9Op_f1UUw) |
+| Catan | |
 | Death Tank | |
 | Dragon Ball Z: Burst Limit | |
 | DiRT | | [Race](https://www.youtube.com/watch?v=udMf-MUzpEc) |
 | Earth Defense Force: Insect Armageddon | |
 | GRID | |
-| Iron Brigade | Multiplayer available after completing 2nd tutorial mission. |
 | GTA V Beta | Requires ```protect_zero = false``` or use patches. | [Beta Showcase](https://www.youtube.com/watch?v=nIjZ7sRGZlo), [Beta Showcase](https://www.youtube.com/watch?v=YIBjy5ZJcq4) | [TU 13](https://github.com/AdrianCassar/Xenia-WebServices/blob/main/patches/545408A7%20-%20Grand%20Theft%20Auto%20V%20(TU13).patch.toml), [TU 10](https://github.com/AdrianCassar/Xenia-WebServices/blob/main/patches/545408A7%20-%20Grand%20Theft%20Auto%20V%20(TU10).patch.toml) |
 | GTA V TU 2-13 | Must complete prologue, download gamesave [here](https://cdn.discordapp.com/attachments/641360906495983616/1101132116441440366/545408A7.rar). Unstable and often crashes. | [Solo Session](https://www.youtube.com/watch?v=lap7liW6pco) |
+| Gears of War | CO-OP doesn't work. |
 | Guilty Gear 2: Overture | |
 | Gundam Operation Troy | [English Patch](https://github.com/Eight-Mansions/MSGOT/releases)
 | Halo 3 ODST v13.2 using [Sunrise Server](https://github.com/ahnewark/Sunrise-Halo3-WebServices) | Mousehook | [Head to Head](https://www.youtube.com/watch?v=amS8OxH3exs) | [Halo 3 Patch](https://github.com/AdrianCassar/Xenia-WebServices/blob/main/patches/4D5307E6%20-%20Halo%203.patch.toml)
+| Iron Brigade | Multiplayer available after completing 2nd tutorial mission. |
 | Juiced 2 | `vsync_interval = 16`, `vsync = true` |
 | Kung Fu Panda: SLL | |
 | Left 4 Dead | Mousehook, Compatible with GOTY | |
 | Left 4 Dead GOTY | Mousehook | |
 | Left 4 Dead 2 | Mousehook | |
 | Left 4 Dead 2 Demo |
+| Mad Riders | |
 | Marble Blast Ultra | |
 | Marvel Ultimate Alliance | |
 | Marvel Ultimate Alliance 2 | |
@@ -119,6 +114,7 @@ It should also be noted that due to the way Steam Decks handle configuration, yo
 | MotoGP 14 | Sprint Season only works |
 | MotoGP 15 | Sprint Season only works |
 | OutRun Online Arcade | | [Race](https://www.youtube.com/watch?v=-UqxjFgGvhk) |
+| Perfect Dark | |
 | Portal 2 | Mousehook |
 | Pro Evolution Soccer 6 (PES 6) | |
 | Pro Evolution Soccer 8 (PES 8) | |
@@ -137,6 +133,8 @@ It should also be noted that due to the way Steam Decks handle configuration, yo
 | Star Wars Battlefront III (Unreleased Game) | Alpha, Mar 17 2008 | [Conquest Taoonie](https://www.youtube.com/watch?v=C54jCqFnCmQ), [MP Event Stream](https://www.youtube.com/watch?v=xSpTmsSvP4s) |
 | Team Fortress 2 | Mousehook |
 | The Outfit | |
+| TimeShift | |
+| TimeShift Beta | |
 | WRC 2010 | Connecting sometimes unstable. |
 | WRC 4 | Connecting sometimes unstable. |
 | WRC 5 | |
