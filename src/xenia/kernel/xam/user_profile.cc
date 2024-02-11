@@ -38,25 +38,13 @@ DEFINE_string(user_2_xuid, to_hex_string(UserProfile::GenerateOnlineXUID()),
 DEFINE_string(user_3_xuid, to_hex_string(UserProfile::GenerateOnlineXUID()),
               "XUID for user 3", "User");
 
-DEFINE_string(user_0_name,
-              "XeniaUser" + std::to_string((string_util::from_string<uint64_t>(
-                                                user_0_xuid.c_str()) &
-                                            0xFFFF)),
+DEFINE_string(user_0_name, UserProfile::GenerateGamertag(user_0_xuid),
               "Gamertag for user 0", "User");
-DEFINE_string(user_1_name,
-              "XeniaUser" + std::to_string((string_util::from_string<uint64_t>(
-                                                user_1_xuid.c_str()) &
-                                            0xFFFF)),
+DEFINE_string(user_1_name, UserProfile::GenerateGamertag(user_1_xuid),
               "Gamertag for user 1", "User");
-DEFINE_string(user_2_name,
-              "XeniaUser" + std::to_string((string_util::from_string<uint64_t>(
-                                                user_2_xuid.c_str()) &
-                                            0xFFFF)),
+DEFINE_string(user_2_name, UserProfile::GenerateGamertag(user_2_xuid),
               "Gamertag for user 2", "User");
-DEFINE_string(user_3_name,
-              "XeniaUser" + std::to_string((string_util::from_string<uint64_t>(
-                                                user_3_xuid.c_str()) &
-                                            0xFFFF)),
+DEFINE_string(user_3_name, UserProfile::GenerateGamertag(user_3_xuid),
               "Gamertag for user 3", "User");
 
 constexpr uint32_t kDashboardID = 0xFFFE07D1;

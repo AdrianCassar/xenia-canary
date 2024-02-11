@@ -184,6 +184,14 @@ class UserProfile {
     return (0x9ULL << 48) | (GenerateXUIDMask(6) & 0x0000FFFFFFFFFFFFULL);
   }
 
+  static std::string GenerateGamertag(const std::string& xuid) {
+    std::string suffix = xuid.substr(xuid.size() - 4);
+
+    uint16_t value = string_util::from_string<uint16_t>(suffix.c_str(), true);
+
+    return "XeniaUser" + std::to_string(value);
+  }
+
   bool IsXUIDOffline() { return ((xuid_ >> 60) & 0xF) == 0xE; }
   bool IsXUIDOnline() { return ((xuid_ >> 48) & 0xFFFF) == 0x9; }
   bool IsXUIDValid() { return IsXUIDOffline() != IsXUIDOnline(); }
