@@ -2,7 +2,7 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2022 Ben Vanik. All rights reserved.                             *
+ * Copyright 2024 Ben Vanik. All rights reserved.                             *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
@@ -661,13 +661,13 @@ dword_result_t NetDll_XNetXnAddrToMachineId_entry(
     return X_ERROR_SUCCESS;
   }
 
-  Player session = XLiveAPI::FindPlayer(ip_to_string(addr_ptr->inaOnline));
+  const auto player = XLiveAPI::FindPlayer(ip_to_string(addr_ptr->inaOnline));
 
-  *id_ptr = session.machineId;
+  *id_ptr = player->MachineID();
 
   // Cache the conversion.
   XLiveAPI::machineIdCache.emplace(addr_ptr->inaOnline.s_addr,
-                                   session.machineId);
+                                   player->MachineID());
 
   return X_ERROR_SUCCESS;
 }
@@ -766,13 +766,13 @@ dword_result_t NetDll_XNetInAddrToXnAddr_entry(dword_t caller, dword_t in_addr,
   // Find cached online IP?
   if (XLiveAPI::macAddressCache.find(xn_addr->inaOnline.s_addr) ==
       XLiveAPI::macAddressCache.end()) {
-    Player session = XLiveAPI::FindPlayer(ip_to_string(xn_addr->inaOnline));
+    const auto player = XLiveAPI::FindPlayer(ip_to_string(xn_addr->inaOnline));
 
     XLiveAPI::sessionIdCache.emplace(xn_addr->inaOnline.s_addr,
-                                     session.sessionId);
+                                     player->SessionID());
 
     XLiveAPI::macAddressCache.emplace(xn_addr->inaOnline.s_addr,
-                                      session.macAddress);
+                                      player->MacAddress());
   }
 
   MacAddress mac_address =
@@ -966,7 +966,7 @@ dword_result_t NetDll_XNetQosListen_entry(
     std::vector<uint8_t> qos_buffer(data_size);
     memcpy(qos_buffer.data(), data, data_size);
 
-    if (XLiveAPI::UpdateQoSCache(session_id, qos_buffer, data_size)) {
+    if (XLiveAPI::UpdateQoSCache(session_id, qos_buffer)) {
       XELOGI("XNetQosListen LISTEN_SET_DATA");
 
       auto run = [](uint64_t sessionId, std::vector<uint8_t> qosData) {

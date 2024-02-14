@@ -2,7 +2,7 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2023 Xenia Emulator. All rights reserved.                        *
+ * Copyright 2024 Xenia Emulator. All rights reserved.                        *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
@@ -20,7 +20,8 @@ namespace xe {
 namespace kernel {
 
 void Uint64toXNKID(uint64_t sessionID, XNKID* xnkid) {
-  memcpy(xnkid->ab, &sessionID, sizeof(XNKID));
+   uint64_t session_id = xe::byte_swap(sessionID);
+   memcpy(xnkid->ab, &session_id, sizeof(XNKID));
 }
 
 uint64_t XNKIDtoUint64(XNKID* sessionID) {
@@ -123,7 +124,7 @@ X_RESULT XSession::CreateHostSession(XSESSION_INFO* session_info,
   session_data->num_slots_private = private_slots;
   session_data->flags = flags;
   session_id_ = GenerateSessionId();
-  Uint64toXNKID(xe::byte_swap(session_id_), &session_info->sessionID);
+  Uint64toXNKID(session_id_, &session_info->sessionID);
 
   XLiveAPI::XSessionCreate(session_id_, session_data);
 
@@ -160,20 +161,22 @@ X_RESULT XSession::JoinExistingSession(XSESSION_INFO* session_info) {
     return X_E_FAIL;
   }
 
-  const auto session = XLiveAPI::XSessionGet(session_id_);
+  const std::unique_ptr<SessionObjectJSON> session =
+      XLiveAPI::XSessionGet(session_id_);
 
-  inet_pton(AF_INET, session.hostAddress.c_str(),
+  inet_pton(AF_INET, session->HostAddress().c_str(),
             &session_info->hostAddress.inaOnline.s_addr);
 
   session_info->hostAddress.ina.s_addr =
       session_info->hostAddress.inaOnline.s_addr;
 
   memcpy(&session_info->hostAddress.abEnet,
-         MacAddress(session.macAddress).raw(), 6);
+         MacAddress(session->MacAddress()).raw(), 6);
   memcpy(&session_info->hostAddress.abOnline,
-         MacAddress(session.macAddress).raw(), 6);
+         MacAddress(session->MacAddress()).raw(), 6);
 
   session_info->hostAddress.wPortOnline = XLiveAPI::GetPlayerPort();
+
   return X_ERROR_SUCCESS;
 }
 
@@ -278,44 +281,47 @@ X_RESULT XSession::ModifySession(XSessionModify* data) {
   XLiveAPI::SessionModify(session_id_, data);
   return X_ERROR_SUCCESS;
 }
+
 X_RESULT XSession::GetSessionDetails(XSessionDetails* data) {
   auto details =
       kernel_state_->memory()->TranslateVirtual<XSESSION_LOCAL_DETAILS*>(
           data->details_buffer);
 
-  SessionJSON session = XLiveAPI::SessionDetails(session_id_);
+  const std::unique_ptr<SessionObjectJSON> session =
+      XLiveAPI::SessionDetails(session_id_);
 
-  if (session.hostAddress.empty()) {
+  if (session->HostAddress().empty()) {
     return 1;
   }
 
-  memcpy(&details->sessionInfo.sessionID, &session.sessionid, 8);
+  Uint64toXNKID(xe::byte_swap(session->SessionID_UInt()),
+                &details->sessionInfo.sessionID);
 
-  inet_pton(AF_INET, session.hostAddress.c_str(),
+  inet_pton(AF_INET, session->HostAddress().c_str(),
             &details->sessionInfo.hostAddress.inaOnline.s_addr);
   details->sessionInfo.hostAddress.ina.s_addr =
       details->sessionInfo.hostAddress.inaOnline.s_addr;
 
   memcpy(&details->sessionInfo.hostAddress.abEnet,
-         MacAddress(session.hostAddress).raw(), 6);
-  details->sessionInfo.hostAddress.wPortOnline = session.port;
+         MacAddress(session->HostAddress()).raw(), 6);
+  details->sessionInfo.hostAddress.wPortOnline = session->Port();
 
   details->UserIndexHost = 0;
   details->GameMode = 0;
   details->GameType = 0;
-  details->Flags = session.flags;
-  details->MaxPublicSlots = session.publicSlotsCount;
-  details->MaxPrivateSlots = session.privateSlotsCount;
+  details->Flags = session->Flags();
+  details->MaxPublicSlots = session->PublicSlotsCount();
+  details->MaxPrivateSlots = session->PrivateSlotsCount();
 
   // TODO:
   // Provide the correct counts.
-  details->AvailablePrivateSlots = session.openPrivateSlotsCount;
-  details->AvailablePublicSlots = session.openPublicSlotsCount;
-  details->ActualMemberCount = session.filledPublicSlotsCount;
+  details->AvailablePrivateSlots = session->OpenPrivateSlotsCount();
+  details->AvailablePublicSlots = session->OpenPublicSlotsCount();
+  details->ActualMemberCount = session->FilledPublicSlotsCount();
   // details->ActualMemberCount =
-  //     session.filledPublicSlotsCount + session.filledPrivateSlotsCount;
+  //     session->FilledPublicSlotsCount() + session->FilledPrivateSlotsCount();
 
-  details->ReturnedMemberCount = (uint32_t)session.players.size();
+  details->ReturnedMemberCount = (uint32_t)session->Players().size();
   details->eState = XSESSION_STATE::LOBBY;
 
   std::random_device rnd;
@@ -341,8 +347,9 @@ X_RESULT XSession::GetSessionDetails(XSessionDetails* data) {
 
   for (uint8_t i = 0; i < details->ReturnedMemberCount; i++) {
     members[i].UserIndex = 0xFE;
-    members[i].xuidOnline = session.players[i].xuid;
+    members[i].xuidOnline = session->Players().at(i).XUID();
   }
+
   return X_ERROR_SUCCESS;
 }
 
@@ -350,10 +357,9 @@ X_RESULT XSession::MigrateHost(XSessionMigate* data) {
   auto sessionInfo = kernel_state_->memory()->TranslateVirtual<XSESSION_INFO*>(
       data->session_info_ptr);
 
-  SessionJSON result = XLiveAPI::XSessionMigration(session_id_);
+  const auto result = XLiveAPI::XSessionMigration(session_id_);
 
-  // FIX ME:
-  if (result.hostAddress.empty()) {
+  if (result->HostAddress().empty()) {
     return X_E_SUCCESS;
   }
 
@@ -373,29 +379,30 @@ X_RESULT XSession::MigrateHost(XSessionMigate* data) {
   sessionInfo->hostAddress.wPortOnline = XLiveAPI::GetPlayerPort();
   return X_ERROR_SUCCESS;
 }
+
 X_RESULT XSession::RegisterArbitration(XSessionArbitrationData* data) {
   XSESSION_REGISTRATION_RESULTS* results =
       kernel_state_->memory()->TranslateVirtual<XSESSION_REGISTRATION_RESULTS*>(
           data->results);
 
-  const XSessionArbitrationJSON api_result =
+  const auto result =
       XLiveAPI::XSessionArbitration(session_id_);
 
   const uint32_t registrants_ptr = kernel_state_->memory()->SystemHeapAlloc(
-      uint32_t(sizeof(XSESSION_REGISTRANT) * api_result.machines.size()));
+      uint32_t(sizeof(XSESSION_REGISTRANT) * result->Machines().size()));
 
-  results->registrants_count = uint32_t(api_result.machines.size());
+  results->registrants_count = uint32_t(result->Machines().size());
   results->registrants_ptr = registrants_ptr;
 
   XSESSION_REGISTRANT* registrants =
       kernel_state_->memory()->TranslateVirtual<XSESSION_REGISTRANT*>(
           registrants_ptr);
 
-  for (uint8_t i = 0; i < api_result.machines.size(); i++) {
+  for (uint8_t i = 0; i < result->Machines().size(); i++) {
     registrants[i].bTrustworthiness = 1;
 
-    registrants[i].MachineID = api_result.machines[i].machineId;
-    registrants[i].bNumUsers = api_result.machines[i].playerCount;
+    registrants[i].MachineID = result->Machines()[i].machine_id;
+    registrants[i].bNumUsers = result->Machines()[i].player_count;
 
     const uint32_t users_ptr = kernel_state_->memory()->SystemHeapAlloc(
         sizeof(uint64_t) * registrants[i].bNumUsers);
@@ -404,7 +411,7 @@ X_RESULT XSession::RegisterArbitration(XSessionArbitrationData* data) {
         kernel_state_->memory()->TranslateVirtual<uint64_t*>(users_ptr);
 
     for (uint8_t j = 0; j < registrants[i].bNumUsers; j++) {
-      users_xuid_ptr[j] = api_result.machines[i].xuids[j];
+      users_xuid_ptr[j] = result->Machines()[i].xuids[j];
     }
 
     registrants[i].rgUsers = users_ptr;
@@ -430,8 +437,7 @@ X_RESULT XSession::GetSessions(Memory* memory, XSessionSearch* search_data) {
     return ERROR_INSUFFICIENT_BUFFER;
   }
 
-  const std::vector<SessionJSON> sessions =
-      XLiveAPI::SessionSearch(search_data);
+  const auto sessions = XLiveAPI::SessionSearch(search_data);
 
   const size_t session_count =
       std::min((size_t)search_data->num_results, sessions.size());
@@ -445,11 +451,13 @@ X_RESULT XSession::GetSessions(Memory* memory, XSessionSearch* search_data) {
           sizeof(XSESSION_SEARCHRESULT_HEADER));
 
   for (uint8_t i = 0; i < session_count; i++) {
-    const auto context = XLiveAPI::SessionContextGet(sessions[i].sessionid);
+    const auto context =
+        XLiveAPI::SessionContextGet(sessions.at(i)->SessionID_UInt());
+
     FillSessionContext(memory, context, &result[i]);
     FillSessionProperties(search_data->num_props, search_data->props_ptr,
                           &result[i]);
-    FillSessionSearchResult(&sessions.at(i), &result[i]);
+    FillSessionSearchResult(sessions.at(i), &result[i]);
   }
 
   XSESSION_SEARCHRESULT_HEADER* resultsHeader =
@@ -469,12 +477,14 @@ X_RESULT XSession::GetSessionByID(Memory* memory,
   }
 
   const auto sessionId = XNKIDtoUint64(search_data->session_id);
+
   if (!sessionId) {
     return ERROR_SUCCESS;
   }
 
-  const SessionJSON session = XLiveAPI::XSessionGet(sessionId);
-  if (session.hostAddress.empty()) {
+  const auto session = XLiveAPI::XSessionGet(sessionId);
+
+  if (session->HostAddress().empty()) {
     return ERROR_SUCCESS;
   }
 
@@ -486,7 +496,7 @@ X_RESULT XSession::GetSessionByID(Memory* memory,
   // HUH? How it should be filled in this case?
   FillSessionContext(memory, {}, result);
   FillSessionProperties(0, 0, result);
-  FillSessionSearchResult(&session, result);
+  FillSessionSearchResult(session, result);
 
   XSESSION_SEARCHRESULT_HEADER* resultsHeader =
       memory->TranslateVirtual<XSESSION_SEARCHRESULT_HEADER*>(
@@ -495,19 +505,21 @@ X_RESULT XSession::GetSessionByID(Memory* memory,
   resultsHeader->search_results_count = 1;
   resultsHeader->search_results_ptr =
       search_data->search_results_ptr + sizeof(XSESSION_SEARCHRESULT_HEADER);
+
   return X_ERROR_SUCCESS;
 }
 
-void XSession::FillSessionSearchResult(const SessionJSON* session_info,
-                                       XSESSION_SEARCHRESULT* result) {
-  result->filled_priv_slots = session_info->filledPrivateSlotsCount;
-  result->filled_public_slots = session_info->filledPublicSlotsCount;
-  result->open_priv_slots = session_info->openPrivateSlotsCount;
-  result->open_public_slots = session_info->openPublicSlotsCount;
+void XSession::FillSessionSearchResult(
+    const std::unique_ptr<SessionObjectJSON>& session_info,
+    XSESSION_SEARCHRESULT* result) {
+  result->filled_priv_slots = session_info->FilledPrivateSlotsCount();
+  result->filled_public_slots = session_info->FilledPublicSlotsCount();
+  result->open_priv_slots = session_info->OpenPrivateSlotsCount();
+  result->open_public_slots = session_info->OpenPublicSlotsCount();
 
-  memcpy(&result->info.sessionID, &session_info->sessionid, sizeof(XNKID));
+  Uint64toXNKID(session_info->SessionID_UInt(), &result->info.sessionID);
 
-  const MacAddress mac = MacAddress(session_info->macAddress);
+  const MacAddress mac = MacAddress(session_info->MacAddress());
 
   memcpy(&result->info.hostAddress.abEnet, mac.raw(),
          sizeof(result->info.hostAddress.abEnet));
@@ -518,13 +530,13 @@ void XSession::FillSessionSearchResult(const SessionJSON* session_info,
     result->info.keyExchangeKey.ab[j] = j;
   }
 
-  inet_pton(AF_INET, session_info->hostAddress.c_str(),
+  inet_pton(AF_INET, session_info->HostAddress().c_str(),
             &result->info.hostAddress.ina.s_addr);
 
-  inet_pton(AF_INET, session_info->hostAddress.c_str(),
+  inet_pton(AF_INET, session_info->HostAddress().c_str(),
             &result->info.hostAddress.inaOnline.s_addr);
 
-  result->info.hostAddress.wPortOnline = session_info->port;
+  result->info.hostAddress.wPortOnline = session_info->Port();
 }
 
 void XSession::FillSessionContext(Memory* memory,
