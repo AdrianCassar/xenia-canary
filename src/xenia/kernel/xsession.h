@@ -2,7 +2,7 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2023 Xenia Emulator. All rights reserved.                        *
+ * Copyright 2024 Xenia Emulator. All rights reserved.                        *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
@@ -10,9 +10,9 @@
 #ifndef XENIA_KERNEL_XSESSION_H_
 #define XENIA_KERNEL_XSESSION_H_
 
-#include <third_party/libcurl/include/curl/curl.h>
-
 #include "xenia/base/byte_order.h"
+#include "xenia/kernel/session_object_json.h"
+#include "xenia/kernel/arbitration_object_json.h"
 #include "xenia/kernel/xnet.h"
 #include "xenia/kernel/xobject.h"
 
@@ -122,20 +122,6 @@ struct XSessionModify {
   xe::be<uint32_t> flags;
   xe::be<uint32_t> maxPublicSlots;
   xe::be<uint32_t> maxPrivateSlots;
-  xe::be<uint32_t> xoverlapped;
-};
-
-struct XSessionSearchEx {
-  xe::be<uint32_t> proc_index;
-  xe::be<uint32_t> user_index;
-  xe::be<uint32_t> num_results;
-  // xe::be<uint32_t> num_users; will break struct
-  xe::be<uint16_t> num_props;
-  xe::be<uint16_t> num_ctx;
-  xe::be<uint32_t> props_ptr;
-  xe::be<uint32_t> ctx_ptr;
-  xe::be<uint32_t> results_buffer;
-  xe::be<uint32_t> search_results;
   xe::be<uint32_t> xoverlapped;
 };
 
@@ -308,8 +294,9 @@ class XSession : public XObject {
     return (flags & checked_flag) == checked_flag;
   };
 
-  static void FillSessionSearchResult(const SessionJSON* session_info,
-                                      XSESSION_SEARCHRESULT* result);
+  static void FillSessionSearchResult(
+      const std::unique_ptr<SessionObjectJSON>& session_info,
+      XSESSION_SEARCHRESULT* result);
 
   static void FillSessionContext(Memory* memory,
                                  std::map<uint32_t, uint32_t> contexts,

@@ -2,7 +2,7 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2023 Xenia Emulator. All rights reserved.                        *
+ * Copyright 2024 Xenia Emulator. All rights reserved.                        *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
@@ -10,18 +10,15 @@
 #ifndef XENIA_KERNEL_XLIVEAPI_H_
 #define XENIA_KERNEL_XLIVEAPI_H_
 
-#include "xenia/kernel/upnp.h"
-
-#define RAPIDJSON_HAS_STDSTRING 1
-
 #include <third_party/libcurl/include/curl/curl.h>
-#include <third_party/rapidjson/include/rapidjson/document.h>
-#include <third_party/rapidjson/include/rapidjson/prettywriter.h>
-#include <third_party/rapidjson/include/rapidjson/stringbuffer.h>
+
 #include "xenia/base/byte_order.h"
+#include "xenia/kernel/upnp.h"
 #include "xenia/kernel/util/net_utils.h"
 #include "xenia/kernel/xnet.h"
+
 #include "xenia/kernel/xsession.h"
+#include "xenia/kernel/leaderboard_object_json.h"
 
 namespace xe {
 namespace kernel {
@@ -48,10 +45,6 @@ class XLiveAPI {
     size_t size = 0;
     uint64_t http_code;
   };
-
-  //~XLiveAPI() {
-  //  // upnp_handler.~upnp();
-  //}
 
   static bool is_active();
 
@@ -81,7 +74,7 @@ class XLiveAPI {
 
   static memory RegisterPlayer();
 
-  static Player FindPlayer(std::string ip);
+  static std::unique_ptr<PlayerObjectJSON> FindPlayer(std::string ip);
 
   static void QoSPost(uint64_t sessionId, uint8_t* qosData, size_t qosLength);
 
@@ -89,9 +82,8 @@ class XLiveAPI {
 
   static void SessionModify(uint64_t sessionId, XSessionModify* data);
 
-  static const std::vector<SessionJSON> SessionSearchEx(XSessionSearchEx* data);
-
-  static const std::vector<SessionJSON> SessionSearch(XSessionSearch* data);
+  static const std::vector<std::unique_ptr<SessionObjectJSON>> SessionSearch(
+      XSessionSearch* data);
 
   static void SessionContextSet(uint64_t session_id,
                                 std::map<uint32_t, uint32_t> contexts);
@@ -99,11 +91,14 @@ class XLiveAPI {
   static const std::map<uint32_t, uint32_t> SessionContextGet(
       uint64_t session_id);
 
-  static const SessionJSON SessionDetails(uint64_t sessionId);
+  static const std::unique_ptr<SessionObjectJSON> SessionDetails(
+      uint64_t sessionId);
 
-  static SessionJSON XSessionMigration(uint64_t sessionId);
+  static std::unique_ptr<SessionObjectJSON> XSessionMigration(
+      uint64_t sessionId);
 
-  static XSessionArbitrationJSON XSessionArbitration(uint64_t sessionId);
+  static std::unique_ptr<ArbitrationObjectJSON> XSessionArbitration(
+      uint64_t sessionId);
 
   static void SessionWriteStats(uint64_t sessionId, XSessionWriteStats* stats,
                                 XSessionViewProperties* probs);
@@ -118,7 +113,7 @@ class XLiveAPI {
 
   static void XSessionCreate(uint64_t sessionId, XSessionData* data);
 
-  static SessionJSON XSessionGet(uint64_t sessionId);
+  static std::unique_ptr<SessionObjectJSON> XSessionGet(uint64_t sessionId);
 
   static std::vector<XTitleServer> GetServers();
 
@@ -135,8 +130,7 @@ class XLiveAPI {
   static const uint8_t* GetMACaddress();
 
   static bool UpdateQoSCache(const uint64_t sessionId,
-                             const std::vector<uint8_t> qos_payload,
-                             const uint32_t payload_size);
+                             const std::vector<uint8_t> qos_payloade);
 
   static const sockaddr_in LocalIP() { return local_ip_; };
   static const sockaddr_in OnlineIP() { return online_ip_; };
@@ -158,8 +152,6 @@ class XLiveAPI {
  private:
   inline static bool active_ = false;
   inline static bool initialized_ = false;
-
-  // std::shared_mutex mutex_;
 
   static memory Get(std::string endpoint);
 
