@@ -1088,6 +1088,13 @@ dword_result_t NetDll_XHttpStartup_entry(dword_t caller, dword_t reserved,
 }
 DECLARE_XAM_EXPORT1(NetDll_XHttpStartup, kNetworking, kStub);
 
+dword_result_t NetDll_XHttpDoWork_entry(dword_t caller, dword_t handle,
+                                        dword_t unk) {
+  XThread::SetLastError(0);
+  return 0;
+}
+DECLARE_XAM_EXPORT1(NetDll_XHttpDoWork, kNetworking, kStub);
+
 dword_result_t NetDll_XHttpOpenRequest_entry(
     dword_t caller, dword_t connect_handle, lpstring_t verb, lpstring_t path,
     lpstring_t version, lpstring_t referrer, lpstring_t reserved,
@@ -1110,6 +1117,14 @@ dword_result_t NetDll_XHttpOpenRequest_entry(
   return 1;
 }
 DECLARE_XAM_EXPORT1(NetDll_XHttpOpenRequest, kNetworking, kStub);
+
+dword_result_t NetDll_XHttpSetStatusCallback_entry(dword_t caller,
+                                                   dword_t handle,
+                                                   lpdword_t callback_ptr,
+                                                   dword_t flags, dword_t unk) {
+  return 1;
+}
+DECLARE_XAM_EXPORT1(NetDll_XHttpSetStatusCallback, kNetworking, kStub);
 
 dword_result_t NetDll_XHttpSendRequest_entry(dword_t caller, dword_t hrequest,
                                              lpstring_t headers,
@@ -1280,8 +1295,8 @@ dword_result_t NetDll_bind_entry(dword_t caller, dword_t socket_handle,
   }
 
   // Can be called multiple times.
-  XLiveAPI::upnp_handler->AddPort(XLiveAPI::LocalIP_str(),
-                                  socket->bound_port(), "UDP");
+  XLiveAPI::upnp_handler->AddPort(XLiveAPI::LocalIP_str(), socket->bound_port(),
+                                  "UDP");
 
   return 0;
 }
