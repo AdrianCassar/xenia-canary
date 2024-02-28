@@ -1356,47 +1356,64 @@ struct host_set {
 
   void Load(const x_fd_set* guest_set) {
     assert_true(guest_set->fd_count < 64);
-    this->count = guest_set->fd_count;
-    for (uint32_t i = 0; i < this->count; ++i) {
+
+    count = guest_set->fd_count;
+    for (uint32_t i = 0; i < count; ++i) {
       auto socket_handle = static_cast<X_HANDLE>(guest_set->fd_array[i]);
       if (socket_handle == -1) {
-        this->count = i;
+        count = i;
         break;
       }
       // Convert from Xenia -> native
       auto socket =
           kernel_state()->object_table()->LookupObject<XSocket>(socket_handle);
       assert_not_null(socket);
-      this->sockets[i] = socket;
+      sockets[i] = socket;
     }
   }
 
   void Store(x_fd_set* guest_set) {
     guest_set->fd_count = 0;
-    for (uint32_t i = 0; i < this->count; ++i) {
-      auto socket = this->sockets[i];
+    for (uint32_t i = 0; i < count; ++i) {
+      auto socket = sockets[i];
       guest_set->fd_array[guest_set->fd_count++] = socket->handle();
     }
   }
 
   void Store(fd_set* native_set) {
     FD_ZERO(native_set);
-    for (uint32_t i = 0; i < this->count; ++i) {
-      FD_SET(this->sockets[i]->native_handle(), native_set);
+    for (uint32_t i = 0; i < count; ++i) {
+      FD_SET(sockets[i]->native_handle(), native_set);
     }
   }
 
   void UpdateFrom(fd_set* native_set) {
     uint32_t new_count = 0;
-    for (uint32_t i = 0; i < this->count; ++i) {
-      auto socket = this->sockets[i];
+    for (uint32_t i = 0; i < count; ++i) {
+      auto socket = sockets[i];
       if (FD_ISSET(socket->native_handle(), native_set)) {
-        this->sockets[new_count++] = socket;
+        sockets[new_count++] = socket;
       }
     }
-    this->count = new_count;
+    count = new_count;
   }
 };
+
+bool verify_x_fd_set(const x_fd_set* guest_set) {
+  for (uint32_t i = 0; i < guest_set->fd_count; ++i) {
+    auto socket_handle = static_cast<X_HANDLE>(guest_set->fd_array[i]);
+    if (socket_handle == -1) {
+      break;
+    }
+    // Convert from Xenia -> native
+    auto socket =
+        kernel_state()->object_table()->LookupObject<XSocket>(socket_handle);
+    if (!socket) {
+      return false;
+    }
+  }
+  return true;
+}
 
 int_result_t NetDll_select_entry(dword_t caller, dword_t nfds,
                                  pointer_t<x_fd_set> readfds,
@@ -1406,18 +1423,33 @@ int_result_t NetDll_select_entry(dword_t caller, dword_t nfds,
   host_set host_readfds = {0};
   fd_set native_readfds = {0};
   if (readfds) {
+    if (!verify_x_fd_set(readfds)) {
+      XThread::SetLastError(uint32_t(X_WSAError::X_WSAENOTSOCK));
+      return -1;
+    }
+
     host_readfds.Load(readfds);
     host_readfds.Store(&native_readfds);
   }
   host_set host_writefds = {0};
   fd_set native_writefds = {0};
   if (writefds) {
+    if (!verify_x_fd_set(writefds)) {
+      XThread::SetLastError(uint32_t(X_WSAError::X_WSAENOTSOCK));
+      return -1;
+    }
+
     host_writefds.Load(writefds);
     host_writefds.Store(&native_writefds);
   }
   host_set host_exceptfds = {0};
   fd_set native_exceptfds = {0};
   if (exceptfds) {
+    if (!verify_x_fd_set(exceptfds)) {
+      XThread::SetLastError(uint32_t(X_WSAError::X_WSAENOTSOCK));
+      return -1;
+    }
+
     host_exceptfds.Load(exceptfds);
     host_exceptfds.Store(&native_exceptfds);
   }
