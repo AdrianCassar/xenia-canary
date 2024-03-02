@@ -131,7 +131,6 @@ X_RESULT XSession::CreateHostSession(XSESSION_INFO* session_info,
 
   XLiveAPI::SessionContextSet(session_id_, contexts_);
 
-
   session_info->hostAddress.inaOnline.s_addr =
       XLiveAPI::OnlineIP().sin_addr.s_addr;
 
@@ -169,8 +168,10 @@ X_RESULT XSession::JoinExistingSession(XSESSION_INFO* session_info) {
   session_info->hostAddress.ina.s_addr =
       session_info->hostAddress.inaOnline.s_addr;
 
-  memcpy(&session_info->hostAddress.abEnet, session.macAddress.c_str(), 6);
-  memcpy(&session_info->hostAddress.abOnline, session.macAddress.c_str(), 6);
+  memcpy(&session_info->hostAddress.abEnet,
+         MacAddress(session.macAddress).raw(), 6);
+  memcpy(&session_info->hostAddress.abOnline,
+         MacAddress(session.macAddress).raw(), 6);
 
   session_info->hostAddress.wPortOnline = XLiveAPI::GetPlayerPort();
   return X_ERROR_SUCCESS;
@@ -295,8 +296,8 @@ X_RESULT XSession::GetSessionDetails(XSessionDetails* data) {
   details->sessionInfo.hostAddress.ina.s_addr =
       details->sessionInfo.hostAddress.inaOnline.s_addr;
 
-  memcpy(&details->sessionInfo.hostAddress.abEnet, session.hostAddress.c_str(),
-         6);
+  memcpy(&details->sessionInfo.hostAddress.abEnet,
+         MacAddress(session.hostAddress).raw(), 6);
   details->sessionInfo.hostAddress.wPortOnline = session.port;
 
   details->UserIndexHost = 0;
