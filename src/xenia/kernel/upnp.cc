@@ -263,16 +263,19 @@ void UPnP::RefreshPortsTimer() {
     return;
   }
 
-  char lanaddr[64] = "";
-  int size = 0;
-  miniwget_getaddr(cvars::upnp_root.c_str(), &size, lanaddr, sizeof(lanaddr), 0,
-                   NULL);
-
   const auto interval = std::chrono::minutes(45);
 
-  wait_item_ =
-      QueueTimerRecurring([&](void*) { RefreshPorts(lanaddr); }, nullptr,
-                          TimerQueueWaitItem::clock::now(), interval);
+  auto run = [&](void*) {
+    char lanaddr[64] = "";
+    int size = 0;
+    miniwget_getaddr(cvars::upnp_root.c_str(), &size, lanaddr, sizeof(lanaddr),
+                     0, NULL);
+
+    RefreshPorts(lanaddr);
+  };
+
+  wait_item_ = QueueTimerRecurring(run, nullptr,
+                                   TimerQueueWaitItem::clock::now(), interval);
 }
 
 uint16_t UPnP::get_mapped_connect_port(uint16_t external_port) {
