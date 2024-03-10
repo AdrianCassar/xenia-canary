@@ -13,6 +13,7 @@ project("xenia-kernel")
     "pugixml",
     "libcurl",
     "miniupnp",
+    "zlib",
     "xenia-apu",
     "xenia-base",
     "xenia-cpu",
