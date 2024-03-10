@@ -35,8 +35,8 @@
 #include "xenia/gpu/graphics_system.h"
 #include "xenia/hid/input_driver.h"
 #include "xenia/hid/input_system.h"
-#include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/XLiveAPI.h"
+#include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/user_module.h"
 #include "xenia/kernel/util/gameinfo_utils.h"
 #include "xenia/kernel/util/xdbf_utils.h"
@@ -117,6 +117,7 @@ Emulator::Emulator(const std::filesystem::path& command_line,
       kernel_state_(),
       main_thread_(),
       title_id_(std::nullopt),
+      title_xlast_(),
       paused_(false),
       restoring_(false),
       restore_fence_() {
@@ -1077,6 +1078,14 @@ X_STATUS Emulator::CompleteLaunch(const std::filesystem::path& path,
         XELOGI("{:08X} - {} - {}", entry.id, label, entry.unk2);
       }
       XELOGI("----------------- END OF CONTEXTS ----------------");
+
+      uint32_t compressed_size, decompressed_size = 0;
+      const uint8_t* xlast_ptr =
+          db.ReadXLast(compressed_size, decompressed_size);
+
+      title_xlast_ =
+          kernel::util::XLast(xlast_ptr, compressed_size, decompressed_size);
+
       auto icon_block = db.icon();
       if (icon_block) {
         display_window_->SetIcon(icon_block.buffer, icon_block.size);

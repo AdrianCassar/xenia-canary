@@ -20,6 +20,7 @@
 #include "xenia/base/delegate.h"
 #include "xenia/base/exception_handler.h"
 #include "xenia/kernel/kernel_state.h"
+#include "xenia/kernel/util/xlast.h"
 #include "xenia/memory.h"
 #include "xenia/patcher/patcher.h"
 #include "xenia/patcher/plugin_loader.h"
@@ -230,9 +231,7 @@ class Emulator {
   xe::Delegate<> on_exit;
 
  private:
-  enum : uint64_t {
-    EmulatorFlagDisclaimerAcknowledged = 1ULL << 0
-  };
+  enum : uint64_t { EmulatorFlagDisclaimerAcknowledged = 1ULL << 0 };
   static uint64_t GetPersistentEmulatorFlags();
   static void SetPersistentEmulatorFlags(uint64_t new_flags);
   static std::string CanonicalizeFileExtension(
@@ -285,6 +284,7 @@ class Emulator {
   kernel::object_ref<kernel::XThread> main_thread_;
   kernel::object_ref<kernel::XHostThread> plugin_loader_thread_;
   std::optional<uint32_t> title_id_;  // Currently running title ID
+  kernel::util::XLast title_xlast_;
 
   bool paused_;
   bool restoring_;
