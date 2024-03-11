@@ -141,7 +141,7 @@ X_STATUS XSocket::Bind(const XSOCKADDR_IN* name, int name_len) {
   memcpy(&sa_in, name, sizeof(XSOCKADDR_IN));
 
   sa_in.address_port =
-      XLiveAPI::upnp_handler->get_mapped_connect_port(name->address_port);
+      XLiveAPI::upnp_handler->get_mapped_bind_port(name->address_port);
 
   sockaddr addr = sa_in.to_host();
 
