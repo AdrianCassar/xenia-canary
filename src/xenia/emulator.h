@@ -299,6 +299,8 @@ class Emulator {
     bool hasError{false};
   };
 
+  void DumpXLast();
+
   void Pause();
   void Resume();
   bool is_paused() const { return paused_; }
