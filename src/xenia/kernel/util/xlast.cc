@@ -331,14 +331,21 @@ void XLast::Dump(std::string file_name) const {
     file_name = xe::to_utf8(GetTitleName());
   }
 
-  FILE* outfile =
-      xe::filesystem::OpenFile(fmt::format("{}.xml", file_name).c_str(), "ab");
-  if (!outfile) {
+  const std::string file = fmt::format("{}.xml", file_name);
+
+  if (std::filesystem::exists(file)) {
     return;
   }
 
-  fwrite(xlast_decompressed_xml_.data(), 1, xlast_decompressed_xml_.size(),
-         outfile);
+  FILE* outfile = xe::filesystem::OpenFile(file.c_str(), "ab");
+
+  if (outfile) {
+    fwrite(xlast_decompressed_xml_.data(), 1, xlast_decompressed_xml_.size(),
+           outfile);
+
+    XELOGI("XLast file saved {}", file);
+  }
+
   fclose(outfile);
 }
 
