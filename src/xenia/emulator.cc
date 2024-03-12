@@ -960,6 +960,19 @@ X_STATUS Emulator::CreateZarchivePackage(
   return X_STATUS_SUCCESS;
 }
 
+void Emulator::DumpXLast() {
+  if (game_info_database_) {
+    if (game_info_database_->GetXLast()) {
+      const std::string title_ver =
+          title_version().empty() ? "" : " - " + title_version();
+      game_info_database_->GetXLast()->Dump(
+          fmt::format("{:08X}{}", title_id(), title_ver));
+    } else {
+      XELOGI("XLast data not found");
+    }
+  }
+}
+
 void Emulator::Pause() {
   if (paused_) {
     return;
