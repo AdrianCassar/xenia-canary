@@ -74,10 +74,13 @@ X_HRESULT AppManager::DispatchMessageAsync(uint32_t app_id, uint32_t message,
     return it->second->DispatchMessageSync(message, buffer_in, buffer_length);
   };
 
-  if (overlapped_ptr)
-    it->second->kernel_state_->CompleteOverlappedDeferred(run, overlapped_ptr, nullptr, post);
-  else 
-      DispatchMessageSync(app_id, message, buffer_in, buffer_length);
+  if (overlapped_ptr) {
+    it->second->kernel_state_->CompleteOverlappedDeferred(run, overlapped_ptr,
+                                                          nullptr, post);
+  } else {
+    DispatchMessageSync(app_id, message, buffer_in, buffer_length);
+    post();
+  }
 
   return 0;
 }
