@@ -68,6 +68,8 @@ bool XLiveAPI::is_active() { return active_; }
 bool XLiveAPI::is_initialized() { return initialized_; }
 
 std::string XLiveAPI::GetApiAddress() {
+  cvars::api_address = xe::string_util::trim(cvars::api_address);
+
   // Add forward slash if not already added
   if (cvars::api_address.back() != '/') {
     cvars::api_address = cvars::api_address + '/';
