@@ -7,11 +7,11 @@
  ******************************************************************************
  */
 
+#include "xenia/kernel/xam/xam_net.h"
 #include "xenia/base/logging.h"
 #include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/util/shim_utils.h"
 #include "xenia/kernel/xam/xam_module.h"
-#include "xenia/kernel/xam/xam_net.h"
 #include "xenia/kernel/xam/xam_private.h"
 #include "xenia/kernel/xboxkrnl/xboxkrnl_error.h"
 #include "xenia/kernel/xboxkrnl/xboxkrnl_threading.h"
@@ -673,8 +673,7 @@ DECLARE_XAM_EXPORT1(NetDll_XNetUnregisterInAddr, kNetworking, kStub);
 
 // https://github.com/pnill/cartographer/blob/28aa77ba9a1062aec4638b34a01c1a4e77e25e04/xlive/xlivedefs.h#L218
 dword_result_t NetDll_XNetConnect_entry(dword_t caller, dword_t addr) {
-  XELOGI("XNetConnect({:08X})",
-         cvars::log_mask_ips ? 0 : addr.value());
+  XELOGI("XNetConnect({:08X})", cvars::log_mask_ips ? 0 : addr.value());
 
   return X_ERROR_SUCCESS;
 }
@@ -1088,7 +1087,6 @@ dword_result_t NetDll_XHttpOpenRequest_entry(
     dword_t caller, dword_t connect_handle, lpstring_t verb, lpstring_t path,
     lpstring_t version, lpstring_t referrer, lpstring_t reserved,
     dword_t flag) {
-
   std::string http_verb = "";
   std::string object_name = "";
 

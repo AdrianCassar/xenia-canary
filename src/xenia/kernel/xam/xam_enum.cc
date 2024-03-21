@@ -116,10 +116,10 @@ dword_result_t XamCreateEnumeratorHandle_entry(
 
   switch (open_message) {
     case 0x58039: {
-      auto e = make_object<XStaticEnumerator<XTitleServer>>(
-          kernel_state(), item_count);
+      auto e = make_object<XStaticEnumerator<XTitleServer>>(kernel_state(),
+                                                            item_count);
       result = e->Initialize(user_index, app_id, open_message, close_message,
-                                  flags, extra_size, nullptr);
+                             flags, extra_size, nullptr);
       if (XFAILED(result)) {
         return result;
       }
@@ -135,7 +135,7 @@ dword_result_t XamCreateEnumeratorHandle_entry(
       }
 
       XELOGI("XamCreateEnumerator: added {} items to enumerator",
-            e->item_count());
+             e->item_count());
 
       enum_handle = e->handle();
     } break;
