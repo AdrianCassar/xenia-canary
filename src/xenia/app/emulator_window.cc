@@ -9,8 +9,8 @@
 
 #include "xenia/app/emulator_window.h"
 
-#include "third_party/libcurl/include/curl/curl.h"
 #include "third_party/imgui/imgui.h"
+#include "third_party/libcurl/include/curl/curl.h"
 #include "third_party/stb/stb_image_write.h"
 #if defined(__clang__)
 #pragma clang diagnostic push
@@ -51,8 +51,8 @@
 #include "xenia/ui/ui_event.h"
 #include "xenia/ui/virtual_key.h"
 
-#include "version.h"
 #include <xenia/kernel/XLiveAPI.h>
+#include "version.h"
 
 DECLARE_bool(debug);
 
@@ -787,7 +787,7 @@ bool EmulatorWindow::Initialize() {
         std::bind(&EmulatorWindow::ShowContentDirectory, this)));
     file_menu->AddChild(
         MenuItem::Create(MenuItem::Type::kString, "Dump XLast",
-        std::bind(&EmulatorWindow::DumpXLast, this)));
+                         std::bind(&EmulatorWindow::DumpXLast, this)));
     file_menu->AddChild(MenuItem::Create(MenuItem::Type::kSeparator));
     file_menu->AddChild(
         MenuItem::Create(MenuItem::Type::kString, "E&xit", "Alt+F4",
@@ -917,7 +917,7 @@ bool EmulatorWindow::Initialize() {
         std::bind(&EmulatorWindow::ToggleConsoleSettingsDialog, this)));
   }
   main_menu->AddChild(std::move(console_menu));
-  
+
   // Netplay menu.
   auto Netplay_menu = MenuItem::Create(MenuItem::Type::kPopup, "&Netplay");
   {

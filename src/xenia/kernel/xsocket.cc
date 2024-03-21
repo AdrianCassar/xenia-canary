@@ -379,8 +379,12 @@ int XSocket::PollWSARecvFrom(bool wait, WSARecvFromData receive_async_data) {
   }
 
   flags = 0;
-  if (msg.msg_flags & MSG_TRUNC) flags |= MSG_PARTIAL;
-  if (msg.msg_flags & MSG_OOB) flags |= MSG_OOB;
+  if (msg.msg_flags & MSG_TRUNC) {
+    flags |= MSG_PARTIAL;
+  }
+  if (msg.msg_flags & MSG_OOB) {
+    flags |= MSG_OOB;
+  }
   receive_async_data.overlapped->offset = flags;
 
   if (ret >= 0) {

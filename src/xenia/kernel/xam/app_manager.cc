@@ -53,7 +53,6 @@ X_HRESULT AppManager::DispatchMessageAsync(uint32_t app_id, uint32_t message,
                                            uint32_t buffer_ptr,
                                            uint32_t buffer_length,
                                            uint32_t overlapped_ptr) {
-
   const auto& it = app_lookup_.find(app_id);
   if (it == app_lookup_.end()) {
     return X_E_NOTFOUND;
