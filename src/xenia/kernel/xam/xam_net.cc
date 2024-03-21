@@ -655,6 +655,11 @@ dword_result_t NetDll_XNetXnAddrToMachineId_entry(
   // 0xFA000000049B679F; else
   //  *id_ptr = 0xFA000000039E7542;
 
+  if (!addr_ptr->inaOnline.s_addr) {
+    *id_ptr = 0;
+    return static_cast<uint32_t>(X_WSAError::X_WSAEINVAL);
+  }
+
   // Check if we have already cached the conversion to reduce API calls.
   if (XLiveAPI::machineIdCache.find(addr_ptr->inaOnline.s_addr) !=
       XLiveAPI::machineIdCache.end()) {
