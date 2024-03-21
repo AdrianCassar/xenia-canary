@@ -220,9 +220,8 @@ X_HRESULT XLiveBaseApp::GetServiceInfo(uint32_t serviceid,
     return X_E_SUCCESS;
   }
 
-  XONLINE_SERVICE_INFO* service_info =
-      reinterpret_cast<XONLINE_SERVICE_INFO*>(
-          memory_->TranslateVirtual(serviceinfo));
+  XONLINE_SERVICE_INFO* service_info = reinterpret_cast<XONLINE_SERVICE_INFO*>(
+      memory_->TranslateVirtual(serviceinfo));
 
   memset(service_info, 0, sizeof(XONLINE_SERVICE_INFO));
 
