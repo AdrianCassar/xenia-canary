@@ -26,12 +26,11 @@
 #include "xenia/config.h"
 #include "xenia/gpu/command_processor.h"
 #include "xenia/gpu/gpu_flags.h"
+#include "xenia/kernel/XLiveAPI.h"
 #include "xenia/kernel/kernel_state.h"
 #include "xenia/ui/graphics_provider.h"
 #include "xenia/ui/window.h"
 #include "xenia/ui/windowed_app_context.h"
-
-#include "xenia/kernel/XLiveAPI.h"
 
 DEFINE_uint32(internal_display_resolution, 8,
               "Allow games that support different resolutions to render "
