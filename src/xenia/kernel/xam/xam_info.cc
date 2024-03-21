@@ -217,7 +217,8 @@ dword_result_t XamGetSystemVersion_entry() {
   // 0x200A3200 = 2.0.2610.0
   // 0x20096B00 = 2.0.2411.0
   // 0x200CE900 = 2.0.3305.0
-  // Latest https://support.xbox.com/en-GB/help/xbox-360/console/system-update-operating-system
+  // Latest
+  // https://support.xbox.com/en-GB/help/xbox-360/console/system-update-operating-system
   // 0x20449700 = 2.0.17559.0
 
   auto ver = 0x20449700;
