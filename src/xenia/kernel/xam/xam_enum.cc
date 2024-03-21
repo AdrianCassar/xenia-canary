@@ -92,8 +92,8 @@ dword_result_t XamCreateEnumeratorHandle_entry(
     dword_t flags, lpdword_t out_handle) {
   // if the message is the LSP create enum message...
   if (open_message == 0x58039) {
-    auto e = make_object<XStaticEnumerator<XTitleServer>>(
-        kernel_state(), item_count);
+    auto e = make_object<XStaticEnumerator<XTitleServer>>(kernel_state(),
+                                                          item_count);
     auto result = e->Initialize(user_index, app_id, open_message, close_message,
                                 flags, extra_size, nullptr);
     if (XFAILED(result)) {
@@ -118,7 +118,7 @@ dword_result_t XamCreateEnumeratorHandle_entry(
   }
 
   auto e = object_ref<XStaticUntypedEnumerator>(
-  new XStaticUntypedEnumerator(kernel_state(), item_count, extra_size));
+      new XStaticUntypedEnumerator(kernel_state(), item_count, extra_size));
 
   auto result =
       e->Initialize(user_index, app_id, open_message, close_message, flags);
