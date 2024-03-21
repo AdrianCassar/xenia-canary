@@ -308,7 +308,7 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
       XSessionArbitrationData* data =
           reinterpret_cast<XSessionArbitrationData*>(buffer);
 
-        XELOGI(
+      XELOGI(
           "XSessionArbitrationRegister({:08X}, {:08X}, {:08X}, {:08X}, {:08X}, "
           "{:08X}, {:08X}, {:08X});",
           data->obj_ptr.get(), data->flags.get(), data->unk1.get(),

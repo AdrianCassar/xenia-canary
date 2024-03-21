@@ -20,8 +20,8 @@ namespace xe {
 namespace kernel {
 
 void Uint64toXNKID(uint64_t sessionID, XNKID* xnkid) {
-   uint64_t session_id = xe::byte_swap(sessionID);
-   memcpy(xnkid->ab, &session_id, sizeof(XNKID));
+  uint64_t session_id = xe::byte_swap(sessionID);
+  memcpy(xnkid->ab, &session_id, sizeof(XNKID));
 }
 
 uint64_t XNKIDtoUint64(XNKID* sessionID) {
@@ -391,8 +391,7 @@ X_RESULT XSession::RegisterArbitration(XSessionArbitrationData* data) {
       kernel_state_->memory()->TranslateVirtual<XSESSION_REGISTRATION_RESULTS*>(
           data->results);
 
-  const auto result =
-      XLiveAPI::XSessionArbitration(session_id_);
+  const auto result = XLiveAPI::XSessionArbitration(session_id_);
 
   const uint32_t registrants_ptr = kernel_state_->memory()->SystemHeapAlloc(
       uint32_t(sizeof(XSESSION_REGISTRANT) * result->Machines().size()));

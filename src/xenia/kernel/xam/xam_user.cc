@@ -494,7 +494,8 @@ dword_result_t XamUserCheckPrivilege_entry(dword_t user_index, dword_t type,
   // If we deny everything, games should hopefully not try to do stuff.
   *out_value = 0;
 
-  const auto& user_profile = kernel_state()->xam_state()->GetUserProfile(user_index);
+  const auto& user_profile =
+      kernel_state()->xam_state()->GetUserProfile(user_index);
   if (user_profile->signin_state() == 2) {
     // We have enabled Live so let's allow multiplayer
     *out_value = 1;
