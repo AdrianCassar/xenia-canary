@@ -62,17 +62,17 @@ bool PlayerObjectJSON::Serialize(
     rapidjson::PrettyWriter<rapidjson::StringBuffer>* writer) const {
   writer->StartObject();
 
-   writer->String("xuid");
-   writer->String(fmt::format("{:016X}", xuid_));
+  writer->String("xuid");
+  writer->String(fmt::format("{:016X}", xuid_));
 
-   writer->String("machineId");
-   writer->String(fmt::format("{:016x}", machineId_));
+  writer->String("machineId");
+  writer->String(fmt::format("{:016x}", machineId_));
 
-   writer->String("hostAddress");
-   writer->String(hostAddress_);
+  writer->String("hostAddress");
+  writer->String(hostAddress_);
 
-   writer->String("macAddress");
-   writer->String(fmt::format("{:012x}", macAddress_));
+  writer->String("macAddress");
+  writer->String(fmt::format("{:012x}", macAddress_));
 
   writer->EndObject();
 
