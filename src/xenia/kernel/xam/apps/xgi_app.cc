@@ -216,7 +216,9 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
         xe::be<uint32_t> results_guest_address;
       }* data = reinterpret_cast<XUserReadStats*>(buffer);
 
-      if (!data->results_guest_address) return 1;
+      if (!data->results_guest_address) {
+        return 1;
+      }
 
 #pragma region Curl
       Document doc;
@@ -349,9 +351,10 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
               default:
                 XELOGW("Unimplemented stat type for read, will attempt anyway.",
                        static_cast<uint32_t>(stat[statIndex].Value.type));
-                if ((*statObjectPtr)["value"].IsNumber())
+                if ((*statObjectPtr)["value"].IsNumber()) {
                   stat[statIndex].Value.data.s64 =
                       (*statObjectPtr)["value"].GetUint64();
+                }
             }
 
             stat[statIndex].Value.type = static_cast<X_USER_DATA_TYPE>(
@@ -371,7 +374,7 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
       XSessionArbitrationData* data =
           reinterpret_cast<XSessionArbitrationData*>(buffer);
 
-        XELOGI(
+      XELOGI(
           "XSessionArbitrationRegister({:08X}, {:08X}, {:08X}, {:08X}, {:08X}, "
           "{:08X}, {:08X}, {:08X});",
           data->obj_ptr.get(), data->flags.get(), data->unk1.get(),
