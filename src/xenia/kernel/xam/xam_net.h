@@ -12,9 +12,7 @@
 
 namespace xe {
 namespace kernel {
-namespace xam {
-
-}  // namespace xam
+namespace xam {}  // namespace xam
 }  // namespace kernel
 }  // namespace xe
 
