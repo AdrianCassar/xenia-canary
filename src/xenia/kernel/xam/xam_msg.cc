@@ -62,7 +62,7 @@ X_HRESULT xeXMsgStartIORequestEx(uint32_t app, uint32_t message,
     XThread::SetLastError(X_ERROR_NOT_FOUND);
   }
   if (overlapped_ptr) {
-      result = X_ERROR_IO_PENDING;
+    result = X_ERROR_IO_PENDING;
   }
   if (result == X_ERROR_SUCCESS || result == X_ERROR_IO_PENDING) {
     XThread::SetLastError(0);
