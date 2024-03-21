@@ -11,8 +11,8 @@
 #define XENIA_KERNEL_XSESSION_H_
 
 #include "xenia/base/byte_order.h"
-#include "xenia/kernel/session_object_json.h"
 #include "xenia/kernel/arbitration_object_json.h"
+#include "xenia/kernel/session_object_json.h"
 #include "xenia/kernel/xnet.h"
 #include "xenia/kernel/xobject.h"
 
