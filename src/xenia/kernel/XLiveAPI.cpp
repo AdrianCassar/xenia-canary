@@ -107,10 +107,9 @@ void XLiveAPI::Init() {
     }
   }
 
-  GetLocalIP();
-
   upnp_handler = new UPnP();
   mac_address_ = new MacAddress(GetMACaddress());
+  local_ip_ = ip_to_sockaddr(UPnP::GetLocalIP());
 
   if (cvars::offline_mode) {
     XELOGI("Offline mode enabled!");
@@ -344,36 +343,6 @@ sockaddr_in XLiveAPI::Getwhoami() {
   XELOGI("Requesting Public IP");
 
   return online_ip_;
-}
-
-sockaddr_in XLiveAPI::GetLocalIP() {
-  char local_ip_str[INET_ADDRSTRLEN]{};
-
-  SOCKET sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-
-  if (sock < 0) {
-    return local_ip_;
-  }
-
-  sockaddr_in addrin{};
-  addrin.sin_family = AF_INET;
-  addrin.sin_port = htons(50);
-
-  inet_pton(AF_INET, "8.8.8.8", &addrin.sin_addr);
-
-  if (connect(sock, (sockaddr*)&addrin, sizeof(addrin)) < 0) {
-    closesocket(sock);
-    return local_ip_;
-  }
-
-  int socklen = sizeof(addrin);
-  if (getsockname(sock, (sockaddr*)&addrin, &socklen) < 0) {
-    return local_ip_;
-  }
-
-  local_ip_ = addrin;
-
-  return addrin;
 }
 
 void XLiveAPI::DownloadPortMappings() {
