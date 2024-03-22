@@ -49,6 +49,8 @@ class UPnP {
     return &port_binding_results_;
   };
 
+  static const std::string GetLocalIP();
+
  private:
   // https://openconnectivity.org/developer/specifications/upnp-resources/upnp/internet-gateway-device-igd-v-2-0/
   // http://upnp.org/specs/gw/UPnP-gw-WANIPConnection-v2-Service.pdf
