@@ -66,8 +66,6 @@ class XLiveAPI {
 
   static sockaddr_in Getwhoami();
 
-  static sockaddr_in GetLocalIP();
-
   static void DownloadPortMappings();
 
   static const uint64_t GetMachineId();
