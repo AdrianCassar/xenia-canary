@@ -117,7 +117,7 @@ void XLiveAPI::Init() {
     return;
   }
 
-  Getwhoami();
+  online_ip_ = Getwhoami();
 
   if (!IsOnline()) {
     XELOGI("Cannot access API server.");
@@ -328,23 +328,24 @@ XLiveAPI::memory XLiveAPI::Delete(std::string endpoint) {
   return chunk;
 }
 
-// Check connection to xenia web server as well as internet.
+// Check connection to xenia web server.
 sockaddr_in XLiveAPI::Getwhoami() {
   memory chunk = Get("whoami");
 
+  sockaddr_in addr{};
+
   if (chunk.http_code != HTTP_STATUS_CODE::HTTP_OK) {
-    return online_ip_;
+    return addr;
   }
 
   Document doc;
   doc.Parse(chunk.response);
 
-  auto result =
-      inet_pton(AF_INET, doc["address"].GetString(), &(online_ip_.sin_addr));
-
   XELOGI("Requesting Public IP");
 
-  return online_ip_;
+  addr = ip_to_sockaddr(doc["address"].GetString());
+
+  return addr;
 }
 
 void XLiveAPI::DownloadPortMappings() {
@@ -490,7 +491,8 @@ XLiveAPI::memory XLiveAPI::QoSGet(uint64_t sessionId) {
 
   memory chunk = Get(endpoint);
 
-  if (chunk.http_code != HTTP_STATUS_CODE::HTTP_OK) {
+  if (chunk.http_code != HTTP_STATUS_CODE::HTTP_OK &&
+      chunk.http_code != HTTP_STATUS_CODE::HTTP_NO_CONTENT) {
     XELOGE("QoSGet GET Failed!");
 
     assert_always();
@@ -896,8 +898,7 @@ std::vector<XTitleServer> XLiveAPI::GetServers() {
   for (const auto& server_data : doc.GetArray()) {
     XTitleServer server{};
 
-    inet_pton(AF_INET, server_data["address"].GetString(),
-              &server.server_address);
+    server.server_address = ip_to_in_addr(server_data["address"].GetString());
 
     server.flags = server_data["flags"].GetInt();
 
@@ -932,7 +933,7 @@ XONLINE_SERVICE_INFO XLiveAPI::GetServiceInfoById(uint32_t serviceId) {
   doc.Parse(chunk.response);
 
   for (const auto& service_info : doc.GetArray()) {
-    inet_pton(AF_INET, service_info["address"].GetString(), &service.ip);
+    service.ip = ip_to_in_addr(service_info["address"].GetString());
 
     XELOGD("GetServiceById IP: {}", service_info["address"].GetString());
 
