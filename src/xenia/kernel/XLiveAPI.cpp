@@ -63,9 +63,7 @@ const uint64_t XLiveAPI::GetMachineId() {
   return machineIdMask | macAddressUint;
 }
 
-bool XLiveAPI::is_active() { return active_; }
-
-bool XLiveAPI::is_initialized() { return initialized_; }
+XLiveAPI::InitState XLiveAPI::GetInitState() { return initialized_; }
 
 std::string XLiveAPI::GetApiAddress() {
   cvars::api_address = xe::string_util::trim(cvars::api_address);
@@ -89,7 +87,7 @@ int8_t XLiveAPI::GetVersionStatus() { return version_status; }
 
 void XLiveAPI::Init() {
   // Only initialize once
-  if (is_initialized()) {
+  if (GetInitState() != InitState::Pending) {
     return;
   }
 
@@ -112,16 +110,16 @@ void XLiveAPI::Init() {
   local_ip_ = ip_to_sockaddr(UPnP::GetLocalIP());
 
   if (cvars::offline_mode) {
-    XELOGI("Offline mode enabled!");
-    initialized_ = true;
+    XELOGI("XLiveAPI:: Offline mode enabled!");
+    initialized_ = InitState::Failed;
     return;
   }
 
   online_ip_ = Getwhoami();
 
   if (!IsOnline()) {
-    XELOGI("Cannot access API server.");
-    initialized_ = true;
+    XELOGI("XLiveAPI:: Cannot reach API server.");
+    initialized_ = InitState::Failed;
     return;
   }
 
@@ -140,10 +138,10 @@ void XLiveAPI::Init() {
 
   if (reg_result.http_code == HTTP_STATUS_CODE::HTTP_CREATED &&
       player->XUID() != 0) {
-    active_ = true;
+    initialized_ = InitState::Success;
+  } else {
+    initialized_ = InitState::Failed;
   }
-
-  initialized_ = true;
 
   // Delete sessions on start-up.
   DeleteAllSessions();
@@ -159,6 +157,11 @@ XLiveAPI::memory XLiveAPI::Get(std::string endpoint) {
   memory chunk = {0};
   CURL* curl_handle = curl_easy_init();
   CURLcode result;
+
+  if (GetInitState() == InitState::Failed) {
+    XELOGE("XLiveAPI::Get: Initialization failed");
+    return chunk;
+  }
 
   if (!curl_handle) {
     XELOGE("XLiveAPI::Get: Cannot initialize CURL");
@@ -219,6 +222,11 @@ XLiveAPI::memory XLiveAPI::Post(std::string endpoint, const uint8_t* data,
   memory chunk = {0};
   CURL* curl_handle = curl_easy_init();
   CURLcode result;
+
+  if (GetInitState() == InitState::Failed) {
+    XELOGE("XLiveAPI::Post: Initialization failed");
+    return chunk;
+  }
 
   if (!curl_handle) {
     XELOGE("XLiveAPI::Post: Cannot initialize CURL");
@@ -287,6 +295,11 @@ XLiveAPI::memory XLiveAPI::Delete(std::string endpoint) {
   memory chunk = {0};
   CURL* curl_handle = curl_easy_init();
   CURLcode result;
+
+  if (GetInitState() == InitState::Failed) {
+    XELOGE("XLiveAPI::Delete: Initialization failed");
+    return chunk;
+  }
 
   if (!curl_handle) {
     XELOGE("XLiveAPI::Delete: Cannot initialize CURL");
@@ -727,8 +740,6 @@ void XLiveAPI::DeleteSession(uint64_t sessionId) {
 }
 
 void XLiveAPI::DeleteAllSessionsByMac() {
-  if (!is_active()) return;
-
   const std::string endpoint =
       fmt::format("DeleteSessions/{}", mac_address_->to_string());
 
@@ -740,8 +751,6 @@ void XLiveAPI::DeleteAllSessionsByMac() {
 }
 
 void XLiveAPI::DeleteAllSessions() {
-  if (!is_active()) return;
-  
   const std::string endpoint = fmt::format("DeleteSessions");
 
   memory chunk = Delete(endpoint);
