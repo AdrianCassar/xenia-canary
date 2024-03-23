@@ -46,9 +46,9 @@ class XLiveAPI {
     uint64_t http_code;
   };
 
-  static bool is_active();
+  enum class InitState { Success, Failed, Pending };
 
-  static bool is_initialized();
+  static InitState GetInitState();
 
   static std::string GetApiAddress();
 
@@ -148,8 +148,7 @@ class XLiveAPI {
   inline static int8_t version_status;
 
  private:
-  inline static bool active_ = false;
-  inline static bool initialized_ = false;
+  inline static InitState initialized_ = InitState::Pending;
 
   static memory Get(std::string endpoint);
 
