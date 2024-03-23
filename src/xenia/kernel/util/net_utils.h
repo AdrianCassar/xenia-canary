@@ -60,6 +60,7 @@ class MacAddress {
 const std::string ip_to_string(in_addr addr);
 const std::string ip_to_string(sockaddr_in sockaddr);
 const sockaddr_in ip_to_sockaddr(std::string ip_str);
+const in_addr ip_to_in_addr(std::string ip_str);
 
 }  // namespace kernel
 }  // namespace xe
