@@ -229,7 +229,7 @@ void Update_XNetStartupParams(XNetStartupParams& dest,
 
 dword_result_t NetDll_XNetStartup_entry(dword_t caller,
                                         pointer_t<XNetStartupParams> params) {
-  if (XLiveAPI::is_initialized()) {
+  if (XLiveAPI::GetInitState() != XLiveAPI::InitState::Pending) {
     return 0;
   }
 
@@ -594,7 +594,7 @@ DECLARE_XAM_EXPORT1(XamQueryLiveHiveA, kNone, kStub);
 dword_result_t NetDll_XNetGetTitleXnAddr_entry(dword_t caller,
                                                pointer_t<XNADDR> addr_ptr) {
   // Wait for NetDll_WSAStartup or XNetStartup to setup XLiveAPI.
-  if (!XLiveAPI::is_initialized()) {
+  if (XLiveAPI::GetInitState() == XLiveAPI::InitState::Pending) {
     // Call of Duty 2 - does not call XNetStartup or WSAStartup before
     // XNetGetTitleXnAddr.
     XLiveAPI::Init();
