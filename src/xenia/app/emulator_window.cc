@@ -1916,11 +1916,15 @@ void EmulatorWindow::NetplayStatus() {
   msg += "API Address: " + cvars::api_address;
   msg += "\n";
 
-  msg += "XLiveAPI Initialized: " +
-         xe::string_util::BoolToString(xe::kernel::XLiveAPI::is_active());
+  msg +=
+      "XLiveAPI Initialized: " +
+      xe::string_util::BoolToString(xe::kernel::XLiveAPI::GetInitState() ==
+                                    xe::kernel::XLiveAPI::InitState::Success);
   msg += "\n";
 
-  if (xe::kernel::XLiveAPI::is_initialized() && cvars::upnp) {
+  if (xe::kernel::XLiveAPI::GetInitState() !=
+          xe::kernel::XLiveAPI::InitState::Pending &&
+      cvars::upnp) {
     if (xe::kernel::XLiveAPI::upnp_handler->is_active()) {
       msg += "UPnP: Device found";
     } else {
@@ -1936,10 +1940,12 @@ void EmulatorWindow::NetplayStatus() {
   msg += "Offline Mode: " + xe::string_util::BoolToString(cvars::offline_mode);
   msg += "\n";
 
-  if (xe::kernel::XLiveAPI::is_initialized()) {
+  if (xe::kernel::XLiveAPI::GetInitState() !=
+      xe::kernel::XLiveAPI::InitState::Pending) {
     msg += "\n";
 
-    if (xe::kernel::XLiveAPI::is_active()) {
+    if (xe::kernel::XLiveAPI::GetInitState() ==
+        xe::kernel::XLiveAPI::InitState::Success) {
       msg += "Communication succeeded with api_address: " + cvars::api_address;
     } else {
       msg += "Communication failed with api_address: " + cvars::api_address;
