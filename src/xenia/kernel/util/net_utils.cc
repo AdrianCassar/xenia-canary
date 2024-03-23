@@ -81,5 +81,12 @@ const sockaddr_in ip_to_sockaddr(std::string ip_str) {
   return addr;
 }
 
+const in_addr ip_to_in_addr(std::string ip_str) {
+  in_addr addr{};
+  inet_pton(AF_INET, ip_str.c_str(), &addr.s_addr);
+
+  return addr;
+}
+
 }  // namespace kernel
 }  // namespace xe
