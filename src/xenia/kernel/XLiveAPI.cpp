@@ -740,6 +740,10 @@ void XLiveAPI::DeleteSession(uint64_t sessionId) {
 }
 
 void XLiveAPI::DeleteAllSessionsByMac() {
+  if (!mac_address_) {
+    return;
+  }
+
   const std::string endpoint =
       fmt::format("DeleteSessions/{}", mac_address_->to_string());
 
