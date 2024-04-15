@@ -764,8 +764,15 @@ dword_result_t NetDll_XNetInAddrToXnAddr_entry(dword_t caller, dword_t in_addr,
     return X_STATUS_SUCCESS;
   }
 
-  xn_addr->inaOnline.s_addr = ntohl(in_addr);
-  xn_addr->ina.s_addr = ntohl(in_addr);
+  if (in_addr == LOOPBACK) {
+    XELOGI("Resolving XNADDR via LOOPBACK!");
+    xn_addr->ina.s_addr = XLiveAPI::OnlineIP().sin_addr.s_addr;
+    xn_addr->inaOnline.s_addr = XLiveAPI::OnlineIP().sin_addr.s_addr;
+  } else {
+    xn_addr->ina.s_addr = ntohl(in_addr);
+    xn_addr->inaOnline.s_addr = ntohl(in_addr);
+  }
+
   xn_addr->wPortOnline = XLiveAPI::GetPlayerPort();
 
   // Find cached online IP?
