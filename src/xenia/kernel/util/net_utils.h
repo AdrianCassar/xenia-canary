@@ -22,6 +22,8 @@
 namespace xe {
 namespace kernel {
 
+const uint32_t LOOPBACK = 0x7F000001;
+
 enum HTTP_STATUS_CODE {
   HTTP_OK = 200,
   HTTP_CREATED = 201,
