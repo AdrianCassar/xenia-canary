@@ -76,10 +76,19 @@ X_RESULT XSession::CreateSession(uint8_t user_index, uint8_t public_slots,
   //
   // Creating a session when not host can cause failure in joining sessions
   // such as L4D2 and Portal 2.
+  //
+  // Hexic creates a session with SINGLEPLAYER_WITH_STATS (without HOST bit)
+  // with contexts
+  //
+  // Create presence sessions?
+  // - Create when joining a session
+  // - Explicitly create a presence session (Frogger without HOST bit)
+  // Based on Presence flag set?
   if (flags == STATS) {
     CreateStatsSession(pSessionInfo, pNonce, user_index, public_slots,
                        private_slots, flags);
-  } else if (HasSessionFlag((SessionFlags)flags, HOST)) {
+  } else if (HasSessionFlag((SessionFlags)flags, HOST) ||
+             flags == SINGLEPLAYER_WITH_STATS) {
     // Write user contexts. After session creation these are read only!
     contexts_.insert(user_profile->contexts_.cbegin(),
                      user_profile->contexts_.cend());
@@ -156,6 +165,8 @@ X_RESULT XSession::JoinExistingSession(XSESSION_INFO* session_info) {
   session_id_ = XNKIDtoUint64(&session_info->sessionID);
   XELOGI("Joining session {:016X}", session_id_);
 
+  assert_true(IsOnlineSession(session_id_));
+
   if (session_id_ == NULL) {
     assert_always();
     return X_E_FAIL;
@@ -164,8 +175,8 @@ X_RESULT XSession::JoinExistingSession(XSESSION_INFO* session_info) {
   const std::unique_ptr<SessionObjectJSON> session =
       XLiveAPI::XSessionGet(session_id_);
 
-  inet_pton(AF_INET, session->HostAddress().c_str(),
-            &session_info->hostAddress.inaOnline.s_addr);
+  // Begin XNetRegisterKey?
+  session_info->hostAddress.inaOnline = ip_to_in_addr(session->HostAddress());
 
   session_info->hostAddress.ina.s_addr =
       session_info->hostAddress.inaOnline.s_addr;
@@ -181,6 +192,7 @@ X_RESULT XSession::JoinExistingSession(XSESSION_INFO* session_info) {
 }
 
 X_RESULT XSession::DeleteSession() {
+  // Begin XNetUnregisterKey?
   XLiveAPI::DeleteSession(session_id_);
   return X_ERROR_SUCCESS;
 }
@@ -278,6 +290,9 @@ X_RESULT XSession::LeaveSession(XSessionLeave* data) {
 }
 
 X_RESULT XSession::ModifySession(XSessionModify* data) {
+  XELOGI("Modifying session {:016X}", session_id_);
+  PrintSessionType(static_cast<SessionFlags>((uint32_t)data->flags));
+
   XLiveAPI::SessionModify(session_id_, data);
   return X_ERROR_SUCCESS;
 }
@@ -297,8 +312,9 @@ X_RESULT XSession::GetSessionDetails(XSessionDetails* data) {
   Uint64toXNKID(xe::byte_swap(session->SessionID_UInt()),
                 &details->sessionInfo.sessionID);
 
-  inet_pton(AF_INET, session->HostAddress().c_str(),
-            &details->sessionInfo.hostAddress.inaOnline.s_addr);
+  details->sessionInfo.hostAddress.inaOnline =
+      ip_to_in_addr(session->HostAddress());
+
   details->sessionInfo.hostAddress.ina.s_addr =
       details->sessionInfo.hostAddress.inaOnline.s_addr;
 
@@ -419,6 +435,20 @@ X_RESULT XSession::RegisterArbitration(XSessionArbitrationData* data) {
   return X_ERROR_SUCCESS;
 }
 
+X_RESULT XSession::ModifySkill(XSessionModifySkill* data) {
+  const auto xuid_array =
+      kernel_state_->memory()->TranslateVirtual<xe::be<uint64_t>*>(
+          data->xuid_array_ptr);
+
+  for (uint32_t i = 0; i < data->array_count; i++) {
+    const auto xuid = xuid_array[i];
+
+    XELOGI("ModifySkill XUID: {:016X}", xuid);
+  }
+
+  return X_ERROR_SUCCESS;
+}
+
 X_RESULT XSession::WriteStats(XSessionWriteStats* data) {
   XSessionViewProperties* leaderboard =
       kernel_state_->memory()->TranslateVirtual<XSessionViewProperties*>(
@@ -428,6 +458,10 @@ X_RESULT XSession::WriteStats(XSessionWriteStats* data) {
 
   return X_ERROR_SUCCESS;
 }
+
+X_RESULT XSession::StartSession(uint32_t flags) { return X_ERROR_SUCCESS; }
+
+X_RESULT XSession::EndSession() { return X_ERROR_SUCCESS; }
 
 X_RESULT XSession::GetSessions(Memory* memory, XSessionSearch* search_data) {
   if (!search_data->results_buffer_size) {
@@ -529,11 +563,11 @@ void XSession::FillSessionSearchResult(
     result->info.keyExchangeKey.ab[j] = j;
   }
 
-  inet_pton(AF_INET, session_info->HostAddress().c_str(),
-            &result->info.hostAddress.ina.s_addr);
+  result->info.hostAddress.inaOnline =
+      ip_to_in_addr(session_info->HostAddress());
 
-  inet_pton(AF_INET, session_info->HostAddress().c_str(),
-            &result->info.hostAddress.inaOnline.s_addr);
+  result->info.hostAddress.ina.s_addr =
+      result->info.hostAddress.inaOnline.s_addr;
 
   result->info.hostAddress.wPortOnline = session_info->Port();
 }
