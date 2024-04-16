@@ -219,10 +219,12 @@ dword_result_t XamGetSystemVersion_entry() {
     ver = 0;
   }
 
-  auto version = fmt::format("Kernel version: {}.{}.{}.{}", (ver >> 28) & 0xF,
-                             (ver >> 24) & 0xF, (ver >> 8) & 0xFFFF, ver & 0xF);
+  // auto version = fmt::format("Kernel version: {}.{}.{}.{}", (ver >> 28) &
+  // 0xF,
+  //                            (ver >> 24) & 0xF, (ver >> 8) & 0xFFFF, ver &
+  //                            0xF);
 
-  XELOGD("{}", version);
+  // XELOGD("{}", version);
 
   return ver;
 }
