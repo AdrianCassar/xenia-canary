@@ -100,8 +100,8 @@ enum {
 
 typedef struct {
   // FYI: IN_ADDR should be in network-byte order.
-  in_addr ina;                   // IP address (zero if not static/DHCP)
-  in_addr inaOnline;             // Online IP address (zero if not online)
+  in_addr ina;        // IP address (zero if not static/DHCP) - Local IP
+  in_addr inaOnline;  // Online IP address (zero if not online) - Public IP
   xe::be<uint16_t> wPortOnline;  // Online port
   uint8_t abEnet[6];             // Ethernet MAC address
   uint8_t abOnline[20];          // Online identification
@@ -167,6 +167,14 @@ struct XNetStartupParams {
 struct XAUTH_SETTINGS {
   xe::be<uint32_t> SizeOfStruct;
   xe::be<uint32_t> Flags;
+};
+
+// Security Gateway Address
+struct SGADDR {
+  in_addr ina_security_gateway;
+  xe::be<uint32_t> security_parameter_index;
+  xe::be<uint64_t> xbox_id;
+  uint8_t unkn[4];
 };
 
 struct XnAddrStatus {
@@ -307,6 +315,12 @@ dword_result_t XNetLogonGetTitleID_entry(dword_t caller, lpvoid_t params) {
   return kernel_state()->title_id();
 }
 DECLARE_XAM_EXPORT1(XNetLogonGetTitleID, kNetworking, kImplemented);
+
+dword_result_t NetDll_XnpLogonGetStatus_entry(
+    dword_t caller, pointer_t<SGADDR> security_gateway_ptr, lpdword_t unkn) {
+  return X_STATUS_SUCCESS;
+}
+DECLARE_XAM_EXPORT1(NetDll_XnpLogonGetStatus, kNetworking, kStub);
 
 dword_result_t NetDll_XNetGetOpt_entry(dword_t one, dword_t option_id,
                                        lpvoid_t buffer_ptr,
@@ -647,9 +661,9 @@ dword_result_t NetDll_XNetGetDebugXnAddr_entry(dword_t caller,
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetGetDebugXnAddr, kNetworking, kStub);
 
-dword_result_t NetDll_XNetXnAddrToMachineId_entry(
-    dword_t caller, pointer_t<XNADDR> addr_ptr,
-    pointer_t<be<uint64_t>> id_ptr) {
+dword_result_t NetDll_XNetXnAddrToMachineId_entry(dword_t caller,
+                                                  pointer_t<XNADDR> addr_ptr,
+                                                  lpqword_t id_ptr) {
   // Tell the caller we're not signed in to live (non-zero ret)
   // if (addr_ptr->inaOnline.S_un.S_un_b.s_b4 == 170) *id_ptr =
   // 0xFA000000049B679F; else
@@ -772,6 +786,8 @@ dword_result_t NetDll_XNetInAddrToXnAddr_entry(dword_t caller, dword_t in_addr,
     XELOGI("Resolving XNADDR via LOOPBACK!");
     xn_addr->ina.s_addr = XLiveAPI::OnlineIP().sin_addr.s_addr;
     xn_addr->inaOnline.s_addr = XLiveAPI::OnlineIP().sin_addr.s_addr;
+
+    // return NetDll_XNetGetTitleXnAddr_entry(caller, xn_addr);
   } else {
     xn_addr->ina.s_addr = ntohl(in_addr);
     xn_addr->inaOnline.s_addr = ntohl(in_addr);
@@ -1676,8 +1692,9 @@ dword_result_t NetDll_XNetCreateKey_entry(dword_t caller, lpdword_t key_id,
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetCreateKey, kNetworking, kStub);
 
-dword_result_t NetDll_XNetRegisterKey_entry(dword_t caller, lpdword_t key_id,
-                                            lpdword_t exchange_key) {
+dword_result_t NetDll_XNetRegisterKey_entry(dword_t caller,
+                                            pointer_t<XNKID> session_key,
+                                            pointer_t<XNKEY> exchange_key) {
   return 0;
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetRegisterKey, kNetworking, kStub);
