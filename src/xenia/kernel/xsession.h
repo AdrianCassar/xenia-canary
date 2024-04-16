@@ -125,6 +125,17 @@ struct XSessionModify {
   xe::be<uint32_t> xoverlapped;
 };
 
+struct XSessionStart {
+  xe::be<uint32_t> obj_ptr;
+  xe::be<uint32_t> flags;
+  xe::be<uint32_t> xoverlapped;
+};
+
+struct XSessionEnd {
+  xe::be<uint32_t> obj_ptr;
+  xe::be<uint32_t> xoverlapped;
+};
+
 struct XSessionSearch {
   xe::be<uint32_t> proc_index;
   xe::be<uint32_t> user_index;
@@ -187,6 +198,13 @@ struct XSessionWriteStats {
   xe::be<uint64_t> xuid;
   xe::be<uint32_t> number_of_leaderboards;
   xe::be<uint32_t> leaderboards_guest_address;
+  xe::be<uint32_t> xoverlapped;
+};
+
+struct XSessionModifySkill {
+  xe::be<uint32_t> obj_ptr;
+  xe::be<uint32_t> array_count;
+  xe::be<uint32_t> xuid_array_ptr;
   xe::be<uint32_t> xoverlapped;
 };
 
@@ -271,7 +289,11 @@ class XSession : public XObject {
   X_RESULT GetSessionDetails(XSessionDetails* data);
   X_RESULT MigrateHost(XSessionMigate* data);
   X_RESULT RegisterArbitration(XSessionArbitrationData* data);
+  X_RESULT ModifySkill(XSessionModifySkill* data);
   X_RESULT WriteStats(XSessionWriteStats* data);
+
+  X_RESULT StartSession(uint32_t flags);
+  X_RESULT EndSession();
 
   static X_RESULT GetSessions(Memory* memory, XSessionSearch* search_data);
   static X_RESULT GetSessionByID(Memory* memory, XSessionSearchID* search_data);
@@ -288,6 +310,11 @@ class XSession : public XObject {
                               uint8_t user_index, uint8_t public_slots,
                               uint8_t private_slots, uint32_t flags);
   X_RESULT JoinExistingSession(XSESSION_INFO* session_info);
+
+  // May trigger for sessions creared with older netplay builds.
+  const bool IsOnlineSession(uint64_t session_id) {
+    return ((session_id >> 56) & 0xFF) == 0xAE;
+  }
 
   const bool HasSessionFlag(SessionFlags flags,
                             SessionFlags checked_flag) const {
