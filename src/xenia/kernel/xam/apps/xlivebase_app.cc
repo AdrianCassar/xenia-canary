@@ -75,8 +75,11 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
     }
     case 0x00050008: {
       // Required to be successful for 534507D4
-      XELOGD("XLiveBaseUnk50008({:08x}, {:08x}) unimplemented", buffer_ptr,
-             buffer_length);
+      // Guess:
+      // XStorageDownloadToMemory -> XStorageDownloadToMemoryGetProgress
+      XELOGD(
+          "XStorageDownloadToMemoryGetProgress({:08x}, {:08x}) unimplemented",
+          buffer_ptr, buffer_length);
       return X_E_SUCCESS;
     }
     case 0x00050009: {
@@ -84,6 +87,11 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
       XELOGD("XStorageDownloadToMemory({:08X}, {:08X}) unimplemented",
              buffer_ptr, buffer_length);
       return XStorageDownloadToMemory(buffer_ptr);
+    }
+    case 0x0005000A: {
+      XELOGD("XStorageEnumerate({:08X}, {:08X}) unimplemented", buffer_ptr,
+             buffer_length);
+      return X_E_SUCCESS;
     }
     case 0x0005000B: {
       // Fixes Xbox Live error for 43430821
@@ -98,6 +106,42 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
     case 0x0005000D: {
       // Fixes hang when leaving session for 545107D5
       XELOGD("XLiveBaseUnk5000D({:08X}, {:08X}) unimplemented", buffer_ptr,
+             buffer_length);
+      return X_E_SUCCESS;
+    }
+    case 0x0005000E: {
+      // Before every call there is a call to XUserFindUsers
+      // Success stub:
+      // 584113E8 successfully creates session.
+      // 58410B5D craches.
+      XELOGD("XUserFindUsersResponseSize({:08X}, {:08X}) unimplemented",
+             buffer_ptr, buffer_length);
+      return X_E_FAIL;
+    }
+    case 0x0005000F: {
+      // 41560855 included from TU 7
+      // Attempts to set a dvar for ui_email_address but fails on
+      // WideCharToMultiByte
+      XELOGD("_XAccountGetUserInfo({:08X}, {:08X}) unimplemented", buffer_ptr,
+             buffer_length);
+      xe::be<uint32_t> args_ptr =
+          *memory_->TranslateVirtual<xe::be<uint32_t>*>(buffer_ptr);
+
+      struct user_ptr {
+        xe::be<uint32_t> unkn_ptr;
+        xe::be<uint32_t> data_ptr;
+      };
+
+      user_ptr* user_info =
+          reinterpret_cast<user_ptr*>(memory_->TranslateVirtual(args_ptr));
+
+      // size = buffer_length
+      char* data = memory_->TranslateVirtual<char*>(user_info->data_ptr);
+      // strcpy(data, "example@gmail.com");
+      return X_E_SUCCESS;
+    }
+    case 0x00050010: {
+      XELOGD("XAccountGetUserInfo({:08X}, {:08X}) unimplemented", buffer_ptr,
              buffer_length);
       return X_E_SUCCESS;
     }
@@ -134,8 +178,8 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
       return GetServiceInfo(buffer_ptr, buffer_length);
     }
     case 0x00058009: {
-      XELOGD("XContentGetMarketplaceCounts({:08X}, {:08X})", buffer_ptr,
-             buffer_length);
+      XELOGD("XContentGetMarketplaceCounts({:08X}, {:08X}) unimplemented",
+             buffer_ptr, buffer_length);
       return X_E_SUCCESS;
     }
     case 0x0005800E: {
@@ -145,16 +189,18 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
       return X_E_SUCCESS;
     }
     case 0x00058017: {
-      XELOGD("UserFindUsers({:08X}, {:08X})", buffer_ptr, buffer_length);
-      return X_E_SUCCESS;
-    }
-    case 0x00058019: {
-      XELOGD("XPresenceCreateEnumerator({:08X}, {:08X})", buffer_ptr,
+      XELOGD("XUserFindUsers({:08X}, {:08X}) unimplemented", buffer_ptr,
              buffer_length);
       return X_E_SUCCESS;
     }
+    case 0x00058019: {
+      XELOGD("XPresenceCreateEnumerator({:08X}, {:08X}) unimplemented",
+             buffer_ptr, buffer_length);
+      return X_E_SUCCESS;
+    }
     case 0x0005801E: {
-      XELOGD("XPresenceSubscribe({:08X}, {:08X})", buffer_ptr, buffer_length);
+      XELOGD("XPresenceSubscribe({:08X}, {:08X}) unimplemented", buffer_ptr,
+             buffer_length);
       return X_E_SUCCESS;
     }
     case 0x00058020: {
@@ -186,14 +232,19 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
       return XStorageBuildServerPath(buffer_ptr);
     }
     case 0x00058037: {
-      XELOGD("XPresenceInitialize({:08X}, {:08X})", buffer_ptr, buffer_length);
+      // Used in older games such as Crackdown, FM2, Saints Row 1
+      XELOGD("XPresenceInitializeLegacy({:08X}, {:08X}) unimplemented",
+             buffer_ptr, buffer_length);
       return X_E_SUCCESS;
     }
     case 0x00058044: {
-      XELOGD("XPresenceUnsubscribe({:08X}, {:08X})", buffer_ptr, buffer_length);
+      XELOGD("XPresenceUnsubscribe({:08X}, {:08X}) unimplemented", buffer_ptr,
+             buffer_length);
       return X_E_SUCCESS;
     }
     case 0x00058046: {
+      // Used in newer games such as Forza 4, MW3, FH2
+      //
       // Required to be successful for 4D530910 to detect signed-in profile
       // Doesn't seem to set anything in the given buffer, probably only takes
       // input

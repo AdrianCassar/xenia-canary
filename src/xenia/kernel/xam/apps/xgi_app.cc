@@ -488,13 +488,37 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
       // get high score table?
 
       XELOGI("XSessionStart");
-      return X_STATUS_SUCCESS;
+
+      const auto data = reinterpret_cast<XSessionStart*>(buffer);
+
+      uint8_t* obj_ptr = memory_->TranslateVirtual<uint8_t*>(data->obj_ptr);
+
+      auto session =
+          XObject::GetNativeObject<XSession>(kernel_state(), obj_ptr);
+
+      if (!session) {
+        return X_STATUS_INVALID_HANDLE;
+      }
+
+      return session->StartSession(data->flags);
     }
     case 0x000B0015: {
       // send high scores?
 
       XELOGI("XSessionEnd");
-      return X_STATUS_SUCCESS;
+
+      const auto data = reinterpret_cast<XSessionEnd*>(buffer);
+
+      uint8_t* obj_ptr = memory_->TranslateVirtual<uint8_t*>(data->obj_ptr);
+
+      auto session =
+          XObject::GetNativeObject<XSession>(kernel_state(), obj_ptr);
+
+      if (!session) {
+        return X_STATUS_INVALID_HANDLE;
+      }
+
+      return session->EndSession();
     }
     case 0x000B0025: {
       XELOGI("XSessionWriteStats");
@@ -526,7 +550,19 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
     }
     case 0x000B001F: {
       XELOGI("XSessionModifySkill unimplemented");
-      return X_E_SUCCESS;
+
+      XSessionModifySkill* data =
+          reinterpret_cast<XSessionModifySkill*>(buffer);
+
+      uint8_t* obj_ptr = memory_->TranslateVirtual<uint8_t*>(data->obj_ptr);
+
+      auto session =
+          XObject::GetNativeObject<XSession>(kernel_state(), obj_ptr);
+      if (!session) {
+        return X_STATUS_INVALID_HANDLE;
+      }
+
+      return session->ModifySkill(data);
     }
     case 0x000B0019: {
       XELOGI("XSessionGetInvitationData unimplemented");
