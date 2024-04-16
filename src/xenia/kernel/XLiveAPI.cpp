@@ -130,18 +130,9 @@ void XLiveAPI::Init() {
     upnp_handler->Initialize();
   }
 
-  // Must get mac address and IP before registering.
   auto reg_result = RegisterPlayer();
 
-  // If player already exists on server then no need to post it again?
-  auto player = FindPlayer(OnlineIP_str());
-
-  if (reg_result.http_code == HTTP_STATUS_CODE::HTTP_CREATED &&
-      player->XUID() != 0) {
-    initialized_ = InitState::Success;
-  } else {
-    initialized_ = InitState::Failed;
-  }
+  initialized_ = InitState::Success;
 
   // Delete sessions on start-up.
   DeleteAllSessions();
@@ -433,6 +424,15 @@ XLiveAPI::memory XLiveAPI::RegisterPlayer() {
   }
 
   XELOGI("POST Success");
+
+  auto player_lookup = FindPlayer(OnlineIP_str());
+
+  // Check for errnours profile lookup
+  if (player_lookup->XUID() != player.XUID()) {
+    XELOGI("XLiveAPI:: Player 0 XUID mismatch!");
+
+    assert_always();
+  }
 
   return chunk;
 }
