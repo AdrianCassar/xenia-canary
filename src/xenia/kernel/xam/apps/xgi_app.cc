@@ -123,13 +123,9 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
       return session->GetSessionDetails(data);
     }
     case 0x000B001E: {
-      XSessionMigate* data = reinterpret_cast<XSessionMigate*>(buffer);
+      XELOGI("XSessionMigrateHost");
 
-      XELOGI("XSessionMigrateHost({:08X});", buffer_length);
-      if (data->session_info_ptr == NULL) {
-        XELOGI("XSessionMigrateHost Failed!");
-        return X_E_SUCCESS;
-      }
+      XSessionMigate* data = reinterpret_cast<XSessionMigate*>(buffer);
 
       uint8_t* obj_ptr = memory_->TranslateVirtual<uint8_t*>(data->obj_ptr);
 
@@ -137,6 +133,14 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
           XObject::GetNativeObject<XSession>(kernel_state(), obj_ptr);
       if (!session) {
         return X_STATUS_INVALID_HANDLE;
+      }
+
+      XSESSION_INFO* session_info_ptr =
+          memory_->TranslateVirtual<XSESSION_INFO*>(data->session_info_ptr);
+
+      if (data->session_info_ptr == NULL) {
+        XELOGI("Session Migration Failed");
+        return X_E_FAIL;
       }
 
       return session->MigrateHost(data);
