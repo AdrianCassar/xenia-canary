@@ -54,13 +54,19 @@ using namespace rapidjson;
 namespace xe {
 namespace kernel {
 
-const uint64_t XLiveAPI::GetMachineId() {
-  const uint64_t machineIdMask = 0xFA00000000000000;
+const uint64_t XLiveAPI::GetMachineId(const uint64_t mac_address) {
+  const uint64_t machine_id_mask = 0xFA00000000000000;
 
-  const uint64_t macAddress = mac_address_->to_uint64();
-  const uint64_t macAddressUint =
-      *reinterpret_cast<const uint64_t*>(&macAddress);
-  return machineIdMask | macAddressUint;
+  return machine_id_mask | mac_address;
+}
+
+const uint64_t XLiveAPI::GetLocalMachineId() {
+  if (!mac_address_) {
+    XELOGE("Mac Address not initialized!");
+    assert_always();
+  }
+
+  return GetMachineId(mac_address_->to_uint64());
 }
 
 XLiveAPI::InitState XLiveAPI::GetInitState() { return initialized_; }
@@ -407,8 +413,9 @@ XLiveAPI::memory XLiveAPI::RegisterPlayer() {
 
   PlayerObjectJSON player = PlayerObjectJSON();
 
+  // User index hard-coded
   player.XUID(kernel_state()->xam_state()->GetUserProfile(index)->xuid());
-  player.MachineID(GetMachineId());
+  player.MachineID(GetLocalMachineId());
   player.HostAddress(OnlineIP_str());
   player.MacAddress(mac_address_->to_uint64());
 
@@ -1108,7 +1115,6 @@ const uint8_t* XLiveAPI::GetMACaddress() {
 
   return GenerateMacAddress();
 #endif  // WIN32
-
 }
 }  // namespace kernel
 }  // namespace xe
