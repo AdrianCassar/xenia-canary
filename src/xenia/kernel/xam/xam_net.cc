@@ -959,7 +959,7 @@ dword_result_t NetDll_XNetQosRelease_entry(dword_t caller,
 DECLARE_XAM_EXPORT1(NetDll_XNetQosRelease, kNetworking, kStub);
 
 dword_result_t NetDll_XNetQosListen_entry(
-    dword_t caller, pointer_t<uint64_t> sessionId, pointer_t<uint32_t> data,
+    dword_t caller, pointer_t<XNKID> sessionId, pointer_t<uint32_t> data,
     dword_t data_size, dword_t bits_per_second, dword_t flags) {
   XELOGI("XNetQosListen({:08X}, {:016X}, {:016X}, {}, {:08X}, {:08X})",
          caller.value(), sessionId.host_address(), data.host_address(),
@@ -992,7 +992,7 @@ dword_result_t NetDll_XNetQosListen_entry(
     return X_ERROR_SUCCESS;
   }
 
-  const uint64_t session_id = xe::byte_swap(*sessionId);
+  const uint64_t session_id = xe::byte_swap(sessionId->as_uint64());
 
   if (flags & LISTEN_SET_DATA) {
     std::vector<uint8_t> qos_buffer(data_size);
