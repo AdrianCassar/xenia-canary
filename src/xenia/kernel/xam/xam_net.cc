@@ -305,7 +305,7 @@ dword_result_t NetDll_XNetCleanup_entry(dword_t caller, lpvoid_t params) {
 DECLARE_XAM_EXPORT1(NetDll_XNetCleanup, kNetworking, kImplemented);
 
 dword_result_t XNetLogonGetMachineID_entry(lpqword_t machine_id_ptr) {
-  *machine_id_ptr = XLiveAPI::GetMachineId();
+  *machine_id_ptr = XLiveAPI::GetLocalMachineId();
 
   return X_STATUS_SUCCESS;
 }
@@ -674,24 +674,14 @@ dword_result_t NetDll_XNetXnAddrToMachineId_entry(dword_t caller,
     return static_cast<uint32_t>(X_WSAError::X_WSAEINVAL);
   }
 
-  // Check if we have already cached the conversion to reduce API calls.
-  if (XLiveAPI::machineIdCache.find(addr_ptr->inaOnline.s_addr) !=
-      XLiveAPI::machineIdCache.end()) {
-    *id_ptr = XLiveAPI::machineIdCache[addr_ptr->inaOnline.s_addr];
-    return X_ERROR_SUCCESS;
-  }
+  const MacAddress mac = MacAddress(addr_ptr->abEnet);
+  const uint64_t machine_id = XLiveAPI::GetMachineId(mac.to_uint64());
 
-  const auto player = XLiveAPI::FindPlayer(ip_to_string(addr_ptr->inaOnline));
-
-  *id_ptr = player->MachineID();
-
-  // Cache the conversion.
-  XLiveAPI::machineIdCache.emplace(addr_ptr->inaOnline.s_addr,
-                                   player->MachineID());
+  *id_ptr = machine_id;
 
   return X_ERROR_SUCCESS;
 }
-DECLARE_XAM_EXPORT1(NetDll_XNetXnAddrToMachineId, kNetworking, kStub);
+DECLARE_XAM_EXPORT1(NetDll_XNetXnAddrToMachineId, kNetworking, kImplemented);
 
 dword_result_t NetDll_XNetUnregisterInAddr_entry(dword_t caller, dword_t addr) {
   XELOGI("NetDll_XNetUnregisterInAddr({:08X})",
