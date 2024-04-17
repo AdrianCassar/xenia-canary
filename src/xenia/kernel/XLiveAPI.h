@@ -68,7 +68,9 @@ class XLiveAPI {
 
   static void DownloadPortMappings();
 
-  static const uint64_t GetMachineId();
+  static const uint64_t GetMachineId(const uint64_t macAddress);
+
+  static const uint64_t GetLocalMachineId();
 
   static memory RegisterPlayer();
 
@@ -140,7 +142,6 @@ class XLiveAPI {
 
   inline static MacAddress* mac_address_ = nullptr;
 
-  inline static std::map<uint32_t, uint64_t> machineIdCache{};
   inline static std::map<uint32_t, uint64_t> sessionIdCache{};
   inline static std::map<uint32_t, uint64_t> macAddressCache{};
   inline static std::map<uint64_t, std::vector<uint8_t>> qos_payload_cache{};
