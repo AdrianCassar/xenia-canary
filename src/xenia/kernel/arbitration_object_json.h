@@ -7,6 +7,9 @@
  ******************************************************************************
  */
 
+#ifndef XENIA_KERNEL_ARITRATION_OBJECT_JSON_H_
+#define XENIA_KERNEL_ARITRATION_OBJECT_JSON_H_
+
 #include <vector>
 
 #include "xenia/kernel/base_object_json.h"
@@ -46,3 +49,5 @@ class ArbitrationObjectJSON : public BaseObjectJSON {
 
 }  // namespace kernel
 }  // namespace xe
+
+#endif  // XENIA_KERNEL_ARITRATION_OBJECT_JSON_H_
