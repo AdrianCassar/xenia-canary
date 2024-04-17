@@ -7,6 +7,9 @@
  ******************************************************************************
  */
 
+#ifndef XENIA_KERNEL_LEADERBOARD_OBJECT_JSON_H_
+#define XENIA_KERNEL_LEADERBOARD_OBJECT_JSON_H_
+
 #include "xenia//kernel/xsession.h"
 #include "xenia/kernel/base_object_json.h"
 
@@ -38,3 +41,5 @@ class LeaderboardObjectJSON : public BaseObjectJSON {
 };
 }  // namespace kernel
 }  // namespace xe
+
+#endif  // XENIA_KERNEL_LEADERBOARD_OBJECT_JSON_H_
