@@ -166,8 +166,8 @@ struct XSessionDetails {
 
 struct XSessionMigate {
   xe::be<uint32_t> obj_ptr;
-  xe::be<uint32_t> user_index;
   xe::be<uint32_t> session_info_ptr;
+  xe::be<uint32_t> user_index;
   xe::be<uint32_t> pXOverlapped;
 };
 
