@@ -7,6 +7,9 @@
  ******************************************************************************
  */
 
+#ifndef XENIA_KERNEL_PLAYER_OBJECT_JSON_H_
+#define XENIA_KERNEL_PLAYER_OBJECT_JSON_H_
+
 #include <vector>
 
 #include "xenia/kernel/base_object_json.h"
@@ -55,3 +58,5 @@ class PlayerObjectJSON : public BaseObjectJSON {
 
 }  // namespace kernel
 }  // namespace xe
+
+#endif  // XENIA_KERNEL_PLAYER_OBJECT_JSON_H_
