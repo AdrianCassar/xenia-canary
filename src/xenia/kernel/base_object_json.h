@@ -7,8 +7,8 @@
  ******************************************************************************
  */
 
-#ifndef XENIA_KERNEL_JSONBASE_H_
-#define XENIA_KERNEL_JSONBASE_H_
+#ifndef XENIA_KERNEL_BASE_OBJECT_JSON_H_
+#define XENIA_KERNEL_BASE_OBJECT_JSON_H_
 
 #define RAPIDJSON_HAS_STDSTRING 1
 
@@ -35,4 +35,4 @@ class BaseObjectJSON {
 }  // namespace kernel
 }  // namespace xe
 
-#endif  // XENIA_KERNEL_JSONBASE_H_
+#endif  // XENIA_KERNEL_BASE_OBJECT_JSON_H_
