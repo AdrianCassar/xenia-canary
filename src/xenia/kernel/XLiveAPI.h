@@ -17,7 +17,10 @@
 #include "xenia/kernel/util/net_utils.h"
 #include "xenia/kernel/xnet.h"
 
+#include "xenia/kernel/arbitration_object_json.h"
 #include "xenia/kernel/leaderboard_object_json.h"
+#include "xenia/kernel/player_object_json.h"
+#include "xenia/kernel/session_object_json.h"
 #include "xenia/kernel/xsession.h"
 
 namespace xe {
