@@ -7,6 +7,9 @@
  ******************************************************************************
  */
 
+#ifndef XENIA_KERNEL_SESSION_OBJECT_JSON_H_
+#define XENIA_KERNEL_SESSION_OBJECT_JSON_H_
+
 #include <vector>
 
 #include "xenia/base/string_util.h"
@@ -126,3 +129,5 @@ class SessionObjectJSON : public BaseObjectJSON {
 };
 }  // namespace kernel
 }  // namespace xe
+
+#endif  // XENIA_KERNEL_SESSION_OBJECT_JSON_H_
