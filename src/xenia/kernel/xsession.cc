@@ -379,15 +379,19 @@ X_RESULT XSession::MigrateHost(XSessionMigate* data) {
   auto sessionInfo = kernel_state_->memory()->TranslateVirtual<XSESSION_INFO*>(
       data->session_info_ptr);
 
+  if (!XLiveAPI::upnp_handler->is_active()) {
+    XELOGI("Migrating without UPnP");
+    // return X_E_FAIL;
+  }
+
   const auto result = XLiveAPI::XSessionMigration(session_id_);
 
-  if (result->HostAddress().empty()) {
-    return X_E_SUCCESS;
+  if (!result->SessionID_UInt()) {
+    XELOGI("Session Migration Failed");
+    return X_E_FAIL;
   }
 
-  for (int i = 0; i < sizeof(XNKEY); i++) {
-    sessionInfo->keyExchangeKey.ab[i] = i;
-  }
+  Uint64toXNKID(result->SessionID_UInt(), &sessionInfo->sessionID);
 
   sessionInfo->hostAddress.inaOnline.s_addr =
       XLiveAPI::OnlineIP().sin_addr.s_addr;
@@ -399,6 +403,11 @@ X_RESULT XSession::MigrateHost(XSessionMigate* data) {
   memcpy(&sessionInfo->hostAddress.abOnline, XLiveAPI::mac_address_->raw(), 6);
 
   sessionInfo->hostAddress.wPortOnline = XLiveAPI::GetPlayerPort();
+
+  for (int i = 0; i < sizeof(XNKEY); i++) {
+    sessionInfo->keyExchangeKey.ab[i] = i;
+  }
+
   return X_ERROR_SUCCESS;
 }
 
