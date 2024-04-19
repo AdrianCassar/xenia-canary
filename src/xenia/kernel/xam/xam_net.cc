@@ -908,19 +908,21 @@ dword_result_t NetDll_XNetQosServiceLookup_entry(dword_t caller, dword_t flags,
   if (pqos) {
     auto qos_guest = kernel_memory()->SystemHeapAlloc(sizeof(XNQOS));
     auto qos = kernel_memory()->TranslateVirtual<XNQOS*>(qos_guest);
+
     qos->count = 1;
 
     qos->info[0].probes_xmit = 4;
     qos->info[0].probes_recv = 4;
-    qos->info[0].data_len = 1;
-    qos->info[0].data_ptr = *(BYTE*)"A";
+    qos->info[0].data_len = sizeof("A");
+    qos->info[0].data_ptr = *(uint8_t*)"A";
     qos->info[0].rtt_min_in_msecs = 4;
     qos->info[0].rtt_med_in_msecs = 10;
-    qos->info[0].up_bits_per_sec = 13125;
-    qos->info[0].down_bits_per_sec = 21058;
+    qos->info[0].up_bits_per_sec = 20 * 1024;
+    qos->info[0].down_bits_per_sec = 20 * 1024;
     qos->info[0].flags = XNET_XNQOSINFO::COMPLETE |
                          XNET_XNQOSINFO::TARGET_CONTACTED |
                          XNET_XNQOSINFO::DATA_RECEIVED;
+
     qos->count_pending = 0;
 
     *pqos = qos_guest;
@@ -948,6 +950,8 @@ dword_result_t NetDll_XNetQosRelease_entry(dword_t caller,
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetQosRelease, kNetworking, kStub);
 
+// Create a socket and listen for incoming probes via player port and filter by
+// session id
 dword_result_t NetDll_XNetQosListen_entry(
     dword_t caller, pointer_t<XNKID> sessionId, pointer_t<uint32_t> data,
     dword_t data_size, dword_t bits_per_second, dword_t flags) {
@@ -955,19 +959,20 @@ dword_result_t NetDll_XNetQosListen_entry(
          caller.value(), sessionId.host_address(), data.host_address(),
          data_size.value(), bits_per_second.value(), flags.value());
 
-  switch (flags) {
-    case LISTEN_ENABLE: {
-      XELOGI("XNetQosListen LISTEN_ENABLE");
-    } break;
-    case LISTEN_DISABLE: {
-      XELOGI("XNetQosListen LISTEN_DISABLE");
-    } break;
-    case LISTEN_SET_BITSPERSEC: {
-      XELOGI("XNetQosListen LISTEN_SET_BITSPERSEC");
-    } break;
-    case XLISTEN_RELEASE: {
-      XELOGI("XNetQosListen LISTEN_RELEASE");
-    }
+  if (flags & LISTEN_ENABLE) {
+    XELOGI("XNetQosListen LISTEN_ENABLE");
+  }
+
+  if (flags & LISTEN_DISABLE) {
+    XELOGI("XNetQosListen LISTEN_DISABLE");
+  }
+
+  if (flags & LISTEN_SET_BITSPERSEC) {
+    XELOGI("XNetQosListen LISTEN_SET_BITSPERSEC");
+  }
+
+  if (flags & XLISTEN_RELEASE) {
+    XELOGI("XNetQosListen XLISTEN_RELEASE");
   }
 
   if (data_size <= 0) {
@@ -1005,59 +1010,169 @@ dword_result_t NetDll_XNetQosListen_entry(
 DECLARE_XAM_EXPORT1(NetDll_XNetQosListen, kNetworking, kSketchy);
 
 dword_result_t NetDll_XNetQosLookup_entry(
-    dword_t caller, dword_t sessionsCount,
-    pointer_t<uint32_t> remote_addressesPtrsPtr,
-    pointer_t<uint32_t> sessionIdPtrsPtr,
-    pointer_t<uint32_t> remote_keysPtrsPtr, dword_t num_gateways,
-    pointer_t<uint32_t> gateways_ips_ptr, pointer_t<uint32_t> service_id_ptr,
-    dword_t probes_count, dword_t bits_per_second, dword_t flags,
-    dword_t event_handle, lpdword_t qos_ptr) {
-  if (qos_ptr == nullptr) {
-    return (uint32_t)X_WSAError::X_WSAEACCES;
+    dword_t caller, dword_t num_remote_consoles,
+    pointer_t<uint32_t> remote_addresses_PtrsPtr,
+    pointer_t<uint32_t> sessionId_PtrsPtr,
+    pointer_t<uint32_t> remote_keys_PtrsPtr, dword_t num_gateways,
+    pointer_t<uint32_t> gateways_PtrsPtr,
+    pointer_t<uint32_t> service_ids_PtrsPtr, dword_t probes_count,
+    dword_t bits_per_second, dword_t flags, dword_t event_handle,
+    lpdword_t qos_ptr) {
+  if (!sessionId_PtrsPtr || !qos_ptr) {
+    return static_cast<uint32_t>(X_WSAError::X_WSAEACCES);
   }
 
-  if (sessionIdPtrsPtr == nullptr) {
-    return X_ERROR_SUCCESS;
+  std::vector<XNADDR> remote_addresses{};
+  std::vector<XNKID> session_ids{};
+  std::vector<XNKEY> remote_keys{};
+  std::vector<IN_ADDR> security_gateways{};
+  std::vector<uint32_t> service_ids{};
+
+  if (num_remote_consoles) {
+    const xe::be<uint32_t>* session_id_ptrs =
+        kernel_memory()->TranslateVirtual<xe::be<uint32_t>*>(sessionId_PtrsPtr);
+
+    const auto session_id_ptr_array = std::vector<xe::be<uint32_t>>(
+        session_id_ptrs, session_id_ptrs + num_remote_consoles);
+
+    for (uint32_t i = 0; i < num_remote_consoles; i++) {
+      XNKID session_id =
+          *kernel_memory()->TranslateVirtual<XNKID*>(session_id_ptr_array[i]);
+
+      session_ids.push_back(session_id);
+    }
   }
 
-  const auto qos_guest = kernel_memory()->SystemHeapAlloc(sizeof(XNQOS));
+  if (remote_keys_PtrsPtr) {
+    const xe::be<uint32_t>* remote_keys_ptrs =
+        kernel_memory()->TranslateVirtual<xe::be<uint32_t>*>(
+            remote_keys_PtrsPtr);
+
+    auto remote_keys_ptr_array = std::vector<xe::be<uint32_t>>(
+        remote_keys_ptrs, remote_keys_ptrs + num_remote_consoles);
+
+    for (uint32_t i = 0; i < num_remote_consoles; i++) {
+      const XNKEY remote_key =
+          *kernel_memory()->TranslateVirtual<XNKEY*>(remote_keys_ptr_array[i]);
+
+      remote_keys.push_back(remote_key);
+    }
+  }
+
+  if (remote_addresses_PtrsPtr) {
+    const xe::be<uint32_t>* remote_addresses_ptrs =
+        kernel_memory()->TranslateVirtual<xe::be<uint32_t>*>(
+            remote_addresses_PtrsPtr);
+
+    auto remote_addresses_ptr_array = std::vector<xe::be<uint32_t>>(
+        remote_addresses_ptrs, remote_addresses_ptrs + num_remote_consoles);
+
+    for (uint32_t i = 0; i < num_remote_consoles; i++) {
+      const XNADDR remote_address =
+          *kernel_memory()->TranslateVirtual<XNADDR*>(remote_addresses_ptrs[i]);
+
+      remote_addresses.push_back(remote_address);
+    }
+  }
+
+  if (service_ids_PtrsPtr) {
+    const xe::be<uint32_t>* service_ids_ptrs =
+        kernel_memory()->TranslateVirtual<xe::be<uint32_t>*>(
+            service_ids_PtrsPtr);
+
+    auto service_ids_ptr_array = std::vector<xe::be<uint32_t>>(
+        service_ids_ptrs, service_ids_ptrs + num_remote_consoles);
+
+    for (uint32_t i = 0; i < num_remote_consoles; i++) {
+      const uint32_t service_id = *kernel_memory()->TranslateVirtual<uint32_t*>(
+          service_ids_ptr_array[i]);
+
+      service_ids.push_back(service_id);
+    }
+  }
+
+  if (gateways_PtrsPtr) {
+    const xe::be<uint32_t>* gateways_ptrs =
+        kernel_memory()->TranslateVirtual<xe::be<uint32_t>*>(gateways_PtrsPtr);
+
+    auto gateways_ptr_array = std::vector<xe::be<uint32_t>>(
+        gateways_ptrs, gateways_ptrs + num_gateways);
+
+    for (uint32_t i = 0; i < num_gateways; i++) {
+      const IN_ADDR gateway_key =
+          *kernel_memory()->TranslateVirtual<IN_ADDR*>(gateways_ptr_array[i]);
+
+      security_gateways.push_back(gateway_key);
+    }
+  }
+
+  // const uint32_t count = num_remote_consoles + num_gateways;
+  const uint32_t count = num_remote_consoles;
+
+  const uint32_t size = sizeof(XNQOS) + (sizeof(XNQOSINFO) * (count - 1));
+  const auto qos_guest = kernel_memory()->SystemHeapAlloc(size);
   const auto qos = kernel_memory()->TranslateVirtual<XNQOS*>(qos_guest);
-  qos->count = 1;
 
-  const xe::be<uint32_t> sessionId_ptrs_ptr =
-      *kernel_memory()->TranslateVirtual<xe::be<uint32_t>*>(sessionIdPtrsPtr);
+  /*
+   GoW 3 - TU 0
+   If qos->count is not equal to num_remote_consoles then it will join
+   sessions otherwise repeats QoS lookup
 
-  const xe::be<uint64_t> session_Id =
-      *kernel_memory()->TranslateVirtual<xe::be<uint64_t>*>(sessionId_ptrs_ptr);
+   L4D2
+   Loops backwards and removes QoS entries if they don't have DATA_RECEIVED flag
+  */
 
-  XLiveAPI::memory chunk = XLiveAPI::QoSGet(session_Id);
+  qos->count_pending = count;
+  qos->count = count;
 
-  if (chunk.http_code == HTTP_STATUS_CODE::HTTP_OK ||
-      chunk.http_code == HTTP_STATUS_CODE::HTTP_NO_CONTENT) {
-    qos->info[0].data_ptr = 0;
-    qos->info[0].data_len = (uint16_t)0;
-    qos->info[0].flags =
-        XNET_XNQOSINFO::COMPLETE | XNET_XNQOSINFO::TARGET_CONTACTED;
+  for (uint32_t i = 0; i <= qos->count; i++) {
+    uint64_t session_id;
+    XLiveAPI::memory chunk{};
 
-    if (chunk.size) {
-      auto data_ptr = kernel_memory()->SystemHeapAlloc((uint32_t)chunk.size);
-      auto data = kernel_memory()->TranslateVirtual<int32_t*>(data_ptr);
+    // Fake QoS entry to fix GoW 3
+    if (i == qos->count) {
+      chunk.http_code = HTTP_STATUS_CODE::HTTP_NO_CONTENT;
 
-      memcpy(data, chunk.response, chunk.size);
-      qos->info[0].data_ptr = data_ptr;
-      qos->info[0].data_len = (uint16_t)chunk.size;
-      qos->info[0].flags |= XNET_XNQOSINFO::DATA_RECEIVED;
+      // Prevent L4D2 removing info[i - 1] entry
+      qos->info[i].flags |= XNET_XNQOSINFO::DATA_RECEIVED;
     }
 
-    qos->info[0].probes_xmit = 4;
-    qos->info[0].probes_recv = 4;
-    qos->info[0].rtt_min_in_msecs = 4;
-    qos->info[0].rtt_med_in_msecs = 10;
-    qos->info[0].up_bits_per_sec = 13125;
-    qos->info[0].down_bits_per_sec = 21058;
-    qos->count_pending = 0;
+    if (i < session_ids.size()) {
+      session_id = xe::byte_swap(session_ids[i].as_uint64());
+      chunk = XLiveAPI::QoSGet(session_id);
+    }
 
-    *qos_ptr = qos_guest;
+    if (chunk.http_code == HTTP_STATUS_CODE::HTTP_OK ||
+        chunk.http_code == HTTP_STATUS_CODE::HTTP_NO_CONTENT) {
+      qos->info[i].data_ptr = 0;
+      qos->info[i].data_len = 0;
+      qos->info[i].flags =
+          XNET_XNQOSINFO::COMPLETE | XNET_XNQOSINFO::TARGET_CONTACTED;
+
+      if (chunk.size) {
+        uint32_t data_ptr =
+            kernel_memory()->SystemHeapAlloc(static_cast<uint32_t>(chunk.size));
+        uint32_t* data = kernel_memory()->TranslateVirtual<uint32_t*>(data_ptr);
+
+        memcpy(data, chunk.response, chunk.size);
+
+        qos->info[i].data_ptr = data_ptr;
+        qos->info[i].data_len = static_cast<uint16_t>(chunk.size);
+        qos->info[i].flags |= XNET_XNQOSINFO::DATA_RECEIVED;
+      }
+
+      qos->info[i].probes_xmit = 4;
+      qos->info[i].probes_recv = 4;
+      qos->info[i].rtt_min_in_msecs = 4;
+      qos->info[i].rtt_med_in_msecs = 10;
+      qos->info[i].up_bits_per_sec = 20 * 1024;
+      qos->info[i].down_bits_per_sec = 20 * 1024;
+
+      qos->count_pending =
+          std::max(static_cast<int>(qos->count_pending - 1), 0);
+
+      *qos_ptr = qos_guest;
+    }
   }
 
   if (event_handle) {
