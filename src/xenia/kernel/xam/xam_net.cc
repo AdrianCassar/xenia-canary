@@ -1105,7 +1105,11 @@ dword_result_t NetDll_XNetQosLookup_entry(
   // const uint32_t count = num_remote_consoles + num_gateways;
   const uint32_t count = num_remote_consoles;
 
-  const uint32_t size = sizeof(XNQOS) + (sizeof(XNQOSINFO) * (count - 1));
+  // Fake QoS count to fix GoW 3
+  const uint32_t countOffset = 1;
+
+  const uint32_t size =
+      sizeof(XNQOS) + (sizeof(XNQOSINFO) * (count - 1) + countOffset);
   const auto qos_guest = kernel_memory()->SystemHeapAlloc(size);
   const auto qos = kernel_memory()->TranslateVirtual<XNQOS*>(qos_guest);
 
@@ -1115,28 +1119,18 @@ dword_result_t NetDll_XNetQosLookup_entry(
    sessions otherwise repeats QoS lookup
 
    L4D2
-   Loops backwards and removes QoS entries if they don't have DATA_RECEIVED flag
+   Removes session if QoS failed therefore adding fake entry must be valid to
+   prevent removal of valid session
   */
 
   qos->count_pending = count;
-  qos->count = count;
+  qos->count = count + countOffset;
 
-  for (uint32_t i = 0; i <= qos->count; i++) {
-    uint64_t session_id;
-    XLiveAPI::memory chunk{};
+  const uint32_t probes = qos->count - countOffset;
 
-    // Fake QoS entry to fix GoW 3
-    if (i == qos->count) {
-      chunk.http_code = HTTP_STATUS_CODE::HTTP_NO_CONTENT;
-
-      // Prevent L4D2 removing info[i - 1] entry
-      qos->info[i].flags |= XNET_XNQOSINFO::DATA_RECEIVED;
-    }
-
-    if (i < session_ids.size()) {
-      session_id = xe::byte_swap(session_ids[i].as_uint64());
-      chunk = XLiveAPI::QoSGet(session_id);
-    }
+  for (uint32_t i = 0; i < probes; i++) {
+    uint64_t session_id = xe::byte_swap(session_ids[i].as_uint64());
+    XLiveAPI::memory chunk = XLiveAPI::QoSGet(session_id);
 
     if (chunk.http_code == HTTP_STATUS_CODE::HTTP_OK ||
         chunk.http_code == HTTP_STATUS_CODE::HTTP_NO_CONTENT) {
@@ -1166,9 +1160,14 @@ dword_result_t NetDll_XNetQosLookup_entry(
 
       qos->count_pending =
           std::max(static_cast<int>(qos->count_pending - 1), 0);
-
-      *qos_ptr = qos_guest;
     }
+
+    // Prevent L4D2 removing info[probes - 1] entry
+    if (i == (probes - 1)) {
+      memcpy(&qos->info[probes], &qos->info[i], sizeof(XNQOSINFO));
+    }
+
+    *qos_ptr = qos_guest;
   }
 
   if (event_handle) {
