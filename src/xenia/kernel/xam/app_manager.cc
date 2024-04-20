@@ -74,12 +74,13 @@ X_HRESULT AppManager::DispatchMessageAsync(uint32_t app_id, uint32_t message,
   if (overlapped_ptr) {
     it->second->kernel_state_->CompleteOverlappedDeferred(run, overlapped_ptr,
                                                           nullptr, post);
-  } else {
-    DispatchMessageSync(app_id, message, buffer_in, buffer_length);
-    post();
-  }
+    return X_ERROR_IO_PENDING;
+  };
 
-  return 0;
+  const X_HRESULT result =
+      DispatchMessageSync(app_id, message, buffer_in, buffer_length);
+  post();
+  return result;
 }
 
 }  // namespace xam
