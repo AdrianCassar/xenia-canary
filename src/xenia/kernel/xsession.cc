@@ -518,7 +518,7 @@ X_RESULT XSession::GetSessionByID(Memory* memory,
     return ERROR_INSUFFICIENT_BUFFER;
   }
 
-  const auto sessionId = XNKIDtoUint64(search_data->session_id);
+  const auto sessionId = XNKIDtoUint64(&search_data->session_id);
 
   if (!sessionId) {
     return ERROR_SUCCESS;
