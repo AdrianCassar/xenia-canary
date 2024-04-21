@@ -331,7 +331,8 @@ void ProfileManager::Login(const uint64_t xuid, const uint8_t user_index,
   UpdateConfig(xuid, assigned_user_slot);
 
   if (XLiveAPI::GetInitState() == XLiveAPI::InitState::Success) {
-    XLiveAPI::RegisterPlayer();
+    std::unique_ptr<HTTPResponseObjectJSON> reg_result =
+        XLiveAPI::RegisterPlayer();
   }
 }
 

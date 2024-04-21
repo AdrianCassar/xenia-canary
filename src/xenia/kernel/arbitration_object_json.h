@@ -19,6 +19,9 @@ namespace kernel {
 
 class ArbitrationObjectJSON : public BaseObjectJSON {
  public:
+  using BaseObjectJSON::Deserialize;
+  using BaseObjectJSON::Serialize;
+
   ArbitrationObjectJSON();
   virtual ~ArbitrationObjectJSON();
 
