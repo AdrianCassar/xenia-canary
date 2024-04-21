@@ -608,6 +608,8 @@ DECLARE_XAM_EXPORT1(XamQueryLiveHiveA, kNone, kStub);
 // Sets the console IP address.
 dword_result_t NetDll_XNetGetTitleXnAddr_entry(dword_t caller,
                                                pointer_t<XNADDR> addr_ptr) {
+  memset(addr_ptr, 0, sizeof(XNADDR));
+
   // Wait for NetDll_WSAStartup or XNetStartup to setup XLiveAPI.
   if (XLiveAPI::GetInitState() == XLiveAPI::InitState::Pending) {
     // Call of Duty 2 - does not call XNetStartup or WSAStartup before
