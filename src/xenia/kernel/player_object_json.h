@@ -18,6 +18,9 @@ namespace xe {
 namespace kernel {
 class PlayerObjectJSON : public BaseObjectJSON {
  public:
+  using BaseObjectJSON::Deserialize;
+  using BaseObjectJSON::Serialize;
+
   PlayerObjectJSON();
   virtual ~PlayerObjectJSON();
 

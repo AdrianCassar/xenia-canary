@@ -206,15 +206,15 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
       PrettyWriter<rapidjson::StringBuffer> writer(buffer);
       doc.Accept(writer);
 
-      XLiveAPI::memory chunk =
+      std::unique_ptr<HTTPResponseObjectJSON> chunk =
           XLiveAPI::LeaderboardsFind((uint8_t*)buffer.GetString());
 
-      if (chunk.response == nullptr) {
+      if (chunk->RawResponse().response == nullptr) {
         return X_E_SUCCESS;
       }
 
       Document leaderboards;
-      leaderboards.Parse(chunk.response);
+      leaderboards.Parse(chunk->RawResponse().response);
       const Value& leaderboardsArray = leaderboards.GetArray();
 
       // Fixed FM4 and RDR GOTY from crashing.
@@ -540,6 +540,8 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
       return session->WriteStats(data);
     }
     case 0x000B001B: {
+      XELOGI("XSessionSearchID");
+
       XSessionSearchID* data = reinterpret_cast<XSessionSearchID*>(buffer);
 
       return XSession::GetSessionByID(memory_, data);
