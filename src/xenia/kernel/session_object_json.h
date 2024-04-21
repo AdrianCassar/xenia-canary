@@ -20,6 +20,9 @@ namespace xe {
 namespace kernel {
 class SessionObjectJSON : public BaseObjectJSON {
  public:
+  using BaseObjectJSON::Deserialize;
+  using BaseObjectJSON::Serialize;
+
   SessionObjectJSON();
   virtual ~SessionObjectJSON();
 

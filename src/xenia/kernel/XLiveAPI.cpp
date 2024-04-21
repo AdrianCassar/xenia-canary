@@ -124,7 +124,7 @@ void XLiveAPI::Init() {
   online_ip_ = Getwhoami();
 
   if (!IsOnline()) {
-    XELOGI("XLiveAPI:: Cannot reach API server.");
+    XELOGE("XLiveAPI:: Cannot reach API server.");
     initialized_ = InitState::Failed;
     return;
   }
@@ -136,7 +136,7 @@ void XLiveAPI::Init() {
     upnp_handler->Initialize();
   }
 
-  auto reg_result = RegisterPlayer();
+  std::unique_ptr<HTTPResponseObjectJSON> reg_result = RegisterPlayer();
 
   initialized_ = InitState::Success;
 
@@ -150,19 +150,19 @@ void XLiveAPI::clearXnaddrCache() {
 }
 
 // Request data from the server
-XLiveAPI::memory XLiveAPI::Get(std::string endpoint) {
-  memory chunk = {0};
+std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::Get(std::string endpoint) {
+  response_data chunk = {};
   CURL* curl_handle = curl_easy_init();
   CURLcode result;
 
   if (GetInitState() == InitState::Failed) {
     XELOGE("XLiveAPI::Get: Initialization failed");
-    return chunk;
+    return PraseResponse(chunk);
   }
 
   if (!curl_handle) {
     XELOGE("XLiveAPI::Get: Cannot initialize CURL");
-    return chunk;
+    return PraseResponse(chunk);
   }
 
   std::string endpoint_API = fmt::format("{}{}", GetApiAddress(), endpoint);
@@ -180,7 +180,7 @@ XLiveAPI::memory XLiveAPI::Get(std::string endpoint) {
   headers = curl_slist_append(headers, "charset: utf-8");
 
   if (headers == NULL) {
-    return chunk;
+    return PraseResponse(chunk);
   }
 
   curl_easy_setopt(curl_handle, CURLOPT_URL, endpoint_API.c_str());
@@ -194,7 +194,7 @@ XLiveAPI::memory XLiveAPI::Get(std::string endpoint) {
 
   if (result != CURLE_OK) {
     XELOGE("XLiveAPI::Get: CURL Error Code: {}", static_cast<uint32_t>(result));
-    return chunk;
+    return PraseResponse(chunk);
   }
 
   result =
@@ -206,28 +206,29 @@ XLiveAPI::memory XLiveAPI::Get(std::string endpoint) {
   if (result == CURLE_OK &&
       (chunk.http_code == HTTP_STATUS_CODE::HTTP_OK ||
        chunk.http_code == HTTP_STATUS_CODE::HTTP_NO_CONTENT)) {
-    return chunk;
+    return PraseResponse(chunk);
   }
 
   XELOGE("XLiveAPI::Get: Failed! HTTP Error Code: {}", chunk.http_code);
-  return chunk;
+  return PraseResponse(chunk);
 }
 
 // Send data to the server
-XLiveAPI::memory XLiveAPI::Post(std::string endpoint, const uint8_t* data,
-                                size_t data_size) {
-  memory chunk = {0};
+std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::Post(std::string endpoint,
+                                                       const uint8_t* data,
+                                                       size_t data_size) {
+  response_data chunk = {};
   CURL* curl_handle = curl_easy_init();
   CURLcode result;
 
   if (GetInitState() == InitState::Failed) {
     XELOGE("XLiveAPI::Post: Initialization failed");
-    return chunk;
+    return PraseResponse(chunk);
   }
 
   if (!curl_handle) {
     XELOGE("XLiveAPI::Post: Cannot initialize CURL");
-    return chunk;
+    return PraseResponse(chunk);
   }
 
   std::string endpoint_API = fmt::format("{}{}", GetApiAddress(), endpoint);
@@ -255,7 +256,7 @@ XLiveAPI::memory XLiveAPI::Post(std::string endpoint, const uint8_t* data,
     headers = curl_slist_append(headers, "charset: utf-8");
 
     if (headers == NULL) {
-      return chunk;
+      return PraseResponse(chunk);
     }
 
     curl_easy_setopt(curl_handle, CURLOPT_HTTPHEADER, headers);
@@ -268,9 +269,8 @@ XLiveAPI::memory XLiveAPI::Post(std::string endpoint, const uint8_t* data,
   result = curl_easy_perform(curl_handle);
 
   if (result != CURLE_OK) {
-    XELOGE("XLiveAPI::Post: CURL Error Code: {}",
-           static_cast<uint32_t>(result));
-    return chunk;
+    XELOGE("XLiveAPI::Post: CURL Error Code: {}", static_cast<uint32_t>(result));
+    return PraseResponse(chunk);
   }
 
   result =
@@ -280,27 +280,27 @@ XLiveAPI::memory XLiveAPI::Post(std::string endpoint, const uint8_t* data,
   curl_slist_free_all(headers);
 
   if (CURLE_OK == result && chunk.http_code == HTTP_STATUS_CODE::HTTP_CREATED) {
-    return chunk;
+    return PraseResponse(chunk);
   }
 
   XELOGE("XLiveAPI::Post: Failed! HTTP Error Code: {}", chunk.http_code);
-  return chunk;
+  return PraseResponse(chunk);
 }
 
 // Delete data from the server
-XLiveAPI::memory XLiveAPI::Delete(std::string endpoint) {
-  memory chunk = {0};
+std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::Delete(std::string endpoint) {
+  response_data chunk = {};
   CURL* curl_handle = curl_easy_init();
   CURLcode result;
 
   if (GetInitState() == InitState::Failed) {
     XELOGE("XLiveAPI::Delete: Initialization failed");
-    return chunk;
+    return PraseResponse(chunk);
   }
 
   if (!curl_handle) {
     XELOGE("XLiveAPI::Delete: Cannot initialize CURL");
-    return chunk;
+    return PraseResponse(chunk);
   }
 
   std::string endpoint_API = fmt::format("{}{}", GetApiAddress(), endpoint);
@@ -319,9 +319,8 @@ XLiveAPI::memory XLiveAPI::Delete(std::string endpoint) {
   result = curl_easy_perform(curl_handle);
 
   if (result != CURLE_OK) {
-    XELOGE("XLiveAPI::Delete: CURL Error Code: {}",
-           static_cast<uint32_t>(result));
-    return chunk;
+    XELOGE("XLiveAPI::Delete: CURL Error Code: {}", static_cast<uint32_t>(result));
+    return PraseResponse(chunk);
   }
 
   result =
@@ -331,25 +330,25 @@ XLiveAPI::memory XLiveAPI::Delete(std::string endpoint) {
   curl_slist_free_all(headers);
 
   if (result == CURLE_OK && chunk.http_code == HTTP_STATUS_CODE::HTTP_OK) {
-    return chunk;
+    return PraseResponse(chunk);
   }
 
   XELOGE("XLiveAPI::Delete: Failed! HTTP Error Code: {}", chunk.http_code);
-  return chunk;
+  return PraseResponse(chunk);
 }
 
 // Check connection to xenia web server.
 sockaddr_in XLiveAPI::Getwhoami() {
-  memory chunk = Get("whoami");
+  std::unique_ptr<HTTPResponseObjectJSON> response = Get("whoami");
 
   sockaddr_in addr{};
 
-  if (chunk.http_code != HTTP_STATUS_CODE::HTTP_OK) {
+  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_OK) {
     return addr;
   }
 
   Document doc;
-  doc.Parse(chunk.response);
+  doc.Parse(response->RawResponse().response);
 
   XELOGI("Requesting Public IP");
 
@@ -362,15 +361,15 @@ void XLiveAPI::DownloadPortMappings() {
   std::string endpoint =
       fmt::format("title/{:08X}/ports", kernel_state()->title_id());
 
-  memory chunk = Get(endpoint);
+  std::unique_ptr<HTTPResponseObjectJSON> response = Get(endpoint);
 
-  if (chunk.http_code != HTTP_STATUS_CODE::HTTP_OK) {
+  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_OK) {
     assert_always();
     return;
   }
 
   Document doc;
-  doc.Parse(chunk.response);
+  doc.Parse(response->RawResponse().response);
 
   if (doc.HasMember("connect")) {
     for (const auto& port : doc["connect"].GetArray()) {
@@ -393,22 +392,22 @@ void XLiveAPI::DownloadPortMappings() {
 // Add player to web server
 // A random mac address is changed every time a player is registered!
 // xuid + ip + mac = unique player on a network
-XLiveAPI::memory XLiveAPI::RegisterPlayer() {
+std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::RegisterPlayer() {
   assert_not_null(mac_address_);
 
-  memory chunk{};
+  std::unique_ptr<HTTPResponseObjectJSON> response{};
 
   // User index hard-coded
   const uint32_t index = 0;
 
   if (!kernel_state()->xam_state()->IsUserSignedIn(index)) {
     XELOGE("Cancelled Registering Player, player not signed in!");
-    return chunk;
+    return response;
   }
 
   if (!mac_address_) {
     XELOGE("Cancelled Registering Player");
-    return chunk;
+    return response;
   }
 
   PlayerObjectJSON player = PlayerObjectJSON();
@@ -420,14 +419,14 @@ XLiveAPI::memory XLiveAPI::RegisterPlayer() {
   player.MacAddress(mac_address_->to_uint64());
 
   std::string player_output;
-  bool valid = player.SerializeToString(player_output);
+  bool valid = player.Serialize(player_output);
   assert_true(valid);
 
-  chunk = Post("players", (uint8_t*)player_output.c_str());
+  response = Post("players", (uint8_t*)player_output.c_str());
 
-  if (chunk.http_code != HTTP_STATUS_CODE::HTTP_CREATED) {
+  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_CREATED) {
     assert_always();
-    return chunk;
+    return response;
   }
 
   XELOGI("POST Success");
@@ -441,7 +440,7 @@ XLiveAPI::memory XLiveAPI::RegisterPlayer() {
     assert_always();
   }
 
-  return chunk;
+  return response;
 }
 
 // Request clients player info via IP address
@@ -460,16 +459,17 @@ std::unique_ptr<PlayerObjectJSON> XLiveAPI::FindPlayer(std::string ip) {
   doc.Accept(writer);
 
   // POST & receive.
-  memory chunk = Post("players/find", (uint8_t*)buffer.GetString());
+  std::unique_ptr<HTTPResponseObjectJSON> response =
+      Post("players/find", (uint8_t*)buffer.GetString());
 
-  if (chunk.http_code != HTTP_STATUS_CODE::HTTP_CREATED) {
-    XELOGE("FindPlayers POST Failed!");
-
+  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_CREATED) {
+    XELOGE("FindPlayers error message: {}", response->Message());
     assert_always();
+
     return player;
   }
 
-  player->DeserializeFromString(chunk.response);
+  player = response->Deserialize<PlayerObjectJSON>();
 
   XELOGI("Requesting {:016X} player details.",
          static_cast<uint64_t>(player->XUID()));
@@ -494,9 +494,10 @@ void XLiveAPI::QoSPost(uint64_t sessionId, uint8_t* qosData, size_t qosLength) {
   std::string endpoint = fmt::format("title/{:08X}/sessions/{:016x}/qos",
                                      kernel_state()->title_id(), sessionId);
 
-  memory chunk = Post(endpoint, qosData, qosLength);
+  std::unique_ptr<HTTPResponseObjectJSON> response =
+      Post(endpoint, qosData, qosLength);
 
-  if (chunk.http_code != HTTP_STATUS_CODE::HTTP_CREATED) {
+  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_CREATED) {
     assert_always();
     return;
   }
@@ -505,23 +506,23 @@ void XLiveAPI::QoSPost(uint64_t sessionId, uint8_t* qosData, size_t qosLength) {
 }
 
 // Get QoS binary data from the server
-XLiveAPI::memory XLiveAPI::QoSGet(uint64_t sessionId) {
+response_data XLiveAPI::QoSGet(uint64_t sessionId) {
   std::string endpoint = fmt::format("title/{:08X}/sessions/{:016x}/qos",
                                      kernel_state()->title_id(), sessionId);
 
-  memory chunk = Get(endpoint);
+  std::unique_ptr<HTTPResponseObjectJSON> response = Get(endpoint);
 
-  if (chunk.http_code != HTTP_STATUS_CODE::HTTP_OK &&
-      chunk.http_code != HTTP_STATUS_CODE::HTTP_NO_CONTENT) {
-    XELOGE("QoSGet GET Failed!");
-
+  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_OK &&
+      response->StatusCode() != HTTP_STATUS_CODE::HTTP_NO_CONTENT) {
+    XELOGE("QoSGet error message: {}", response->Message());
     assert_always();
-    return chunk;
+
+    return response->RawResponse();
   }
 
   XELOGI("Requesting QoS data.");
 
-  return chunk;
+  return response->RawResponse();
 }
 
 void XLiveAPI::SessionModify(uint64_t sessionId, XSessionModify* data) {
@@ -539,11 +540,13 @@ void XLiveAPI::SessionModify(uint64_t sessionId, XSessionModify* data) {
   PrettyWriter<rapidjson::StringBuffer> writer(buffer);
   doc.Accept(writer);
 
-  memory chunk = Post(endpoint, (uint8_t*)buffer.GetString());
+  std::unique_ptr<HTTPResponseObjectJSON> response =
+      Post(endpoint, (uint8_t*)buffer.GetString());
 
-  if (chunk.http_code != HTTP_STATUS_CODE::HTTP_CREATED) {
-    XELOGE("Modify Post Failed!");
+  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_CREATED) {
+    XELOGE("Modify error message: {}", response->Message());
     assert_always();
+
     return;
   }
 
@@ -565,18 +568,19 @@ const std::vector<std::unique_ptr<SessionObjectJSON>> XLiveAPI::SessionSearch(
   PrettyWriter<rapidjson::StringBuffer> writer(buffer);
   doc.Accept(writer);
 
-  memory chunk = Post(endpoint, (uint8_t*)buffer.GetString());
+  std::unique_ptr<HTTPResponseObjectJSON> response =
+      Post(endpoint, (uint8_t*)buffer.GetString());
 
   std::vector<std::unique_ptr<SessionObjectJSON>> sessions;
 
-  if (chunk.http_code != HTTP_STATUS_CODE::HTTP_CREATED) {
-    XELOGE("SessionSearch POST Failed!");
+  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_CREATED) {
+    XELOGE("SessionSearch error message: {}", response->Message());
     assert_always();
 
     return sessions;
   }
 
-  doc.Swap(doc.Parse(chunk.response));
+  doc.Swap(doc.Parse(response->RawResponse().response));
 
   const Value& sessionsJsonArray = doc.GetArray();
 
@@ -602,20 +606,19 @@ const std::unique_ptr<SessionObjectJSON> XLiveAPI::SessionDetails(
   std::string endpoint = fmt::format("title/{:08X}/sessions/{:016x}/details",
                                      kernel_state()->title_id(), sessionId);
 
-  memory chunk = Get(endpoint);
+  std::unique_ptr<HTTPResponseObjectJSON> response = Get(endpoint);
 
-  auto session = std::make_unique<SessionObjectJSON>();
+  std::unique_ptr<SessionObjectJSON> session =
+      std::make_unique<SessionObjectJSON>();
 
-  if (chunk.http_code != HTTP_STATUS_CODE::HTTP_OK) {
-    XELOGE("SessionDetails error code {}", chunk.http_code);
-    XELOGE("SessionDetails not found e.g. Invalid sessionId");
-
+  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_OK) {
+    XELOGE("SessionDetails error message: {}", response->Message());
     assert_always();
+
     return session;
   }
 
-  bool valid = session->DeserializeFromString(chunk.response);
-  assert_true(valid);
+  session = response->Deserialize<SessionObjectJSON>();
 
   XELOGI("Requesting Session Details.");
 
@@ -638,24 +641,25 @@ std::unique_ptr<SessionObjectJSON> XLiveAPI::XSessionMigration(
   PrettyWriter<rapidjson::StringBuffer> writer(buffer);
   doc.Accept(writer);
 
-  memory chunk = Post(endpoint, (uint8_t*)buffer.GetString());
+  std::unique_ptr<HTTPResponseObjectJSON> response =
+      Post(endpoint, (uint8_t*)buffer.GetString());
 
   std::unique_ptr<SessionObjectJSON> session =
       std::make_unique<SessionObjectJSON>();
 
-  if (chunk.http_code != HTTP_STATUS_CODE::HTTP_CREATED) {
-    XELOGE("XSessionMigration POST Failed!");
+  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_CREATED) {
+    XELOGE("XSessionMigration error message: {}", response->Message());
+
     assert_always();
 
-    if (chunk.http_code == HTTP_STATUS_CODE::HTTP_NOT_FOUND) {
+    if (response->StatusCode() == HTTP_STATUS_CODE::HTTP_NOT_FOUND) {
       XELOGE("Cannot migrate session {:016X} not found.", sessionId);
     }
 
     return session;
   }
 
-  bool valid = session->DeserializeFromString(chunk.response);
-  assert_true(valid);
+  session = response->Deserialize<SessionObjectJSON>();
 
   XELOGI("Send XSessionMigration data.");
 
@@ -671,17 +675,16 @@ std::unique_ptr<ArbitrationObjectJSON> XLiveAPI::XSessionArbitration(
   std::unique_ptr<ArbitrationObjectJSON> arbitration =
       std::make_unique<ArbitrationObjectJSON>();
 
-  memory chunk = Get(endpoint);
+  std::unique_ptr<HTTPResponseObjectJSON> response = Get(endpoint);
 
-  if (chunk.http_code != HTTP_STATUS_CODE::HTTP_OK) {
-    XELOGE("XSessionArbitration GET Failed!");
+  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_OK) {
+    XELOGE("XSessionArbitration error message: {}", response->Message());
     assert_always();
 
     return arbitration;
   }
 
-  bool valid = arbitration->DeserializeFromString(chunk.response);
-  assert_true(valid);
+  arbitration = response->Deserialize<ArbitrationObjectJSON>();
 
   return arbitration;
 }
@@ -701,44 +704,47 @@ void XLiveAPI::SessionWriteStats(uint64_t sessionId, XSessionWriteStats* stats,
   leaderboard.ViewProperties(properties);
 
   std::string output;
-  bool valid = leaderboard.SerializeToString(output);
+  bool valid = leaderboard.Serialize(output);
   assert_true(valid);
 
   if (cvars::logging) {
     XELOGI("SessionWriteStats:\n\n{}", output);
   }
 
-  memory chunk = Post(endpoint, (uint8_t*)output.c_str());
+  std::unique_ptr<HTTPResponseObjectJSON> response =
+      Post(endpoint, (uint8_t*)output.c_str());
 
-  if (chunk.http_code != HTTP_STATUS_CODE::HTTP_CREATED) {
-    XELOGE("SessionWriteStats POST Failed!");
+  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_CREATED) {
+    XELOGE("SessionWriteStats error message: {}", response->Message());
     // assert_always();
 
     return;
   }
 }
 
-XLiveAPI::memory XLiveAPI::LeaderboardsFind(const uint8_t* data) {
+std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::LeaderboardsFind(
+    const uint8_t* data) {
   std::string endpoint = fmt::format("leaderboards/find");
 
-  memory chunk = Post(endpoint, data);
+  std::unique_ptr<HTTPResponseObjectJSON> response = Post(endpoint, data);
 
-  if (chunk.http_code != HTTP_STATUS_CODE::HTTP_CREATED) {
-    XELOGE("LeaderboardsFind POST Failed!");
+  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_CREATED) {
+    XELOGE("LeaderboardsFind error message: {}", response->Message());
     assert_always();
   }
 
-  return chunk;
+  return response;
 }
 
 void XLiveAPI::DeleteSession(uint64_t sessionId) {
   std::string endpoint = fmt::format("title/{:08X}/sessions/{:016x}",
                                      kernel_state()->title_id(), sessionId);
 
-  memory chunk = Delete(endpoint);
+  std::unique_ptr<HTTPResponseObjectJSON> response = Delete(endpoint);
 
-  if (chunk.http_code != HTTP_STATUS_CODE::HTTP_OK) {
-    XELOGI("Failed to delete session {:08X}", sessionId);
+  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_OK) {
+    XELOGE("Failed to delete session {:08X}", sessionId);
+    XELOGE("DeleteSession error message: {}", response->Message());
     // assert_always();
   }
 
@@ -754,20 +760,20 @@ void XLiveAPI::DeleteAllSessionsByMac() {
   const std::string endpoint =
       fmt::format("DeleteSessions/{}", mac_address_->to_string());
 
-  memory chunk = Delete(endpoint);
+  std::unique_ptr<HTTPResponseObjectJSON> response = Delete(endpoint);
 
-  if (chunk.http_code != HTTP_STATUS_CODE::HTTP_OK) {
-    XELOGI("Failed to delete all sessions");
+  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_OK) {
+    XELOGE("Failed to delete all sessions");
   }
 }
 
 void XLiveAPI::DeleteAllSessions() {
   const std::string endpoint = fmt::format("DeleteSessions");
 
-  memory chunk = Delete(endpoint);
+  std::unique_ptr<HTTPResponseObjectJSON> response = Delete(endpoint);
 
-  if (chunk.http_code != HTTP_STATUS_CODE::HTTP_OK) {
-    XELOGI("Failed to delete all sessions");
+  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_OK) {
+    XELOGE("Failed to delete all sessions");
   }
 }
 
@@ -802,14 +808,16 @@ void XLiveAPI::XSessionCreate(uint64_t sessionId, XSessionData* data) {
   session.Port(GetPlayerPort());
 
   std::string session_output;
-  bool valid = session.SerializeToString(session_output);
+  bool valid = session.Serialize(session_output);
   assert_true(valid);
 
-  memory chunk = Post(endpoint, (uint8_t*)session_output.c_str());
+  std::unique_ptr<HTTPResponseObjectJSON> response =
+      Post(endpoint, (uint8_t*)session_output.c_str());
 
-  if (chunk.http_code != HTTP_STATUS_CODE::HTTP_CREATED) {
-    XELOGI("XSessionCreate POST Failed!");
+  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_CREATED) {
+    XELOGE("XSessionCreate error message: {}", response->Message());
     assert_always();
+
     return;
   }
 
@@ -839,10 +847,11 @@ void XLiveAPI::SessionContextSet(uint64_t session_id,
   PrettyWriter<rapidjson::StringBuffer> writer(buffer);
   doc.Accept(writer);
 
-  memory chunk = Post(endpoint, (uint8_t*)buffer.GetString());
+  std::unique_ptr<HTTPResponseObjectJSON> response =
+      Post(endpoint, (uint8_t*)buffer.GetString());
 
-  if (chunk.http_code != HTTP_STATUS_CODE::HTTP_CREATED) {
-    XELOGI("SessionContextSet POST Failed!");
+  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_CREATED) {
+    XELOGE("SessionContextSet error message: {}", response->Message());
     assert_always();
   }
 }
@@ -853,16 +862,18 @@ const std::map<uint32_t, uint32_t> XLiveAPI::SessionContextGet(
                                      kernel_state()->title_id(), session_id);
 
   std::map<uint32_t, uint32_t> result = {};
-  memory chunk = Get(endpoint);
-  if (chunk.http_code != HTTP_STATUS_CODE::HTTP_OK) {
-    XELOGE("XSessionGet error code: {}", chunk.http_code);
+
+  std::unique_ptr<HTTPResponseObjectJSON> response = Get(endpoint);
+
+  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_OK) {
+    XELOGE("SessionContextGet error message: {}", response->Message());
     assert_always();
 
     return result;
   }
 
   Document doc;
-  doc.Parse(chunk.response);
+  doc.Parse(response->RawResponse().response);
 
   const Value& contexts = doc["context"];
 
@@ -882,17 +893,16 @@ std::unique_ptr<SessionObjectJSON> XLiveAPI::XSessionGet(uint64_t sessionId) {
   std::unique_ptr<SessionObjectJSON> session =
       std::make_unique<SessionObjectJSON>();
 
-  memory chunk = Get(endpoint);
+  std::unique_ptr<HTTPResponseObjectJSON> response = Get(endpoint);
 
-  if (chunk.http_code != HTTP_STATUS_CODE::HTTP_OK) {
-    XELOGE("XSessionGet error code: {}", chunk.http_code);
+  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_OK) {
+    XELOGE("XSessionGet error message: {}", response->Message());
     assert_always();
 
     return session;
   }
 
-  bool valid = session->DeserializeFromString(chunk.response);
-  assert_true(valid);
+  session = response->Deserialize<SessionObjectJSON>();
 
   return session;
 }
@@ -901,19 +911,19 @@ std::vector<XTitleServer> XLiveAPI::GetServers() {
   std::string endpoint =
       fmt::format("title/{:08X}/servers", kernel_state()->title_id());
 
-  memory chunk = Get(endpoint);
+  std::unique_ptr<HTTPResponseObjectJSON> response = Get(endpoint);
 
   std::vector<XTitleServer> servers{};
 
-  if (chunk.http_code != HTTP_STATUS_CODE::HTTP_OK) {
-    XELOGE("GetServers error code: {}", chunk.http_code);
+  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_OK) {
+    XELOGE("GetServers error message: {}", response->Message());
     assert_always();
 
     return servers;
   }
 
   Document doc;
-  doc.Parse(chunk.response);
+  doc.Parse(response->RawResponse().response);
 
   for (const auto& server_data : doc.GetArray()) {
     XTitleServer server{};
@@ -938,19 +948,19 @@ XONLINE_SERVICE_INFO XLiveAPI::GetServiceInfoById(uint32_t serviceId) {
   std::string endpoint = fmt::format("title/{:08X}/services/{:08X}",
                                      kernel_state()->title_id(), serviceId);
 
-  memory chunk = Get(endpoint);
+  std::unique_ptr<HTTPResponseObjectJSON> response = Get(endpoint);
 
   XONLINE_SERVICE_INFO service{};
 
-  if (chunk.http_code != HTTP_STATUS_CODE::HTTP_OK) {
-    XELOGE("GetServiceById error code: {}", chunk.http_code);
+  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_OK) {
+    XELOGE("GetServiceById error message: {}", response->Message());
     assert_always();
 
     return service;
   }
 
   Document doc;
-  doc.Parse(chunk.response);
+  doc.Parse(response->RawResponse().response);
 
   for (const auto& service_info : doc.GetArray()) {
     service.ip = ip_to_in_addr(service_info["address"].GetString());
@@ -987,10 +997,11 @@ void XLiveAPI::SessionJoinRemote(uint64_t sessionId,
   PrettyWriter<rapidjson::StringBuffer> writer(buffer);
   doc.Accept(writer);
 
-  memory chunk = Post(endpoint, (uint8_t*)buffer.GetString());
+  std::unique_ptr<HTTPResponseObjectJSON> response =
+      Post(endpoint, (uint8_t*)buffer.GetString());
 
-  if (chunk.http_code != HTTP_STATUS_CODE::HTTP_CREATED) {
-    XELOGE("SessionJoinRemote error code: {}", chunk.http_code);
+  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_CREATED) {
+    XELOGE("SessionJoinRemote error message: {}", response->Message());
     assert_always();
   }
 }
@@ -1018,12 +1029,42 @@ void XLiveAPI::SessionLeaveRemote(uint64_t sessionId,
   PrettyWriter<rapidjson::StringBuffer> writer(buffer);
   doc.Accept(writer);
 
-  memory chunk = Post(endpoint, (uint8_t*)buffer.GetString());
+   std::unique_ptr<HTTPResponseObjectJSON> response =
+      Post(endpoint, (uint8_t*)buffer.GetString());
 
-  if (chunk.http_code != HTTP_STATUS_CODE::HTTP_CREATED) {
-    XELOGE("SessionLeaveRemote error code: {}", chunk.http_code);
+  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_CREATED) {
+    XELOGE("SessionLeaveRemote error message: {}", response->Message());
     assert_always();
   }
+}
+
+std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::PraseResponse(response_data chunk) {
+  std::unique_ptr<HTTPResponseObjectJSON> response =
+      std::make_unique<HTTPResponseObjectJSON>(chunk);
+
+  const std::string defaultMessage = "{ \"message\": \"N/A\" }";
+
+  /*
+     Valid:
+     {}
+     []
+
+     Invalid:
+     QoS binary data
+  */
+
+  // Replace null response with default response
+  const std::string responseData =
+      chunk.response ? chunk.response : defaultMessage;
+
+  bool validJSON = response->Deserialize(responseData);
+
+  // Always set status code in case validation fails
+  if (!response->StatusCode()) {
+    response->StatusCode(chunk.http_code);
+  }
+
+  return response;
 }
 
 const uint8_t* XLiveAPI::GenerateMacAddress() {
