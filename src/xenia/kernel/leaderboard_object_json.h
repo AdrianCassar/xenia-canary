@@ -17,6 +17,9 @@ namespace xe {
 namespace kernel {
 class LeaderboardObjectJSON : public BaseObjectJSON {
  public:
+  using BaseObjectJSON::Deserialize;
+  using BaseObjectJSON::Serialize;
+
   LeaderboardObjectJSON();
   virtual ~LeaderboardObjectJSON();
 
