@@ -770,6 +770,8 @@ dword_result_t NetDll_XNetInAddrToXnAddr_entry(dword_t caller, dword_t in_addr,
     return X_STATUS_SUCCESS;
   }
 
+  memset(xn_addr, 0, sizeof(XNADDR));
+
   if (in_addr == LOOPBACK) {
     XELOGI("Resolving XNADDR via LOOPBACK!");
     xn_addr->ina.s_addr = XLiveAPI::OnlineIP().sin_addr.s_addr;
