@@ -1134,7 +1134,7 @@ dword_result_t NetDll_XNetQosLookup_entry(
 
   for (uint32_t i = 0; i < probes; i++) {
     uint64_t session_id = xe::byte_swap(session_ids[i].as_uint64());
-    XLiveAPI::memory chunk = XLiveAPI::QoSGet(session_id);
+    response_data chunk = XLiveAPI::QoSGet(session_id);
 
     if (chunk.http_code == HTTP_STATUS_CODE::HTTP_OK ||
         chunk.http_code == HTTP_STATUS_CODE::HTTP_NO_CONTENT) {
@@ -1261,8 +1261,8 @@ dword_result_t NetDll_inet_addr_entry(lpstring_t addr_ptr) {
 
   uint32_t addr = inet_addr(addr_ptr);
   // https://docs.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-inet_addr#return-value
-  // Based on console research it seems like x360 uses old version of inet_addr
-  // In case of empty string it return 0 instead of -1
+  // Based on console research it seems like x360 uses old version of
+  // inet_addr In case of empty string it return 0 instead of -1
   if (addr == -1 && !addr_ptr.value().length()) {
     return 0;
   }
@@ -1610,7 +1610,8 @@ int_result_t NetDll_select_entry(dword_t caller, dword_t nfds,
     host_exceptfds.Store(exceptfds);
   }
 
-  // TODO(gibbed): modify ret to be what's actually copied to the guest fd_sets?
+  // TODO(gibbed): modify ret to be what's actually copied to the guest
+  // fd_sets?
   return ret;
 }
 DECLARE_XAM_EXPORT1(NetDll_select, kNetworking, kImplemented);
