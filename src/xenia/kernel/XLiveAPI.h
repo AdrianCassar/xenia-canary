@@ -18,6 +18,7 @@
 #include "xenia/kernel/xnet.h"
 
 #include "xenia/kernel/arbitration_object_json.h"
+#include "xenia/kernel/http_response_object_json.h"
 #include "xenia/kernel/leaderboard_object_json.h"
 #include "xenia/kernel/player_object_json.h"
 #include "xenia/kernel/session_object_json.h"
@@ -43,12 +44,6 @@ static_assert_size(XTitleServer, 208);
 
 class XLiveAPI {
  public:
-  struct memory {
-    char* response{};
-    size_t size = 0;
-    uint64_t http_code;
-  };
-
   enum class InitState { Success, Failed, Pending };
 
   static InitState GetInitState();
@@ -75,13 +70,13 @@ class XLiveAPI {
 
   static const uint64_t GetLocalMachineId();
 
-  static memory RegisterPlayer();
+  static std::unique_ptr<HTTPResponseObjectJSON> RegisterPlayer();
 
   static std::unique_ptr<PlayerObjectJSON> FindPlayer(std::string ip);
 
   static void QoSPost(uint64_t sessionId, uint8_t* qosData, size_t qosLength);
 
-  static memory QoSGet(uint64_t sessionId);
+  static response_data QoSGet(uint64_t sessionId);
 
   static void SessionModify(uint64_t sessionId, XSessionModify* data);
 
@@ -106,7 +101,8 @@ class XLiveAPI {
   static void SessionWriteStats(uint64_t sessionId, XSessionWriteStats* stats,
                                 XSessionViewProperties* probs);
 
-  static memory LeaderboardsFind(const uint8_t* data);
+  static std::unique_ptr<HTTPResponseObjectJSON> LeaderboardsFind(
+      const uint8_t* data);
 
   static void DeleteSession(uint64_t sessionId);
 
@@ -127,6 +123,9 @@ class XLiveAPI {
 
   static void SessionLeaveRemote(uint64_t sessionId,
                                  std::vector<std::string> xuids);
+
+  static std::unique_ptr<HTTPResponseObjectJSON> PraseResponse(
+      response_data response);
 
   static const uint8_t* GenerateMacAddress();
 
@@ -154,17 +153,18 @@ class XLiveAPI {
  private:
   inline static InitState initialized_ = InitState::Pending;
 
-  static memory Get(std::string endpoint);
+  static std::unique_ptr<HTTPResponseObjectJSON> Get(std::string endpoint);
 
-  static memory Post(std::string endpoint, const uint8_t* data,
-                     size_t data_size = 0);
+  static std::unique_ptr<HTTPResponseObjectJSON> Post(std::string endpoint,
+                                                      const uint8_t* data,
+                                                      size_t data_size = 0);
 
-  static memory Delete(std::string endpoint);
+  static std::unique_ptr<HTTPResponseObjectJSON> Delete(std::string endpoint);
 
   // https://curl.se/libcurl/c/CURLOPT_WRITEFUNCTION.html
   static size_t callback(void* data, size_t size, size_t nmemb, void* clientp) {
     size_t realsize = size * nmemb;
-    struct memory* mem = (struct memory*)clientp;
+    struct response_data* mem = (struct response_data*)clientp;
 
     char* ptr = (char*)realloc(mem->response, mem->size + realsize + 1);
     if (ptr == NULL) return 0; /* out of memory! */

@@ -20,11 +20,10 @@ namespace xe {
 namespace kernel {
 class BaseObjectJSON {
  public:
-  bool DeserializeFromString(const std::string& s);
-  bool SerializeToString(std::string& s);
+  bool Deserialize(const std::string& s);
+  bool Serialize(std::string& s);
 
   virtual std::pair<bool, std::string> Serialize() const;
-  virtual bool Deserialize(const std::string& s);
   virtual bool Deserialize(const rapidjson::Value& obj) = 0;
   virtual bool Serialize(
       rapidjson::PrettyWriter<rapidjson::StringBuffer>* writer) const = 0;
