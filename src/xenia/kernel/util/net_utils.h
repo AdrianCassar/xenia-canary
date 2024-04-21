@@ -24,6 +24,12 @@ namespace kernel {
 
 const uint32_t LOOPBACK = 0x7F000001;
 
+struct response_data {
+  char* response;
+  size_t size;
+  uint64_t http_code;
+};
+
 enum HTTP_STATUS_CODE {
   HTTP_OK = 200,
   HTTP_CREATED = 201,
