@@ -149,11 +149,11 @@ struct XSessionSearch {
 };
 
 struct XSessionSearchID {
-  xe::kernel::XNKID* session_id;
   xe::be<uint32_t> user_index;
+  xe::kernel::XNKID session_id;
   xe::be<uint32_t> results_buffer_size;
   xe::be<uint32_t> search_results_ptr;
-  xe::be<uint32_t> xoverlapped_ptr;
+  // xe::be<uint32_t> xoverlapped_ptr;
 };
 
 struct XSessionDetails {
