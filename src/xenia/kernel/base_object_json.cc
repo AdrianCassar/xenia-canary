@@ -37,11 +37,7 @@ bool BaseObjectJSON::Deserialize(const std::string& s) {
   return Deserialize(doc);
 }
 
-bool BaseObjectJSON::DeserializeFromString(const std::string& s) {
-  return Deserialize(s);
-}
-
-bool BaseObjectJSON::SerializeToString(std::string& s) {
+bool BaseObjectJSON::Serialize(std::string& s) {
   std::pair<bool, std::string> result = Serialize();
 
   s = result.second;
