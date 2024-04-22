@@ -909,16 +909,20 @@ std::vector<XTitleServer> XLiveAPI::GetServers() {
   std::string endpoint =
       fmt::format("title/{:08X}/servers", kernel_state()->title_id());
 
-  std::unique_ptr<HTTPResponseObjectJSON> response = Get(endpoint);
+  if (xlsp_servers_cached) {
+    return xlsp_servers;
+  }
 
-  std::vector<XTitleServer> servers{};
+  std::unique_ptr<HTTPResponseObjectJSON> response = Get(endpoint);
 
   if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_OK) {
     XELOGE("GetServers error message: {}", response->Message());
     assert_always();
 
-    return servers;
+    return xlsp_servers;
   }
+
+  xlsp_servers_cached = true;
 
   Document doc;
   doc.Parse(response->RawResponse().response);
@@ -936,10 +940,10 @@ std::vector<XTitleServer> XLiveAPI::GetServers() {
       strcpy(server.server_description, description.c_str());
     }
 
-    servers.push_back(server);
+    xlsp_servers.push_back(server);
   }
 
-  return servers;
+  return xlsp_servers;
 }
 
 XONLINE_SERVICE_INFO XLiveAPI::GetServiceInfoById(uint32_t serviceId) {
@@ -1027,7 +1031,7 @@ void XLiveAPI::SessionLeaveRemote(uint64_t sessionId,
   PrettyWriter<rapidjson::StringBuffer> writer(buffer);
   doc.Accept(writer);
 
-   std::unique_ptr<HTTPResponseObjectJSON> response =
+  std::unique_ptr<HTTPResponseObjectJSON> response =
       Post(endpoint, (uint8_t*)buffer.GetString());
 
   if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_CREATED) {
@@ -1036,7 +1040,8 @@ void XLiveAPI::SessionLeaveRemote(uint64_t sessionId,
   }
 }
 
-std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::PraseResponse(response_data chunk) {
+std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::PraseResponse(
+    response_data chunk) {
   std::unique_ptr<HTTPResponseObjectJSON> response =
       std::make_unique<HTTPResponseObjectJSON>(chunk);
 
