@@ -105,7 +105,37 @@ static uint32_t XMPCreateUserPlaylistEnumeratorHandle(
   return X_ERROR_SUCCESS;
 }
 
+static uint32_t XTitleServerCreateEnumerator(
+    uint32_t user_index, uint32_t app_id, uint32_t open_message,
+    uint32_t close_message, uint32_t extra_size, uint32_t item_count,
+    uint32_t flags, uint32_t& out_handle) {
+  auto e =
+      make_object<XStaticEnumerator<XTitleServer>>(kernel_state(), item_count);
+
+  auto result = e->Initialize(user_index, app_id, open_message, close_message,
+                              flags, extra_size, nullptr);
+
+  if (XFAILED(result)) {
+    return result;
+  }
+
+  const auto servers = XLiveAPI::GetServers();
+
+  for (const auto& server : servers) {
+    XTitleServer* item = e->AppendItem();
+
+    *item = server;
+  }
+
+  XELOGI("XTitleServerCreateEnumerator: added {} items to enumerator",
+         e->item_count());
+
+  out_handle = e->handle();
+  return X_ERROR_SUCCESS;
+}
+
 constexpr uint32_t XMPCreateUserPlaylistEnumeratorMessage = 0x70026;
+constexpr uint32_t XTitleServerMessage = 0x58039;
 
 dword_result_t XamCreateEnumeratorHandle_entry(
     dword_t user_index, dword_t app_id, dword_t open_message,
@@ -115,29 +145,10 @@ dword_result_t XamCreateEnumeratorHandle_entry(
   X_STATUS result = 0;
 
   switch (open_message) {
-    case 0x58039: {
-      auto e = make_object<XStaticEnumerator<XTitleServer>>(kernel_state(),
-                                                            item_count);
-      result = e->Initialize(user_index, app_id, open_message, close_message,
-                             flags, extra_size, nullptr);
-      if (XFAILED(result)) {
-        return result;
-      }
-
-      // Implement an XEnumerator that supports asynchronous enumeration.
-
-      const auto servers = XLiveAPI::GetServers();
-
-      for (const auto& server : servers) {
-        auto item = e->AppendItem();
-
-        *item = server;
-      }
-
-      XELOGI("XamCreateEnumerator: added {} items to enumerator",
-             e->item_count());
-
-      enum_handle = e->handle();
+    case XTitleServerMessage: {
+      result = XTitleServerCreateEnumerator(user_index, app_id, open_message,
+                                            close_message, extra_size,
+                                            item_count, flags, enum_handle);
     } break;
     case XMPCreateUserPlaylistEnumeratorMessage: {
       result = XMPCreateUserPlaylistEnumeratorHandle(
