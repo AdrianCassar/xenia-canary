@@ -90,8 +90,28 @@ X_STATUS XSocket::SetOption(uint32_t level, uint32_t optname, void* optval_ptr,
     return X_STATUS_SUCCESS;
   }
 
-  int ret =
-      setsockopt(native_handle_, level, optname, (char*)optval_ptr, optlen);
+  // Because values provided in optval_ptr are in BE we must to somehow save
+  // them in LE.
+  void* optval_ptr_le = calloc(1, optlen);
+  switch (optlen) {
+    case 4:
+      xe::copy_and_swap<uint32_t>((uint32_t*)optval_ptr_le,
+                                  (uint32_t*)optval_ptr, (uint32_t)optlen);
+      break;
+    case 8:
+      xe::copy_and_swap<uint64_t>((uint64_t*)optval_ptr_le,
+                                  (uint64_t*)optval_ptr, (uint32_t)optlen);
+      break;
+    default:
+      XELOGE("XSocket::SetOption - Unhandled optlen: {}", optlen);
+      break;
+  }
+
+  int ret = setsockopt(native_handle_, level, optname,
+                       (const char*)optval_ptr_le, optlen);
+
+  free(optval_ptr_le);
+
   if (ret < 0) {
     // TODO: WSAGetLastError()
     return X_STATUS_UNSUCCESSFUL;
@@ -461,9 +481,8 @@ int XSocket::Send(const uint8_t* buf, uint32_t buf_len, uint32_t flags) {
 int XSocket::SendTo(uint8_t* buf, uint32_t buf_len, uint32_t flags,
                     XSOCKADDR_IN* to, uint32_t to_len) {
   sockaddr addr = to->to_host();
-
-  return sendto(native_handle_, reinterpret_cast<char*>(buf), buf_len, flags,
-                to ? &addr : nullptr, to_len);
+  return sendto(native_handle_, reinterpret_cast<const char*>(buf), buf_len,
+                flags, to ? &addr : nullptr, to_len);
 }
 
 bool XSocket::QueuePacket(uint32_t src_ip, uint16_t src_port,
