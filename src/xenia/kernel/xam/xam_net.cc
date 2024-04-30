@@ -1700,8 +1700,9 @@ dword_result_t NetDll_sendto_entry(dword_t caller, dword_t socket_handle,
   int ret = socket->SendTo(buf_ptr, buf_len, flags, to_ptr, to_len);
   if (ret < 0) {
     XThread::SetLastError(socket->GetLastWSAError());
+    return -1;
   }
-  return ret;
+  return 0;
 }
 DECLARE_XAM_EXPORT1(NetDll_sendto, kNetworking, kImplemented);
 
