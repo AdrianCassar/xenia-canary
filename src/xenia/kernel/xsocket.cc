@@ -82,11 +82,11 @@ X_STATUS XSocket::GetOption(uint32_t level, uint32_t optname, void* optval_ptr,
   switch (*optlen) {
     case 4:
       xe::copy_and_swap<uint32_t>((uint32_t*)optval_ptr, (uint32_t*)optval_ptr,
-                                  (uint32_t)*optlen);
+                                  1);
       break;
     case 8:
       xe::copy_and_swap<uint64_t>((uint64_t*)optval_ptr, (uint64_t*)optval_ptr,
-                                  (uint32_t)*optlen);
+                                  1);
       break;
     default:
       XELOGE("XSocket::GetOption - Unhandled optlen: {}", *optlen);
@@ -113,11 +113,11 @@ X_STATUS XSocket::SetOption(uint32_t level, uint32_t optname, void* optval_ptr,
   switch (optlen) {
     case 4:
       xe::copy_and_swap<uint32_t>((uint32_t*)optval_ptr_le,
-                                  (uint32_t*)optval_ptr, (uint32_t)optlen);
+                                  (uint32_t*)optval_ptr, 1);
       break;
     case 8:
       xe::copy_and_swap<uint64_t>((uint64_t*)optval_ptr_le,
-                                  (uint64_t*)optval_ptr, (uint32_t)optlen);
+                                  (uint64_t*)optval_ptr, 1);
       break;
     default:
       XELOGE("XSocket::SetOption - Unhandled optlen: {}", optlen);
