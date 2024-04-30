@@ -76,6 +76,23 @@ X_STATUS XSocket::GetOption(uint32_t level, uint32_t optname, void* optval_ptr,
                             int* optlen) {
   int ret =
       getsockopt(native_handle_, level, optname, (char*)optval_ptr, optlen);
+
+  // Because values provided in optval_ptr are in LE we must to somehow save
+  // them in BE.
+  switch (*optlen) {
+    case 4:
+      xe::copy_and_swap<uint32_t>((uint32_t*)optval_ptr, (uint32_t*)optval_ptr,
+                                  (uint32_t)*optlen);
+      break;
+    case 8:
+      xe::copy_and_swap<uint64_t>((uint64_t*)optval_ptr, (uint64_t*)optval_ptr,
+                                  (uint32_t)*optlen);
+      break;
+    default:
+      XELOGE("XSocket::GetOption - Unhandled optlen: {}", *optlen);
+      break;
+  }
+
   if (ret < 0) {
     // TODO: WSAGetLastError()
     return X_STATUS_UNSUCCESSFUL;
