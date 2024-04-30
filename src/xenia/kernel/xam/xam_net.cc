@@ -519,9 +519,15 @@ dword_result_t NetDll_WSASendTo_entry(
     combined_buffer_offset += buffers[i].len;
   }
 
-  socket->SendTo(combined_buffer_mem.data(), combined_buffer_size, flags,
-                 to_ptr, to_len);
+  const int result = socket->SendTo(
+      combined_buffer_mem.data(), combined_buffer_size, flags, to_ptr, to_len);
 
+  if (result == -1) {
+    const uint32_t error_code = socket->GetLastWSAError();
+    XThread::SetLastError(error_code);
+    XELOGE("NetDll_WSASendTo failed: {:08X}", error_code);
+    return result;
+  }
   // TODO: Instantly complete overlapped
 
   return 0;
