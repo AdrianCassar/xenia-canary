@@ -66,6 +66,8 @@ DECLARE_bool(d3d12_readback_resolve);
 
 DECLARE_string(api_address);
 
+DECLARE_string(api_list);
+
 DECLARE_bool(upnp);
 
 DEFINE_bool(fullscreen, false, "Whether to launch the emulator in fullscreen.",
@@ -713,10 +715,20 @@ bool EmulatorWindow::Initialize() {
 
   // Netplay menu.
   auto Netplay_menu = MenuItem::Create(MenuItem::Type::kPopup, "&Netplay");
+  auto API_list_menu =
+      MenuItem::Create(MenuItem::Type::kPopup, "&API addresses");
   {
     Netplay_menu->AddChild(
         MenuItem::Create(MenuItem::Type::kString, "&Status", "",
                          std::bind(&EmulatorWindow::NetplayStatus, this)));
+
+    for (std::string& api_address : xe::kernel::XLiveAPI::ParseAPIList()) {
+      API_list_menu->AddChild(MenuItem::Create(
+          MenuItem::Type::kString, api_address, "",
+          std::bind(&EmulatorWindow::SetAPIAddress, this, api_address)));
+    }
+
+    Netplay_menu->AddChild(std::move(API_list_menu));
   }
   main_menu->AddChild(std::move(Netplay_menu));
 
@@ -1413,6 +1425,10 @@ void EmulatorWindow::SetFullscreen(bool fullscreen) {
 
 void EmulatorWindow::ToggleFullscreen() {
   SetFullscreen(!window_->IsFullscreen());
+}
+
+void EmulatorWindow::SetAPIAddress(std::string api_address) {
+  xe::kernel::XLiveAPI::SetAPIAddress(api_address);
 }
 
 void EmulatorWindow::ToggleDisplayConfigDialog() {
