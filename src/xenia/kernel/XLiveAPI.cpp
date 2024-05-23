@@ -26,6 +26,10 @@
 DEFINE_string(api_address, "127.0.0.1:36000", "Xenia Master Server Address",
               "Live");
 
+DEFINE_string(
+    api_list, "",
+    "Comma delimited list URL1, URL2. Set api_address during runtime.", "Live");
+
 DEFINE_bool(logging, false, "Log Network Activity & Stats", "Live");
 
 DEFINE_bool(log_mask_ips, true, "Do not include P2P IPs inside the log",
@@ -70,6 +74,43 @@ const uint64_t XLiveAPI::GetLocalMachineId() {
 }
 
 XLiveAPI::InitState XLiveAPI::GetInitState() { return initialized_; }
+
+std::vector<std::string> XLiveAPI::ParseAPIList() {
+  if (cvars::api_list.empty()) {
+    OVERRIDE_string(api_list, GetApiAddress() + ",");
+  }
+
+  std::unordered_set<std::string> unique_api_addresses;
+  std::vector<std::string> api_addresses;
+
+  std::stringstream api_list(cvars::api_list);
+  std::string api_address;
+
+  while (std::getline(api_list, api_address, ',')) {
+    if (api_addresses.size() >= 10) {
+      break;
+    }
+
+    api_address = xe::string_util::trim(api_address);
+
+    if (api_address.empty()) {
+      continue;
+    }
+
+    // Check if address is unique
+    if (unique_api_addresses.insert(api_address).second) {
+      api_addresses.push_back(api_address);
+    }
+  }
+
+  return api_addresses;
+}
+
+void XLiveAPI::SetAPIAddress(std::string address) {
+  if (initialized_ == InitState::Pending) {
+    OVERRIDE_string(api_address, address);
+  }
+}
 
 std::string XLiveAPI::GetApiAddress() {
   cvars::api_address = xe::string_util::trim(cvars::api_address);
