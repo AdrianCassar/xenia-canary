@@ -10,6 +10,8 @@
 #ifndef XENIA_KERNEL_XLIVEAPI_H_
 #define XENIA_KERNEL_XLIVEAPI_H_
 
+#include <unordered_set>
+
 #include <third_party/libcurl/include/curl/curl.h>
 
 #include "xenia/base/byte_order.h"
@@ -47,6 +49,10 @@ class XLiveAPI {
   enum class InitState { Success, Failed, Pending };
 
   static InitState GetInitState();
+
+  static std::vector<std::string> ParseAPIList();
+
+  static void SetAPIAddress(std::string address);
 
   static std::string GetApiAddress();
 
