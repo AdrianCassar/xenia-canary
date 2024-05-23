@@ -747,7 +747,7 @@ dword_result_t NetDll_XNetInAddrToString_entry(dword_t caller, dword_t ina,
                                                lpstring_t string_out,
                                                dword_t string_size) {
   in_addr addr = in_addr{};
-  addr.s_addr = ina;
+  addr.s_addr = ntohl(ina);
 
   strncpy(string_out, ip_to_string(addr).c_str(), string_size);
 
