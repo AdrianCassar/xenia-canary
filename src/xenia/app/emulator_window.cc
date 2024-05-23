@@ -1957,7 +1957,10 @@ void EmulatorWindow::NetplayStatus() {
 
     for (const auto& [protocol, m_port_bindings] : port_results) {
       for (const auto& [port, error] : m_port_bindings) {
-        msg += fmt::format("{} - {}: {}\n", protocol, port, error);
+        const std::string error_status = error == 0 ? "Success" : "Error";
+
+        msg += fmt::format("{} - {}: {}\t({})\n", protocol, port, error,
+                           error_status);
       }
     }
   }
