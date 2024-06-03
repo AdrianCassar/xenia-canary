@@ -35,6 +35,9 @@ DEFINE_int32(
     "                    bad idea, could lead to undefined behavior.",
     "Content");
 
+DEFINE_bool(source_engine_license, true,
+            "License mask for Source Engine: L4D, L4D2 & Portal 2.", "HACKS");
+
 namespace xe {
 namespace kernel {
 namespace xam {
@@ -393,7 +396,46 @@ dword_result_t xeXamContentCreate(dword_t user_index, lpstring_t root_name,
     }
 
     if (license_mask_ptr && XSUCCEEDED(result)) {
-      *license_mask_ptr = content_license;
+      if (cvars::source_engine_license) {
+        //  Portal 2
+        if (kernel_state()->title_id() == 0x45410912) {
+          if (content_data.display_name() == u"Portal 2: Peer Review") {
+            *license_mask_ptr = (1 << 24) & 0xFFFF0000;
+          }
+        }
+
+        // L4D2
+        if (kernel_state()->title_id() == 0x454108D4) {
+          if (content_data.display_name() == u"The Passing") {
+            *license_mask_ptr = (1 << 24) & 0xFFFF0000;
+          }
+
+          if (content_data.display_name() == u"Left 4 Dead 2: The Sacrifice") {
+            *license_mask_ptr = (2 << 24) & 0xFFFF0000;
+          }
+
+          if (content_data.display_name() == u"Left 4 Dead 2: Cold Stream") {
+            *license_mask_ptr = (3 << 24) & 0xFFFF0000;
+          }
+        }
+
+        // L4D & L4D GOTY
+        if (kernel_state()->title_id() == 0x45410830) {
+          if (content_data.display_name() == u"Left 4 Dead Survival Pack") {
+            *license_mask_ptr = (1 << 16) & 0xFFFF0000;
+          }
+
+          if (content_data.display_name() == u"Left 4 Dead Crash Course Pack") {
+            *license_mask_ptr = (2 << 16) & 0xFFFF0000;
+          }
+
+          if (content_data.display_name() == u"Left 4 Dead: The Sacrifice") {
+            *license_mask_ptr = (3 << 16) & 0xFFFF0000;
+          }
+        }
+      } else {
+        *license_mask_ptr = content_license;
+      }
     }
 
     extended_error = X_HRESULT_FROM_WIN32(result);
