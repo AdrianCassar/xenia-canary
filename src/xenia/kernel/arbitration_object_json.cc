@@ -43,7 +43,7 @@ bool ArbitrationObjectJSON::Deserialize(const rapidjson::Value& obj) {
         const auto xuid = string_util::from_string<uint64_t>(
             player["xuid"].GetString(), true);
 
-        machine.xuids.push_back(xuid);
+        machine.xuids.push_back(xe::byte_swap(xuid));
       }
 
       machine_info.push_back(machine);
