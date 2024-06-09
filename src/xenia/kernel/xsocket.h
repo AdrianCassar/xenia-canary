@@ -60,7 +60,7 @@ struct XSOCKADDR_IN {
   xe::be<uint16_t> address_family;
   xe::be<uint16_t> address_port;
   in_addr address_ip;
-  char sa_data[8];
+  char sa_zero[8];
 
   const sockaddr to_host() {
     sockaddr sa = {};
