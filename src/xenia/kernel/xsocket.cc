@@ -497,9 +497,13 @@ int XSocket::Send(const uint8_t* buf, uint32_t buf_len, uint32_t flags) {
 
 int XSocket::SendTo(uint8_t* buf, uint32_t buf_len, uint32_t flags,
                     XSOCKADDR_IN* to, uint32_t to_len) {
+  to->address_port =
+      XLiveAPI::upnp_handler->get_mapped_bind_port(to->address_port);
+
   sockaddr addr = to->to_host();
-  return sendto(native_handle_, reinterpret_cast<const char*>(buf), buf_len,
-                flags, to ? &addr : nullptr, to_len);
+
+  return sendto(native_handle_, reinterpret_cast<char*>(buf), buf_len, flags,
+                to ? &addr : nullptr, to_len);
 }
 
 bool XSocket::QueuePacket(uint32_t src_ip, uint16_t src_port,
