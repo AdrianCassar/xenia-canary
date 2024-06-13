@@ -18,11 +18,6 @@
 
 #include "xenia/kernel/XLiveAPI.h"
 
-#ifdef XE_PLATFORM_WIN32
-#include <IPTypes.h>
-#include <iphlpapi.h>
-#endif  // XE_PLATFORM_WIN32
-
 DEFINE_string(api_address, "127.0.0.1:36000", "Xenia Master Server Address",
               "Live");
 
@@ -35,7 +30,10 @@ DEFINE_bool(logging, false, "Log Network Activity & Stats", "Live");
 DEFINE_bool(log_mask_ips, true, "Do not include P2P IPs inside the log",
             "Live");
 
-DEFINE_bool(offline_mode, false, "Offline Mode", "Live");
+DEFINE_bool(offline_mode, false, "Offline Mode e.g. not connected to a LAN",
+            "Live");
+
+DEFINE_string(network_guid, "", "Network Interface GUID", "Live");
 
 DECLARE_bool(upnp);
 
@@ -112,6 +110,15 @@ void XLiveAPI::SetAPIAddress(std::string address) {
   }
 }
 
+void XLiveAPI::SetNetworkInterfaceByGUID(std::string guid) {
+  if (initialized_ == InitState::Pending) {
+    OVERRIDE_string(network_guid, guid);
+
+    DiscoverNetworkInterfaces();
+    SelectNetworkInterface();
+  }
+}
+
 std::string XLiveAPI::GetApiAddress() {
   cvars::api_address = xe::string_util::trim(cvars::api_address);
 
@@ -152,9 +159,12 @@ void XLiveAPI::Init() {
     }
   }
 
+  DiscoverNetworkInterfaces();
+
+  SelectNetworkInterface();
+
   upnp_handler = new UPnP();
   mac_address_ = new MacAddress(GetMACaddress());
-  local_ip_ = ip_to_sockaddr(UPnP::GetLocalIP());
 
   if (cvars::offline_mode) {
     XELOGI("XLiveAPI:: Offline mode enabled!");
@@ -165,6 +175,9 @@ void XLiveAPI::Init() {
   online_ip_ = Getwhoami();
 
   if (!IsOnline()) {
+    // Assign online ip as local ip to ensure XNADDR is not 0 for systemlink
+    online_ip_ = local_ip_;
+
     XELOGE("XLiveAPI:: Cannot reach API server.");
     initialized_ = InitState::Failed;
     return;
@@ -1132,76 +1145,195 @@ const uint8_t* XLiveAPI::GenerateMacAddress() {
 }
 
 const uint8_t* XLiveAPI::GetMACaddress() {
-  XELOGI("Resolving system mac address.");
-
-  // Use random mac for now.
   return GenerateMacAddress();
 
-#ifdef WIN32
-  DWORD dwRetval = 0;
+  XELOGI("Resolving system mac address.");
+
+#ifdef XE_PLATFORM_WIN32
+  // Select MAC based on network adapter
+  for (auto& adapter : adapter_addresses) {
+    if (cvars::network_guid == adapter.AdapterName) {
+      if (adapter.PhysicalAddressLength != NULL &&
+          adapter.PhysicalAddressLength == 6) {
+        uint8_t* adapter_mac_ptr = new uint8_t[MAX_ADAPTER_ADDRESS_LENGTH - 2];
+
+        memcpy(adapter_mac_ptr, adapter.PhysicalAddress,
+               sizeof(adapter_mac_ptr));
+
+        return adapter_mac_ptr;
+      }
+    }
+  }
+
+  return GenerateMacAddress();
+#else
+  return GenerateMacAddress();
+#endif  // XE_PLATFORM_WIN32
+}
+
+std::string XLiveAPI::GetNetworkFriendlyName(IP_ADAPTER_ADDRESSES adapter) {
+  char interface_name[MAX_ADAPTER_NAME_LENGTH];
+  wcstombs(interface_name, adapter.FriendlyName, sizeof(interface_name));
+
+  return interface_name;
+}
+
+void XLiveAPI::DiscoverNetworkInterfaces() {
+  XELOGI("Discovering network interfaces...");
+
+#ifdef XE_PLATFORM_WIN32
+  uint32_t dwRetval = 0;
   ULONG outBufLen = 0;
 
-  std::unique_ptr<IP_ADAPTER_ADDRESSES[]> adapter_addresses;
+  IP_ADAPTER_ADDRESSES* adapters_ptr = nullptr;
 
-  dwRetval = GetAdaptersAddresses(AF_UNSPEC, GAA_FLAG_INCLUDE_PREFIX, NULL,
-                                  NULL, &outBufLen);
+  adapter_addresses.clear();
+  adapter_addresses_buf.clear();
+
+  dwRetval = GetAdaptersAddresses(AF_INET, 0, 0, 0, &outBufLen);
+
+  adapter_addresses_buf.resize(outBufLen);
 
   if (dwRetval == ERROR_BUFFER_OVERFLOW) {
-    adapter_addresses = std::make_unique<IP_ADAPTER_ADDRESSES[]>(outBufLen);
-  } else {
-    return GenerateMacAddress();
+    adapters_ptr =
+        reinterpret_cast<IP_ADAPTER_ADDRESSES*>(adapter_addresses_buf.data());
   }
 
-  dwRetval = GetAdaptersAddresses(AF_UNSPEC, GAA_FLAG_INCLUDE_PREFIX, NULL,
-                                  adapter_addresses.get(), &outBufLen);
+  dwRetval = GetAdaptersAddresses(AF_INET, 0, 0, adapters_ptr, &outBufLen);
 
-  if (dwRetval) {
-    return GenerateMacAddress();
-  }
+  std::string networks = "Network Interfaces:\n";
 
-  for (IP_ADAPTER_ADDRESSES* adapter_ptr = adapter_addresses.get();
-       adapter_ptr != NULL; adapter_ptr = adapter_ptr->Next) {
+  for (IP_ADAPTER_ADDRESSES* adapter_ptr = adapters_ptr; adapter_ptr != nullptr;
+       adapter_ptr = adapter_ptr->Next) {
     if (adapter_ptr->OperStatus == IfOperStatusUp &&
         (adapter_ptr->IfType == IF_TYPE_IEEE80211 ||
          adapter_ptr->IfType == IF_TYPE_ETHERNET_CSMACD)) {
-      if (adapter_ptr->PhysicalAddress != NULL) {
-        char mac_address[MAX_ADAPTER_ADDRESS_LENGTH]{};
-        memcpy(mac_address, adapter_ptr->PhysicalAddress,
-               MAX_ADAPTER_ADDRESS_LENGTH);
+      if (adapter_ptr->PhysicalAddress != nullptr) {
+        for (PIP_ADAPTER_UNICAST_ADDRESS_LH adapater_address =
+                 adapter_ptr->FirstUnicastAddress;
+             adapater_address != nullptr;
+             adapater_address = adapater_address->Next) {
+          sockaddr_in addr_ptr = *reinterpret_cast<sockaddr_in*>(
+              adapater_address->Address.lpSockaddr);
 
-        // Check U/L bit
-        if (adapter_ptr->PhysicalAddress[0] & 2) {
-          // Universal
-          // XELOGI("Universal");
-        } else {
-          // Local
-          // XELOGI("Local");
-        }
+          if (addr_ptr.sin_family == AF_INET) {
+            std::string friendlyName = GetNetworkFriendlyName(*adapter_ptr);
+            std::string guid = adapter_ptr->AdapterName;
 
-        if (adapter_ptr->PhysicalAddressLength != NULL &&
-            adapter_ptr->PhysicalAddressLength == 6) {
-          unsigned char* mac_ptr =
-              new unsigned char[MAX_ADAPTER_ADDRESS_LENGTH];
+            IP_ADAPTER_ADDRESSES adapter = IP_ADAPTER_ADDRESSES(*adapter_ptr);
 
-          for (int i = 0; i < 6; i++) {
-            mac_ptr[i] =
-                static_cast<unsigned char>(adapter_ptr->PhysicalAddress[i]);
+            adapter_addresses.push_back(adapter);
+
+            if (guid == cvars::network_guid) {
+              interface_name = friendlyName;
+            }
+
+            networks += fmt::format("{} {}: {}\n", friendlyName, guid,
+                                    ip_to_string(addr_ptr));
           }
-
-          return mac_ptr;
         }
       }
     }
   }
 
-  XELOGI("Cannot find mac address generating random.");
+  if (adapter_addresses.empty()) {
+    XELOGI("No network interfaces detected!\n");
+  } else {
+    XELOGI("Found {} network interfaces!\n", adapter_addresses.size());
+  }
 
-  return GenerateMacAddress();
+  if (cvars::logging) {
+    XELOGI("{}", xe::string_util::trim(networks));
+  }
 #else
-  XELOGI("Generating random mac address.");
+#endif  // XE_PLATFORM_WIN32
+}
 
-  return GenerateMacAddress();
-#endif  // WIN32
+bool XLiveAPI::UpdateNetworkInterface(sockaddr_in local_ip,
+                                      IP_ADAPTER_ADDRESSES adapter) {
+  for (PIP_ADAPTER_UNICAST_ADDRESS_LH address = adapter.FirstUnicastAddress;
+       address != NULL; address = address->Next) {
+    sockaddr_in adapter_addr =
+        *reinterpret_cast<sockaddr_in*>(address->Address.lpSockaddr);
+
+    if (adapter_addr.sin_family == AF_INET) {
+      if (cvars::network_guid.empty()) {
+        if (local_ip.sin_addr.s_addr == adapter_addr.sin_addr.s_addr ||
+            local_ip.sin_addr.s_addr == 0) {
+          local_ip_ = adapter_addr;
+          OVERRIDE_string(network_guid, adapter.AdapterName);
+          return true;
+        }
+      } else {
+        local_ip_ = adapter_addr;
+        OVERRIDE_string(network_guid, adapter.AdapterName);
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+void XLiveAPI::SelectNetworkInterface() {
+  sockaddr_in local_ip = ip_to_sockaddr(UPnP::GetLocalIP());
+
+  XELOGI("Checking for interface: {}", cvars::network_guid);
+
+  bool updated = false;
+
+  // If existing network GUID exists use it
+  for (auto const& adapter : adapter_addresses) {
+    if (cvars::network_guid == adapter.AdapterName) {
+      if (UpdateNetworkInterface(local_ip, adapter)) {
+        interface_name = GetNetworkFriendlyName(adapter);
+        updated = true;
+        break;
+      }
+    }
+  }
+
+  // Find interface that has local_ip
+  if (!updated) {
+    XELOGI("Network Interface GUID: {} not found!",
+           cvars::network_guid.empty() ? "N\\A" : cvars::network_guid);
+
+    for (auto const& adapter : adapter_addresses) {
+      if (UpdateNetworkInterface(local_ip, adapter)) {
+        interface_name = GetNetworkFriendlyName(adapter);
+        updated = true;
+        break;
+      }
+    }
+  }
+
+  // Use first interface from adapter_addresses, otherwise unspecified network
+  if (!updated) {
+    // Reset the GUID
+    OVERRIDE_string(network_guid, "");
+
+    XELOGI("Interface GUID: {} not found!",
+           cvars::network_guid.empty() ? "N\\A" : cvars::network_guid);
+
+    if (cvars::network_guid.empty()) {
+      if (!adapter_addresses.empty()) {
+        auto& adapter = adapter_addresses.front();
+
+        if (UpdateNetworkInterface(local_ip, adapter)) {
+          interface_name = GetNetworkFriendlyName(adapter);
+        }
+      } else {
+        local_ip_ = local_ip;
+        interface_name = "Unspecified Network";
+      }
+    } else {
+      interface_name = "Unspecified Network";
+    }
+  }
+
+  XELOGI("Set network interface: {} {}", interface_name, cvars::network_guid);
+
+  assert_false(cvars::network_guid == "");
 }
 }  // namespace kernel
 }  // namespace xe
