@@ -467,6 +467,9 @@ bool EmulatorApp::OnInitialize() {
     window_h = 768;
   }
 
+  // Discover network interfaces so they can be displayed in toolbar.
+  xe::kernel::XLiveAPI::DiscoverNetworkInterfaces();
+
   // Main emulator display window.
   emulator_window_ = EmulatorWindow::Create(emulator_.get(), app_context(),
                                             window_w, window_h);
