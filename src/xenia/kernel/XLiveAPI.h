@@ -26,6 +26,10 @@
 #include "xenia/kernel/session_object_json.h"
 #include "xenia/kernel/xsession.h"
 
+#ifdef XE_PLATFORM_WIN32
+#include <iphlpapi.h>
+#endif  // XE_PLATFORM_WIN32
+
 namespace xe {
 namespace kernel {
 
@@ -54,6 +58,8 @@ class XLiveAPI {
 
   static void SetAPIAddress(std::string address);
 
+  static void SetNetworkInterfaceByGUID(std::string guid);
+
   static std::string GetApiAddress();
 
   static uint32_t GetNatType();
@@ -79,6 +85,9 @@ class XLiveAPI {
   static std::unique_ptr<HTTPResponseObjectJSON> RegisterPlayer();
 
   static std::unique_ptr<PlayerObjectJSON> FindPlayer(std::string ip);
+
+  static bool UpdateQoSCache(const uint64_t sessionId,
+                             const std::vector<uint8_t> qos_payloade);
 
   static void QoSPost(uint64_t sessionId, uint8_t* qosData, size_t qosLength);
 
@@ -137,8 +146,14 @@ class XLiveAPI {
 
   static const uint8_t* GetMACaddress();
 
-  static bool UpdateQoSCache(const uint64_t sessionId,
-                             const std::vector<uint8_t> qos_payloade);
+  static std::string GetNetworkFriendlyName(IP_ADAPTER_ADDRESSES adapter);
+
+  static void DiscoverNetworkInterfaces();
+
+  static bool UpdateNetworkInterface(sockaddr_in local_ip,
+                                     IP_ADAPTER_ADDRESSES adapter);
+
+  static void SelectNetworkInterface();
 
   static const sockaddr_in LocalIP() { return local_ip_; };
   static const sockaddr_in OnlineIP() { return online_ip_; };
@@ -152,6 +167,12 @@ class XLiveAPI {
 
   inline static bool xlsp_servers_cached = false;
   inline static std::vector<XTitleServer> xlsp_servers{};
+
+  inline static std::string interface_name;
+
+  inline static std::vector<uint8_t> adapter_addresses_buf{};
+
+  inline static std::vector<IP_ADAPTER_ADDRESSES> adapter_addresses{};
 
   inline static std::map<uint32_t, uint64_t> sessionIdCache{};
   inline static std::map<uint32_t, uint64_t> macAddressCache{};
