@@ -604,7 +604,7 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
         }
         xe::store_and_swap<uint32_t>(context + 4, value);
       }
-      return X_E_FAIL;
+      return X_E_SUCCESS;
     }
     case 0x000B0071: {
       XELOGD("XGI 0x000B0071, unimplemented");
