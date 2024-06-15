@@ -297,8 +297,9 @@ class XSession : public XObject {
   static X_RESULT GetSessions(Memory* memory, XSessionSearch* search_data);
   static X_RESULT GetSessionByID(Memory* memory, XSessionSearchID* search_data);
 
+  static void GenerateIdentityExchangeKey(XNKEY* key);
+
  private:
-  void GenerateExchangeKey(XNKEY* key);
   uint64_t GenerateSessionId();
   void PrintSessionType(SessionFlags flags);
 
@@ -319,6 +320,9 @@ class XSession : public XObject {
                             SessionFlags checked_flag) const {
     return (flags & checked_flag) == checked_flag;
   };
+
+  static void GetXnAddrFromSessionObject(SessionObjectJSON* session,
+                                         XNADDR* XnAddr_ptr);
 
   static void FillSessionSearchResult(
       const std::unique_ptr<SessionObjectJSON>& session_info,
