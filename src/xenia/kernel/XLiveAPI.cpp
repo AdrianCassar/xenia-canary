@@ -18,11 +18,11 @@
 
 #include "xenia/kernel/XLiveAPI.h"
 
-DEFINE_string(api_address, "127.0.0.1:36000",
+DEFINE_string(api_address, "192.168.0.1:36000/",
               "Xenia Server Address e.g. IP:PORT", "Live");
 
 DEFINE_string(
-    api_list, "",
+    api_list, "https://xenia-netplay-2a0298c0e3f4.herokuapp.com/,",
     "Comma delimited list URL1, URL2. Set api_address during runtime.", "Live");
 
 DEFINE_bool(logging, false, "Log Network Activity & Stats", "Live");
@@ -89,7 +89,7 @@ XLiveAPI::InitState XLiveAPI::GetInitState() { return initialized_; }
 
 std::vector<std::string> XLiveAPI::ParseAPIList() {
   if (cvars::api_list.empty()) {
-    OVERRIDE_string(api_list, GetApiAddress() + ",");
+    OVERRIDE_string(api_list, default_public_server_ + ",");
   }
 
   std::unordered_set<std::string> unique_api_addresses;
@@ -115,6 +115,13 @@ std::vector<std::string> XLiveAPI::ParseAPIList() {
     }
   }
 
+  if (api_addresses.size() < 10) {
+    if (unique_api_addresses.insert(GetApiAddress()).second) {
+      OVERRIDE_string(api_list, cvars::api_list + GetApiAddress() + ",");
+      api_addresses.push_back(GetApiAddress());
+    }
+  }
+
   return api_addresses;
 }
 
@@ -135,6 +142,10 @@ void XLiveAPI::SetNetworkInterfaceByGUID(std::string guid) {
 
 std::string XLiveAPI::GetApiAddress() {
   cvars::api_address = xe::string_util::trim(cvars::api_address);
+
+  if (cvars::api_address.empty()) {
+    cvars::api_address = default_local_server_;
+  }
 
   // Add forward slash if not already added
   if (cvars::api_address.back() != '/') {
