@@ -185,6 +185,11 @@ class XLiveAPI {
   inline static int8_t version_status;
 
  private:
+  inline static const std::string default_local_server_ = "192.168.0.1:36000/";
+
+  inline static const std::string default_public_server_ =
+      "https://xenia-netplay-2a0298c0e3f4.herokuapp.com/";
+
   inline static InitState initialized_ = InitState::Pending;
 
   static std::unique_ptr<HTTPResponseObjectJSON> Get(std::string endpoint);
