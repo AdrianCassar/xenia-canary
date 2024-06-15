@@ -18,8 +18,8 @@
 
 #include "xenia/kernel/XLiveAPI.h"
 
-DEFINE_string(api_address, "127.0.0.1:36000", "Xenia Master Server Address",
-              "Live");
+DEFINE_string(api_address, "127.0.0.1:36000",
+              "Xenia Server Address e.g. IP:PORT", "Live");
 
 DEFINE_string(
     api_list, "",
@@ -48,13 +48,27 @@ using namespace rapidjson;
 // Use the overlapped task for asynchronous curl requests.
 // API endpoint lookup table
 //
-// How is systemlink state determined?
 // Extract stat descriptions from XDBF.
 // Profiles have offline and online XUIDs we only use online.
 
 // https://patents.google.com/patent/US20060287099A1
 namespace xe {
 namespace kernel {
+
+void XLiveAPI::IpGetConsoleXnAddr(XNADDR* XnAddr_ptr) {
+  memset(XnAddr_ptr, 0, sizeof(XNADDR));
+
+  if (IsOnline()) {
+    XnAddr_ptr->ina = OnlineIP().sin_addr;
+    XnAddr_ptr->inaOnline = OnlineIP().sin_addr;
+    XnAddr_ptr->wPortOnline = GetPlayerPort();
+  }
+
+  // XnAddr_ptr->ina = LocalIP().sin_addr;
+
+  memcpy(XnAddr_ptr->abEnet, mac_address_->raw(), sizeof(MacAddress));
+  memcpy(XnAddr_ptr->abOnline, mac_address_->raw(), sizeof(MacAddress));
+}
 
 const uint64_t XLiveAPI::GetMachineId(const uint64_t mac_address) {
   const uint64_t machine_id_mask = 0xFA00000000000000;
@@ -134,6 +148,8 @@ std::string XLiveAPI::GetApiAddress() {
 uint32_t XLiveAPI::GetNatType() { return IsOnline() ? 1 : 3; }
 
 bool XLiveAPI::IsOnline() { return OnlineIP().sin_addr.s_addr != 0; }
+
+bool XLiveAPI::IsConnectedToLAN() { return LocalIP().sin_addr.s_addr != 0; }
 
 uint16_t XLiveAPI::GetPlayerPort() { return 36000; }
 
