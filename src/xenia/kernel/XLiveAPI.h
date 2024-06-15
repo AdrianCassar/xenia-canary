@@ -52,6 +52,8 @@ class XLiveAPI {
  public:
   enum class InitState { Success, Failed, Pending };
 
+  static void IpGetConsoleXnAddr(XNADDR* XnAddr_ptr);
+
   static InitState GetInitState();
 
   static std::vector<std::string> ParseAPIList();
@@ -65,6 +67,8 @@ class XLiveAPI {
   static uint32_t GetNatType();
 
   static bool IsOnline();
+
+  static bool IsConnectedToLAN();
 
   static uint16_t GetPlayerPort();
 
