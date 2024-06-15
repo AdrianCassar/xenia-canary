@@ -202,7 +202,9 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
         xe::be<uint32_t> results_guest_address;
       }* data = reinterpret_cast<XUserReadStats*>(buffer);
 
-      if (!data->results_guest_address) return 1;
+      if (!data->results_guest_address) {
+        return 1;
+      }
 
 #pragma region Curl
       Document doc;
