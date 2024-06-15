@@ -927,8 +927,8 @@ dword_result_t NetDll_XNetQosServiceLookup_entry(dword_t caller, dword_t flags,
     qos->info[0].data_ptr = *(uint8_t*)"A";
     qos->info[0].rtt_min_in_msecs = 4;
     qos->info[0].rtt_med_in_msecs = 10;
-    qos->info[0].up_bits_per_sec = 20 * 1024;
-    qos->info[0].down_bits_per_sec = 20 * 1024;
+    qos->info[0].up_bits_per_sec = 1024 * 1024;
+    qos->info[0].down_bits_per_sec = 1024 * 1024;
     qos->info[0].flags = XNET_XNQOSINFO::COMPLETE |
                          XNET_XNQOSINFO::TARGET_CONTACTED |
                          XNET_XNQOSINFO::DATA_RECEIVED;
