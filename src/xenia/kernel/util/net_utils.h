@@ -22,6 +22,7 @@
 namespace xe {
 namespace kernel {
 
+const uint32_t BROADCAST = 0xFFFFFFFF;
 const uint32_t LOOPBACK = 0x7F000001;
 
 struct response_data {

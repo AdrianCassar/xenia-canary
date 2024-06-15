@@ -62,14 +62,14 @@ X_RESULT XSession::CreateSession(uint8_t user_index, uint8_t public_slots,
     return X_ERROR_FUNCTION_FAILED;
   }
 
-  XSESSION_INFO* pSessionInfo =
+  XSESSION_INFO* SessionInfo_ptr =
       kernel_state_->memory()->TranslateVirtual<XSESSION_INFO*>(
           session_info_ptr);
 
-  GenerateExchangeKey(&pSessionInfo->keyExchangeKey);
+  GenerateIdentityExchangeKey(&SessionInfo_ptr->keyExchangeKey);
   PrintSessionType((SessionFlags)flags);
 
-  uint64_t* pNonce =
+  uint64_t* Nonce_ptr =
       kernel_state_->memory()->TranslateVirtual<uint64_t*>(nonce_ptr);
   // CSGO only uses STATS flag to create a session to POST stats pre round.
   // Minecraft and Portal 2 use flags HOST + STATS.
@@ -85,7 +85,7 @@ X_RESULT XSession::CreateSession(uint8_t user_index, uint8_t public_slots,
   // - Explicitly create a presence session (Frogger without HOST bit)
   // Based on Presence flag set?
   if (flags == STATS) {
-    CreateStatsSession(pSessionInfo, pNonce, user_index, public_slots,
+    CreateStatsSession(SessionInfo_ptr, Nonce_ptr, user_index, public_slots,
                        private_slots, flags);
   } else if (HasSessionFlag((SessionFlags)flags, HOST) ||
              flags == SINGLEPLAYER_WITH_STATS) {
@@ -93,18 +93,18 @@ X_RESULT XSession::CreateSession(uint8_t user_index, uint8_t public_slots,
     contexts_.insert(user_profile->contexts_.cbegin(),
                      user_profile->contexts_.cend());
 
-    CreateHostSession(pSessionInfo, pNonce, user_index, public_slots,
+    CreateHostSession(SessionInfo_ptr, Nonce_ptr, user_index, public_slots,
                       private_slots, flags);
   } else {
-    JoinExistingSession(pSessionInfo);
+    JoinExistingSession(SessionInfo_ptr);
   }
 
   is_session_created_ = true;
   return X_ERROR_SUCCESS;
 }
 
-void XSession::GenerateExchangeKey(XNKEY* key) {
-  for (int i = 0; i < sizeof(XNKEY); i++) {
+void XSession::GenerateIdentityExchangeKey(XNKEY* key) {
+  for (uint8_t i = 0; i < sizeof(XNKEY); i++) {
     key->ab[i] = i;
   }
 }
@@ -141,15 +141,8 @@ X_RESULT XSession::CreateHostSession(XSESSION_INFO* session_info,
 
   XLiveAPI::SessionContextSet(session_id_, contexts_);
 
-  session_info->hostAddress.inaOnline.s_addr =
-      XLiveAPI::OnlineIP().sin_addr.s_addr;
+  XLiveAPI::IpGetConsoleXnAddr(&session_info->hostAddress);
 
-  session_info->hostAddress.ina.s_addr =
-      session_info->hostAddress.inaOnline.s_addr;
-
-  memcpy(&session_info->hostAddress.abEnet, XLiveAPI::mac_address_->raw(), 6);
-  memcpy(&session_info->hostAddress.abOnline, XLiveAPI::mac_address_->raw(), 6);
-  session_info->hostAddress.wPortOnline = XLiveAPI::GetPlayerPort();
   return X_ERROR_SUCCESS;
 }
 
@@ -176,17 +169,7 @@ X_RESULT XSession::JoinExistingSession(XSESSION_INFO* session_info) {
       XLiveAPI::XSessionGet(session_id_);
 
   // Begin XNetRegisterKey?
-  session_info->hostAddress.inaOnline = ip_to_in_addr(session->HostAddress());
-
-  session_info->hostAddress.ina.s_addr =
-      session_info->hostAddress.inaOnline.s_addr;
-
-  memcpy(&session_info->hostAddress.abEnet,
-         MacAddress(session->MacAddress()).raw(), 6);
-  memcpy(&session_info->hostAddress.abOnline,
-         MacAddress(session->MacAddress()).raw(), 6);
-
-  session_info->hostAddress.wPortOnline = XLiveAPI::GetPlayerPort();
+  GetXnAddrFromSessionObject(session.get(), &session_info->hostAddress);
 
   return X_ERROR_SUCCESS;
 }
@@ -304,7 +287,7 @@ X_RESULT XSession::ModifySession(XSessionModify* data) {
 }
 
 X_RESULT XSession::GetSessionDetails(XSessionDetails* data) {
-  auto details =
+  auto details_ptr =
       kernel_state_->memory()->TranslateVirtual<XSESSION_LOCAL_DETAILS*>(
           data->details_buffer);
 
@@ -316,58 +299,45 @@ X_RESULT XSession::GetSessionDetails(XSessionDetails* data) {
   }
 
   Uint64toXNKID(xe::byte_swap(session->SessionID_UInt()),
-                &details->sessionInfo.sessionID);
+                &details_ptr->sessionInfo.sessionID);
 
-  details->sessionInfo.hostAddress.inaOnline =
-      ip_to_in_addr(session->HostAddress());
+  GetXnAddrFromSessionObject(session.get(),
+                             &details_ptr->sessionInfo.hostAddress);
 
-  details->sessionInfo.hostAddress.ina.s_addr =
-      details->sessionInfo.hostAddress.inaOnline.s_addr;
+  GenerateIdentityExchangeKey(&details_ptr->sessionInfo.keyExchangeKey);
 
-  memcpy(&details->sessionInfo.hostAddress.abEnet,
-         MacAddress(session->HostAddress()).raw(), 6);
-  details->sessionInfo.hostAddress.wPortOnline = session->Port();
-
-  details->UserIndexHost = 0;
-  details->GameMode = 0;
-  details->GameType = 0;
-  details->Flags = session->Flags();
-  details->MaxPublicSlots = session->PublicSlotsCount();
-  details->MaxPrivateSlots = session->PrivateSlotsCount();
+  details_ptr->UserIndexHost = 0;
+  details_ptr->GameMode = 0;
+  details_ptr->GameType = 0;
+  details_ptr->Flags = session->Flags();
+  details_ptr->MaxPublicSlots = session->PublicSlotsCount();
+  details_ptr->MaxPrivateSlots = session->PrivateSlotsCount();
 
   // TODO:
   // Provide the correct counts.
-  details->AvailablePrivateSlots = session->OpenPrivateSlotsCount();
-  details->AvailablePublicSlots = session->OpenPublicSlotsCount();
-  details->ActualMemberCount = session->FilledPublicSlotsCount();
+  details_ptr->AvailablePrivateSlots = session->OpenPrivateSlotsCount();
+  details_ptr->AvailablePublicSlots = session->OpenPublicSlotsCount();
+  details_ptr->ActualMemberCount = session->FilledPublicSlotsCount();
   // details->ActualMemberCount =
   //     session->FilledPublicSlotsCount() + session->FilledPrivateSlotsCount();
 
-  details->ReturnedMemberCount = (uint32_t)session->Players().size();
-  details->eState = XSESSION_STATE::LOBBY;
+  details_ptr->ReturnedMemberCount = (uint32_t)session->Players().size();
+  details_ptr->eState = XSESSION_STATE::LOBBY;
 
   std::random_device rnd;
   std::mt19937_64 gen(rnd());
   std::uniform_int_distribution<uint64_t> dist(0, -1);
 
-  details->Nonce = dist(rnd);
-
-  for (int i = 0; i < sizeof(XNKEY); i++) {
-    details->sessionInfo.keyExchangeKey.ab[i] = i;
-  }
-
-  for (int i = 0; i < sizeof(XNADDR::abOnline); i++) {
-    details->sessionInfo.hostAddress.abOnline[i] = i;
-  }
+  details_ptr->Nonce = dist(rnd);
 
   uint32_t members_ptr = kernel_state_->memory()->SystemHeapAlloc(
-      sizeof(XSESSION_MEMBER) * details->ReturnedMemberCount);
+      sizeof(XSESSION_MEMBER) * details_ptr->ReturnedMemberCount);
 
   auto members =
       kernel_state_->memory()->TranslateVirtual<XSESSION_MEMBER*>(members_ptr);
-  details->pSessionMembers = members_ptr;
+  details_ptr->pSessionMembers = members_ptr;
 
-  for (uint8_t i = 0; i < details->ReturnedMemberCount; i++) {
+  for (uint8_t i = 0; i < details_ptr->ReturnedMemberCount; i++) {
     members[i].UserIndex = 0xFE;
     members[i].xuidOnline = session->Players().at(i).XUID();
   }
@@ -376,8 +346,9 @@ X_RESULT XSession::GetSessionDetails(XSessionDetails* data) {
 }
 
 X_RESULT XSession::MigrateHost(XSessionMigate* data) {
-  auto sessionInfo = kernel_state_->memory()->TranslateVirtual<XSESSION_INFO*>(
-      data->session_info_ptr);
+  auto SessionInfo_ptr =
+      kernel_state_->memory()->TranslateVirtual<XSESSION_INFO*>(
+          data->session_info_ptr);
 
   if (!XLiveAPI::upnp_handler->is_active()) {
     XELOGI("Migrating without UPnP");
@@ -391,28 +362,19 @@ X_RESULT XSession::MigrateHost(XSessionMigate* data) {
     return X_E_FAIL;
   }
 
-  Uint64toXNKID(result->SessionID_UInt(), &sessionInfo->sessionID);
+  memset(SessionInfo_ptr, 0, sizeof(XSESSION_INFO));
 
-  sessionInfo->hostAddress.inaOnline.s_addr =
-      XLiveAPI::OnlineIP().sin_addr.s_addr;
+  Uint64toXNKID(result->SessionID_UInt(), &SessionInfo_ptr->sessionID);
 
-  sessionInfo->hostAddress.ina.s_addr =
-      sessionInfo->hostAddress.inaOnline.s_addr;
+  XLiveAPI::IpGetConsoleXnAddr(&SessionInfo_ptr->hostAddress);
 
-  memcpy(&sessionInfo->hostAddress.abEnet, XLiveAPI::mac_address_->raw(), 6);
-  memcpy(&sessionInfo->hostAddress.abOnline, XLiveAPI::mac_address_->raw(), 6);
-
-  sessionInfo->hostAddress.wPortOnline = XLiveAPI::GetPlayerPort();
-
-  for (int i = 0; i < sizeof(XNKEY); i++) {
-    sessionInfo->keyExchangeKey.ab[i] = i;
-  }
+  GenerateIdentityExchangeKey(&SessionInfo_ptr->keyExchangeKey);
 
   return X_ERROR_SUCCESS;
 }
 
 X_RESULT XSession::RegisterArbitration(XSessionArbitrationData* data) {
-  XSESSION_REGISTRATION_RESULTS* results =
+  XSESSION_REGISTRATION_RESULTS* results_ptr =
       kernel_state_->memory()->TranslateVirtual<XSESSION_REGISTRATION_RESULTS*>(
           data->results);
 
@@ -421,8 +383,8 @@ X_RESULT XSession::RegisterArbitration(XSessionArbitrationData* data) {
   const uint32_t registrants_ptr = kernel_state_->memory()->SystemHeapAlloc(
       uint32_t(sizeof(XSESSION_REGISTRANT) * result->Machines().size()));
 
-  results->registrants_count = uint32_t(result->Machines().size());
-  results->registrants_ptr = registrants_ptr;
+  results_ptr->registrants_count = uint32_t(result->Machines().size());
+  results_ptr->registrants_ptr = registrants_ptr;
 
   XSESSION_REGISTRANT* registrants =
       kernel_state_->memory()->TranslateVirtual<XSESSION_REGISTRANT*>(
@@ -456,7 +418,7 @@ X_RESULT XSession::ModifySkill(XSessionModifySkill* data) {
           data->xuid_array_ptr);
 
   for (uint32_t i = 0; i < data->array_count; i++) {
-    const auto xuid = xuid_array[i];
+    const auto& xuid = xuid_array[i];
 
     XELOGI("ModifySkill XUID: {:016X}", static_cast<uint64_t>(xuid));
   }
@@ -557,34 +519,40 @@ X_RESULT XSession::GetSessionByID(Memory* memory,
   return X_ERROR_SUCCESS;
 }
 
+void XSession::GetXnAddrFromSessionObject(SessionObjectJSON* session,
+                                          XNADDR* XnAddr_ptr) {
+  memset(XnAddr_ptr, 0, sizeof(XNADDR));
+
+  // We only store online IP on server.
+
+  // if (XLiveAPI::IsOnline()) {
+  // } else {
+  // }
+
+  XnAddr_ptr->inaOnline = ip_to_in_addr(session->HostAddress());
+  XnAddr_ptr->ina = ip_to_in_addr(session->HostAddress());
+
+  const MacAddress mac = MacAddress(session->MacAddress());
+
+  memcpy(&XnAddr_ptr->abEnet, mac.raw(), sizeof(MacAddress));
+  memcpy(&XnAddr_ptr->abOnline, mac.raw(), sizeof(MacAddress));
+
+  XnAddr_ptr->wPortOnline = session->Port();
+}
+
 void XSession::FillSessionSearchResult(
-    const std::unique_ptr<SessionObjectJSON>& session_info,
+    const std::unique_ptr<SessionObjectJSON>& session,
     XSESSION_SEARCHRESULT* result) {
-  result->filled_priv_slots = session_info->FilledPrivateSlotsCount();
-  result->filled_public_slots = session_info->FilledPublicSlotsCount();
-  result->open_priv_slots = session_info->OpenPrivateSlotsCount();
-  result->open_public_slots = session_info->OpenPublicSlotsCount();
+  result->filled_priv_slots = session->FilledPrivateSlotsCount();
+  result->filled_public_slots = session->FilledPublicSlotsCount();
+  result->open_priv_slots = session->OpenPrivateSlotsCount();
+  result->open_public_slots = session->OpenPublicSlotsCount();
 
-  Uint64toXNKID(session_info->SessionID_UInt(), &result->info.sessionID);
+  Uint64toXNKID(session->SessionID_UInt(), &result->info.sessionID);
 
-  const MacAddress mac = MacAddress(session_info->MacAddress());
+  GetXnAddrFromSessionObject(session.get(), &result->info.hostAddress);
 
-  memcpy(&result->info.hostAddress.abEnet, mac.raw(),
-         sizeof(result->info.hostAddress.abEnet));
-  memcpy(&result->info.hostAddress.abOnline, mac.raw(),
-         sizeof(result->info.hostAddress.abEnet));
-
-  for (int j = 0; j < sizeof(XNKEY); j++) {
-    result->info.keyExchangeKey.ab[j] = j;
-  }
-
-  result->info.hostAddress.inaOnline =
-      ip_to_in_addr(session_info->HostAddress());
-
-  result->info.hostAddress.ina.s_addr =
-      result->info.hostAddress.inaOnline.s_addr;
-
-  result->info.hostAddress.wPortOnline = session_info->Port();
+  GenerateIdentityExchangeKey(&result->info.keyExchangeKey);
 }
 
 void XSession::FillSessionContext(Memory* memory,
