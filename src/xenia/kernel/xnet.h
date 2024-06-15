@@ -32,11 +32,12 @@ struct XNKEY {
 };
 
 struct XNADDR {
-  in_addr ina;
-  in_addr inaOnline;
-  xe::be<uint16_t> wPortOnline;
-  uint8_t abEnet[6];
-  uint8_t abOnline[20];
+  // FYI: IN_ADDR should be in network-byte order.
+  in_addr ina;        // IP address (zero if not static/DHCP) - Local IP
+  in_addr inaOnline;  // Online IP address (zero if not online) - Public IP
+  xe::be<uint16_t> wPortOnline;  // Online port
+  uint8_t abEnet[6];             // Ethernet MAC address
+  uint8_t abOnline[20];          // Online identification
 };
 
 }  // namespace kernel
