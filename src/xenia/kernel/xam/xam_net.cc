@@ -99,15 +99,6 @@ enum {
 };
 
 typedef struct {
-  // FYI: IN_ADDR should be in network-byte order.
-  in_addr ina;        // IP address (zero if not static/DHCP) - Local IP
-  in_addr inaOnline;  // Online IP address (zero if not online) - Public IP
-  xe::be<uint16_t> wPortOnline;  // Online port
-  uint8_t abEnet[6];             // Ethernet MAC address
-  uint8_t abOnline[20];          // Online identification
-} XNADDR;
-
-typedef struct {
   xe::be<int32_t> status;
   xe::be<uint32_t> cina;
   in_addr aina[8];
@@ -131,11 +122,6 @@ typedef struct {
   xe::be<uint32_t> count_pending;
   XNQOSINFO info[1];
 } XNQOS;
-
-struct Xsockaddr_t {
-  xe::be<uint16_t> sa_family;
-  char sa_data[14];
-};
 
 struct X_WSADATA {
   xe::be<uint16_t> version;
@@ -248,7 +234,7 @@ dword_result_t NetDll_XNetStartup_entry(dword_t caller,
     assert_true(params->cfgSizeOfStruct == sizeof(XNetStartupParams));
     Update_XNetStartupParams(xnet_startup_params, *params);
 
-    switch (params->cfgFlags) {
+    switch (xnet_startup_params.cfgFlags) {
       case BYPASS_SECURITY:
         XELOGI("XNetStartup BYPASS_SECURITY");
         break;
@@ -613,8 +599,8 @@ DECLARE_XAM_EXPORT1(XamQueryLiveHiveA, kNone, kStub);
 
 // Sets the console IP address.
 dword_result_t NetDll_XNetGetTitleXnAddr_entry(dword_t caller,
-                                               pointer_t<XNADDR> addr_ptr) {
-  memset(addr_ptr, 0, sizeof(XNADDR));
+                                               pointer_t<XNADDR> XnAddr_ptr) {
+  memset(XnAddr_ptr, 0, sizeof(XNADDR));
 
   // Wait for NetDll_WSAStartup or XNetStartup to setup XLiveAPI.
   if (XLiveAPI::GetInitState() == XLiveAPI::InitState::Pending) {
@@ -625,24 +611,15 @@ dword_result_t NetDll_XNetGetTitleXnAddr_entry(dword_t caller,
     return XnAddrStatus::XNET_GET_XNADDR_PENDING;
   }
 
-  auto status = XnAddrStatus::XNET_GET_XNADDR_STATIC |
-                XnAddrStatus::XNET_GET_XNADDR_GATEWAY |
-                XnAddrStatus::XNET_GET_XNADDR_DNS;
+  uint8_t status = XnAddrStatus::XNET_GET_XNADDR_STATIC |
+                   XnAddrStatus::XNET_GET_XNADDR_GATEWAY |
+                   XnAddrStatus::XNET_GET_XNADDR_DNS;
 
   if (XLiveAPI::IsOnline()) {
-    addr_ptr->ina = XLiveAPI::OnlineIP().sin_addr;
-    addr_ptr->inaOnline = XLiveAPI::OnlineIP().sin_addr;
-    addr_ptr->wPortOnline = XLiveAPI::GetPlayerPort();
-
     status |= XnAddrStatus::XNET_GET_XNADDR_ONLINE;
-  } else {
-    addr_ptr->ina.s_addr = 0;
-    addr_ptr->inaOnline.s_addr = 0;
-    addr_ptr->wPortOnline = 0;
   }
 
-  memcpy(addr_ptr->abEnet, XLiveAPI::mac_address_->raw(), 6);
-  memcpy(addr_ptr->abOnline, XLiveAPI::mac_address_->raw(), 6);
+  XLiveAPI::IpGetConsoleXnAddr(XnAddr_ptr);
 
   // TODO(gibbed): A proper mac address.
   // RakNet's 360 version appears to depend on abEnet to create "random" 64-bit
@@ -765,6 +742,19 @@ dword_result_t NetDll_XNetXnAddrToInAddr_entry(dword_t caller,
                                                pointer_t<XNADDR> xn_addr,
                                                pointer_t<XNKID> xid,
                                                pointer_t<in_addr> in_addr) {
+  if (in_addr) {
+    in_addr->S_un.S_addr = 0;
+  }
+
+  if (memcmp(XLiveAPI::mac_address_, xn_addr->abEnet, sizeof(MacAddress)) ==
+      0) {
+    XELOGI("Resolving XNetXnAddrToInAddr to LOOPBACK!");
+    in_addr->S_un.S_addr = LOOPBACK;
+
+    return X_ERROR_SUCCESS;
+  }
+
+  // What if it's a local IP (ina) instead of online?
   if (XLiveAPI::IsOnline()) {
     in_addr->s_addr = xn_addr->inaOnline.s_addr;
   }
@@ -776,23 +766,27 @@ DECLARE_XAM_EXPORT1(NetDll_XNetXnAddrToInAddr, kNetworking, kSketchy);
 dword_result_t NetDll_XNetInAddrToXnAddr_entry(dword_t caller, dword_t in_addr,
                                                pointer_t<XNADDR> xn_addr,
                                                pointer_t<XNKID> xid_ptr) {
-  if (xn_addr == nullptr) {
+  if (xn_addr) {
+    memset(xn_addr, 0, sizeof(XNADDR));
+  }
+
+  if (xid_ptr) {
+    memset(xid_ptr, 0, sizeof(XNKID));
+  }
+
+  if (in_addr == BROADCAST) {
+    XELOGI("Resolving XnAddr via BROADCAST!");
+  }
+
+  if (in_addr == LOOPBACK || in_addr == BROADCAST) {
+    XELOGI("Resolving XnAddr via LOOPBACK!");
+    XLiveAPI::IpGetConsoleXnAddr(xn_addr);
+
     return X_STATUS_SUCCESS;
   }
 
-  memset(xn_addr, 0, sizeof(XNADDR));
-
-  if (in_addr == LOOPBACK) {
-    XELOGI("Resolving XNADDR via LOOPBACK!");
-    xn_addr->ina.s_addr = XLiveAPI::OnlineIP().sin_addr.s_addr;
-    xn_addr->inaOnline.s_addr = XLiveAPI::OnlineIP().sin_addr.s_addr;
-
-    // return NetDll_XNetGetTitleXnAddr_entry(caller, xn_addr);
-  } else {
-    xn_addr->ina.s_addr = ntohl(in_addr);
-    xn_addr->inaOnline.s_addr = ntohl(in_addr);
-  }
-
+  xn_addr->ina.s_addr = ntohl(in_addr);
+  xn_addr->inaOnline.s_addr = ntohl(in_addr);
   xn_addr->wPortOnline = XLiveAPI::GetPlayerPort();
 
   // Find cached online IP?
@@ -807,19 +801,19 @@ dword_result_t NetDll_XNetInAddrToXnAddr_entry(dword_t caller, dword_t in_addr,
                                       player->MacAddress());
   }
 
-  MacAddress mac_address =
+  MacAddress mac =
       MacAddress(XLiveAPI::macAddressCache[xn_addr->inaOnline.s_addr]);
 
-  std::memcpy(xn_addr->abEnet, mac_address.raw(), 6);
-  std::memcpy(xn_addr->abOnline, mac_address.raw(), 6);
+  std::memcpy(xn_addr->abEnet, mac.raw(), sizeof(MacAddress));
+  std::memcpy(xn_addr->abOnline, mac.raw(), sizeof(MacAddress));
 
-  if (xid_ptr == nullptr) {
-    return X_STATUS_SUCCESS;
+  if (xid_ptr != nullptr) {
+    uint64_t* sessionId_ptr =
+        kernel_memory()->TranslateVirtual<uint64_t*>(xid_ptr);
+
+    *sessionId_ptr =
+        xe::byte_swap(XLiveAPI::sessionIdCache[xn_addr->inaOnline.s_addr]);
   }
-
-  auto sessionId_ptr = kernel_memory()->TranslateVirtual<uint64_t*>(xid_ptr);
-  *sessionId_ptr =
-      xe::byte_swap(XLiveAPI::sessionIdCache[xn_addr->inaOnline.s_addr]);
 
   return X_STATUS_SUCCESS;
 }
@@ -904,6 +898,7 @@ dword_result_t NetDll_XNetDnsRelease_entry(dword_t caller,
   if (!dns) {
     return X_STATUS_INVALID_PARAMETER;
   }
+
   kernel_memory()->SystemHeapFree(dns.guest_address());
   return 0;
 }
@@ -1330,7 +1325,7 @@ dword_result_t NetDll_closesocket_entry(dword_t caller, dword_t socket_handle) {
   }
 
   // Remove port if socket closes
-  // XLiveAPI::upnp_handler.remove_port(socket.get()->bound_port(), "UDP");
+  // XLiveAPI::upnp_handler->RemovePort(socket.get()->bound_port(), "UDP");
 
   // TODO: Absolutely delete this object. It is no longer valid after calling
   // closesocket.
