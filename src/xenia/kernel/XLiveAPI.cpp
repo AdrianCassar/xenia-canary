@@ -473,6 +473,7 @@ std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::RegisterPlayer() {
 
   // User index hard-coded
   player.XUID(kernel_state()->user_profile((uint32_t)0)->xuid());
+  player.Gamertag(kernel_state()->user_profile((uint32_t)0)->name());
   player.MachineID(GetLocalMachineId());
   player.HostAddress(OnlineIP_str());
   player.MacAddress(mac_address_->to_uint64());

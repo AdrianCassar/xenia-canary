@@ -39,13 +39,13 @@ DEFINE_string(user_3_xuid, to_hex_string(UserProfile::GenerateOnlineXUID()),
               "XUID for user 3", "User");
 
 DEFINE_string(user_0_name, UserProfile::GenerateGamertag(user_0_xuid),
-              "Gamertag for user 0", "User");
+              "Gamertag for user 0. 15 characters max.", "User");
 DEFINE_string(user_1_name, UserProfile::GenerateGamertag(user_1_xuid),
-              "Gamertag for user 1", "User");
+              "Gamertag for user 1. 15 characters max.", "User");
 DEFINE_string(user_2_name, UserProfile::GenerateGamertag(user_2_xuid),
-              "Gamertag for user 2", "User");
+              "Gamertag for user 2. 15 characters max.", "User");
 DEFINE_string(user_3_name, UserProfile::GenerateGamertag(user_3_xuid),
-              "Gamertag for user 3", "User");
+              "Gamertag for user 3. 15 characters max.", "User");
 
 constexpr uint32_t kDashboardID = 0xFFFE07D1;
 
@@ -67,6 +67,15 @@ UserProfile::UserProfile(uint8_t index) {
                         to_hex_string(UserProfile::GenerateOnlineXUID()));
       }
 
+      if (cvars::user_0_name.empty()) {
+        OVERRIDE_string(user_0_name,
+                        UserProfile::GenerateGamertag(cvars::user_0_xuid));
+      }
+
+      if (cvars::user_0_name.length() > 15) {
+        OVERRIDE_string(user_0_name, cvars::user_0_name.substr(0, 15));
+      }
+
       xuid_ =
           string_util::from_string<uint64_t>(cvars::user_0_xuid.c_str(), true);
       name_ = cvars::user_0_name;
@@ -79,8 +88,17 @@ UserProfile::UserProfile(uint8_t index) {
     }
     case 1: {
       if (cvars::user_1_xuid.empty()) {
-        OVERRIDE_string(user_0_xuid,
+        OVERRIDE_string(user_1_xuid,
                         to_hex_string(UserProfile::GenerateOnlineXUID()));
+      }
+
+      if (cvars::user_1_name.empty()) {
+        OVERRIDE_string(user_1_name,
+                        UserProfile::GenerateGamertag(cvars::user_1_xuid));
+      }
+
+      if (cvars::user_1_name.length() > 15) {
+        OVERRIDE_string(user_1_name, cvars::user_1_name.substr(0, 15));
       }
 
       xuid_ =
@@ -99,6 +117,15 @@ UserProfile::UserProfile(uint8_t index) {
                         to_hex_string(UserProfile::GenerateOnlineXUID()));
       }
 
+      if (cvars::user_2_name.empty()) {
+        OVERRIDE_string(user_2_name,
+                        UserProfile::GenerateGamertag(cvars::user_2_xuid));
+      }
+
+      if (cvars::user_2_name.length() > 15) {
+        OVERRIDE_string(user_2_name, cvars::user_2_name.substr(0, 15));
+      }
+
       xuid_ =
           string_util::from_string<uint64_t>(cvars::user_2_xuid.c_str(), true);
       name_ = cvars::user_2_name;
@@ -113,6 +140,15 @@ UserProfile::UserProfile(uint8_t index) {
       if (cvars::user_3_xuid.empty()) {
         OVERRIDE_string(user_3_xuid,
                         to_hex_string(UserProfile::GenerateOnlineXUID()));
+      }
+
+      if (cvars::user_3_name.empty()) {
+        OVERRIDE_string(user_3_name,
+                        UserProfile::GenerateGamertag(cvars::user_3_xuid));
+      }
+
+      if (cvars::user_3_name.length() > 15) {
+        OVERRIDE_string(user_3_name, cvars::user_3_name.substr(0, 15));
       }
 
       xuid_ =
