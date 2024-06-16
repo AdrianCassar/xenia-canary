@@ -44,6 +44,9 @@ class PlayerObjectJSON : public BaseObjectJSON {
     hostAddress_ = hostAddress;
   }
 
+  const std::string& Gamertag() const { return gamertag_; }
+  void Gamertag(const std::string& gamertag) { gamertag_ = gamertag; }
+
   const xe::be<uint64_t>& SessionID() const { return sessionId_; }
   void SessionID(const xe::be<uint64_t>& sessionId) { sessionId_ = sessionId; }
 
@@ -53,6 +56,7 @@ class PlayerObjectJSON : public BaseObjectJSON {
  private:
   xe::be<uint64_t> xuid_;
   std::string hostAddress_;
+  std::string gamertag_;
   xe::be<uint64_t> machineId_;
   xe::be<uint64_t> macAddress_;  // 6 Bytes
   xe::be<uint64_t> sessionId_;
