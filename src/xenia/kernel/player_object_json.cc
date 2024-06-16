@@ -18,6 +18,7 @@ namespace kernel {
 PlayerObjectJSON::PlayerObjectJSON()
     : xuid_(0),
       hostAddress_(""),
+      gamertag_(""),
       machineId_(0),
       port_(0),
       macAddress_(0),
@@ -37,6 +38,10 @@ bool PlayerObjectJSON::Deserialize(const rapidjson::Value& obj) {
 
   if (obj.HasMember("hostAddress")) {
     HostAddress(obj["hostAddress"].GetString());
+  }
+
+  if (obj.HasMember("gamertag")) {
+    Gamertag(obj["gamertag"].GetString());
   }
 
   if (obj.HasMember("macAddress")) {
@@ -70,6 +75,9 @@ bool PlayerObjectJSON::Serialize(
 
   writer->String("hostAddress");
   writer->String(hostAddress_);
+
+  writer->String("gamertag");
+  writer->String(gamertag_);
 
   writer->String("macAddress");
   writer->String(fmt::format("{:012x}", static_cast<uint64_t>(macAddress_)));
