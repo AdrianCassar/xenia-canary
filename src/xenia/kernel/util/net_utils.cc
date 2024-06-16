@@ -61,14 +61,14 @@ std::string MacAddress::to_printable_form() const {
 }
 
 const std::string ip_to_string(in_addr addr) {
-  char ip_str[INET_ADDRSTRLEN];
+  char ip_str[INET_ADDRSTRLEN]{};
   inet_ntop(AF_INET, &addr.s_addr, ip_str, INET_ADDRSTRLEN);
 
   return ip_str;
 }
 
 const std::string ip_to_string(sockaddr_in sockaddr) {
-  char ip_str[INET_ADDRSTRLEN];
+  char ip_str[INET_ADDRSTRLEN]{};
   inet_ntop(AF_INET, &sockaddr.sin_addr, ip_str, INET_ADDRSTRLEN);
 
   return ip_str;
