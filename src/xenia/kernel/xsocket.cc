@@ -161,7 +161,7 @@ X_STATUS XSocket::Connect(const XSOCKADDR_IN* name, int name_len) {
   memcpy(&sa_in, name, sizeof(XSOCKADDR_IN));
 
   sa_in.address_port =
-      XLiveAPI::upnp_handler->get_mapped_connect_port(name->address_port);
+      XLiveAPI::upnp_handler->GetMappedConnectPort(name->address_port);
 
   int ret = connect(native_handle_, &sa_in.to_host(), name_len);
   if (ret < 0) {
@@ -176,7 +176,7 @@ X_STATUS XSocket::Bind(const XSOCKADDR_IN* name, int name_len) {
   memcpy(&sa_in, name, sizeof(XSOCKADDR_IN));
 
   sa_in.address_port =
-      XLiveAPI::upnp_handler->get_mapped_bind_port(name->address_port);
+      XLiveAPI::upnp_handler->GetMappedBindPort(name->address_port);
 
   int ret = bind(native_handle_, &sa_in.to_host(), name_len);
   if (ret < 0) {
@@ -493,7 +493,7 @@ int XSocket::Send(const uint8_t* buf, uint32_t buf_len, uint32_t flags) {
 int XSocket::SendTo(uint8_t* buf, uint32_t buf_len, uint32_t flags,
                     XSOCKADDR_IN* to, uint32_t to_len) {
   to->address_port =
-      XLiveAPI::upnp_handler->get_mapped_bind_port(to->address_port);
+      XLiveAPI::upnp_handler->GetMappedBindPort(to->address_port);
 
   return sendto(native_handle_, reinterpret_cast<char*>(buf), buf_len, flags,
                 to ? &to->to_host() : nullptr, to_len);
