@@ -41,9 +41,9 @@ class UPnP {
     mapped_bind_ports_.insert({port, mapped_port});
   }
 
-  uint16_t get_mapped_connect_port(uint16_t port);
+  uint16_t GetMappedConnectPort(uint16_t port);
 
-  uint16_t get_mapped_bind_port(uint16_t external_port);
+  uint16_t GetMappedBindPort(uint16_t external_port);
 
   std::map<std::string, std::map<uint16_t, int32_t>>* port_binding_results() {
     return &port_binding_results_;

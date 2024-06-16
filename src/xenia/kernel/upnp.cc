@@ -155,7 +155,7 @@ void UPnP::AddPort(std::string_view addr, uint16_t internal_port,
 
   std::lock_guard lock(mutex_);
 
-  internal_port = get_mapped_bind_port(internal_port);
+  internal_port = GetMappedBindPort(internal_port);
 
   const uint16_t external_port = internal_port;
   const std::string internal_port_str = fmt::format("{}", internal_port);
@@ -206,7 +206,7 @@ void UPnP::RemovePort(uint16_t internal_port, std::string_view protocol) {
 
   std::lock_guard lock(mutex_);
 
-  internal_port = get_mapped_bind_port(internal_port);
+  internal_port = GetMappedBindPort(internal_port);
 
   const std::string str_protocol(protocol);
 
@@ -248,8 +248,8 @@ void UPnP::RefreshPorts(std::string_view addr) {
     return;
   }
 
-  for (const auto& [protocol, prot_bindings] : port_bindings_) {
-    for (const auto& [internal_port, external_port] : prot_bindings) {
+  for (const auto& [protocol, port_bindings] : port_bindings_) {
+    for (const auto& [internal_port, external_port] : port_bindings) {
       AddPort(addr, external_port, protocol);
     }
   }
@@ -271,7 +271,7 @@ void UPnP::RefreshPortsTimer() {
                                    TimerQueueWaitItem::clock::now(), interval);
 }
 
-uint16_t UPnP::get_mapped_connect_port(uint16_t external_port) {
+uint16_t UPnP::GetMappedConnectPort(uint16_t external_port) {
   if (mapped_connect_ports_.find(external_port) !=
       mapped_connect_ports_.end()) {
     return mapped_connect_ports_[external_port];
@@ -292,7 +292,7 @@ uint16_t UPnP::get_mapped_connect_port(uint16_t external_port) {
   return external_port;
 }
 
-uint16_t UPnP::get_mapped_bind_port(uint16_t external_port) {
+uint16_t UPnP::GetMappedBindPort(uint16_t external_port) {
   if (mapped_bind_ports_.find(external_port) != mapped_bind_ports_.end()) {
     return mapped_bind_ports_[external_port];
   }

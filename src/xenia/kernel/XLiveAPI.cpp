@@ -186,10 +186,6 @@ void XLiveAPI::Init() {
     }
   }
 
-  DiscoverNetworkInterfaces();
-
-  SelectNetworkInterface();
-
   upnp_handler = new UPnP();
   mac_address_ = new MacAddress(GetMACaddress());
 
@@ -198,6 +194,13 @@ void XLiveAPI::Init() {
     initialized_ = InitState::Failed;
     return;
   }
+
+  if (cvars::upnp) {
+    upnp_handler->Initialize();
+  }
+
+  DiscoverNetworkInterfaces();
+  SelectNetworkInterface();
 
   online_ip_ = Getwhoami();
 
@@ -212,10 +215,6 @@ void XLiveAPI::Init() {
 
   // Download ports mappings before initializing UPnP.
   DownloadPortMappings();
-
-  if (cvars::upnp) {
-    upnp_handler->Initialize();
-  }
 
   std::unique_ptr<HTTPResponseObjectJSON> reg_result = RegisterPlayer();
 
