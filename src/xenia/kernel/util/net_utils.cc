@@ -60,6 +60,47 @@ std::string MacAddress::to_printable_form() const {
   return mac;
 }
 
+sockaddr_in WinsockGetLocalIP() {
+  sockaddr_in localAddr{};
+
+#ifdef XE_PLATFORM_WIN32
+  SOCKET sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+
+  if (sock == INVALID_SOCKET) {
+    return localAddr;
+  }
+
+  // Connect the socket to a remote address
+  sockaddr_in remoteAddr{};
+  remoteAddr.sin_family = AF_INET;
+  remoteAddr.sin_port = htons(80);
+
+  // Google DNS
+  inet_pton(AF_INET, "8.8.8.8", &remoteAddr.sin_addr);
+
+  sockaddr* remoteAddr_ptr = reinterpret_cast<sockaddr*>(&remoteAddr);
+
+  if (connect(sock, remoteAddr_ptr, sizeof(remoteAddr)) == SOCKET_ERROR) {
+    closesocket(sock);
+    return localAddr;
+  }
+
+  sockaddr* localAddr_ptr = reinterpret_cast<sockaddr*>(&localAddr);
+  int addrSize = sizeof(localAddr);
+
+  if (getsockname(sock, localAddr_ptr, &addrSize) == SOCKET_ERROR) {
+    closesocket(sock);
+    return localAddr;
+  }
+
+  closesocket(sock);
+
+  return localAddr;
+#else
+  return localAddr;
+#endif  // XE_PLATFORM_WIN32
+}
+
 const std::string ip_to_string(in_addr addr) {
   char ip_str[INET_ADDRSTRLEN]{};
   inet_ntop(AF_INET, &addr.s_addr, ip_str, INET_ADDRSTRLEN);
