@@ -35,6 +35,8 @@ DEFINE_bool(offline_mode, false, "Offline Mode e.g. not connected to a LAN",
 
 DEFINE_string(network_guid, "", "Network Interface GUID", "Live");
 
+DECLARE_string(upnp_root);
+
 DECLARE_bool(upnp);
 
 using namespace rapidjson;
@@ -1302,7 +1304,14 @@ bool XLiveAPI::UpdateNetworkInterface(sockaddr_in local_ip,
 }
 
 void XLiveAPI::SelectNetworkInterface() {
-  sockaddr_in local_ip = ip_to_sockaddr(UPnP::GetLocalIP());
+  sockaddr_in local_ip{};
+
+  // If upnp is disabled or upnp_root is empty fallback to winsock
+  if (cvars::upnp && !cvars::upnp_root.empty()) {
+    local_ip = ip_to_sockaddr(UPnP::GetLocalIP());
+  } else {
+    local_ip = WinsockGetLocalIP();
+  }
 
   XELOGI("Checking for interface: {}", cvars::network_guid);
 
