@@ -299,8 +299,19 @@ class XSession : public XObject {
 
   static void GenerateIdentityExchangeKey(XNKEY* key);
 
+  static constexpr uint8_t XNKID_ONLINE = 0xAE;
+  static constexpr uint8_t XNKID_SYSTEM_LINK = 0x00;
+
+  static const bool IsOnlinePeer(uint64_t session_id) {
+    return ((session_id >> 56) & 0xFF) == XNKID_ONLINE;
+  }
+
+  static const bool IsSystemlink(uint64_t session_id) {
+    return ((session_id >> 56) & 0xFF) == XNKID_SYSTEM_LINK;
+  }
+
  private:
-  uint64_t GenerateSessionId();
+  uint64_t GenerateSessionId(uint8_t mask);
   void PrintSessionType(SessionFlags flags);
 
   X_RESULT CreateHostSession(XSESSION_INFO* session_info, uint64_t* nonce_ptr,
@@ -310,11 +321,6 @@ class XSession : public XObject {
                               uint8_t user_index, uint8_t public_slots,
                               uint8_t private_slots, uint32_t flags);
   X_RESULT JoinExistingSession(XSESSION_INFO* session_info);
-
-  // May trigger for sessions creared with older netplay builds.
-  const bool IsOnlineSession(uint64_t session_id) {
-    return ((session_id >> 56) & 0xFF) == 0xAE;
-  }
 
   const bool HasSessionFlag(SessionFlags flags,
                             SessionFlags checked_flag) const {
