@@ -1,168 +1,30 @@
-# Netplay Fork
+# Xenia Canary Netplay
 
-This is a fork of [Xenia Canary](https://github.com/xenia-canary/xenia-canary) which implements online multiplayer features. 
-It has been built from the ground up and a handful of games are [working](#Supported-Games).
+This is a fork of [Xenia Canary](https://github.com/xenia-canary/xenia-canary) which implements online multiplayer features. The REST API powering this fork can be found [here](https://github.com/AdrianCassar/Xenia-WebServices#xenia-web-services).
 
-The REST API powering this fork can be found [here](https://github.com/AdrianCassar/Xenia-WebServices).
-
-Current online sessions are displayed [here](https://xenia-netplay-2a0298c0e3f4.herokuapp.com/).
+Current online sessions are displayed at [https://xenia-netplay-2a0298c0e3f4.herokuapp.com/](https://xenia-netplay-2a0298c0e3f4.herokuapp.com/).
 
 ---
 
-## FAQ:
+## Netplay Wiki
 
-Is UPnP Supported?
-- Yes, **UPnP** is supported it must be enabled in the config to host sessions.
+The wiki contains a compatibility list and general information about the current state netplay.
 
-Is **Systemlink** or **XLink Kai** supported?
+To get started with netplay read [config setup](https://github.com/AdrianCassar/xenia-canary/wiki/Config-Setup).
 
-- No, Systemlink and XLink Kai are not supported.
+### Wiki Pages:
+* [Home](https://github.com/AdrianCassar/xenia-canary/wiki)
+* [Netplay Compatibility](https://github.com/AdrianCassar/xenia-canary/wiki/Netplay-Compatibility)
+* [Testing Procedure](https://github.com/AdrianCassar/xenia-canary/wiki/Testing-Procedure)
+* [Config Setup](https://github.com/AdrianCassar/xenia-canary/wiki/Config-Setup)
+* [FAQ](https://github.com/AdrianCassar/xenia-canary/wiki/FAQ)
 
-Can I host Xenia Web Services?
-
-- Yes, [Xenia Web Services](https://github.com/AdrianCassar/Xenia-WebServices).
-
-Is there a Netplay mousehook build?
-
-- Yes, download it from [Netplay Mousehook](https://github.com/marinesciencedude/xenia-canary-mousehook/releases?q=Netplay).
-
-Are games dependant on servers?
-
-- Yes a lot of games are dependant on servers therefore will not work, unless a server is developed for that game. For example many games requires EA servers, without them netplay will not work. 
-
-Can I use multiple PCs on the same network?
-
-- Yes this will require hosting [Xenia Web Services](https://github.com/AdrianCassar/Xenia-WebServices) on your local network. However, connecting to the API via the internet on the same network will require a VPN.
-
-Where can I **download** the Canary Netplay build?
-
-- You can download it from [releases](https://github.com/AdrianCassar/xenia-canary/releases).
-
-## Config Setup
-
-To connect to a **Xenia WebServices** server you can either privately host it yourself or connect to my server.
-
-```toml
-api_address = "https://xenia-netplay-2a0298c0e3f4.herokuapp.com"
-```
-
-UPnP is disabled by default, you can enable it in the config.
-```toml
-upnp = true
-```
-
-## Linux Notes
-
-<details>
-  <summary>Failure to Bind to Ports</summary>
-
-### Failure to Bind to Ports
-Binding to ports <= 1024 will usually fail on Linux as they are protected by default. To verify this is an issue you are encountering, search your log for the following message:
-`NetDll_WSAGetLastError: 10013`
-
-To fix this run this command:
-```console
-sudo sysctl net.ipv4.ip_unprivileged_port_start=999
-echo 'sysctl net.ipv4.ip_unprivileged_port_start=999' | sudo tee /etc/sysctl.d/99-xenia.conf
-```
-This command configures privileged ports to start at port 999 instead of port 1024 in this logon session and future logons. This should allow for most games to now bind. 
-
-If you are still seeing `NetDll_WSAGetLastError: 10013` in logs after running this, you can try rerunning the previous commands with a number lower than `999`. `23` should solve every case. You can try `0` but it will prevent you from running ssh.
-
-It should also be noted that due to the way Steam Decks handle configuration, you will need to rerun this command on every reboot.
-
-</details>
-
-## Supported Games
-
-| Game | Notes | Gameplay | Patches/Plugins | 
-|---|---|---|---|
-| Apache: Air Assault | |
-| BattleBlock Theater | |
-| BurgerTime World Tour | |
-| Blades of Time | |
-| Bloody Good Time | |
-| Breach | |
-| CS:GO | Mousehook |
-| CS:GO Beta | Mousehook |
-| Call of Duty 2 | ```launch_module = "default_mp.xex"``` | [Deathmatch](https://www.youtube.com/watch?v=DR9Op_f1UUw) |
-| Catan | |
-| Death Tank | |
-| Dragon Ball Z: Burst Limit | |
-| DiRT | | [Race](https://www.youtube.com/watch?v=udMf-MUzpEc) |
-| Earth Defense Force: Insect Armageddon | |
-| GRID | |
-| GTA V Beta | Requires ```protect_zero = false``` or use patches. | [Beta Showcase](https://www.youtube.com/watch?v=nIjZ7sRGZlo), [Beta Showcase](https://www.youtube.com/watch?v=YIBjy5ZJcq4) | [TU 13](https://github.com/AdrianCassar/Xenia-WebServices/blob/main/patches/545408A7%20-%20Grand%20Theft%20Auto%20V%20(TU13).patch.toml), [TU 10](https://github.com/AdrianCassar/Xenia-WebServices/blob/main/patches/545408A7%20-%20Grand%20Theft%20Auto%20V%20(TU10).patch.toml) |
-| GTA V TU 2-13 | Must complete prologue, download gamesave [here](https://cdn.discordapp.com/attachments/641360906495983616/1101132116441440366/545408A7.rar). Unstable and often crashes. | [Solo Session](https://www.youtube.com/watch?v=lap7liW6pco) |
-| Gears of War | CO-OP doesn't work. |
-| Guilty Gear 2: Overture | |
-| Gundam Operation Troy | [English Patch](https://github.com/Eight-Mansions/MSGOT/releases)
-| Halo 3 ODST v13.2 using [Sunrise Server](https://github.com/ahnewark/Sunrise-Halo3-WebServices) | Mousehook | [Head to Head](https://www.youtube.com/watch?v=amS8OxH3exs) | [Halo 3 Patch](https://github.com/AdrianCassar/Xenia-WebServices/blob/main/patches/4D5307E6%20-%20Halo%203.patch.toml)
-| Iron Brigade | Multiplayer available after completing 2nd tutorial mission. |
-| Juiced 2 | `vsync_interval = 16`, `vsync = true` |
-| Kung Fu Panda: SLL | |
-| Left 4 Dead | Mousehook, Compatible with GOTY | |
-| Left 4 Dead GOTY | Mousehook | |
-| Left 4 Dead 2 | Mousehook | |
-| Left 4 Dead 2 Demo |
-| Mad Riders | |
-| Marble Blast Ultra | |
-| Marvel Ultimate Alliance | |
-| Marvel Ultimate Alliance 2 | |
-| MotoGP 06 | |
-| MotoGP 07 | |
-| MotoGP 14 | Sprint Season only works |
-| MotoGP 15 | Sprint Season only works |
-| OutRun Online Arcade | | [Race](https://www.youtube.com/watch?v=-UqxjFgGvhk) |
-| Perfect Dark | |
-| Portal 2 | Mousehook |
-| Pro Evolution Soccer 6 (PES 6) | |
-| Pro Evolution Soccer 8 (PES 8) | |
-| Resident Evil 5 | | [Chapter 1](https://www.youtube.com/watch?v=SKgnUVairqs) |
-| Resident Evil Revelations | |
-| Ridge Racer 6 | |
-| Saints Row 2 | | [Co-op](https://www.youtube.com/watch?v=YTw84keeWfs), [Setup Guide](https://www.youtube.com/watch?v=nf7TDOtTEIE) |
-| Saints Row the Third / The Full Package | Unplayable due to broken graphics. Requires [Online Pass](https://www.xbox.com/en-GB/games/store/online-pass/BS7JTR0MN356) + license_mask |
-| Saints Row IV | Unplayable due to broken graphics. Requires Online Pass + license_mask |
-| Screwjumper! | |
-| Section 8 | |
-| Section 8: Prejudice | |
-| Serious Sam HD The First Encounter | |
-| Serious Sam HD The Second Encounter | |
-| Splinter Cell: Double Agent | |
-| Star Wars Battlefront III (Unreleased Game) | Alpha, Mar 17 2008 | [Conquest Taoonie](https://www.youtube.com/watch?v=C54jCqFnCmQ), [MP Event Stream](https://www.youtube.com/watch?v=xSpTmsSvP4s) |
-| Team Fortress 2 | Mousehook |
-| The Outfit | |
-| TimeShift | |
-| TimeShift Beta | |
-| WRC 2010 | Connecting sometimes unstable. |
-| WRC 4 | Connecting sometimes unstable. |
-| WRC 5 | |
----
-
-### Non-Supported Games
-
-| Game  | Description  |
-|---|---|
-| Minecraft | Requires friend lists to invite friends. |
-| Red Dead Redemption  | Connects online but cannot play with others. |
-| Forza Motorsport 4 | Connects online but cannot play with others. |
-| Grand Theft Auto 4 | Connects online but cannot play with others. |
-| Saints Row 1 | Connects online but cannot play with others. |
-| Gears of War 3 | Connects online but cannot play with others. |
-| Chromehounds | Requires a file from a dedicated Xbox server. |
-
-#### Requires Servers
-- Activision Games
-- EA Games
-- Ubisoft Games
-
----
-
-### [Netplay Mousehook](https://github.com/marinesciencedude/xenia-canary-mousehook/tree/netplay_canary_experimental#mousehook)
-- [Releases](https://github.com/marinesciencedude/xenia-canary-mousehook/releases?q=Netplay)
-
-Netplay mousehook is a fork of netplay which adds support for playing games with mouse and keyboard.
+### Netplay Builds:
+* [Latest stable release](https://github.com/AdrianCassar/xenia-canary/releases/latest)
+* [Github Actions](https://github.com/AdrianCassar/xenia-canary/actions?query=actor%3AAdrianCassar+branch%3Anetplay_canary_experimental)
+    * These builds are latest work in progress and require a github account to download.
+* [Mousehook](https://github.com/marinesciencedude/xenia-canary-mousehook/releases?q=Netplay)
+    * A limited number of games have netplay and mousehook support.
 
 ---
 
