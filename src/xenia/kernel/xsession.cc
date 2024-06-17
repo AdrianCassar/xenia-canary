@@ -109,10 +109,10 @@ void XSession::GenerateIdentityExchangeKey(XNKEY* key) {
   }
 }
 
-uint64_t XSession::GenerateSessionId() {
+uint64_t XSession::GenerateSessionId(uint8_t mask) {
   std::random_device rd;
   std::uniform_int_distribution<uint64_t> dist(0, -1);
-  return ((uint64_t)0xAE << 56) | (dist(rd) & 0x0000FFFFFFFFFFFF);
+  return ((uint64_t)mask << 56) | (dist(rd) & 0x0000FFFFFFFFFFFF);
 }
 
 X_RESULT XSession::CreateHostSession(XSESSION_INFO* session_info,
@@ -132,7 +132,7 @@ X_RESULT XSession::CreateHostSession(XSESSION_INFO* session_info,
   session_data->num_slots_public = public_slots;
   session_data->num_slots_private = private_slots;
   session_data->flags = flags;
-  session_id_ = GenerateSessionId();
+  session_id_ = GenerateSessionId(XNKID_ONLINE);
   Uint64toXNKID(session_id_, &session_info->sessionID);
 
   XLiveAPI::XSessionCreate(session_id_, session_data);
@@ -158,7 +158,7 @@ X_RESULT XSession::JoinExistingSession(XSESSION_INFO* session_info) {
   session_id_ = XNKIDtoUint64(&session_info->sessionID);
   XELOGI("Joining session {:016X}", session_id_);
 
-  assert_true(IsOnlineSession(session_id_));
+  assert_true(IsOnlinePeer(session_id_));
 
   if (session_id_ == NULL) {
     assert_always();
