@@ -293,6 +293,11 @@ DECLARE_XAM_EXPORT1(NetDll_XNetCleanup, kNetworking, kImplemented);
 dword_result_t XNetLogonGetMachineID_entry(lpqword_t machine_id_ptr) {
   *machine_id_ptr = XLiveAPI::GetLocalMachineId();
 
+  // if (XLiveAPI::GetInitState() != XLiveAPI::InitState::Success) {
+  //   *machine_id_ptr = 0;
+  //   return 0x80151802;  // ERROR_CONNECTION_INVALID
+  // }
+
   return X_STATUS_SUCCESS;
 }
 DECLARE_XAM_EXPORT1(XNetLogonGetMachineID, kNetworking, kImplemented);
@@ -695,10 +700,18 @@ DECLARE_XAM_EXPORT1(NetDll_XNetGetConnectStatus, kNetworking, kStub);
 
 dword_result_t NetDll_XNetServerToInAddr_entry(dword_t caller,
                                                dword_t server_addr,
-                                               dword_t serviceId,
+                                               dword_t service_id,
                                                pointer_t<in_addr> pina) {
   XELOGI("XNetServerToInAddr({:08X} {:08X})", server_addr.value(),
          pina.guest_address());
+
+  if (XLiveAPI::GetInitState() != XLiveAPI::InitState::Success) {
+    return static_cast<uint32_t>(X_WSAError::X_WSANOTINITIALISED);
+  }
+
+  if (!server_addr || !service_id) {
+    return static_cast<uint32_t>(X_WSAError::X_WSAEINVAL);
+  }
 
   pina->s_addr = htonl(server_addr);
 
