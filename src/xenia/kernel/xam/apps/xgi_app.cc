@@ -612,6 +612,12 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
 
       return session->ModifySkill(data);
     }
+    case 0x000B0020: {
+      XELOGI("XUserResetStatsView");
+      XUSER_STATS_RESET* data = reinterpret_cast<XUSER_STATS_RESET*>(buffer);
+
+      return X_E_SUCCESS;
+    }
     case 0x000B0019: {
       XELOGI("XSessionGetInvitationData unimplemented");
       return X_E_SUCCESS;
