@@ -182,6 +182,23 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
              buffer_ptr, buffer_length);
       return X_E_SUCCESS;
     }
+    case 0x0005800C: {
+      XELOGD("XUserMuteListSetState({:08X}, {:08X}) unimplemented", buffer_ptr,
+             buffer_length);
+
+      struct MuteListSetState {
+        xe::be<uint32_t> user_index;
+        xe::be<uint64_t> remote_xuid;
+        bool set_muted;
+      };
+
+      MuteListSetState* mute_list_ptr =
+          memory_->TranslateVirtual<MuteListSetState*>(buffer_ptr);
+
+      mute_list_ptr->set_muted = !mute_list_ptr->set_muted;
+
+      return X_E_SUCCESS;
+    }
     case 0x0005800E: {
       // Fixes Xbox Live error for 513107D9
       XELOGD("XUserMuteListQuery({:08X}, {:08X}) unimplemented", buffer_ptr,
