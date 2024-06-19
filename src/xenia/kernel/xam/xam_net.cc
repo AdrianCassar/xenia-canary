@@ -1127,8 +1127,12 @@ dword_result_t NetDll_XNetQosLookup_entry(
   // const uint32_t count = num_remote_consoles + num_gateways;
   const uint32_t count = num_remote_consoles;
 
+  uint32_t countOffset = 0;
+
   // Fake QoS count to fix GoW 3
-  const uint32_t countOffset = 0;
+  if (kernel_state()->title_id() == 0x4D5308AB) {
+    countOffset = 1;
+  }
 
   const uint32_t size =
       sizeof(XNQOS) + (sizeof(XNQOSINFO) * (count - 1) + countOffset);
