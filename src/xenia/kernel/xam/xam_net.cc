@@ -450,6 +450,12 @@ dword_result_t NetDll_WSARecvFrom_entry(
                           from_ptr, fromlen_ptr, overlapped_ptr);
   if (ret < 0) {
     XThread::SetLastError(socket->GetLastWSAError());
+  } else if (ret >= 0 && !cvars::log_mask_ips && from_ptr) {
+    XELOGI("NetDll_WSARecvFrom: Received {} bytes from: {}.{}.{}.{}",
+           *num_bytes_recv_ptr, from_ptr->address_ip.S_un.S_un_b.s_b1,
+           from_ptr->address_ip.S_un.S_un_b.s_b2,
+           from_ptr->address_ip.S_un.S_un_b.s_b3,
+           from_ptr->address_ip.S_un.S_un_b.s_b4);
   }
 
   return ret;
@@ -518,6 +524,16 @@ dword_result_t NetDll_WSASendTo_entry(
     XThread::SetLastError(error_code);
     XELOGE("NetDll_WSASendTo failed: {:08X}", error_code);
     return result;
+  } else if (result != -1 && to_ptr && !cvars::log_mask_ips) {
+    XELOGI("NetDll_WSASendTo: Send {} bytes to: {}.{}.{}.{}", result,
+           to_ptr->address_ip.S_un.S_un_b.s_b1,
+           to_ptr->address_ip.S_un.S_un_b.s_b2,
+           to_ptr->address_ip.S_un.S_un_b.s_b3,
+           to_ptr->address_ip.S_un.S_un_b.s_b4);
+  }
+
+  if (num_bytes_sent && !overlapped) {
+    *num_bytes_sent = result;
   }
   // TODO: Instantly complete overlapped
 
@@ -1674,6 +1690,12 @@ dword_result_t NetDll_recvfrom_entry(dword_t caller, dword_t socket_handle,
 
   if (ret == -1) {
     XThread::SetLastError(socket->GetLastWSAError());
+  } else if (ret >= 0 && !cvars::log_mask_ips && from_ptr) {
+    XELOGI("NetDll_recvfrom: Received {} bytes from: {}.{}.{}.{}", ret,
+           from_ptr->address_ip.S_un.S_un_b.s_b1,
+           from_ptr->address_ip.S_un.S_un_b.s_b2,
+           from_ptr->address_ip.S_un.S_un_b.s_b3,
+           from_ptr->address_ip.S_un.S_un_b.s_b4);
   }
 
   return ret;
@@ -1713,7 +1735,14 @@ dword_result_t NetDll_sendto_entry(dword_t caller, dword_t socket_handle,
   int ret = socket->SendTo(buf_ptr, buf_len, flags, to_ptr, to_len);
   if (ret < 0) {
     XThread::SetLastError(socket->GetLastWSAError());
+  } else if (ret >= 0 && to_ptr && !cvars::log_mask_ips) {
+    XELOGI("NetDll_sendto: Send {} bytes to: {}.{}.{}.{}", ret,
+           to_ptr->address_ip.S_un.S_un_b.s_b1,
+           to_ptr->address_ip.S_un.S_un_b.s_b2,
+           to_ptr->address_ip.S_un.S_un_b.s_b3,
+           to_ptr->address_ip.S_un.S_un_b.s_b4);
   }
+
   return ret;
 }
 DECLARE_XAM_EXPORT1(NetDll_sendto, kNetworking, kImplemented);
