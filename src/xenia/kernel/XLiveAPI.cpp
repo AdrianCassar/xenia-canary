@@ -1202,7 +1202,13 @@ const uint8_t* XLiveAPI::GetMACaddress() {
 
 std::string XLiveAPI::GetNetworkFriendlyName(IP_ADAPTER_ADDRESSES adapter) {
   char interface_name[MAX_ADAPTER_NAME_LENGTH];
-  wcstombs(interface_name, adapter.FriendlyName, sizeof(interface_name));
+  size_t bytes_out =
+      wcstombs(interface_name, adapter.FriendlyName, sizeof(interface_name));
+
+  // Fallback to adapater GUID if name failed to convert
+  if (bytes_out == -1) {
+    strcpy(interface_name, adapter.AdapterName);
+  }
 
   return interface_name;
 }
