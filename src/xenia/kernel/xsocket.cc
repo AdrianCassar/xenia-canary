@@ -80,6 +80,9 @@ X_STATUS XSocket::GetOption(uint32_t level, uint32_t optname, void* optval_ptr,
   // Because values provided in optval_ptr are in LE we must to somehow save
   // them in BE.
   switch (*optlen) {
+    case 1:
+      xe::copy_and_swap<uint8_t>((uint8_t*)optval_ptr, (uint8_t*)optval_ptr, 1);
+      break;
     case 4:
       xe::copy_and_swap<uint32_t>((uint32_t*)optval_ptr, (uint32_t*)optval_ptr,
                                   1);
