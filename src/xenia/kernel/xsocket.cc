@@ -111,6 +111,10 @@ X_STATUS XSocket::SetOption(uint32_t level, uint32_t optname, void* optval_ptr,
   // them in LE.
   void* optval_ptr_le = calloc(1, optlen);
   switch (optlen) {
+    case 1:
+      xe::copy_and_swap<uint8_t>((uint8_t*)optval_ptr_le, (uint8_t*)optval_ptr,
+                                 1);
+      break;
     case 4:
       xe::copy_and_swap<uint32_t>((uint32_t*)optval_ptr_le,
                                   (uint32_t*)optval_ptr, 1);
