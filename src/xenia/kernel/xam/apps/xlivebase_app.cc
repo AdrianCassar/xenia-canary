@@ -116,7 +116,7 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
       // 58410B5D craches.
       XELOGD("XUserFindUsersResponseSize({:08X}, {:08X}) unimplemented",
              buffer_ptr, buffer_length);
-      return X_E_FAIL;
+      return cvars::stub_xlivebase ? X_E_SUCCESS : X_E_FAIL;
     }
     case 0x0005000F: {
       // 41560855 included from TU 7
@@ -234,7 +234,7 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
           "CXLiveMessaging::XMessageGameInviteGetAcceptedInfo({:08X}, {:08X}) "
           "unimplemented",
           buffer_ptr, buffer_length);
-      return X_E_FAIL;
+      return cvars::stub_xlivebase ? X_E_SUCCESS : X_E_FAIL;
     }
     case 0x00058032: {
       XELOGD("XGetTaskProgress({:08X}, {:08X}) unimplemented", buffer_ptr,
@@ -252,7 +252,7 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
       // Used in older games such as Crackdown, FM2, Saints Row 1
       XELOGD("XPresenceInitializeLegacy({:08X}, {:08X}) unimplemented",
              buffer_ptr, buffer_length);
-      return X_E_SUCCESS;
+      return XPresenceInitialize(buffer_length);
     }
     case 0x00058044: {
       XELOGD("XPresenceUnsubscribe({:08X}, {:08X}) unimplemented", buffer_ptr,
@@ -267,19 +267,39 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
       // input
       XELOGD("XPresenceInitialize({:08X}, {:08X}) unimplemented", buffer_ptr,
              buffer_length);
-      return X_E_SUCCESS;
+      return XPresenceInitialize(buffer_length);
     }
   }
 
   auto xlivebase_log = fmt::format(
-      "{} XLIVEBASE message app={:08X}, msg={:08X}, arg1={:08X}, "
-      "arg2={:08X}",
+      "{} XLIVEBASE message app={:08X}, msg={:08X}, buffer_ptr={:08X}, "
+      "buffer_length={:08X}",
       cvars::stub_xlivebase ? "Stubbed" : "Unimplemented", app_id(), message,
       buffer_ptr, buffer_length);
 
   XELOGE("{}", xlivebase_log);
 
   return cvars::stub_xlivebase ? X_E_SUCCESS : X_E_FAIL;
+}
+
+X_HRESULT XLiveBaseApp::XPresenceInitialize(uint32_t buffer_length) {
+  if (!buffer_length) {
+    return X_E_INVALIDARG;
+  }
+
+  Memory* memory = kernel_state_->memory();
+
+  X_ARGUEMENT_ENTRY* entry =
+      memory->TranslateVirtual<X_ARGUEMENT_ENTRY*>(buffer_length);
+
+  uint32_t max_peer_subscriptions =
+      xe::load_and_swap<uint32_t>(memory->TranslateVirtual(entry->object_ptr));
+
+  if (max_peer_subscriptions > 0x190) {
+    return X_E_INVALIDARG;
+  }
+
+  return X_E_SUCCESS;
 }
 
 X_HRESULT XLiveBaseApp::GetServiceInfo(uint32_t serviceid,
@@ -357,6 +377,10 @@ X_HRESULT XLiveBaseApp::CreateFriendsEnumerator(uint32_t buffer_args) {
   auto e =
       make_object<XStaticUntypedEnumerator>(kernel_state_, friends_amount, 0);
   auto result = e->Initialize(-1, app_id(), 0x58021, 0x58022, 0, 0x10, nullptr);
+
+  if (XFAILED(result)) {
+    return result;
+  }
 
   const uint32_t received_friends_count = 0;
   *buffer_ptr = xe::byte_swap<uint32_t>(received_friends_count * 0xC4);
