@@ -207,6 +207,8 @@ typedef struct {
 
 XNetStartupParams xnet_startup_params{};
 
+uint16_t systemlink_port = 5000;
+
 void Update_XNetStartupParams(XNetStartupParams& dest,
                               const XNetStartupParams& src) {
   uint8_t* dest_ptr = reinterpret_cast<uint8_t*>(&dest);
@@ -851,21 +853,28 @@ DECLARE_XAM_EXPORT1(NetDll_XNetInAddrToXnAddr, kNetworking, kImplemented);
 
 // https://www.google.com/patents/WO2008112448A1?cl=en
 // Reserves a port for use by system link
-dword_result_t NetDll_XNetSetSystemLinkPort_entry(dword_t caller,
-                                                  dword_t port) {
+dword_result_t NetDll_XNetSetSystemLinkPort_entry(dword_t caller, word_t port) {
   XELOGI("XNetSetSystemLinkPort: {}", port.value());
 
+  systemlink_port = port;
+
   return X_STATUS_SUCCESS;
 }
-DECLARE_XAM_EXPORT1(NetDll_XNetSetSystemLinkPort, kNetworking, kStub);
+DECLARE_XAM_EXPORT1(NetDll_XNetSetSystemLinkPort, kNetworking, kImplemented);
 
 dword_result_t NetDll_XNetGetSystemLinkPort_entry(dword_t caller,
-                                                  dword_t port) {
-  XELOGI("XNetGetSystemLinkPort: {}", port.value());
+                                                  lpword_t port) {
+  if (!port) {
+    return X_STATUS_INVALID_PARAMETER;
+  }
+
+  XELOGI("XNetGetSystemLinkPort: {}", static_cast<uint16_t>(*port));
+
+  *port = systemlink_port;
 
   return X_STATUS_SUCCESS;
 }
-DECLARE_XAM_EXPORT1(NetDll_XNetGetSystemLinkPort, kNetworking, kStub);
+DECLARE_XAM_EXPORT1(NetDll_XNetGetSystemLinkPort, kNetworking, kImplemented);
 
 dword_result_t NetDll_XNetGetBroadcastVersionStatus_entry(dword_t caller,
                                                           dword_t reset) {
