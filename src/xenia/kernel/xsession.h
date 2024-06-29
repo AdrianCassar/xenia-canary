@@ -238,6 +238,11 @@ struct Player {
   xe::be<uint64_t> sessionId;
 };
 
+struct SEARCH_RESULTS {
+  XSESSION_SEARCHRESULT_HEADER header;
+  XSESSION_SEARCHRESULT* results_ptr;
+};
+
 struct SessionJSON {
   xe::be<uint64_t> sessionid;
   xe::be<uint16_t> port;
