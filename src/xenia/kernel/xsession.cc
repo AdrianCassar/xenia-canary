@@ -449,33 +449,34 @@ X_RESULT XSession::GetSessions(Memory* memory, XSessionSearch* search_data) {
 
   const auto sessions = XLiveAPI::SessionSearch(search_data);
 
-  const size_t session_count =
-      std::min((size_t)search_data->num_results, sessions.size());
+  const uint32_t session_count =
+      std::min<uint32_t>(search_data->num_results, (uint32_t)sessions.size());
 
-  const uint32_t session_search_result_data_address =
-      search_data->search_results_ptr + sizeof(XSESSION_SEARCHRESULT_HEADER);
+  SEARCH_RESULTS* search_results_ptr =
+      memory->TranslateVirtual<SEARCH_RESULTS*>(
+          search_data->search_results_ptr);
 
-  XSESSION_SEARCHRESULT* result =
+  const uint32_t session_search_results_ptr =
+      memory->SystemHeapAlloc(search_data->results_buffer_size);
+
+  search_results_ptr->results_ptr =
       memory->TranslateVirtual<XSESSION_SEARCHRESULT*>(
-          search_data->search_results_ptr +
-          sizeof(XSESSION_SEARCHRESULT_HEADER));
+          session_search_results_ptr);
 
-  for (uint8_t i = 0; i < session_count; i++) {
+  for (uint32_t i = 0; i < session_count; i++) {
     const auto context =
         XLiveAPI::SessionContextGet(sessions.at(i)->SessionID_UInt());
 
-    FillSessionContext(memory, context, &result[i]);
+    FillSessionContext(memory, context, &search_results_ptr->results_ptr[i]);
     FillSessionProperties(search_data->num_props, search_data->props_ptr,
-                          &result[i]);
-    FillSessionSearchResult(sessions.at(i), &result[i]);
+                          &search_results_ptr->results_ptr[i]);
+    FillSessionSearchResult(sessions.at(i),
+                            &search_results_ptr->results_ptr[i]);
   }
 
-  XSESSION_SEARCHRESULT_HEADER* resultsHeader =
-      memory->TranslateVirtual<XSESSION_SEARCHRESULT_HEADER*>(
-          search_data->search_results_ptr);
+  search_results_ptr->header.search_results_count = session_count;
+  search_results_ptr->header.search_results_ptr = session_search_results_ptr;
 
-  resultsHeader->search_results_count = (uint32_t)session_count;
-  resultsHeader->search_results_ptr = session_search_result_data_address;
   return X_ERROR_SUCCESS;
 }
 
@@ -486,35 +487,36 @@ X_RESULT XSession::GetSessionByID(Memory* memory,
     return ERROR_INSUFFICIENT_BUFFER;
   }
 
-  const auto sessionId = XNKIDtoUint64(&search_data->session_id);
+  const auto session_id = XNKIDtoUint64(&search_data->session_id);
 
-  if (!sessionId) {
-    return ERROR_SUCCESS;
+  if (!session_id) {
+    assert_always();
+    return X_ERROR_SUCCESS;
   }
 
-  const auto session = XLiveAPI::XSessionGet(sessionId);
+  const auto session = XLiveAPI::XSessionGet(session_id);
+  const uint32_t session_count = 1;
 
-  if (session->HostAddress().empty()) {
-    return ERROR_SUCCESS;
-  }
-
-  XSESSION_SEARCHRESULT* result =
-      memory->TranslateVirtual<XSESSION_SEARCHRESULT*>(
-          search_data->search_results_ptr +
-          sizeof(XSESSION_SEARCHRESULT_HEADER));
-
-  // HUH? How it should be filled in this case?
-  FillSessionContext(memory, {}, result);
-  FillSessionProperties(0, 0, result);
-  FillSessionSearchResult(session, result);
-
-  XSESSION_SEARCHRESULT_HEADER* resultsHeader =
-      memory->TranslateVirtual<XSESSION_SEARCHRESULT_HEADER*>(
+  SEARCH_RESULTS* search_results_ptr =
+      memory->TranslateVirtual<SEARCH_RESULTS*>(
           search_data->search_results_ptr);
 
-  resultsHeader->search_results_count = 1;
-  resultsHeader->search_results_ptr =
-      search_data->search_results_ptr + sizeof(XSESSION_SEARCHRESULT_HEADER);
+  const uint32_t session_search_result_ptr =
+      memory->SystemHeapAlloc(search_data->results_buffer_size);
+
+  search_results_ptr->results_ptr =
+      memory->TranslateVirtual<XSESSION_SEARCHRESULT*>(
+          session_search_result_ptr);
+
+  if (!session->HostAddress().empty()) {
+    // HUH? How it should be filled in this case?
+    FillSessionContext(memory, {}, &search_results_ptr->results_ptr[0]);
+    FillSessionProperties(0, 0, &search_results_ptr->results_ptr[0]);
+    FillSessionSearchResult(session, &search_results_ptr->results_ptr[0]);
+  }
+
+  search_results_ptr->header.search_results_count = session_count;
+  search_results_ptr->header.search_results_ptr = session_search_result_ptr;
 
   return X_ERROR_SUCCESS;
 }
