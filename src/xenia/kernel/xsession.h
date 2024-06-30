@@ -173,12 +173,11 @@ struct XSessionMigate {
 struct XSessionArbitrationData {
   xe::be<uint32_t> obj_ptr;
   xe::be<uint32_t> flags;
-  xe::be<uint32_t> unk1;
-  xe::be<uint32_t> unk2;
-  xe::be<uint32_t> session_nonce;
+  xe::be<uint64_t> session_nonce;
+  xe::be<uint32_t> value_const;  // 300
   xe::be<uint32_t> results_buffer_size;
-  xe::be<uint32_t> results;
-  xe::be<uint32_t> pXOverlapped;
+  xe::be<uint32_t> results_ptr;
+  xe::be<uint32_t> xoverlapped_ptr;
 };
 
 struct XSessionData {
