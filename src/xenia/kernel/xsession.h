@@ -56,9 +56,9 @@ struct X_KSESSION {
 static_assert_size(X_KSESSION, 4);
 
 struct XSESSION_INFO {
-  xe::kernel::XNKID sessionID;
+  XNKID sessionID;
   XNADDR hostAddress;
-  xe::kernel::XNKEY keyExchangeKey;
+  XNKEY keyExchangeKey;
 };
 
 struct XSESSION_REGISTRANT {
@@ -104,8 +104,7 @@ struct XSESSION_LOCAL_DETAILS {
   XSESSION_STATE eState;
   xe::be<uint64_t> Nonce;
   XSESSION_INFO sessionInfo;
-  xe::kernel::XNKID xnkidArbitration;
-  // XSESSION_MEMBER* pSessionMembers;
+  XNKID xnkidArbitration;
   xe::be<uint32_t> pSessionMembers;
 };
 
@@ -150,10 +149,10 @@ struct XSessionSearch {
 
 struct XSessionSearchID {
   xe::be<uint32_t> user_index;
-  xe::kernel::XNKID session_id;
+  XNKID session_id;
   xe::be<uint32_t> results_buffer_size;
   xe::be<uint32_t> search_results_ptr;
-  // xe::be<uint32_t> xoverlapped_ptr;
+  xe::be<uint32_t> xoverlapped_ptr;
 };
 
 struct XSessionDetails {
@@ -215,17 +214,17 @@ struct XSessionViewProperties {
 struct XSessionJoin {
   xe::be<uint32_t> obj_ptr;
   xe::be<uint32_t> array_count;
-  xe::be<uint32_t> xuid_array_ptr;
-  xe::be<uint32_t> indices_array_ptr;
+  xe::be<uint32_t> xuid_array_ptr;     // 0 = Join Local
+  xe::be<uint32_t> indices_array_ptr;  // 0 = Join Remote
   xe::be<uint32_t> private_slots_array_ptr;
 };
 
 struct XSessionLeave {
   xe::be<uint32_t> obj_ptr;
   xe::be<uint32_t> array_count;
-  xe::be<uint32_t> xuid_array_ptr;
-  xe::be<uint32_t> indices_array_ptr;
-  xe::be<uint32_t> unused;
+  xe::be<uint32_t> xuid_array_ptr;     // 0 = Leave Local
+  xe::be<uint32_t> indices_array_ptr;  // 0 = Leave Remote
+  xe::be<uint32_t> unused;             // const 0
 };
 
 struct Player {
