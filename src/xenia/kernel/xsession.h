@@ -192,10 +192,10 @@ struct XSessionData {
 
 struct XSessionWriteStats {
   xe::be<uint32_t> obj_ptr;
-  xe::be<uint32_t> unk1;
+  xe::be<uint32_t> unk_value;
   xe::be<uint64_t> xuid;
   xe::be<uint32_t> number_of_leaderboards;
-  xe::be<uint32_t> leaderboards_guest_address;
+  xe::be<uint32_t> leaderboards_ptr;
   xe::be<uint32_t> xoverlapped;
 };
 
