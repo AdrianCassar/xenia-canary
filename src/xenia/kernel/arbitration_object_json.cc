@@ -40,10 +40,12 @@ bool ArbitrationObjectJSON::Deserialize(const rapidjson::Value& obj) {
       machine.player_count = players.Size();
 
       for (const auto& player : players) {
-        const auto xuid = string_util::from_string<uint64_t>(
+        xe::be<uint64_t> xuid = string_util::from_string<uint64_t>(
             player["xuid"].GetString(), true);
 
-        machine.xuids.push_back(xe::byte_swap(xuid));
+        xuid = xe::byte_swap(xuid);
+
+        machine.xuids.push_back(xuid);
       }
 
       machine_info.push_back(machine);

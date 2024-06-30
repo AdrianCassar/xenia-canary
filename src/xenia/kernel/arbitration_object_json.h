@@ -32,7 +32,7 @@ class ArbitrationObjectJSON : public BaseObjectJSON {
   struct MachineInfo {
     xe::be<uint64_t> machine_id;
     xe::be<uint32_t> player_count;
-    std::vector<uint64_t> xuids;
+    std::vector<xe::be<uint64_t>> xuids;
   };
 
   const xe::be<uint32_t>& TotalPlayers() const { return total_players_; }
