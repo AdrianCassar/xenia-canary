@@ -532,9 +532,14 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
       return session->EndSession();
     }
     case 0x000B0025: {
-      XELOGI("XSessionWriteStats");
-
       XSessionWriteStats* data = reinterpret_cast<XSessionWriteStats*>(buffer);
+
+      XELOGI(
+          "XSessionWriteStats({:08X}, {:08X}, {:016X}, {:08X}, {:08X}, "
+          "{:08X});",
+          data->obj_ptr.get(), data->unk_value.get(), data->xuid.get(),
+          data->number_of_leaderboards.get(), data->leaderboards_ptr.get(),
+          data->xoverlapped.get());
 
       uint8_t* obj_ptr = memory_->TranslateVirtual<uint8_t*>(data->obj_ptr);
 
