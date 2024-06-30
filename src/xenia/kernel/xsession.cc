@@ -376,7 +376,7 @@ X_RESULT XSession::MigrateHost(XSessionMigate* data) {
 X_RESULT XSession::RegisterArbitration(XSessionArbitrationData* data) {
   XSESSION_REGISTRATION_RESULTS* results_ptr =
       kernel_state_->memory()->TranslateVirtual<XSESSION_REGISTRATION_RESULTS*>(
-          data->results);
+          data->results_ptr);
 
   const auto result = XLiveAPI::XSessionArbitration(session_id_);
 
