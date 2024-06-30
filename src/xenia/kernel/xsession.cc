@@ -429,7 +429,7 @@ X_RESULT XSession::ModifySkill(XSessionModifySkill* data) {
 X_RESULT XSession::WriteStats(XSessionWriteStats* data) {
   XSessionViewProperties* leaderboard =
       kernel_state_->memory()->TranslateVirtual<XSessionViewProperties*>(
-          data->leaderboards_guest_address);
+          data->leaderboards_ptr);
 
   XLiveAPI::SessionWriteStats(session_id_, data, leaderboard);
 
