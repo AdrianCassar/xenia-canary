@@ -322,11 +322,10 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
 
       XELOGI(
           "XSessionArbitrationRegister({:08X}, {:08X}, {:08X}, {:08X}, {:08X}, "
-          "{:08X}, {:08X}, {:08X});",
-          data->obj_ptr.get(), data->flags.get(), data->unk1.get(),
-          data->unk2.get(), data->session_nonce.get(),
-          data->results_buffer_size.get(), data->results.get(),
-          data->pXOverlapped.get());
+          "{:08X}, {:08X});",
+          data->obj_ptr.get(), data->flags.get(), data->session_nonce.get(),
+          data->value_const.get(), data->results_buffer_size.get(),
+          data->results_ptr.get(), data->xoverlapped_ptr.get());
 
       uint8_t* obj_ptr = memory_->TranslateVirtual<uint8_t*>(data->obj_ptr);
 
