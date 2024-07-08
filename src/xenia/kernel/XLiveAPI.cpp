@@ -1062,23 +1062,30 @@ XONLINE_SERVICE_INFO XLiveAPI::GetServiceInfoById(uint32_t serviceId) {
 }
 
 void XLiveAPI::SessionJoinRemote(uint64_t sessionId,
-                                 const std::vector<std::string> xuids) {
+                                 std::unordered_map<uint64_t, bool> members) {
   std::string endpoint = fmt::format("title/{:08X}/sessions/{:016x}/join",
                                      kernel_state()->title_id(), sessionId);
 
   Document doc;
   doc.SetObject();
 
-  Value xuidsJsonArray(kArrayType);
+  Value xuidsJsonArray = Value(kArrayType);
+  Value privateSlotsJsonArray = Value(kArrayType);
 
-  for (const auto xuid : xuids) {
-    Value value;
-    value.SetString(xuid.c_str(), 16, doc.GetAllocator());
+  for (const auto& [xuid, is_private] : members) {
+    const std::string xuid_str = string_util::to_hex_string(xuid);
 
-    xuidsJsonArray.PushBack(value, doc.GetAllocator());
+    Value xuid_value;
+    xuid_value.SetString(xuid_str.c_str(), 16, doc.GetAllocator());
+
+    Value is_private_value = Value(is_private);
+
+    xuidsJsonArray.PushBack(xuid_value, doc.GetAllocator());
+    privateSlotsJsonArray.PushBack(is_private_value, doc.GetAllocator());
   }
 
   doc.AddMember("xuids", xuidsJsonArray, doc.GetAllocator());
+  doc.AddMember("privateSlots", privateSlotsJsonArray, doc.GetAllocator());
 
   rapidjson::StringBuffer buffer;
   PrettyWriter<rapidjson::StringBuffer> writer(buffer);
@@ -1094,7 +1101,7 @@ void XLiveAPI::SessionJoinRemote(uint64_t sessionId,
 }
 
 void XLiveAPI::SessionLeaveRemote(uint64_t sessionId,
-                                  const std::vector<std::string> xuids) {
+                                  const std::vector<xe::be<uint64_t>> xuids) {
   std::string endpoint = fmt::format("title/{:08X}/sessions/{:016x}/leave",
                                      kernel_state()->title_id(), sessionId);
 
@@ -1104,8 +1111,10 @@ void XLiveAPI::SessionLeaveRemote(uint64_t sessionId,
   Value xuidsJsonArray(kArrayType);
 
   for (const auto xuid : xuids) {
+    const std::string xuid_str = string_util::to_hex_string(xuid);
+
     Value value;
-    value.SetString(xuid.c_str(), 16, doc.GetAllocator());
+    value.SetString(xuid_str.c_str(), 16, doc.GetAllocator());
 
     xuidsJsonArray.PushBack(value, doc.GetAllocator());
   }
