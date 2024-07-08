@@ -11,7 +11,6 @@
 
 #include "xenia/base/logging.h"
 #include "xenia/kernel/XLiveAPI.h"
-#include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/xsession.h"
 
 DECLARE_bool(upnp);
@@ -51,7 +50,7 @@ X_RESULT XSession::CreateSession(uint8_t user_index, uint8_t public_slots,
                                  uint8_t private_slots, uint32_t flags,
                                  uint32_t session_info_ptr,
                                  uint32_t nonce_ptr) {
-  if (is_session_created_) {
+  if (IsCreated()) {
     // Todo: Find proper code!
     return X_ERROR_FUNCTION_FAILED;
   }
@@ -71,6 +70,9 @@ X_RESULT XSession::CreateSession(uint8_t user_index, uint8_t public_slots,
 
   uint64_t* Nonce_ptr =
       kernel_state_->memory()->TranslateVirtual<uint64_t*>(nonce_ptr);
+
+  local_details_.UserIndexHost = XUSER_INDEX_NONE;
+
   // CSGO only uses STATS flag to create a session to POST stats pre round.
   // Minecraft and Portal 2 use flags HOST + STATS.
   //
@@ -84,22 +86,39 @@ X_RESULT XSession::CreateSession(uint8_t user_index, uint8_t public_slots,
   // - Create when joining a session
   // - Explicitly create a presence session (Frogger without HOST bit)
   // Based on Presence flag set?
+
+  // Write user contexts. After session creation these are read only!
+  contexts_.insert(user_profile->contexts_.cbegin(),
+                   user_profile->contexts_.cend());
+
   if (flags == STATS) {
     CreateStatsSession(SessionInfo_ptr, Nonce_ptr, user_index, public_slots,
                        private_slots, flags);
   } else if (HasSessionFlag((SessionFlags)flags, HOST) ||
              flags == SINGLEPLAYER_WITH_STATS) {
-    // Write user contexts. After session creation these are read only!
-    contexts_.insert(user_profile->contexts_.cbegin(),
-                     user_profile->contexts_.cend());
-
     CreateHostSession(SessionInfo_ptr, Nonce_ptr, user_index, public_slots,
                       private_slots, flags);
   } else {
     JoinExistingSession(SessionInfo_ptr);
   }
 
-  is_session_created_ = true;
+  local_details_.GameType = GetGameTypeContext();
+  local_details_.GameMode = GetGameModeContext();
+  local_details_.Flags = flags;
+  local_details_.MaxPublicSlots = public_slots;
+  local_details_.MaxPrivateSlots = private_slots;
+  local_details_.AvailablePublicSlots = public_slots;
+  local_details_.AvailablePrivateSlots = private_slots;
+  local_details_.ActualMemberCount = 0;
+  local_details_.ReturnedMemberCount = 0;
+  local_details_.eState = XSESSION_STATE::LOBBY;
+  local_details_.Nonce = *Nonce_ptr;
+  local_details_.sessionInfo = *SessionInfo_ptr;
+  local_details_.xnkidArbitration = XNKID{};
+  local_details_.SessionMembers_ptr = 0;
+
+  state |= STATE_FLAGS_CREATED;
+
   return X_ERROR_SUCCESS;
 }
 
@@ -119,6 +138,10 @@ X_RESULT XSession::CreateHostSession(XSESSION_INFO* session_info,
                                      uint64_t* nonce_ptr, uint8_t user_index,
                                      uint8_t public_slots,
                                      uint8_t private_slots, uint32_t flags) {
+  state |= STATE_FLAGS_HOST;
+
+  local_details_.UserIndexHost = user_index;
+
   if (!cvars::upnp) {
     XELOGI("Hosting while UPnP is disabled!");
   }
@@ -160,7 +183,7 @@ X_RESULT XSession::JoinExistingSession(XSESSION_INFO* session_info) {
 
   assert_true(IsOnlinePeer(session_id_));
 
-  if (session_id_ == NULL) {
+  if (session_id_ == 0) {
     assert_always();
     return X_E_FAIL;
   }
@@ -175,15 +198,32 @@ X_RESULT XSession::JoinExistingSession(XSESSION_INFO* session_info) {
 }
 
 X_RESULT XSession::DeleteSession() {
+  state |= STATE_FLAGS_DELETED;
+
   // Begin XNetUnregisterKey?
-  XLiveAPI::DeleteSession(session_id_);
+
+  if (IsHost()) {
+    XLiveAPI::DeleteSession(session_id_);
+  }
+
+  // session_id_ = 0;
+
+  local_details_.eState = XSESSION_STATE::DELETED;
+  // local_details_.sessionInfo.sessionID = XNKID{};
   return X_ERROR_SUCCESS;
 }
 
+// A member can be added by either local or remote, typically local members are
+// joined via local but are often joined via remote - they're equivalent.
+//
+// If there are no private slots available then the member will occupy a public
+// slot instead.
 X_RESULT XSession::JoinSession(XSessionJoin* data) {
   const bool join_local = data->xuid_array_ptr == 0;
+
   std::string join_type =
       join_local ? "XGISessionJoinLocal" : "XGISessionJoinRemote";
+
   XELOGI("{}({:08X}, {}, {:08X}, {:08X}, {:08X})", join_type,
          static_cast<uint32_t>(data->obj_ptr),
          static_cast<uint32_t>(data->array_count),
@@ -191,7 +231,7 @@ X_RESULT XSession::JoinSession(XSessionJoin* data) {
          static_cast<uint32_t>(data->indices_array_ptr),
          static_cast<uint32_t>(data->private_slots_array_ptr));
 
-  std::vector<std::string> xuids{};
+  std::unordered_map<uint64_t, bool> members{};
 
   const auto xuid_array =
       kernel_state_->memory()->TranslateVirtual<xe::be<uint64_t>*>(
@@ -201,45 +241,103 @@ X_RESULT XSession::JoinSession(XSessionJoin* data) {
       kernel_state_->memory()->TranslateVirtual<xe::be<uint32_t>*>(
           data->indices_array_ptr);
 
-  const auto private_slots = kernel_state_->memory()->TranslateVirtual<bool*>(
-      data->private_slots_array_ptr);
+  const auto private_slots_array =
+      kernel_state_->memory()->TranslateVirtual<xe::be<uint32_t>*>(
+          data->private_slots_array_ptr);
 
   for (uint32_t i = 0; i < data->array_count; i++) {
-    if (join_local) {
-      const uint32_t index = (uint32_t)indices_array[i];
-      const auto profile = kernel_state()->xam_state()->GetUserProfile(index);
+    XSESSION_MEMBER* member = new XSESSION_MEMBER();
 
-      if (!profile) {
-        assert_always();
+    if (join_local) {
+      const uint32_t user_index = static_cast<uint32_t>(indices_array[i]);
+
+      if (!kernel_state()->xam_state()->IsUserSignedIn(user_index)) {
         return X_E_FAIL;
       }
 
-      const auto xuid = profile->xuid();
+      const auto profile =
+          kernel_state()->xam_state()->GetUserProfile(user_index);
+      const xe::be<uint64_t> xuid = profile->xuid();
 
-      // Convert local user index to xuid.
-      xuids.push_back(string_util::to_hex_string(xuid));
+      const bool is_member_added =
+          local_members_.find(xuid) != local_members_.end();
+
+      if (is_member_added) {
+        member = &local_members_[xuid];
+      }
+
+      member->OnlineXUID = xuid;
+      member->UserIndex = user_index;
+
+      local_details_.ActualMemberCount =
+          std::min<int32_t>(MAX_USERS, local_details_.ActualMemberCount + 1);
     } else {
-      xuids.push_back(string_util::to_hex_string(xuid_array[i]));
+      // Default member
+      const xe::be<uint64_t> xuid = xuid_array[i];
+      const uint32_t user_index = XUSER_INDEX_NONE;
+
+      const bool is_member_added =
+          remote_members_.find(xuid) != remote_members_.end();
+
+      if (is_member_added) {
+        member = &remote_members_[xuid];
+      }
+
+      member->OnlineXUID = xuid;
+      member->UserIndex = user_index;
+
+      bool is_local_member = IsMemberLocallySignedIn(xuid, user_index);
+
+      if (is_local_member) {
+        const auto profile_manager =
+            kernel_state()->xam_state()->profile_manager();
+        member->UserIndex =
+            profile_manager->GetUserIndexAssignedToProfile(xuid);
+
+        local_details_.ActualMemberCount =
+            std::min<int32_t>(MAX_USERS, local_details_.ActualMemberCount + 1);
+      }
     }
 
-    const bool private_slot = private_slots[i];
+    const bool is_private = private_slots_array[i];
 
-    if (private_slot) {
-      XELOGI("Occupying private slot");
+    if (is_private && local_details_.AvailablePrivateSlots > 0) {
+      member->SetPrivate();
+
+      local_details_.AvailablePrivateSlots =
+          std::max<int32_t>(0, local_details_.AvailablePrivateSlots - 1);
     } else {
-      XELOGI("Occupying public slot");
+      local_details_.AvailablePublicSlots =
+          std::max<int32_t>(0, local_details_.AvailablePublicSlots - 1);
+    }
+
+    XELOGI("XUID: {:016X} - Occupying {} slot",
+           static_cast<uint64_t>(member->OnlineXUID),
+           member->IsPrivate() ? "private" : "public");
+
+    members[member->OnlineXUID] = member->IsPrivate();
+
+    if (join_local) {
+      local_members_.emplace(member->OnlineXUID, *member);
+    } else {
+      remote_members_.emplace(member->OnlineXUID, *member);
     }
   }
 
-  XLiveAPI::SessionJoinRemote(session_id_, xuids);
+  local_details_.ReturnedMemberCount = GetMembersCount();
+
+  if (!members.empty() && IsHost()) {
+    XLiveAPI::SessionJoinRemote(session_id_, members);
+  }
+
   return X_ERROR_SUCCESS;
 }
 
 X_RESULT XSession::LeaveSession(XSessionLeave* data) {
-  const bool leavelocal = data->xuid_array_ptr == 0;
+  const bool leave_local = data->xuid_array_ptr == 0;
 
   std::string leave_type =
-      leavelocal ? "XGISessionLeaveLocal" : "XGISessionLeaveRemote";
+      leave_local ? "XGISessionLeaveLocal" : "XGISessionLeaveRemote";
 
   XELOGI("{}({:08X}, {}, {:08X}, {:08X})", leave_type,
          static_cast<uint32_t>(data->obj_ptr),
@@ -247,7 +345,9 @@ X_RESULT XSession::LeaveSession(XSessionLeave* data) {
          static_cast<uint32_t>(data->xuid_array_ptr),
          static_cast<uint32_t>(data->indices_array_ptr));
 
-  std::vector<std::string> xuids{};
+  // Server already knows slots types from joining so we only need to send
+  // xuids.
+  std::vector<xe::be<uint64_t>> xuids{};
 
   auto xuid_array =
       kernel_state_->memory()->TranslateVirtual<xe::be<uint64_t>*>(
@@ -257,24 +357,104 @@ X_RESULT XSession::LeaveSession(XSessionLeave* data) {
       kernel_state_->memory()->TranslateVirtual<xe::be<uint32_t>*>(
           data->indices_array_ptr);
 
-  for (uint32_t i = 0; i < data->array_count; i++) {
-    if (leavelocal) {
-      const uint32_t index = (uint32_t)indices_array[i];
-      const auto profile = kernel_state()->xam_state()->GetUserProfile(index);
+  bool is_arbitrated = HasSessionFlag(
+      static_cast<SessionFlags>((uint32_t)local_details_.Flags), ARBITRATION);
 
-      if (!profile) {
-        assert_always();
+  for (uint32_t i = 0; i < data->array_count; i++) {
+    XSESSION_MEMBER* member = new XSESSION_MEMBER();
+
+    if (leave_local) {
+      const uint32_t user_index = static_cast<uint32_t>(indices_array[i]);
+
+      if (!kernel_state()->xam_state()->IsUserSignedIn(user_index)) {
         return X_E_FAIL;
       }
 
-      // Convert local user index to xuid.
-      xuids.push_back(string_util::to_hex_string(profile->xuid()));
+      const auto profile =
+          kernel_state()->xam_state()->GetUserProfile(user_index);
+      const xe::be<uint64_t> xuid = profile->xuid();
+
+      const bool is_member_added =
+          local_members_.find(xuid) != local_members_.end();
+
+      if (!is_member_added) {
+        return X_ERROR_SUCCESS;
+      }
+
+      member = &local_members_[xuid];
     } else {
-      xuids.push_back(string_util::to_hex_string(xuid_array[i]));
+      const xe::be<uint64_t> xuid = xuid_array[i];
+
+      const bool is_member_added =
+          remote_members_.find(xuid) != remote_members_.end();
+
+      if (!is_member_added) {
+        return X_ERROR_SUCCESS;
+      }
+
+      member = &remote_members_[xuid];
+    }
+
+    if (member->IsPrivate()) {
+      // Removing a private member but all members are removed
+      assert_false(local_details_.AvailablePrivateSlots ==
+                   local_details_.MaxPrivateSlots);
+
+      local_details_.AvailablePrivateSlots =
+          std::min<int32_t>(local_details_.MaxPrivateSlots,
+                            local_details_.AvailablePrivateSlots + 1);
+    } else {
+      // Removing a public member but all members are removed
+      assert_false(local_details_.AvailablePublicSlots ==
+                   local_details_.MaxPublicSlots);
+
+      local_details_.AvailablePublicSlots =
+          std::min<int32_t>(local_details_.MaxPublicSlots,
+                            local_details_.AvailablePublicSlots + 1);
+    }
+
+    // Keep arbitrated session members for stats reporting
+    if (is_arbitrated) {
+      member->SetZombie();
+    }
+
+    if (!member->IsZombie()) {
+      bool removed = false;
+
+      XELOGI("XUID: {:016X} - Leaving {} slot",
+             static_cast<uint64_t>(member->OnlineXUID),
+             member->IsPrivate() ? "private" : "public");
+
+      const xe::be<uint64_t> xuid = member->OnlineXUID;
+
+      if (leave_local) {
+        removed = local_members_.erase(member->OnlineXUID);
+      } else {
+        removed = remote_members_.erase(member->OnlineXUID);
+      }
+
+      assert_true(removed);
+
+      if (removed) {
+        xuids.push_back(xuid);
+
+        bool is_local_member =
+            IsMemberLocallySignedIn(member->OnlineXUID, member->UserIndex);
+
+        if (is_local_member) {
+          local_details_.ActualMemberCount =
+              std::max<int32_t>(0, local_details_.ActualMemberCount - 1);
+        }
+      }
     }
   }
 
-  XLiveAPI::SessionLeaveRemote(session_id_, xuids);
+  local_details_.ReturnedMemberCount = GetMembersCount();
+
+  if (!xuids.empty() && IsHost()) {
+    XLiveAPI::SessionLeaveRemote(session_id_, xuids);
+  }
+
   return X_ERROR_SUCCESS;
 }
 
@@ -282,65 +462,64 @@ X_RESULT XSession::ModifySession(XSessionModify* data) {
   XELOGI("Modifying session {:016X}", session_id_);
   PrintSessionType(static_cast<SessionFlags>((uint32_t)data->flags));
 
-  XLiveAPI::SessionModify(session_id_, data);
+  local_details_.Flags = data->flags;
+
+  const uint32_t num_private_slots = std::max<int32_t>(
+      0, local_details_.MaxPrivateSlots - local_details_.AvailablePrivateSlots);
+
+  const uint32_t num_public_slots = std::max<int32_t>(
+      0, local_details_.MaxPublicSlots - local_details_.AvailablePublicSlots);
+
+  data->maxPrivateSlots = std::max<int32_t>(0, data->maxPrivateSlots);
+  data->maxPublicSlots = std::max<int32_t>(0, data->maxPublicSlots);
+
+  local_details_.MaxPrivateSlots = data->maxPrivateSlots;
+  local_details_.MaxPublicSlots = data->maxPublicSlots;
+
+  local_details_.AvailablePrivateSlots =
+      std::max<int32_t>(0, local_details_.MaxPrivateSlots - num_private_slots);
+  local_details_.AvailablePublicSlots =
+      std::max<int32_t>(0, local_details_.MaxPublicSlots - num_public_slots);
+
+  PrintSessionDetails();
+
+  if (IsHost()) {
+    XLiveAPI::SessionModify(session_id_, data);
+  }
+
   return X_ERROR_SUCCESS;
 }
 
 X_RESULT XSession::GetSessionDetails(XSessionDetails* data) {
-  auto details_ptr =
+  auto local_details_ptr =
       kernel_state_->memory()->TranslateVirtual<XSESSION_LOCAL_DETAILS*>(
-          data->details_buffer);
+          data->session_details_ptr);
 
-  const std::unique_ptr<SessionObjectJSON> session =
-      XLiveAPI::SessionDetails(session_id_);
+  local_details_ptr->SessionMembers_ptr =
+      kernel_state_->memory()->SystemHeapAlloc(sizeof(XSESSION_MEMBER) *
+                                               GetMembersCount());
 
-  if (session->HostAddress().empty()) {
-    return 1;
+  local_details_.SessionMembers_ptr = local_details_ptr->SessionMembers_ptr;
+
+  XSESSION_MEMBER* members_ptr =
+      kernel_state_->memory()->TranslateVirtual<XSESSION_MEMBER*>(
+          local_details_ptr->SessionMembers_ptr);
+
+  uint32_t index = 0;
+
+  for (auto const& [xuid, member] : local_members_) {
+    members_ptr[index] = member;
+    index++;
   }
 
-  Uint64toXNKID(xe::byte_swap(session->SessionID_UInt()),
-                &details_ptr->sessionInfo.sessionID);
-
-  GetXnAddrFromSessionObject(session.get(),
-                             &details_ptr->sessionInfo.hostAddress);
-
-  GenerateIdentityExchangeKey(&details_ptr->sessionInfo.keyExchangeKey);
-
-  details_ptr->UserIndexHost = 0;
-  details_ptr->GameMode = 0;
-  details_ptr->GameType = 0;
-  details_ptr->Flags = session->Flags();
-  details_ptr->MaxPublicSlots = session->PublicSlotsCount();
-  details_ptr->MaxPrivateSlots = session->PrivateSlotsCount();
-
-  // TODO:
-  // Provide the correct counts.
-  details_ptr->AvailablePrivateSlots = session->OpenPrivateSlotsCount();
-  details_ptr->AvailablePublicSlots = session->OpenPublicSlotsCount();
-  details_ptr->ActualMemberCount = session->FilledPublicSlotsCount();
-  // details->ActualMemberCount =
-  //     session->FilledPublicSlotsCount() + session->FilledPrivateSlotsCount();
-
-  details_ptr->ReturnedMemberCount = (uint32_t)session->Players().size();
-  details_ptr->eState = XSESSION_STATE::LOBBY;
-
-  std::random_device rnd;
-  std::mt19937_64 gen(rnd());
-  std::uniform_int_distribution<uint64_t> dist(0, -1);
-
-  details_ptr->Nonce = dist(rnd);
-
-  uint32_t members_ptr = kernel_state_->memory()->SystemHeapAlloc(
-      sizeof(XSESSION_MEMBER) * details_ptr->ReturnedMemberCount);
-
-  auto members =
-      kernel_state_->memory()->TranslateVirtual<XSESSION_MEMBER*>(members_ptr);
-  details_ptr->pSessionMembers = members_ptr;
-
-  for (uint8_t i = 0; i < details_ptr->ReturnedMemberCount; i++) {
-    members[i].UserIndex = 0xFE;
-    members[i].xuidOnline = session->Players().at(i).XUID();
+  for (auto const& [xuid, member] : remote_members_) {
+    members_ptr[index] = member;
+    index++;
   }
+
+  memcpy(local_details_ptr, &local_details_, sizeof(XSESSION_LOCAL_DETAILS));
+
+  PrintSessionDetails();
 
   return X_ERROR_SUCCESS;
 }
@@ -365,14 +544,24 @@ X_RESULT XSession::MigrateHost(XSessionMigate* data) {
   memset(SessionInfo_ptr, 0, sizeof(XSESSION_INFO));
 
   Uint64toXNKID(result->SessionID_UInt(), &SessionInfo_ptr->sessionID);
-
   XLiveAPI::IpGetConsoleXnAddr(&SessionInfo_ptr->hostAddress);
-
   GenerateIdentityExchangeKey(&SessionInfo_ptr->keyExchangeKey);
+
+  // Update session id to migrated session id
+  session_id_ = result->SessionID_UInt();
+
+  state |= STATE_FLAGS_HOST;
+  state |= STATE_FLAGS_MIGRATED;
+
+  local_details_.UserIndexHost = data->user_index;
+  local_details_.sessionInfo = *SessionInfo_ptr;
+  local_details_.xnkidArbitration = local_details_.sessionInfo.sessionID;
 
   return X_ERROR_SUCCESS;
 }
 
+// Server dependancy can be removed if we calculate remote machine id from
+// remote mac address.
 X_RESULT XSession::RegisterArbitration(XSessionArbitrationData* data) {
   XSESSION_REGISTRATION_RESULTS* results_ptr =
       kernel_state_->memory()->TranslateVirtual<XSESSION_REGISTRATION_RESULTS*>(
@@ -391,7 +580,7 @@ X_RESULT XSession::RegisterArbitration(XSessionArbitrationData* data) {
           registrants_ptr);
 
   for (uint8_t i = 0; i < result->Machines().size(); i++) {
-    registrants[i].bTrustworthiness = 1;
+    registrants[i].Trustworthiness = 1;
 
     registrants[i].MachineID = result->Machines()[i].machine_id;
     registrants[i].bNumUsers = result->Machines()[i].player_count;
@@ -408,6 +597,13 @@ X_RESULT XSession::RegisterArbitration(XSessionArbitrationData* data) {
 
     registrants[i].rgUsers = users_ptr;
   }
+
+  Uint64toXNKID(session_id_, &local_details_.xnkidArbitration);
+
+  local_details_.eState = XSESSION_STATE::REGISTRATION;
+
+  // Assert?
+  // local_details_.Nonce = data->session_nonce;
 
   return X_ERROR_SUCCESS;
 }
@@ -436,9 +632,17 @@ X_RESULT XSession::WriteStats(XSessionWriteStats* data) {
   return X_ERROR_SUCCESS;
 }
 
-X_RESULT XSession::StartSession(uint32_t flags) { return X_ERROR_SUCCESS; }
+X_RESULT XSession::StartSession(uint32_t flags) {
+  local_details_.eState = XSESSION_STATE::INGAME;
 
-X_RESULT XSession::EndSession() { return X_ERROR_SUCCESS; }
+  return X_ERROR_SUCCESS;
+}
+
+X_RESULT XSession::EndSession() {
+  local_details_.eState = XSESSION_STATE::REPORTING;
+
+  return X_ERROR_SUCCESS;
+}
 
 X_RESULT XSession::GetSessions(Memory* memory, XSessionSearch* search_data) {
   if (!search_data->results_buffer_size) {
@@ -450,7 +654,7 @@ X_RESULT XSession::GetSessions(Memory* memory, XSessionSearch* search_data) {
   const auto sessions = XLiveAPI::SessionSearch(search_data);
 
   const uint32_t session_count =
-      std::min<uint32_t>(search_data->num_results, (uint32_t)sessions.size());
+      std::min<int32_t>(search_data->num_results, (uint32_t)sessions.size());
 
   SEARCH_RESULTS* search_results_ptr =
       memory->TranslateVirtual<SEARCH_RESULTS*>(
@@ -545,9 +749,9 @@ void XSession::GetXnAddrFromSessionObject(SessionObjectJSON* session,
 void XSession::FillSessionSearchResult(
     const std::unique_ptr<SessionObjectJSON>& session,
     XSESSION_SEARCHRESULT* result) {
-  result->filled_priv_slots = session->FilledPrivateSlotsCount();
+  result->filled_private_slots = session->FilledPrivateSlotsCount();
   result->filled_public_slots = session->FilledPublicSlotsCount();
-  result->open_priv_slots = session->OpenPrivateSlotsCount();
+  result->open_private_slots = session->OpenPrivateSlotsCount();
   result->open_public_slots = session->OpenPublicSlotsCount();
 
   Uint64toXNKID(session->SessionID_UInt(), &result->info.sessionID);
@@ -583,6 +787,61 @@ void XSession::FillSessionProperties(uint32_t properties_count,
                                      XSESSION_SEARCHRESULT* result) {
   result->properties_count = properties_count;
   result->properties_ptr = properties_ptr;
+}
+
+void XSession::PrintSessionDetails() {
+  XELOGI(
+      "\n***************** PrintSessionDetails *****************\n"
+      "UserIndex: {}\n"
+      "GameType: {}\n"
+      "GameMode: {}\n"
+      "eState: {}\n"
+      "Nonce: {:016X}\n"
+      "Flags: {:08X}\n"
+      "MaxPrivateSlots: {}\n"
+      "MaxPublicSlots: {}\n"
+      "AvailablePrivateSlots: {}\n"
+      "AvailablePublicSlots: {}\n"
+      "ActualMemberCount: {}\n"
+      "ReturnedMemberCount: {}\n"
+      "xnkidArbitration: {:016X}\n",
+      local_details_.UserIndexHost.get(),
+      local_details_.GameType ? "Standard" : "Ranked",
+      local_details_.GameMode.get(),
+      static_cast<uint32_t>(local_details_.eState), local_details_.Nonce.get(),
+      local_details_.Flags.get(), local_details_.MaxPrivateSlots.get(),
+      local_details_.MaxPublicSlots.get(),
+      local_details_.AvailablePrivateSlots.get(),
+      local_details_.AvailablePublicSlots.get(),
+      local_details_.ActualMemberCount.get(),
+      local_details_.ReturnedMemberCount.get(),
+      local_details_.xnkidArbitration.as_uint64());
+
+  uint32_t index = 0;
+
+  for (const auto& [xuid, mamber] : local_members_) {
+    XELOGI(
+        "\n***************** LOCAL MEMBER {} *****************\n"
+        "Online XUID: {:016X}\n"
+        "UserIndex: {}\n"
+        "Flags: {:08X}\n"
+        "IsPrivate: {}\n",
+        index++, mamber.OnlineXUID.get(), mamber.UserIndex.get(),
+        mamber.Flags.get(), mamber.IsPrivate() ? "True" : "False");
+  }
+
+  index = 0;
+
+  for (const auto& [xuid, mamber] : remote_members_) {
+    XELOGI(
+        "\n***************** REMOTE MEMBER {} *****************\n"
+        "Online XUID: {:016X}\n"
+        "UserIndex: {}\n"
+        "Flags: {:08X}\n"
+        "IsPrivate: {}\n",
+        index++, mamber.OnlineXUID.get(), mamber.UserIndex.get(),
+        mamber.Flags.get(), mamber.IsPrivate() ? "True" : "False");
+  }
 }
 
 void XSession::PrintSessionType(SessionFlags flags) {
