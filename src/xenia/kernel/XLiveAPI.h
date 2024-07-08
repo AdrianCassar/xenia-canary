@@ -137,11 +137,11 @@ class XLiveAPI {
 
   static XONLINE_SERVICE_INFO GetServiceInfoById(uint32_t serviceId);
 
-  static void SessionJoinRemote(uint64_t sessionId,
-                                const std::vector<std::string> xuids);
+  static void SessionJoinRemote(
+      uint64_t sessionId, const std::unordered_map<uint64_t, bool> members);
 
   static void SessionLeaveRemote(uint64_t sessionId,
-                                 std::vector<std::string> xuids);
+                                 const std::vector<xe::be<uint64_t>> xuids);
 
   static std::unique_ptr<HTTPResponseObjectJSON> PraseResponse(
       response_data response);
