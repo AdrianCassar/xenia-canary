@@ -112,7 +112,7 @@ class XLiveAPI {
       uint64_t sessionId);
 
   static std::unique_ptr<SessionObjectJSON> XSessionMigration(
-      uint64_t sessionId);
+      uint64_t sessionId, XSessionMigate* data);
 
   static std::unique_ptr<ArbitrationObjectJSON> XSessionArbitration(
       uint64_t sessionId);

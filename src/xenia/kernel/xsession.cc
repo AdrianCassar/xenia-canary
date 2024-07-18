@@ -218,6 +218,8 @@ X_RESULT XSession::DeleteSession() {
 //
 // If there are no private slots available then the member will occupy a public
 // slot instead.
+//
+// TODO: Add player to recent player list, maybe backend responsibility.
 X_RESULT XSession::JoinSession(XSessionJoin* data) {
   const bool join_local = data->xuid_array_ptr == 0;
 
@@ -534,7 +536,7 @@ X_RESULT XSession::MigrateHost(XSessionMigate* data) {
     // return X_E_FAIL;
   }
 
-  const auto result = XLiveAPI::XSessionMigration(session_id_);
+  const auto result = XLiveAPI::XSessionMigration(session_id_, data);
 
   if (!result->SessionID_UInt()) {
     XELOGI("Session Migration Failed");
