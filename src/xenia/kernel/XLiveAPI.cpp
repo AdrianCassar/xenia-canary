@@ -708,13 +708,18 @@ const std::unique_ptr<SessionObjectJSON> XLiveAPI::SessionDetails(
 }
 
 std::unique_ptr<SessionObjectJSON> XLiveAPI::XSessionMigration(
-    uint64_t sessionId) {
+    uint64_t sessionId, XSessionMigate* data) {
   std::string endpoint = fmt::format("title/{:08X}/sessions/{:016x}/migrate",
                                      kernel_state()->title_id(), sessionId);
 
   Document doc;
   doc.SetObject();
 
+  const auto& xuid =
+      kernel_state()->xam_state()->GetUserProfile(data->user_index)->xuid();
+  const std::string xuid_str = fmt::format("{:016X}", xuid);
+
+  doc.AddMember("xuid", xuid_str, doc.GetAllocator());
   doc.AddMember("hostAddress", OnlineIP_str(), doc.GetAllocator());
   doc.AddMember("macAddress", mac_address_->to_string(), doc.GetAllocator());
   doc.AddMember("port", GetPlayerPort(), doc.GetAllocator());
@@ -874,9 +879,14 @@ void XLiveAPI::XSessionCreate(uint64_t sessionId, XSessionData* data) {
 
   const std::string mediaId_str = fmt::format("{:08X}", media_id);
 
+  const auto& xuid =
+      kernel_state()->xam_state()->GetUserProfile(data->user_index)->xuid();
+  const std::string xuid_str = fmt::format("{:016X}", xuid);
+
   SessionObjectJSON session = SessionObjectJSON();
 
   session.SessionID(sessionId_str);
+  session.XUID(xuid_str);
   session.Title(kernel_state()->emulator()->title_name());
   session.MediaID(mediaId_str);
   session.Version(kernel_state()->emulator()->title_version());
