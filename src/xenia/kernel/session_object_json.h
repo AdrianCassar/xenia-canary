@@ -37,6 +37,9 @@ class SessionObjectJSON : public BaseObjectJSON {
     return string_util::from_string<uint64_t>(sessionid_, true);
   }
 
+  const std::string& XUID() const { return xuid_; }
+  void XUID(const std::string& xuid) { xuid_ = xuid; }
+
   const std::string& Title() const { return title_; }
   void Title(const std::string& title) { title_ = title; }
 
@@ -111,6 +114,7 @@ class SessionObjectJSON : public BaseObjectJSON {
 
  private:
   std::string sessionid_;
+  std::string xuid_;
   std::string title_;
   std::string mediaId_;
   std::string version_;
