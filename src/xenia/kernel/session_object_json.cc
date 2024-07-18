@@ -37,6 +37,10 @@ bool SessionObjectJSON::Deserialize(const rapidjson::Value& obj) {
     SessionID(obj["id"].GetString());
   }
 
+  if (obj.HasMember("xuid")) {
+    XUID(obj["xuid"].GetString());
+  }
+
   if (obj.HasMember("title")) {
     Title(obj["title"].GetString());
   }
@@ -119,6 +123,9 @@ bool SessionObjectJSON::Serialize(
 
   writer->String("sessionId");
   writer->String(sessionid_);
+
+  writer->String("xuid");
+  writer->String(xuid_);
 
   writer->String("title");
   writer->String(title_);
