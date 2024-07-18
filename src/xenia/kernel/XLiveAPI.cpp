@@ -709,13 +709,28 @@ const std::unique_ptr<SessionObjectJSON> XLiveAPI::SessionDetails(
 }
 
 std::unique_ptr<SessionObjectJSON> XLiveAPI::XSessionMigration(
-    uint64_t sessionId) {
+    uint64_t sessionId, XSessionMigate* data) {
   std::string endpoint = fmt::format("title/{:08X}/sessions/{:016x}/migrate",
                                      kernel_state()->title_id(), sessionId);
 
   Document doc;
   doc.SetObject();
 
+  xe::be<uint64_t> xuid = 0;
+
+  if (kernel_state()->xam_state()->IsUserSignedIn(data->user_index)) {
+    const auto& profile =
+        kernel_state()->xam_state()->GetUserProfile(data->user_index);
+
+    xuid = profile->xuid();
+  } else {
+    XELOGI("New host is remote.");
+  }
+
+  const std::string xuid_str =
+      fmt::format("{:016X}", static_cast<uint64_t>(xuid));
+
+  doc.AddMember("xuid", xuid_str, doc.GetAllocator());
   doc.AddMember("hostAddress", OnlineIP_str(), doc.GetAllocator());
   doc.AddMember("macAddress", mac_address_->to_string(), doc.GetAllocator());
   doc.AddMember("port", GetPlayerPort(), doc.GetAllocator());
@@ -876,9 +891,22 @@ void XLiveAPI::XSessionCreate(uint64_t sessionId, XSessionData* data) {
   const std::string mediaId_str =
       fmt::format("{:08X}", static_cast<uint32_t>(media_id));
 
+  xe::be<uint64_t> xuid = 0;
+
+  if (kernel_state()->xam_state()->IsUserSignedIn(data->user_index)) {
+    const auto& profile =
+        kernel_state()->xam_state()->GetUserProfile(data->user_index);
+
+    xuid = profile->xuid();
+  }
+
+  const std::string xuid_str =
+      fmt::format("{:016X}", static_cast<uint64_t>(xuid));
+
   SessionObjectJSON session = SessionObjectJSON();
 
   session.SessionID(sessionId_str);
+  session.XUID(xuid_str);
   session.Title(kernel_state()->emulator()->title_name());
   session.MediaID(mediaId_str);
   session.Version(kernel_state()->emulator()->title_version());
