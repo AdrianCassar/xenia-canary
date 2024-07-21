@@ -124,26 +124,12 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
       // WideCharToMultiByte
       XELOGD("_XAccountGetUserInfo({:08X}, {:08X}) unimplemented", buffer_ptr,
              buffer_length);
-      xe::be<uint32_t> args_ptr =
-          *memory_->TranslateVirtual<xe::be<uint32_t>*>(buffer_ptr);
-
-      struct user_ptr {
-        xe::be<uint32_t> unkn_ptr;
-        xe::be<uint32_t> data_ptr;
-      };
-
-      user_ptr* user_info =
-          reinterpret_cast<user_ptr*>(memory_->TranslateVirtual(args_ptr));
-
-      // size = buffer_length
-      char* data = memory_->TranslateVirtual<char*>(user_info->data_ptr);
-      // strcpy(data, "example@gmail.com");
-      return X_E_SUCCESS;
+      return X_ERROR_FUNCTION_FAILED;
     }
     case 0x00050010: {
       XELOGD("XAccountGetUserInfo({:08X}, {:08X}) unimplemented", buffer_ptr,
              buffer_length);
-      return X_E_SUCCESS;
+      return X_ERROR_FUNCTION_FAILED;
     }
     case 0x00050036: {
       XELOGD("XOnlineQuerySearch({:08X}, {:08X}) unimplemented", buffer_ptr,
