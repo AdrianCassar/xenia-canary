@@ -242,12 +242,18 @@ int XSocket::Recv(uint8_t* buf, uint32_t buf_len, uint32_t flags) {
 
 int XSocket::RecvFrom(uint8_t* buf, uint32_t buf_len, uint32_t flags,
                       XSOCKADDR_IN* from, uint32_t* from_len) {
-  sockaddr sa = from->to_host();
+  sockaddr sa{};
+
+  if (from) {
+    sa = from->to_host();
+  }
 
   int ret = recvfrom(native_handle_, reinterpret_cast<char*>(buf), buf_len,
                      flags, from ? &sa : nullptr, (int*)from_len);
 
-  from->to_guest(&sa);
+  if (from) {
+    from->to_guest(&sa);
+  }
 
   return ret;
 }
