@@ -1714,7 +1714,7 @@ dword_result_t NetDll_recvfrom_entry(dword_t caller, dword_t socket_handle,
 
   uint32_t native_fromlen = fromlen_ptr ? fromlen_ptr.value() : 0;
   int ret = socket->RecvFrom(buf_ptr, buf_len, flags, from_ptr,
-                             fromlen_ptr ? &native_fromlen : 0);
+                             fromlen_ptr ? &native_fromlen : nullptr);
   if (fromlen_ptr) {
     *fromlen_ptr = native_fromlen;
   }
