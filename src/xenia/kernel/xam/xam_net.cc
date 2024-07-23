@@ -497,6 +497,10 @@ dword_result_t NetDll_WSASendTo_entry(
   assert(!overlapped);
   assert(!completion_routine);
 
+  if (overlapped) {
+    XELOGW("NetDll_WSASendTo: overlapped!");
+  }
+
   auto socket =
       kernel_state()->object_table()->LookupObject<XSocket>(socket_handle);
   if (!socket) {
@@ -524,9 +528,7 @@ dword_result_t NetDll_WSASendTo_entry(
       combined_buffer_mem.data(), combined_buffer_size, flags, to_ptr, to_len);
 
   if (result == -1) {
-    const uint32_t error_code = socket->GetLastWSAError();
-    XThread::SetLastError(error_code);
-    XELOGE("NetDll_WSASendTo failed: {:08X}", error_code);
+    XThread::SetLastError(socket->GetLastWSAError());
     return result;
   } else if (result != -1 && to_ptr && !cvars::log_mask_ips) {
     XELOGI("NetDll_WSASendTo: Send {} bytes to: {}.{}.{}.{}", result,
@@ -1033,6 +1035,8 @@ dword_result_t NetDll_XNetQosListen_entry(
 
   const uint64_t session_id = xe::byte_swap(sessionId->as_uint64());
 
+  assert_true(XSession::IsOnlinePeer(session_id));
+
   if (flags & LISTEN_SET_DATA) {
     std::vector<uint8_t> qos_buffer(data_size);
     memcpy(qos_buffer.data(), data, data_size);
@@ -1263,7 +1267,7 @@ DECLARE_XAM_EXPORT1(XampXAuthStartup, kNetworking, kStub);
 
 dword_result_t NetDll_XHttpStartup_entry(dword_t caller, dword_t reserved,
                                          dword_t reserved_ptr) {
-  return TRUE;
+  return 1;
 }
 DECLARE_XAM_EXPORT1(NetDll_XHttpStartup, kNetworking, kStub);
 
@@ -1316,7 +1320,7 @@ dword_result_t NetDll_XHttpSendRequest_entry(dword_t caller, dword_t hrequest,
   }
 
   XELOGI("Headers {}", request_headers);
-  return FALSE;
+  return false;
 }
 DECLARE_XAM_EXPORT1(NetDll_XHttpSendRequest, kNetworking, kStub);
 
@@ -1337,7 +1341,7 @@ dword_result_t NetDll_inet_addr_entry(lpstring_t addr_ptr) {
 }
 DECLARE_XAM_EXPORT1(NetDll_inet_addr, kNetworking, kImplemented);
 
-BOOL optEnable = TRUE;
+bool optEnable = true;
 dword_result_t NetDll_socket_entry(dword_t caller, dword_t af, dword_t type,
                                    dword_t protocol) {
   XSocket* socket = new XSocket(kernel_state());
