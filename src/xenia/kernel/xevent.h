@@ -43,6 +43,12 @@ class XEvent : public XObject {
   static object_ref<XEvent> Restore(KernelState* kernel_state,
                                     ByteStream* stream);
 
+  uint64_t XEvent::native_handle() const {
+    const uint64_t native_handle =
+        reinterpret_cast<uint64_t>(event_->native_handle());
+    return native_handle;
+  }
+
  protected:
   xe::threading::WaitHandle* GetWaitHandle() override { return event_.get(); }
 
