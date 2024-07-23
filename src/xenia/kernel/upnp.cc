@@ -286,7 +286,7 @@ uint16_t UPnP::GetMappedConnectPort(uint16_t external_port) {
   }
 
   if (cvars::logging) {
-    XELOGW("No mapped connect port found for {}!", external_port);
+    XELOGI("Using connect port {}", external_port);
   }
 
   return external_port;
@@ -306,7 +306,7 @@ uint16_t UPnP::GetMappedBindPort(uint16_t external_port) {
   }
 
   if (cvars::logging) {
-    XELOGW("No mapped bind port found for {}!", external_port);
+    XELOGI("Using bind port {}", external_port);
   }
 
   return external_port;
