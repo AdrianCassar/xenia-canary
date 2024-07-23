@@ -145,6 +145,9 @@ class XSocket : public XObject {
   int SendTo(uint8_t* buf, uint32_t buf_len, uint32_t flags, XSOCKADDR_IN* to,
              uint32_t to_len);
 
+  int WSAEventSelect(uint64_t socket_handle, uint64_t event_handle,
+                     uint32_t flags);
+
   int WSARecvFrom(XWSABUF* buffers, uint32_t num_buffers,
                   xe::be<uint32_t>* num_bytes_recv_ptr,
                   xe::be<uint32_t>* flags_ptr, XSOCKADDR_IN* from_ptr,
