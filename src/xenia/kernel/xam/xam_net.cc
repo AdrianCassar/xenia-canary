@@ -475,7 +475,7 @@ dword_result_t NetDll_WSAGetOverlappedResult_entry(
       kernel_state()->object_table()->LookupObject<XSocket>(socket_handle);
   if (!socket) {
     XThread::SetLastError(uint32_t(X_WSAError::X_WSAENOTSOCK));
-    return 0;
+    return -1;
   }
 
   bool ret = socket->WSAGetOverlappedResult(overlapped_ptr, bytes_transferred,
