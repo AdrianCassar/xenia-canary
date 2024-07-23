@@ -512,6 +512,12 @@ int XSocket::SendTo(uint8_t* buf, uint32_t buf_len, uint32_t flags,
                 to ? &to->to_host() : nullptr, to_len);
 }
 
+int XSocket::WSAEventSelect(uint64_t socket_handle, uint64_t event_handle,
+                            uint32_t flags) {
+  return ::WSAEventSelect(socket_handle, reinterpret_cast<HANDLE>(event_handle),
+                          flags);
+}
+
 bool XSocket::QueuePacket(uint32_t src_ip, uint16_t src_port,
                           const uint8_t* buf, size_t len) {
   packet* pkt = reinterpret_cast<packet*>(new uint8_t[sizeof(packet) + len]);
