@@ -70,8 +70,23 @@ bool LeaderboardObjectJSON::Serialize(
           writer->String("value");
           writer->Double(stat.data.f64);
         } break;
+        case X_USER_DATA_TYPE::WSTRING: {
+          XELOGW("Unimplemented statistic type: WSTRING");
+        } break;
+        case X_USER_DATA_TYPE::FLOAT: {
+          XELOGW("Unimplemented statistic type: FLOAT");
+        } break;
+        case X_USER_DATA_TYPE::BINARY: {
+          XELOGW("Unimplemented statistic type: BINARY");
+        } break;
+        case X_USER_DATA_TYPE::DATETIME: {
+          XELOGW("Unimplemented statistic type: DATETIME");
+        } break;
+        case X_USER_DATA_TYPE::UNSET: {
+          XELOGW("Unimplemented statistic type: UNSET");
+        } break;
         default:
-          XELOGW("Unimplemented statistic type for write {}",
+          XELOGW("Unsupported statistic type for write {}",
                  static_cast<uint32_t>(stat.data.type));
           break;
       }
