@@ -43,7 +43,7 @@ bool LeaderboardObjectJSON::Serialize(
     for (uint32_t i = 0; i < user_property.properties_count; i++) {
       const xam::XUSER_PROPERTY* statistics_ptr =
           kernel_state()->memory()->TranslateVirtual<xam::XUSER_PROPERTY*>(
-              user_property.properties_guest_address);
+              user_property.properties_ptr);
 
       const xam::XUSER_PROPERTY& stat = statistics_ptr[i];
 
