@@ -625,6 +625,22 @@ X_RESULT XSession::ModifySkill(XSessionModifySkill* data) {
 }
 
 X_RESULT XSession::WriteStats(XSessionWriteStats* data) {
+  if (!HasSessionFlag(static_cast<SessionFlags>((uint32_t)local_details_.Flags),
+                      STATS)) {
+    XELOGW("Session does not support stats.");
+    return X_ERROR_FUNCTION_FAILED;
+  }
+
+  if (local_details_.eState != XSESSION_STATE::INGAME) {
+    XELOGW("Writing stats outside of gameplay.");
+    return X_ERROR_FUNCTION_FAILED;
+  }
+
+  if (!data->number_of_leaderboards) {
+    XELOGW("No leaderboard stats to write.");
+    return X_ERROR_SUCCESS;
+  }
+
   XSessionViewProperties* leaderboard =
       kernel_state_->memory()->TranslateVirtual<XSessionViewProperties*>(
           data->leaderboards_ptr);
