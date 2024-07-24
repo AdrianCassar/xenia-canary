@@ -234,7 +234,7 @@ struct XSessionModifySkill {
 struct XSessionViewProperties {
   xe::be<uint32_t> leaderboard_id;
   xe::be<uint32_t> properties_count;
-  xe::be<uint32_t> properties_guest_address;
+  xe::be<uint32_t> properties_ptr;
 };
 
 struct XSessionJoin {
