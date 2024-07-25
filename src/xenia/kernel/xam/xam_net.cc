@@ -783,7 +783,7 @@ dword_result_t NetDll_XNetXnAddrToInAddr_entry(dword_t caller,
   if (memcmp(XLiveAPI::mac_address_, xn_addr->abEnet, sizeof(MacAddress)) ==
       0) {
     XELOGI("Resolving XNetXnAddrToInAddr to LOOPBACK!");
-    in_addr->S_un.S_addr = LOOPBACK;
+    in_addr->S_un.S_addr = xe::byte_swap(LOOPBACK);
 
     return X_ERROR_SUCCESS;
   }
