@@ -17,6 +17,7 @@ To get started with netplay read [config setup](https://github.com/AdrianCassar/
 * [Netplay Compatibility](https://github.com/AdrianCassar/xenia-canary/wiki/Netplay-Compatibility)
 * [Testing Procedure](https://github.com/AdrianCassar/xenia-canary/wiki/Testing-Procedure)
 * [Config Setup](https://github.com/AdrianCassar/xenia-canary/wiki/Config-Setup)
+* [Systemlink](https://github.com/AdrianCassar/xenia-canary/wiki/Systemlink)
 * [FAQ](https://github.com/AdrianCassar/xenia-canary/wiki/FAQ)
 
 ### Netplay Builds:
