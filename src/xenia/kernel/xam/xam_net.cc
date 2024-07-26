@@ -1237,11 +1237,10 @@ dword_result_t NetDll_XNetQosLookup_entry(
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetQosLookup, kNetworking, kImplemented);
 
-dword_result_t NetDll_XNetQosGetListenStats_entry(dword_t caller, dword_t unk,
+dword_result_t NetDll_XNetQosGetListenStats_entry(dword_t caller,
                                                   dword_t pxnkid,
                                                   lpdword_t pQosListenStats) {
-  XELOGI("XNetQosGetListenStats({:08X}, {:08X}, {:08X}, {:08X})",
-         caller.value(), unk.value(), caller.value(), unk.value(),
+  XELOGI("XNetQosGetListenStats({:08X}, {:08X}, {:08X})", caller.value(),
          pxnkid.value(), pQosListenStats.guest_address());
 
   if (pQosListenStats) {
