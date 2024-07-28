@@ -146,18 +146,15 @@ struct XSessionModify {
   xe::be<uint32_t> flags;
   xe::be<uint32_t> maxPublicSlots;
   xe::be<uint32_t> maxPrivateSlots;
-  xe::be<uint32_t> xoverlapped;
 };
 
 struct XSessionStart {
   xe::be<uint32_t> obj_ptr;
   xe::be<uint32_t> flags;
-  xe::be<uint32_t> xoverlapped;
 };
 
 struct XSessionEnd {
   xe::be<uint32_t> obj_ptr;
-  xe::be<uint32_t> xoverlapped;
 };
 
 struct XSessionSearch {
@@ -170,7 +167,11 @@ struct XSessionSearch {
   xe::be<uint32_t> ctx_ptr;
   xe::be<uint32_t> results_buffer_size;
   xe::be<uint32_t> search_results_ptr;
-  xe::be<uint32_t> xoverlapped_ptr;
+};
+
+struct XSessionSearchEx {
+  XSessionSearch session_search;
+  xe::be<uint32_t> num_users;
 };
 
 struct XSessionSearchID {
@@ -178,21 +179,18 @@ struct XSessionSearchID {
   XNKID session_id;
   xe::be<uint32_t> results_buffer_size;
   xe::be<uint32_t> search_results_ptr;
-  xe::be<uint32_t> xoverlapped_ptr;
 };
 
 struct XSessionDetails {
   xe::be<uint32_t> obj_ptr;
   xe::be<uint32_t> details_buffer_size;
   xe::be<uint32_t> session_details_ptr;
-  xe::be<uint32_t> pXOverlapped;
 };
 
 struct XSessionMigate {
   xe::be<uint32_t> obj_ptr;
   xe::be<uint32_t> session_info_ptr;
   xe::be<uint32_t> user_index;
-  xe::be<uint32_t> pXOverlapped;
 };
 
 struct XSessionArbitrationData {
@@ -202,7 +200,6 @@ struct XSessionArbitrationData {
   xe::be<uint32_t> value_const;  // 300
   xe::be<uint32_t> results_buffer_size;
   xe::be<uint32_t> results_ptr;
-  xe::be<uint32_t> xoverlapped_ptr;
 };
 
 struct XSessionData {
@@ -221,14 +218,12 @@ struct XSessionWriteStats {
   xe::be<uint64_t> xuid;
   xe::be<uint32_t> number_of_leaderboards;
   xe::be<uint32_t> leaderboards_ptr;
-  xe::be<uint32_t> xoverlapped;
 };
 
 struct XSessionModifySkill {
   xe::be<uint32_t> obj_ptr;
   xe::be<uint32_t> array_count;
   xe::be<uint32_t> xuid_array_ptr;
-  xe::be<uint32_t> xoverlapped;
 };
 
 struct XSessionViewProperties {
