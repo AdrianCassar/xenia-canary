@@ -143,12 +143,11 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
 
       return XSession::GetSessions(memory_, data);
     }
-
     case 0x000B001C: {
       XELOGI("XSessionSearchEx");
-      XSessionSearch* data = reinterpret_cast<XSessionSearch*>(buffer);
+      XSessionSearchEx* data = reinterpret_cast<XSessionSearchEx*>(buffer);
 
-      return XSession::GetSessions(memory_, data);
+      return XSession::GetSessions(memory_, &data->session_search);
     }
 
     case 0x000B001D: {
@@ -361,10 +360,10 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
 
       XELOGI(
           "XSessionArbitrationRegister({:08X}, {:08X}, {:08X}, {:08X}, {:08X}, "
-          "{:08X}, {:08X});",
+          "{:08X});",
           data->obj_ptr.get(), data->flags.get(), data->session_nonce.get(),
           data->value_const.get(), data->results_buffer_size.get(),
-          data->results_ptr.get(), data->xoverlapped_ptr.get());
+          data->results_ptr.get());
 
       uint8_t* obj_ptr = memory_->TranslateVirtual<uint8_t*>(data->obj_ptr);
 
@@ -568,12 +567,9 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
     case 0x000B0025: {
       XSessionWriteStats* data = reinterpret_cast<XSessionWriteStats*>(buffer);
 
-      XELOGI(
-          "XSessionWriteStats({:08X}, {:08X}, {:016X}, {:08X}, {:08X}, "
-          "{:08X});",
-          data->obj_ptr.get(), data->unk_value.get(), data->xuid.get(),
-          data->number_of_leaderboards.get(), data->leaderboards_ptr.get(),
-          data->xoverlapped.get());
+      XELOGI("XSessionWriteStats({:08X}, {:08X}, {:016X}, {:08X}, {:08X}",
+             data->obj_ptr.get(), data->unk_value.get(), data->xuid.get(),
+             data->number_of_leaderboards.get(), data->leaderboards_ptr.get());
 
       uint8_t* obj_ptr = memory_->TranslateVirtual<uint8_t*>(data->obj_ptr);
 
