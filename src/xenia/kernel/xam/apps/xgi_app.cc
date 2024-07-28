@@ -70,7 +70,6 @@ struct XUSER_STATS_SPEC {
 struct XUSER_STATS_RESET {
   xe::be<uint32_t> user_index;
   xe::be<uint32_t> view_id;
-  xe::be<uint32_t> xoverlapped_ptr;
 };
 
 XgiApp::XgiApp(KernelState* kernel_state) : App(kernel_state, 0xFB) {}
@@ -105,12 +104,11 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
 
       return XSession::GetSessions(memory_, data);
     }
-
     case 0x000B001C: {
       XELOGI("XSessionSearchEx");
-      XSessionSearch* data = reinterpret_cast<XSessionSearch*>(buffer);
+      XSessionSearchEx* data = reinterpret_cast<XSessionSearchEx*>(buffer);
 
-      return XSession::GetSessions(memory_, data);
+      return XSession::GetSessions(memory_, &data->session_search);
     }
 
     case 0x000B001D: {
@@ -321,9 +319,9 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
 
       XELOGI(
           "XSessionArbitrationRegister({:08X}, {:08X}, {:08X}, {:08X}, {:08X}, "
-          "{:08X}, {:08X});",
+          "{:08X});",
           data->obj_ptr, data->flags, data->session_nonce, data->value_const,
-          data->results_buffer_size, data->results_ptr, data->xoverlapped_ptr);
+          data->results_buffer_size, data->results_ptr);
 
       uint8_t* obj_ptr = memory_->TranslateVirtual<uint8_t*>(data->obj_ptr);
 
@@ -531,12 +529,9 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
     case 0x000B0025: {
       XSessionWriteStats* data = reinterpret_cast<XSessionWriteStats*>(buffer);
 
-      XELOGI(
-          "XSessionWriteStats({:08X}, {:08X}, {:016X}, {:08X}, {:08X}, "
-          "{:08X});",
-          data->obj_ptr, data->unk_value, data->xuid,
-          data->number_of_leaderboards, data->leaderboards_ptr,
-          data->xoverlapped);
+      XELOGI("XSessionWriteStats({:08X}, {:08X}, {:016X}, {:08X}, {:08X});",
+             data->obj_ptr, data->unk_value, data->xuid,
+             data->number_of_leaderboards, data->leaderboards_ptr);
 
       uint8_t* obj_ptr = memory_->TranslateVirtual<uint8_t*>(data->obj_ptr);
 
