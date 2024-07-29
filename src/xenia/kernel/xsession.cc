@@ -662,14 +662,15 @@ X_RESULT XSession::EndSession() {
   return X_ERROR_SUCCESS;
 }
 
-X_RESULT XSession::GetSessions(Memory* memory, XSessionSearch* search_data) {
+X_RESULT XSession::GetSessions(Memory* memory, XSessionSearch* search_data,
+                               uint32_t num_users) {
   if (!search_data->results_buffer_size) {
     search_data->results_buffer_size =
         sizeof(XSESSION_SEARCHRESULT) * search_data->num_results;
     return ERROR_INSUFFICIENT_BUFFER;
   }
 
-  const auto sessions = XLiveAPI::SessionSearch(search_data);
+  const auto sessions = XLiveAPI::SessionSearch(search_data, num_users);
 
   const uint32_t session_count =
       std::min<int32_t>(search_data->num_results, (uint32_t)sessions.size());
@@ -703,7 +704,7 @@ X_RESULT XSession::GetSessions(Memory* memory, XSessionSearch* search_data) {
 }
 
 X_RESULT XSession::GetSessionByID(Memory* memory,
-                                  XSessionSearchID* search_data) {
+                                  XSessionSearchByID* search_data) {
   if (!search_data->results_buffer_size) {
     search_data->results_buffer_size = sizeof(XSESSION_SEARCHRESULT);
     return ERROR_INSUFFICIENT_BUFFER;

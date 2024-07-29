@@ -103,15 +103,23 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
       XELOGI("XSessionSearch");
       XSessionSearch* data = reinterpret_cast<XSessionSearch*>(buffer);
 
-      return XSession::GetSessions(memory_, data);
+      uint32_t num_users = 0;
+
+      for (uint32_t i = 0; i < MAX_USERS; i++) {
+        if (kernel_state()->xam_state()->IsUserSignedIn(i)) {
+          num_users++;
+        }
+      }
+
+      return XSession::GetSessions(memory_, data, num_users);
     }
     case 0x000B001C: {
       XELOGI("XSessionSearchEx");
       XSessionSearchEx* data = reinterpret_cast<XSessionSearchEx*>(buffer);
 
-      return XSession::GetSessions(memory_, &data->session_search);
+      return XSession::GetSessions(memory_, &data->session_search,
+                                   data->num_users);
     }
-
     case 0x000B001D: {
       XSessionDetails* data = reinterpret_cast<XSessionDetails*>(buffer);
 
@@ -547,9 +555,9 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
       return session->WriteStats(data);
     }
     case 0x000B001B: {
-      XELOGI("XSessionSearchID");
+      XELOGI("XSessionSearchByID");
 
-      XSessionSearchID* data = reinterpret_cast<XSessionSearchID*>(buffer);
+      XSessionSearchByID* data = reinterpret_cast<XSessionSearchByID*>(buffer);
 
       return XSession::GetSessionByID(memory_, data);
     }
