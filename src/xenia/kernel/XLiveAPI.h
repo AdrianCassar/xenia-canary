@@ -100,7 +100,7 @@ class XLiveAPI {
   static void SessionModify(uint64_t sessionId, XSessionModify* data);
 
   static const std::vector<std::unique_ptr<SessionObjectJSON>> SessionSearch(
-      XSessionSearch* data);
+      XSessionSearch* data, uint32_t num_users);
 
   static void SessionContextSet(uint64_t session_id,
                                 std::map<uint32_t, uint32_t> contexts);
