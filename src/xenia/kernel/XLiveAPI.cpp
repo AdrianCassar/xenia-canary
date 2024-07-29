@@ -633,7 +633,7 @@ void XLiveAPI::SessionModify(uint64_t sessionId, XSessionModify* data) {
 }
 
 const std::vector<std::unique_ptr<SessionObjectJSON>> XLiveAPI::SessionSearch(
-    XSessionSearch* data) {
+    XSessionSearch* data, uint32_t num_users) {
   std::string endpoint =
       fmt::format("title/{:08X}/sessions/search", kernel_state()->title_id());
 
@@ -642,6 +642,7 @@ const std::vector<std::unique_ptr<SessionObjectJSON>> XLiveAPI::SessionSearch(
 
   doc.AddMember("searchIndex", data->proc_index, doc.GetAllocator());
   doc.AddMember("resultsCount", data->num_results, doc.GetAllocator());
+  doc.AddMember("numUsers", num_users, doc.GetAllocator());
 
   rapidjson::StringBuffer buffer;
   PrettyWriter<rapidjson::StringBuffer> writer(buffer);
