@@ -174,7 +174,7 @@ struct XSessionSearchEx {
   xe::be<uint32_t> num_users;
 };
 
-struct XSessionSearchID {
+struct XSessionSearchByID {
   xe::be<uint32_t> user_index;
   XNKID session_id;
   xe::be<uint32_t> results_buffer_size;
@@ -318,8 +318,10 @@ class XSession : public XObject {
   X_RESULT StartSession(uint32_t flags);
   X_RESULT EndSession();
 
-  static X_RESULT GetSessions(Memory* memory, XSessionSearch* search_data);
-  static X_RESULT GetSessionByID(Memory* memory, XSessionSearchID* search_data);
+  static X_RESULT GetSessions(Memory* memory, XSessionSearch* search_data,
+                              uint32_t num_users);
+  static X_RESULT GetSessionByID(Memory* memory,
+                                 XSessionSearchByID* search_data);
 
   static void GenerateIdentityExchangeKey(XNKEY* key);
 
