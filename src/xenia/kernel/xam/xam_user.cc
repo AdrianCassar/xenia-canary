@@ -23,6 +23,8 @@
 
 DECLARE_int32(user_language);
 
+DECLARE_int32(user_country);
+
 DECLARE_bool(offline_mode);
 
 namespace xe {
@@ -514,6 +516,16 @@ dword_result_t XamUserGetMembershipTier_entry(dword_t user_index) {
   return 6 /* 6 appears to be Gold */;
 }
 DECLARE_XAM_EXPORT1(XamUserGetMembershipTier, kUserProfiles, kStub);
+
+dword_result_t XamUserGetOnlineCountryFromXUID_entry(qword_t xuid) {
+  return cvars::user_country;
+}
+DECLARE_XAM_EXPORT1(XamUserGetOnlineCountryFromXUID, kUserProfiles, kStub);
+
+dword_result_t XamUserGetMembershipTierFromXUID_entry(qword_t xuid) {
+  return 6 /* 6 appears to be Gold */;
+}
+DECLARE_XAM_EXPORT1(XamUserGetMembershipTierFromXUID, kUserProfiles, kStub);
 
 dword_result_t XamUserAreUsersFriends_entry(dword_t user_index, dword_t unk1,
                                             dword_t unk2, lpdword_t out_value,
