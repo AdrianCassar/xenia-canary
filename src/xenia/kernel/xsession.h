@@ -323,12 +323,23 @@ class XSession : public XObject {
   static X_RESULT GetSessionByID(Memory* memory,
                                  XSessionSearchByID* search_data);
 
-  static void GenerateIdentityExchangeKey(XNKEY* key);
-
   static constexpr uint8_t XNKID_ONLINE = 0xAE;
   static constexpr uint8_t XNKID_SYSTEM_LINK = 0x00;
 
   // static constexpr uint32_t ERROR_SESSION_WRONG_STATE = 0x80155206;
+
+  static void GenerateIdentityExchangeKey(XNKEY* key) {
+    for (uint8_t i = 0; i < sizeof(XNKEY); i++) {
+      key->ab[i] = i;
+    }
+  }
+
+  static const uint64_t GenerateSessionId(uint8_t mask) {
+    std::random_device rd;
+    std::uniform_int_distribution<uint64_t> dist(0, -1);
+
+    return ((uint64_t)mask << 56) | (dist(rd) & 0x0000FFFFFFFFFFFF);
+  }
 
   static const bool IsOnlinePeer(uint64_t session_id) {
     return ((session_id >> 56) & 0xFF) == XNKID_ONLINE;
@@ -336,6 +347,17 @@ class XSession : public XObject {
 
   static const bool IsSystemlink(uint64_t session_id) {
     return ((session_id >> 56) & 0xFF) == XNKID_SYSTEM_LINK;
+  }
+
+  static const bool IsValidXKNID(uint64_t session_id) {
+    if (!XSession::IsOnlinePeer(session_id) &&
+        !XSession::IsSystemlink(session_id)) {
+      assert_always();
+
+      return false;
+    }
+
+    return true;
   }
 
   const bool IsMemberLocallySignedIn(uint64_t xuid, uint32_t user_index) const {
@@ -396,7 +418,6 @@ class XSession : public XObject {
   }
 
  private:
-  uint64_t GenerateSessionId(uint8_t mask);
   void PrintSessionDetails();
   void PrintSessionType(SessionFlags flags);
 
