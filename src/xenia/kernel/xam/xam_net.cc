@@ -1035,7 +1035,7 @@ dword_result_t NetDll_XNetQosListen_entry(
 
   const uint64_t session_id = xe::byte_swap(sessionId->as_uint64());
 
-  assert_true(XSession::IsOnlinePeer(session_id));
+  XSession::IsValidXKNID(session_id);
 
   if (flags & LISTEN_SET_DATA) {
     std::vector<uint8_t> qos_buffer(data_size);
@@ -1881,10 +1881,15 @@ dword_result_t NetDll_getsockname_entry(dword_t caller, dword_t socket_handle,
 }
 DECLARE_XAM_EXPORT1(NetDll_getsockname, kNetworking, kImplemented);
 
-dword_result_t NetDll_XNetCreateKey_entry(dword_t caller, lpdword_t key_id,
-                                          lpdword_t exchange_key) {
-  kernel_memory()->Fill(key_id.guest_address(), 8, 0xBE);
-  kernel_memory()->Fill(exchange_key.guest_address(), 16, 0xBE);
+dword_result_t NetDll_XNetCreateKey_entry(dword_t caller,
+                                          pointer_t<XNKID> session_key,
+                                          pointer_t<XNKEY> exchange_key) {
+  const xe::be<uint64_t> xnkid =
+      XSession::GenerateSessionId(XSession::XNKID_SYSTEM_LINK);
+  memcpy(session_key->ab, &xnkid, sizeof(XNKID));
+
+  XSession::GenerateIdentityExchangeKey(exchange_key);
+
   return 0;
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetCreateKey, kNetworking, kStub);
