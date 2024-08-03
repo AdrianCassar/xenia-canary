@@ -208,6 +208,7 @@ typedef struct {
 XNetStartupParams xnet_startup_params{};
 
 uint16_t systemlink_port = 5000;
+xe::be<uint64_t> systemlink_id = 0;
 
 void Update_XNetStartupParams(XNetStartupParams& dest,
                               const XNetStartupParams& src) {
@@ -828,15 +829,27 @@ dword_result_t NetDll_XNetInAddrToXnAddr_entry(dword_t caller, dword_t in_addr,
       XLiveAPI::macAddressCache.end()) {
     const auto player = XLiveAPI::FindPlayer(ip_to_string(xn_addr->inaOnline));
 
-    XLiveAPI::sessionIdCache.emplace(xn_addr->inaOnline.s_addr,
-                                     player->SessionID());
+    // FIXME
+    if (!systemlink_id) {
+      XSession::IsValidXKNID(player->SessionID());
 
-    XLiveAPI::macAddressCache.emplace(xn_addr->inaOnline.s_addr,
-                                      player->MacAddress());
+      XLiveAPI::sessionIdCache.emplace(xn_addr->inaOnline.s_addr,
+                                       player->SessionID());
+
+      XLiveAPI::macAddressCache.emplace(xn_addr->inaOnline.s_addr,
+                                        player->MacAddress());
+    } else {
+      // Remote mac missing for systemlink!
+    }
   }
 
-  MacAddress mac =
-      MacAddress(XLiveAPI::macAddressCache[xn_addr->inaOnline.s_addr]);
+  const uint64_t remote_mac =
+      XLiveAPI::macAddressCache[xn_addr->inaOnline.s_addr];
+  MacAddress mac = MacAddress(static_cast<uint64_t>(0));
+
+  if (remote_mac) {
+    mac = MacAddress(XLiveAPI::macAddressCache[xn_addr->inaOnline.s_addr]);
+  }
 
   std::memcpy(xn_addr->abEnet, mac.raw(), sizeof(MacAddress));
   std::memcpy(xn_addr->abOnline, mac.raw(), sizeof(MacAddress));
@@ -845,8 +858,15 @@ dword_result_t NetDll_XNetInAddrToXnAddr_entry(dword_t caller, dword_t in_addr,
     uint64_t* sessionId_ptr =
         kernel_memory()->TranslateVirtual<uint64_t*>(xid_ptr);
 
-    *sessionId_ptr =
-        xe::byte_swap(XLiveAPI::sessionIdCache[xn_addr->inaOnline.s_addr]);
+    // FIXME
+    if (systemlink_id) {
+      *sessionId_ptr = systemlink_id;
+    } else {
+      *sessionId_ptr =
+          xe::byte_swap(XLiveAPI::sessionIdCache[xn_addr->inaOnline.s_addr]);
+    }
+
+    XSession::IsValidXKNID(xe::byte_swap(*sessionId_ptr));
   }
 
   return X_STATUS_SUCCESS;
@@ -1897,12 +1917,16 @@ DECLARE_XAM_EXPORT1(NetDll_XNetCreateKey, kNetworking, kStub);
 dword_result_t NetDll_XNetRegisterKey_entry(dword_t caller,
                                             pointer_t<XNKID> session_key,
                                             pointer_t<XNKEY> exchange_key) {
+  // Very hacky needs fixing!
+  systemlink_id = session_key->as_uint64();
   return 0;
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetRegisterKey, kNetworking, kStub);
 
 dword_result_t NetDll_XNetUnregisterKey_entry(dword_t caller,
                                               pointer_t<XNKID> session_key) {
+  systemlink_id = 0;
+
   return 0;
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetUnregisterKey, kNetworking, kStub);
