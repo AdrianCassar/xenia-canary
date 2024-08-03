@@ -73,6 +73,9 @@ const std::string ip_to_string(sockaddr_in sockaddr);
 const sockaddr_in ip_to_sockaddr(std::string ip_str);
 const in_addr ip_to_in_addr(std::string ip_str);
 
+void* GetOptValueWithProperEndianness(void* ptr, uint32_t optValue,
+                                      uint32_t length);
+
 }  // namespace kernel
 }  // namespace xe
 

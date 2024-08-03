@@ -158,31 +158,16 @@ X_STATUS XSocket::SetOption(uint32_t level, uint32_t optname, void* optval_ptr,
     }
   }
 
-  // Because values provided in optval_ptr are in BE we must to somehow save
-  // them in LE.
-  void* optval_ptr_le = calloc(1, optlen);
-  switch (optlen) {
-    case 1:
-      xe::copy_and_swap<uint8_t>((uint8_t*)optval_ptr_le, (uint8_t*)optval_ptr,
-                                 1);
-      break;
-    case 4:
-      xe::copy_and_swap<uint32_t>((uint32_t*)optval_ptr_le,
-                                  (uint32_t*)optval_ptr, 1);
-      break;
-    case 8:
-      xe::copy_and_swap<uint64_t>((uint64_t*)optval_ptr_le,
-                                  (uint64_t*)optval_ptr, 1);
-      break;
-    default:
-      XELOGE("XSocket::SetOption - Unhandled optlen: {}", optlen);
-      break;
-  }
+  void* proper_ptr =
+      GetOptValueWithProperEndianness(optval_ptr, optname, optlen);
 
   int ret = setsockopt(native_handle_, native_level, native_optname,
-                       static_cast<const char*>(optval_ptr_le), optlen);
+                       static_cast<const char*>(proper_ptr), optlen);
 
-  free(optval_ptr_le);
+  // Cheezy way to check if we created some additional allocation.
+  if (optval_ptr != proper_ptr) {
+    free(proper_ptr);
+  }
 
   if (ret < 0) {
     // TODO: WSAGetLastError()
