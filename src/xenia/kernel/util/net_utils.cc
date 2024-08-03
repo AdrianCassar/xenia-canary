@@ -8,6 +8,7 @@
  */
 
 #include "xenia/kernel/util/net_utils.h"
+#include "xenia/base/logging.h"
 
 namespace xe {
 namespace kernel {
@@ -127,6 +128,47 @@ const in_addr ip_to_in_addr(std::string ip_str) {
   inet_pton(AF_INET, ip_str.c_str(), &addr.s_addr);
 
   return addr;
+}
+
+void* GetOptValueWithProperEndianness(void* ptr, uint32_t optValue,
+                                      uint32_t length) {
+  if (length == 1) {
+    // No need to do anything as it is 1 byte long anyway
+    return ptr;
+  }
+
+  // Check if endianness matches for byte type options that use 4 bytes
+  // 494707E4 Uses SO_BROADCAST but writes only 1 byte instead of 4 which causes
+  // it to be in correct endianness from start.
+
+  // Check for all possible BOOLEAN type options
+  if (optValue == 0x0004 || optValue == (int)(~0x0004) || optValue == 0x0020 ||
+      optValue == (int)(~0x0080)) {
+    // Check if we have correct endianness out of the box
+    uint32_t* value = reinterpret_cast<uint32_t*>(ptr);
+    if (*value == 1) {
+      return ptr;
+    }
+  }
+
+  void* optval_ptr_le = calloc(1, length);
+
+  switch (length) {
+    case 4:
+      xe::copy_and_swap((uint32_t*)optval_ptr_le, (uint32_t*)ptr, 1);
+      break;
+    case 8:
+      xe::copy_and_swap((uint64_t*)optval_ptr_le, (uint64_t*)ptr, 1);
+      break;
+    default:
+      XELOGE(
+          "GetOptValueWithProperEndianness - Unhandled length: {} for option: "
+          "{:08X}",
+          length, optValue);
+      break;
+  }
+
+  return optval_ptr_le;
 }
 
 }  // namespace kernel
