@@ -351,7 +351,8 @@ class XSession : public XObject {
 
   static const bool IsValidXKNID(uint64_t session_id) {
     if (!XSession::IsOnlinePeer(session_id) &&
-        !XSession::IsSystemlink(session_id)) {
+            !XSession::IsSystemlink(session_id) ||
+        session_id == 0) {
       assert_always();
 
       return false;
