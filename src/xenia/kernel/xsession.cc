@@ -91,6 +91,10 @@ X_RESULT XSession::CreateSession(uint8_t user_index, uint8_t public_slots,
   contexts_.insert(user_profile->contexts_.cbegin(),
                    user_profile->contexts_.cend());
 
+  if (IsSystemlinkFlags(flags)) {
+    is_systemlink_ = true;
+  }
+
   if (flags == STATS) {
     CreateStatsSession(SessionInfo_ptr, Nonce_ptr, user_index, public_slots,
                        private_slots, flags);
@@ -117,7 +121,7 @@ X_RESULT XSession::CreateSession(uint8_t user_index, uint8_t public_slots,
   local_details_.xnkidArbitration = XNKID{};
   local_details_.SessionMembers_ptr = 0;
 
-  state |= STATE_FLAGS_CREATED;
+  state_ |= STATE_FLAGS_CREATED;
 
   return X_ERROR_SUCCESS;
 }
@@ -126,7 +130,7 @@ X_RESULT XSession::CreateHostSession(XSESSION_INFO* session_info,
                                      uint64_t* nonce_ptr, uint8_t user_index,
                                      uint8_t public_slots,
                                      uint8_t private_slots, uint32_t flags) {
-  state |= STATE_FLAGS_HOST;
+  state_ |= STATE_FLAGS_HOST;
 
   local_details_.UserIndexHost = user_index;
 
@@ -143,15 +147,32 @@ X_RESULT XSession::CreateHostSession(XSESSION_INFO* session_info,
   session_data->num_slots_public = public_slots;
   session_data->num_slots_private = private_slots;
   session_data->flags = flags;
-  session_id_ = GenerateSessionId(XNKID_ONLINE);
-  Uint64toXNKID(session_id_, &session_info->sessionID);
 
-  XLiveAPI::XSessionCreate(session_id_, session_data);
+  const uint64_t systemlink_id = xe::byte_swap(XLiveAPI::systemlink_id);
+
+  if (IsSystemlink()) {
+    XELOGI("Creating systemlink session");
+
+    // If XNetRegisterKey did not register key then we must register it here
+    if (systemlink_id) {
+      session_id_ = systemlink_id;
+    } else {
+      session_id_ = GenerateSessionId(XNKID_SYSTEM_LINK);
+      XLiveAPI::systemlink_id = session_id_;
+    }
+  } else {
+    XELOGI("Creating xbox live session");
+    session_id_ = GenerateSessionId(XNKID_ONLINE);
+
+    XLiveAPI::XSessionCreate(session_id_, session_data);
+    XLiveAPI::SessionContextSet(session_id_, contexts_);
+  }
 
   XELOGI("Created session {:016X}", session_id_);
 
-  XLiveAPI::SessionContextSet(session_id_, contexts_);
+  IsValidXNKID(session_id_);
 
+  Uint64toXNKID(session_id_, &session_info->sessionID);
   XLiveAPI::IpGetConsoleXnAddr(&session_info->hostAddress);
 
   return X_ERROR_SUCCESS;
@@ -169,28 +190,34 @@ X_RESULT XSession::JoinExistingSession(XSESSION_INFO* session_info) {
   session_id_ = XNKIDtoUint64(&session_info->sessionID);
   XELOGI("Joining session {:016X}", session_id_);
 
-  XSession::IsValidXKNID(session_id_);
+  XSession::IsValidXNKID(session_id_);
 
-  if (session_id_ == 0) {
-    assert_always();
-    return X_E_FAIL;
+  if (IsSystemlink(session_id_)) {
+    XELOGI("Joining systemlink session");
+    is_systemlink_ = true;
+    return X_ERROR_SUCCESS;
+  } else {
+    XELOGI("Joining xbox live session");
   }
 
   const std::unique_ptr<SessionObjectJSON> session =
       XLiveAPI::XSessionGet(session_id_);
 
   // Begin XNetRegisterKey?
-  GetXnAddrFromSessionObject(session.get(), &session_info->hostAddress);
+
+  if (!session->HostAddress().empty()) {
+    GetXnAddrFromSessionObject(session.get(), &session_info->hostAddress);
+  }
 
   return X_ERROR_SUCCESS;
 }
 
 X_RESULT XSession::DeleteSession() {
-  state |= STATE_FLAGS_DELETED;
+  state_ |= STATE_FLAGS_DELETED;
 
   // Begin XNetUnregisterKey?
 
-  if (IsHost()) {
+  if (IsHost() && IsXboxLive()) {
     XLiveAPI::DeleteSession(session_id_);
   }
 
@@ -201,11 +228,11 @@ X_RESULT XSession::DeleteSession() {
   return X_ERROR_SUCCESS;
 }
 
-// A member can be added by either local or remote, typically local members are
-// joined via local but are often joined via remote - they're equivalent.
+// A member can be added by either local or remote, typically local members
+// are joined via local but are often joined via remote - they're equivalent.
 //
-// If there are no private slots available then the member will occupy a public
-// slot instead.
+// If there are no private slots available then the member will occupy a
+// public slot instead.
 //
 // TODO: Add player to recent player list, maybe backend responsibility.
 X_RESULT XSession::JoinSession(XSessionJoin* data) {
@@ -316,7 +343,7 @@ X_RESULT XSession::JoinSession(XSessionJoin* data) {
 
   local_details_.ReturnedMemberCount = GetMembersCount();
 
-  if (!members.empty() && IsHost()) {
+  if (!members.empty() && IsHost() && IsXboxLive()) {
     XLiveAPI::SessionJoinRemote(session_id_, members);
   }
 
@@ -441,7 +468,7 @@ X_RESULT XSession::LeaveSession(XSessionLeave* data) {
 
   local_details_.ReturnedMemberCount = GetMembersCount();
 
-  if (!xuids.empty() && IsHost()) {
+  if (!xuids.empty() && IsHost() && IsXboxLive()) {
     XLiveAPI::SessionLeaveRemote(session_id_, xuids);
   }
 
@@ -473,7 +500,7 @@ X_RESULT XSession::ModifySession(XSessionModify* data) {
 
   PrintSessionDetails();
 
-  if (IsHost()) {
+  if (IsHost() && IsXboxLive()) {
     XLiveAPI::SessionModify(session_id_, data);
   }
 
@@ -540,8 +567,8 @@ X_RESULT XSession::MigrateHost(XSessionMigate* data) {
   // Update session id to migrated session id
   session_id_ = result->SessionID_UInt();
 
-  state |= STATE_FLAGS_HOST;
-  state |= STATE_FLAGS_MIGRATED;
+  state_ |= STATE_FLAGS_HOST;
+  state_ |= STATE_FLAGS_MIGRATED;
 
   local_details_.UserIndexHost = data->user_index;
   local_details_.sessionInfo = *SessionInfo_ptr;
