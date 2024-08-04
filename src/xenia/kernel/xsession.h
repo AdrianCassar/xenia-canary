@@ -349,7 +349,11 @@ class XSession : public XObject {
     return ((session_id >> 56) & 0xFF) == XNKID_SYSTEM_LINK;
   }
 
-  static const bool IsValidXKNID(uint64_t session_id) {
+  const bool IsXboxLive() { return !is_systemlink_; }
+
+  const bool IsSystemlink() { return is_systemlink_; }
+
+  static const bool IsValidXNKID(uint64_t session_id) {
     if (!XSession::IsOnlinePeer(session_id) &&
             !XSession::IsSystemlink(session_id) ||
         session_id == 0) {
@@ -359,6 +363,12 @@ class XSession : public XObject {
     }
 
     return true;
+  }
+
+  static const bool IsSystemlinkFlags(uint8_t flags) {
+    const uint32_t systemlink = HOST | STATS | PEER_NETWORK;
+
+    return (flags & ~systemlink) == 0;
   }
 
   const bool IsMemberLocallySignedIn(uint64_t xuid, uint32_t user_index) const {
@@ -403,19 +413,19 @@ class XSession : public XObject {
   }
 
   const bool IsCreated() const {
-    return (state & STATE_FLAGS_CREATED) == STATE_FLAGS_CREATED;
+    return (state_ & STATE_FLAGS_CREATED) == STATE_FLAGS_CREATED;
   }
 
   const bool IsHost() const {
-    return (state & STATE_FLAGS_HOST) == STATE_FLAGS_HOST;
+    return (state_ & STATE_FLAGS_HOST) == STATE_FLAGS_HOST;
   }
 
   const bool IsMigrted() const {
-    return (state & STATE_FLAGS_MIGRATED) == STATE_FLAGS_MIGRATED;
+    return (state_ & STATE_FLAGS_MIGRATED) == STATE_FLAGS_MIGRATED;
   }
 
   const bool IsDeleted() const {
-    return (state & STATE_FLAGS_DELETED) == STATE_FLAGS_DELETED;
+    return (state_ & STATE_FLAGS_DELETED) == STATE_FLAGS_DELETED;
   }
 
  private:
@@ -451,8 +461,10 @@ class XSession : public XObject {
                                     XSESSION_SEARCHRESULT* result);
 
   // uint64_t migrated_session_id_;
-  uint64_t session_id_;
-  uint32_t state = 0;
+  uint64_t session_id_ = 0;
+  uint32_t state_ = 0;
+
+  bool is_systemlink_ = false;
 
   XSESSION_LOCAL_DETAILS local_details_{};
 
