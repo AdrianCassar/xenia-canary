@@ -182,6 +182,8 @@ class XLiveAPI {
   inline static std::map<uint32_t, uint64_t> macAddressCache{};
   inline static std::map<uint64_t, std::vector<uint8_t>> qos_payload_cache{};
 
+  inline static xe::be<uint64_t> systemlink_id = 0;
+
   inline static int8_t version_status;
 
  private:
