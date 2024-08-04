@@ -208,7 +208,6 @@ typedef struct {
 XNetStartupParams xnet_startup_params{};
 
 uint16_t systemlink_port = 5000;
-xe::be<uint64_t> systemlink_id = 0;
 
 void Update_XNetStartupParams(XNetStartupParams& dest,
                               const XNetStartupParams& src) {
@@ -830,8 +829,8 @@ dword_result_t NetDll_XNetInAddrToXnAddr_entry(dword_t caller, dword_t in_addr,
     const auto player = XLiveAPI::FindPlayer(ip_to_string(xn_addr->inaOnline));
 
     // FIXME
-    if (!systemlink_id) {
-      XSession::IsValidXKNID(player->SessionID());
+    if (!XLiveAPI::systemlink_id) {
+      XSession::IsValidXNKID(player->SessionID());
 
       XLiveAPI::sessionIdCache.emplace(xn_addr->inaOnline.s_addr,
                                        player->SessionID());
@@ -840,6 +839,11 @@ dword_result_t NetDll_XNetInAddrToXnAddr_entry(dword_t caller, dword_t in_addr,
                                         player->MacAddress());
     } else {
       // Remote mac missing for systemlink!
+      // If we're connected to server then use it
+      if (!player->MacAddress()) {
+        XLiveAPI::macAddressCache.emplace(xn_addr->inaOnline.s_addr,
+                                          player->MacAddress());
+      }
     }
   }
 
@@ -859,14 +863,14 @@ dword_result_t NetDll_XNetInAddrToXnAddr_entry(dword_t caller, dword_t in_addr,
         kernel_memory()->TranslateVirtual<uint64_t*>(xid_ptr);
 
     // FIXME
-    if (systemlink_id) {
-      *sessionId_ptr = systemlink_id;
+    if (XLiveAPI::systemlink_id) {
+      *sessionId_ptr = XLiveAPI::systemlink_id;
     } else {
       *sessionId_ptr =
           xe::byte_swap(XLiveAPI::sessionIdCache[xn_addr->inaOnline.s_addr]);
     }
 
-    XSession::IsValidXKNID(xe::byte_swap(*sessionId_ptr));
+    XSession::IsValidXNKID(xe::byte_swap(*sessionId_ptr));
   }
 
   return X_STATUS_SUCCESS;
@@ -1055,7 +1059,7 @@ dword_result_t NetDll_XNetQosListen_entry(
 
   const uint64_t session_id = xe::byte_swap(sessionId->as_uint64());
 
-  XSession::IsValidXKNID(session_id);
+  XSession::IsValidXNKID(session_id);
 
   if (flags & LISTEN_SET_DATA) {
     std::vector<uint8_t> qos_buffer(data_size);
@@ -1918,14 +1922,14 @@ dword_result_t NetDll_XNetRegisterKey_entry(dword_t caller,
                                             pointer_t<XNKID> session_key,
                                             pointer_t<XNKEY> exchange_key) {
   // Very hacky needs fixing!
-  systemlink_id = session_key->as_uint64();
+  XLiveAPI::systemlink_id = session_key->as_uint64();
   return 0;
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetRegisterKey, kNetworking, kStub);
 
 dword_result_t NetDll_XNetUnregisterKey_entry(dword_t caller,
                                               pointer_t<XNKID> session_key) {
-  systemlink_id = 0;
+  XLiveAPI::systemlink_id = 0;
 
   return 0;
 }
