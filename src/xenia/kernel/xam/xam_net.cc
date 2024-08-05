@@ -839,8 +839,10 @@ dword_result_t NetDll_XNetInAddrToXnAddr_entry(dword_t caller, dword_t in_addr,
                                         player->MacAddress());
     } else {
       // Remote mac missing for systemlink!
+      // 415607E1 (CoD 3) checks for this!
+      //
       // If we're connected to server then use it
-      if (!player->MacAddress()) {
+      if (player->MacAddress()) {
         XLiveAPI::macAddressCache.emplace(xn_addr->inaOnline.s_addr,
                                           player->MacAddress());
       }
