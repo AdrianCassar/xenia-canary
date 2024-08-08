@@ -105,9 +105,9 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
     }
     case 0x0005000D: {
       // Fixes hang when leaving session for 545107D5
-      XELOGD("XLiveBaseUnk5000D({:08X}, {:08X}) unimplemented", buffer_ptr,
-             buffer_length);
-      return X_E_SUCCESS;
+      // 415607D2 says this is XStringVerify
+      XELOGD("XStringVerify({:08X}, {:08X})", buffer_ptr, buffer_length);
+      return XStringVerify(buffer_ptr, buffer_length);
     }
     case 0x0005000E: {
       // Before every call there is a call to XUserFindUsers
