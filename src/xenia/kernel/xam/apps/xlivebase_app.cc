@@ -122,6 +122,8 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
       // 41560855 included from TU 7
       // Attempts to set a dvar for ui_email_address but fails on
       // WideCharToMultiByte
+      //
+      // 4D530AA5 encounters "Failed to retrieve account credentials".
       XELOGD("_XAccountGetUserInfo({:08X}, {:08X}) unimplemented", buffer_ptr,
              buffer_length);
       return X_ERROR_FUNCTION_FAILED;
