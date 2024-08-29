@@ -921,7 +921,7 @@ void KernelState::RegisterNotifyListener(XNotifyListener* listener) {
   if (!has_notified_live_startup_ && listener->mask() & kXNotifyLive) {
     has_notified_live_startup_ = true;
     listener->EnqueueNotification(kXNotificationLiveConnectionChanged,
-                                  0x1510F0L);
+                                  X_ONLINE_S_LOGON_CONNECTION_ESTABLISHED);
     listener->EnqueueNotification(kXNotificationLiveLinkStateChanged, 1);
   }
 }
