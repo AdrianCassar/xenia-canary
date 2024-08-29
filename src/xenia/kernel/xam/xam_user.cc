@@ -587,6 +587,21 @@ dword_result_t XamUserAreUsersFriends_entry(dword_t user_index, dword_t unk1,
 }
 DECLARE_XAM_EXPORT1(XamUserAreUsersFriends, kUserProfiles, kStub);
 
+dword_result_t XamUserGetIndexFromXUID_entry(qword_t xuid, dword_t flags,
+                                             pointer_t<uint32_t> index) {
+  if (!kernel_state()->xam_state()->IsUserSignedIn(xuid)) {
+    return X_ERROR_NO_SUCH_USER;
+  }
+
+  *index = kernel_state()
+               ->xam_state()
+               ->profile_manager()
+               ->GetUserIndexAssignedToProfile(xuid);
+
+  return X_ERROR_SUCCESS;
+}
+DECLARE_XAM_EXPORT1(XamUserGetIndexFromXUID, kUserProfiles, kImplemented);
+
 dword_result_t XamUserCreateAchievementEnumerator_entry(
     dword_t title_id, dword_t user_index, dword_t xuid, dword_t flags,
     dword_t offset, dword_t count, lpdword_t buffer_size_ptr,
