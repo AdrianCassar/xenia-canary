@@ -315,10 +315,10 @@ dword_result_t NetDll_XnpLogonGetStatus_entry(
 }
 DECLARE_XAM_EXPORT1(NetDll_XnpLogonGetStatus, kNetworking, kStub);
 
-dword_result_t NetDll_XNetGetOpt_entry(dword_t one, dword_t option_id,
+dword_result_t NetDll_XNetGetOpt_entry(dword_t caller, dword_t option_id,
                                        lpvoid_t buffer_ptr,
                                        lpdword_t buffer_size) {
-  assert_true(one == 1);
+  assert_true(caller == 1);
   switch (option_id) {
     case 1:
       if (*buffer_size < sizeof(XNetStartupParams)) {
