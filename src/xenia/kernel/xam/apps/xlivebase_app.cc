@@ -61,7 +61,8 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
   switch (message) {
     case 0x00058003: {
       // Called on startup of dashboard (netplay build)
-      XELOGD("XLiveBaseLogonGetHR, unimplemented");
+      XELOGD("XLiveBaseLogonGetHR({:08X}, {:08X})", buffer_ptr, buffer_length);
+      return X_ONLINE_S_LOGON_CONNECTION_ESTABLISHED;
     }
     case 0x0005008C: {
       // Called on startup of blades dashboard v1888 to v2858
@@ -133,14 +134,73 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
              buffer_length);
       return X_ERROR_FUNCTION_FAILED;
     }
+    case 0x0005801C: {
+      // Called on blades dashboard v1888
+      XELOGD("XLiveBaseUnk5801C({:08X}, {:08X}) unimplemented", buffer_ptr,
+             buffer_length);
+      return Unk5801C(buffer_length);
+    }
+    case 0x00058024: {
+      // Called on blades dashboard v1888
+      XELOGD("XLiveBaseUnk58024({:08X}, {:08X}) unimplemented", buffer_ptr,
+             buffer_length);
+      return Unk58024(buffer_length);
+    }
     case 0x00050036: {
       XELOGD("XOnlineQuerySearch({:08X}, {:08X}) unimplemented", buffer_ptr,
+             buffer_length);
+      return X_E_SUCCESS;
+    }
+    case 0x00050077: {
+      // Called on blades dashboard v1888
+      // Current Balance in sub menus:
+      // All New Demos and Trailers
+      // More Videos and Downloads
+      XELOGD("XLiveBaseUnk50077({:08X}, {:08X}) unimplemented", buffer_ptr,
              buffer_length);
       return X_E_SUCCESS;
     }
     case 0x00050079: {
       // Fixes Xbox Live error for 454107DB
       XELOGD("XLiveBaseUnk50079({:08X}, {:08X}) unimplemented", buffer_ptr,
+             buffer_length);
+      return X_E_SUCCESS;
+    }
+    case 0x0005008B: {
+      // Called on blades dashboard v1888
+      // Fixes accessing marketplace Featured Downloads.
+      XELOGD("XLiveBaseUnk5008B({:08X}, {:08X}) unimplemented", buffer_ptr,
+             buffer_length);
+      return X_E_SUCCESS;
+    }
+    case 0x0005008F: {
+      // Called on blades dashboard v1888
+      // Fixes accessing marketplace sub menus:
+      // All New Demos and Trailers
+      // More Videos and Downloads
+      XELOGD("XLiveBaseUnk5008F({:08X}, {:08X}) unimplemented", buffer_ptr,
+             buffer_length);
+      return X_E_SUCCESS;
+    }
+    case 0x00050090: {
+      // Called on blades dashboard v1888
+      // Fixes accessing marketplace Game Downloads->All Games->Xbox Live Arcade
+      // sub menu.
+      XELOGD("XLiveBaseUnk50090({:08X}, {:08X}) unimplemented", buffer_ptr,
+             buffer_length);
+      return X_E_SUCCESS;
+    }
+    case 0x00050091: {
+      // Called on blades dashboard v1888
+      // Fixes accessing marketplace Game Downloads.
+      XELOGD("XLiveBaseUnk50091({:08X}, {:08X}) unimplemented", buffer_ptr,
+             buffer_length);
+      return X_E_SUCCESS;
+    }
+    case 0x00050097: {
+      // Called on blades dashboard v1888
+      // Fixes accessing marketplace Memberships.
+      XELOGD("XLiveBaseUnk50097({:08X}, {:08X}) unimplemented", buffer_ptr,
              buffer_length);
       return X_E_SUCCESS;
     }
@@ -305,8 +365,8 @@ X_HRESULT XLiveBaseApp::GetServiceInfo(uint32_t serviceid,
       XLiveAPI::GetServiceInfoById(serviceid);
 
   if (retrieved_service_info.ip.s_addr == 0) {
-    return 0x80151100;  // ERROR_SERVICE_NOT_FOUND
-    // return 0x80151802;   // ERROR_CONNECTION_INVALID
+    return X_ERROR_SERVICE_NOT_FOUND;
+    // return X_ERROR_CONNECTION_INVALID;
     // return -1;           // ERROR_FUNCTION_FAILED
   }
 
@@ -457,6 +517,56 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
     *server_path_length =
         xe::byte_swap<uint32_t>(uint32_t(endpoint_API.size()));
   }
+
+  return X_E_SUCCESS;
+}
+
+X_HRESULT XLiveBaseApp::Unk58024(uint32_t buffer_length) {
+  if (!buffer_length) {
+    return X_E_INVALIDARG;
+  }
+
+  Memory* memory = kernel_state_->memory();
+
+  struct data {
+    X_ARGUEMENT_ENTRY xuid;
+    X_ARGUEMENT_ENTRY ukn2;  // 125
+    X_ARGUEMENT_ENTRY ukn3;  // 0
+  };
+
+  data* entry = memory->TranslateVirtual<data*>(buffer_length);
+
+  uint64_t xuid = xe::load_and_swap<uint64_t>(
+      memory->TranslateVirtual(entry->xuid.object_ptr));
+  uint32_t ukn2 = xe::load_and_swap<uint32_t>(
+      memory->TranslateVirtual(entry->ukn2.object_ptr));
+  uint32_t ukn3_ptr = xe::load_and_swap<uint32_t>(
+      memory->TranslateVirtual(entry->ukn3.object_ptr));
+
+  return X_E_SUCCESS;
+}
+
+X_HRESULT XLiveBaseApp::Unk5801C(uint32_t buffer_length) {
+  if (!buffer_length) {
+    return X_E_INVALIDARG;
+  }
+
+  Memory* memory = kernel_state_->memory();
+
+  struct data {
+    X_ARGUEMENT_ENTRY xuid;
+    X_ARGUEMENT_ENTRY ukn2;
+    X_ARGUEMENT_ENTRY ukn3;
+  };
+
+  data* entry = memory->TranslateVirtual<data*>(buffer_length);
+
+  uint64_t xuid = xe::load_and_swap<uint64_t>(
+      memory->TranslateVirtual(entry->xuid.object_ptr));
+  uint32_t ukn2 = xe::load_and_swap<uint32_t>(
+      memory->TranslateVirtual(entry->ukn2.object_ptr));
+  uint32_t ukn3_ptr = xe::load_and_swap<uint32_t>(
+      memory->TranslateVirtual(entry->ukn3.object_ptr));
 
   return X_E_SUCCESS;
 }
