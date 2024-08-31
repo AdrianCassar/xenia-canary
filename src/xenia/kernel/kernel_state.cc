@@ -861,8 +861,6 @@ void KernelState::RegisterNotifyListener(XNotifyListener* listener) {
   auto global_lock = global_critical_region_.Acquire();
   notify_listeners_.push_back(retain_object(listener));
 
-  listener->EnqueueNotification(0x2000001, 0x1510F0);
-
   // Games seem to expect a few notifications on startup, only for the first
   // listener.
   // https://cs.rin.ru/forum/viewtopic.php?f=38&t=60668&hilit=resident+evil+5&start=375
@@ -874,6 +872,11 @@ void KernelState::RegisterNotifyListener(XNotifyListener* listener) {
     // XN_SYS_SIGNINCHANGED x2
     listener->EnqueueNotification(kXNotificationIDSystemSignInChanged, 1);
     listener->EnqueueNotification(kXNotificationIDSystemSignInChanged, 1);
+    // LIVE
+    listener->EnqueueNotification(kXNotificationIDLiveConnectionChanged,
+                                  X_ONLINE_S_LOGON_CONNECTION_ESTABLISHED);
+    listener->EnqueueNotification(kXNotificationIDLiveConnectionChanged,
+                                  1);  // Ethernet Enabled
   }
 }
 
