@@ -434,7 +434,11 @@ sockaddr_in XLiveAPI::Getwhoami() {
 
   XELOGI("Requesting Public IP");
 
-  addr = ip_to_sockaddr(doc["address"].GetString());
+  const char* address_str = doc["address"].GetString();
+
+  if (address_str) {
+    addr = ip_to_sockaddr(address_str);
+  }
 
   return addr;
 }

@@ -104,28 +104,30 @@ sockaddr_in WinsockGetLocalIP() {
 
 const std::string ip_to_string(in_addr addr) {
   char ip_str[INET_ADDRSTRLEN]{};
-  inet_ntop(AF_INET, &addr.s_addr, ip_str, INET_ADDRSTRLEN);
+  const char* result =
+      inet_ntop(AF_INET, &addr.s_addr, ip_str, INET_ADDRSTRLEN);
 
   return ip_str;
 }
 
 const std::string ip_to_string(sockaddr_in sockaddr) {
   char ip_str[INET_ADDRSTRLEN]{};
-  inet_ntop(AF_INET, &sockaddr.sin_addr, ip_str, INET_ADDRSTRLEN);
+  const char* result =
+      inet_ntop(AF_INET, &sockaddr.sin_addr, ip_str, INET_ADDRSTRLEN);
 
   return ip_str;
 }
 
 const sockaddr_in ip_to_sockaddr(std::string ip_str) {
   sockaddr_in addr{};
-  inet_pton(AF_INET, ip_str.c_str(), &addr.sin_addr);
+  int32_t result = inet_pton(AF_INET, ip_str.c_str(), &addr.sin_addr);
 
   return addr;
 }
 
 const in_addr ip_to_in_addr(std::string ip_str) {
   in_addr addr{};
-  inet_pton(AF_INET, ip_str.c_str(), &addr.s_addr);
+  int32_t result = inet_pton(AF_INET, ip_str.c_str(), &addr.s_addr);
 
   return addr;
 }
