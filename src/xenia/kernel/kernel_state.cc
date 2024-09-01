@@ -40,6 +40,8 @@ DEFINE_uint32(kernel_build_version, 1888, "Define current kernel version",
 
 DECLARE_string(cl);
 
+DECLARE_bool(offline_mode);
+
 namespace xe {
 namespace kernel {
 
@@ -920,9 +922,16 @@ void KernelState::RegisterNotifyListener(XNotifyListener* listener) {
 
   if (!has_notified_live_startup_ && listener->mask() & kXNotifyLive) {
     has_notified_live_startup_ = true;
+
+    uint32_t live_connection_state =
+        cvars::offline_mode ? X_ONLINE_S_LOGON_DISCONNECTED
+                            : X_ONLINE_S_LOGON_CONNECTION_ESTABLISHED;
+    uint32_t ethernet_link_state = cvars::offline_mode ? 0 : 1;
+
     listener->EnqueueNotification(kXNotificationLiveConnectionChanged,
-                                  X_ONLINE_S_LOGON_CONNECTION_ESTABLISHED);
-    listener->EnqueueNotification(kXNotificationLiveLinkStateChanged, 1);
+                                  live_connection_state);
+    listener->EnqueueNotification(kXNotificationLiveLinkStateChanged,
+                                  ethernet_link_state);
   }
 }
 
