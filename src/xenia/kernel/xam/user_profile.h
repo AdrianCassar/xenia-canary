@@ -39,6 +39,12 @@ enum class X_USER_PROFILE_SETTING_SOURCE : uint32_t {
   UNKNOWN = 3,
 };
 
+enum class X_USER_SIGNIN_STATE : uint32_t {
+  NotSignedIn,
+  SignedInLocally,
+  SignedInToLive
+};
+
 // Each setting contains 0x18 bytes long header
 struct X_USER_PROFILE_SETTING_HEADER {
   xe::be<uint32_t> setting_id;
@@ -162,16 +168,10 @@ class UserProfile {
 
   uint64_t xuid() const { return xuid_; }
   std::string name() const { return account_info_.GetGamertagString(); }
-  uint32_t signin_state() const {
-    if (cvars::offline_mode) {
-      // Signed in Locally
-      return 1;
-    } else {
-      // Signed in Online
-      return 2;
-    }
+  X_USER_SIGNIN_STATE signin_state() const {
+    return cvars::offline_mode ? X_USER_SIGNIN_STATE::SignedInLocally
+                               : X_USER_SIGNIN_STATE::SignedInToLive;
   }
-  uint32_t type() const { return 1 | 2; /* local | online profile? */ }
 
   uint32_t GetCachedFlags() const { return account_info_.GetCachedFlags(); };
   uint32_t GetSubscriptionTier() const {
