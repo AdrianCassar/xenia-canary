@@ -29,6 +29,12 @@ namespace xe {
 namespace kernel {
 namespace xam {
 
+enum class X_USER_SIGNIN_STATE : uint32_t {
+  NotSignedIn,
+  SignedInLocally,  // Offline
+  SignedInToLive,   // Online
+};
+
 enum class X_USER_PROFILE_SETTING_SOURCE : uint32_t {
   NO_VALUE = 0,
   DEFAULT = 1,  // Default value taken from default OS values.
@@ -90,26 +96,16 @@ inline const std::map<XTileType, std::string> kTileFileNames = {
 static constexpr std::pair<uint16_t, uint16_t> kProfileIconSize = {64, 64};
 static constexpr std::pair<uint16_t, uint16_t> kProfileIconSizeSmall = {32, 32};
 
-enum class SignInState : uint32_t {
-  NotSignedIn,
-  SignedInLocally,  // Offline
-  SignedInToLive,   // Online
-};
-
 class UserProfile {
  public:
   UserProfile(const uint64_t xuid, const X_XAMACCOUNTINFO* account_info);
 
   uint64_t xuid() const { return xuid_; }
   std::string name() const { return account_info_.GetGamertagString(); }
-  uint32_t signin_state() const {
-    if (cvars::offline_mode) {
-      return static_cast<uint32_t>(SignInState::SignedInLocally);
-    } else {
-      return static_cast<uint32_t>(SignInState::SignedInToLive);
-    }
+  X_USER_SIGNIN_STATE signin_state() const {
+    return cvars::offline_mode ? X_USER_SIGNIN_STATE::SignedInLocally
+                               : X_USER_SIGNIN_STATE::SignedInToLive;
   }
-  uint32_t type() const { return 1 | 2; /* local | online profile? */ }
 
   uint32_t GetReservedFlags() const {
     return account_info_.GetReservedFlags();

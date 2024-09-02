@@ -54,16 +54,25 @@ X_HRESULT_result_t XamUserGetXUID_entry(dword_t user_index, dword_t type_mask,
   uint32_t result = X_E_NO_SUCH_USER;
   uint64_t xuid = 0;
 
-  auto type = user_profile->type() & type_mask;
-  if (type & (2 | 4)) {
-    // maybe online profile?
+  const uint32_t singin_state =
+      static_cast<uint32_t>(user_profile->signin_state());
+  const uint32_t local =
+      static_cast<uint32_t>(X_USER_SIGNIN_STATE::SignedInLocally);
+  const uint32_t live =
+      static_cast<uint32_t>(X_USER_SIGNIN_STATE::SignedInToLive);
+
+  uint32_t type = singin_state & type_mask;
+
+  if (type & (live | 4)) {
+    // Online XUID
     xuid = user_profile->xuid();
     result = X_E_SUCCESS;
-  } else if (type & 1) {
-    // maybe offline profile?
+  } else if (type & local) {
+    // Offline XUID
     xuid = user_profile->xuid();
     result = X_E_SUCCESS;
   }
+
   *xuid_ptr = xuid;
   return result;
 }
@@ -91,9 +100,9 @@ dword_result_t XamUserGetIndexFromXUID_entry(qword_t xuid, dword_t flags,
 DECLARE_XAM_EXPORT1(XamUserGetIndexFromXUID, kUserProfiles, kImplemented);
 
 dword_result_t XamUserGetSigninState_entry(dword_t user_index) {
-  uint32_t signin_state = 0;
+  X_USER_SIGNIN_STATE signin_state = X_USER_SIGNIN_STATE::NotSignedIn;
   if (user_index >= XUserMaxUserCount) {
-    return signin_state;
+    return static_cast<uint32_t>(signin_state);
   }
 
   if (kernel_state()->xam_state()->IsUserSignedIn(user_index)) {
@@ -101,7 +110,8 @@ dword_result_t XamUserGetSigninState_entry(dword_t user_index) {
         kernel_state()->xam_state()->GetUserProfile(user_index);
     signin_state = user_profile->signin_state();
   }
-  return signin_state;
+
+  return static_cast<uint32_t>(signin_state);
 }
 DECLARE_XAM_EXPORT2(XamUserGetSigninState, kUserProfiles, kImplemented,
                     kHighFrequency);
@@ -132,12 +142,18 @@ X_HRESULT_result_t XamUserGetSigninInfo_entry(
     info->xuid = user_profile->xuid();
   }
 
-  if (!cvars::offline_mode) {
-    // Tell the title we are online.
-    info->flags = 1;
+  // Change when online XUIDs are supported
+  if (flags & X_USER_GET_SIGNIN_INFO_ONLINE_XUID_ONLY) {
+    info->xuid = user_profile->xuid();
   }
 
-  info->signin_state = user_profile->signin_state();
+  info->signin_state = static_cast<uint32_t>(user_profile->signin_state());
+
+  if (user_profile->signin_state() == X_USER_SIGNIN_STATE::SignedInToLive) {
+    // Tell the title we are online.
+    info->flags = X_USER_INFO_FLAG_LIVE_ENABLED;
+  }
+
   return X_E_SUCCESS;
 }
 DECLARE_XAM_EXPORT1(XamUserGetSigninInfo, kUserProfiles, kImplemented);
@@ -436,7 +452,7 @@ dword_result_t XamUserCheckPrivilege_entry(dword_t user_index, dword_t mask,
   }
 
   if (kernel_state()->xam_state()->GetUserProfile(user_index)->signin_state() !=
-      static_cast<uint32_t>(SignInState::SignedInToLive)) {
+      X_USER_SIGNIN_STATE::SignedInToLive) {
     *out_value = 0;
     return X_ERROR_NOT_LOGGED_ON;
   }
@@ -446,8 +462,9 @@ dword_result_t XamUserCheckPrivilege_entry(dword_t user_index, dword_t mask,
 
   const auto& user_profile =
       kernel_state()->xam_state()->GetUserProfile(user_index);
-  if (user_profile->signin_state() == 2) {
-    // We have enabled Live so let's allow multiplayer
+
+  // Allow all privileges including multiplayer
+  if (user_profile->signin_state() == X_USER_SIGNIN_STATE::SignedInToLive) {
     *out_value = 1;
   }
 
@@ -562,8 +579,7 @@ dword_result_t XamUserAreUsersFriends_entry(
       const auto& user_profile =
           kernel_state()->xam_state()->GetUserProfile(user_index);
 
-      // Check if we are signed into live
-      if (user_profile->signin_state() != 2) {
+      if (user_profile->signin_state() != X_USER_SIGNIN_STATE::SignedInToLive) {
         result = X_ERROR_NOT_LOGGED_ON;
       } else {
         // No friends!
