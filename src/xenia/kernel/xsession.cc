@@ -71,7 +71,7 @@ X_RESULT XSession::CreateSession(uint8_t user_index, uint8_t public_slots,
   uint64_t* Nonce_ptr =
       kernel_state_->memory()->TranslateVirtual<uint64_t*>(nonce_ptr);
 
-  local_details_.UserIndexHost = XUSER_INDEX_NONE;
+  local_details_.UserIndexHost = X_USER_INDEX_NONE;
 
   // CSGO only uses STATS flag to create a session to POST stats pre round.
   // Minecraft and Portal 2 use flags HOST + STATS.
@@ -286,12 +286,12 @@ X_RESULT XSession::JoinSession(XSessionJoin* data) {
       member->OnlineXUID = xuid;
       member->UserIndex = user_index;
 
-      local_details_.ActualMemberCount =
-          std::min<int32_t>(MAX_USERS, local_details_.ActualMemberCount + 1);
+      local_details_.ActualMemberCount = std::min<int32_t>(
+          X_USER_MAX_USERS, local_details_.ActualMemberCount + 1);
     } else {
       // Default member
       const xe::be<uint64_t> xuid = xuid_array[i];
-      const uint32_t user_index = XUSER_INDEX_NONE;
+      const uint32_t user_index = X_USER_INDEX_NONE;
 
       const bool is_member_added =
           remote_members_.find(xuid) != remote_members_.end();
@@ -311,8 +311,8 @@ X_RESULT XSession::JoinSession(XSessionJoin* data) {
         member->UserIndex =
             profile_manager->GetUserIndexAssignedToProfile(xuid);
 
-        local_details_.ActualMemberCount =
-            std::min<int32_t>(MAX_USERS, local_details_.ActualMemberCount + 1);
+        local_details_.ActualMemberCount = std::min<int32_t>(
+            X_USER_MAX_USERS, local_details_.ActualMemberCount + 1);
       }
     }
 
