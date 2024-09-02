@@ -29,6 +29,12 @@ namespace xe {
 namespace kernel {
 namespace xam {
 
+enum class X_USER_SIGNIN_STATE : uint32_t {
+  NotSignedIn,
+  SignedInLocally,
+  SignedInToLive
+};
+
 enum class X_USER_PROFILE_SETTING_SOURCE : uint32_t {
   NO_VALUE = 0,
   DEFAULT = 1,  // Default value taken from default OS values.
@@ -96,16 +102,10 @@ class UserProfile {
 
   uint64_t xuid() const { return xuid_; }
   std::string name() const { return account_info_.GetGamertagString(); }
-  uint32_t signin_state() const {
-    if (cvars::offline_mode) {
-      // Signed in Locally
-      return 1;
-    } else {
-      // Signed in Online
-      return 2;
-    }
+  X_USER_SIGNIN_STATE signin_state() const {
+    return cvars::offline_mode ? X_USER_SIGNIN_STATE::SignedInLocally
+                               : X_USER_SIGNIN_STATE::SignedInToLive;
   }
-  uint32_t type() const { return 1 | 2; /* local | online profile? */ }
 
   uint32_t GetReservedFlags() const {
     return account_info_.GetReservedFlags();
