@@ -40,8 +40,6 @@
 
 #include <xenia/kernel/XLiveAPI.h>
 
-DECLARE_string(api_address);
-
 DECLARE_bool(logging);
 
 DECLARE_bool(log_mask_ips);
@@ -1501,8 +1499,21 @@ dword_result_t NetDll_bind_entry(dword_t caller, dword_t socket_handle,
     return -1;
   }
 
+  auto upnp_internal_port = name->address_port;
+  const uint16_t mapped_internal_port =
+      XLiveAPI::upnp_handler->GetMappedBindPort(name->address_port);
+
+  // Support wildcard port
+  if (!upnp_internal_port || !mapped_internal_port) {
+    upnp_internal_port = socket->bound_port();
+  }
+
+  if (cvars::logging) {
+    XELOGI("Bind port {}", upnp_internal_port.get());
+  }
+
   // Can be called multiple times.
-  XLiveAPI::upnp_handler->AddPort(XLiveAPI::LocalIP_str(), socket->bound_port(),
+  XLiveAPI::upnp_handler->AddPort(XLiveAPI::LocalIP_str(), upnp_internal_port,
                                   "UDP");
 
   return 0;
