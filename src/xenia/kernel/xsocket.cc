@@ -179,8 +179,17 @@ X_STATUS XSocket::Bind(const XSOCKADDR_IN* name, int name_len) {
     return X_STATUS_UNSUCCESSFUL;
   }
 
+  bound_port_ = sa_in.address_port;
+
+  if (!bound_port_) {
+    XSOCKADDR_IN sa = *name;
+
+    if (!GetSockName(&sa, &name_len)) {
+      bound_port_ = sa.address_port;
+    }
+  }
+
   bound_ = true;
-  bound_port_ = name->address_port;
 
   return X_STATUS_SUCCESS;
 }
