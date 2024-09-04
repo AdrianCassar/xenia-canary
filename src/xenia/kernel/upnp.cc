@@ -305,10 +305,6 @@ uint16_t UPnP::GetMappedBindPort(uint16_t external_port) {
     return mapped_bind_ports_[0];
   }
 
-  if (cvars::logging) {
-    XELOGI("Using bind port {}", external_port);
-  }
-
   return external_port;
 }
 
