@@ -33,21 +33,6 @@
 namespace xe {
 namespace kernel {
 
-struct XONLINE_SERVICE_INFO {
-  xe::be<uint32_t> id;
-  in_addr ip;
-  xe::be<uint16_t> port;
-  xe::be<uint16_t> reserved;
-};
-static_assert_size(XONLINE_SERVICE_INFO, 12);
-
-struct XTitleServer {
-  in_addr server_address;
-  uint32_t flags;
-  char server_description[200];
-};
-static_assert_size(XTitleServer, 208);
-
 class XLiveAPI {
  public:
   enum class InitState { Success, Failed, Pending };
@@ -133,9 +118,9 @@ class XLiveAPI {
 
   static std::unique_ptr<SessionObjectJSON> XSessionGet(uint64_t sessionId);
 
-  static std::vector<XTitleServer> GetServers();
+  static std::vector<X_TITLE_SERVER> GetServers();
 
-  static XONLINE_SERVICE_INFO GetServiceInfoById(uint32_t serviceId);
+  static X_ONLINE_SERVICE_INFO GetServiceInfoById(uint32_t serviceId);
 
   static void SessionJoinRemote(
       uint64_t sessionId, const std::unordered_map<uint64_t, bool> members);
@@ -170,7 +155,7 @@ class XLiveAPI {
   inline static MacAddress* mac_address_ = nullptr;
 
   inline static bool xlsp_servers_cached = false;
-  inline static std::vector<XTitleServer> xlsp_servers{};
+  inline static std::vector<X_TITLE_SERVER> xlsp_servers{};
 
   inline static std::string interface_name;
 
