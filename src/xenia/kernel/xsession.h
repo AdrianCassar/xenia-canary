@@ -181,6 +181,17 @@ struct XSessionSearchByID {
   xe::be<uint32_t> search_results_ptr;
 };
 
+struct XSessionSearchByIDs {
+  xe::be<uint32_t> user_index;
+  xe::be<uint32_t> num_session_ids;
+  xe::be<uint32_t> session_ids;
+  xe::be<uint32_t> results_buffer_size;
+  xe::be<uint32_t> search_results_ptr;
+  xe::be<uint32_t> value_const1;  // 0
+  xe::be<uint32_t> value_const2;  // 0
+  xe::be<uint32_t> value_const3;  // 0
+};
+
 struct XSessionDetails {
   xe::be<uint32_t> obj_ptr;
   xe::be<uint32_t> details_buffer_size;
@@ -322,6 +333,12 @@ class XSession : public XObject {
                               uint32_t num_users);
   static X_RESULT GetSessionByID(Memory* memory,
                                  XSessionSearchByID* search_data);
+  static X_RESULT GetSessionByIDs(Memory* memory,
+                                  XSessionSearchByIDs* search_data);
+  static X_RESULT GetSessionByIDs(Memory* memory, XNKID* session_ids_ptr,
+                                  uint32_t num_session_ids,
+                                  uint32_t search_results_ptr,
+                                  uint32_t results_buffer_size);
 
   static constexpr uint8_t XNKID_ONLINE = 0xAE;
   static constexpr uint8_t XNKID_SYSTEM_LINK = 0x00;
