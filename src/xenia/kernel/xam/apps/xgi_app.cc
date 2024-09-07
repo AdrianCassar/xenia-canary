@@ -197,7 +197,7 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
       return session->MigrateHost(data);
     }
     case 0x000B0021: {
-      XELOGD("XUserReadStats");
+      XELOGI("XUserReadStats");
 
       struct XUserReadStats {
         xe::be<uint32_t> titleId;
@@ -223,11 +223,15 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
 
       for (unsigned int playerIndex = 0; playerIndex < data->xuids_count;
            playerIndex++) {
-        std::string xuid = to_hex_string(xuids[playerIndex]);
+        xe::be<uint64_t> xuid = xuids[playerIndex];
 
-        Value value;
-        value.SetString(xuid.c_str(), 16, doc.GetAllocator());
-        xuidsJsonArray.PushBack(value, doc.GetAllocator());
+        if (xuid) {
+          std::string xuid_str = xe::string_util::to_hex_string(xuid);
+
+          Value value;
+          value.SetString(xuid_str.c_str(), 16, doc.GetAllocator());
+          xuidsJsonArray.PushBack(value, doc.GetAllocator());
+        }
       }
 
       doc.AddMember("players", xuidsJsonArray, doc.GetAllocator());
