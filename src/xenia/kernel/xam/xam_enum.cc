@@ -90,8 +90,8 @@ static uint32_t XTitleServerCreateEnumerator(
     uint32_t user_index, uint32_t app_id, uint32_t open_message,
     uint32_t close_message, uint32_t extra_size, uint32_t item_count,
     uint32_t flags, uint32_t* out_handle) {
-  auto e =
-      make_object<XStaticEnumerator<XTitleServer>>(kernel_state(), item_count);
+  auto e = make_object<XStaticEnumerator<X_TITLE_SERVER>>(kernel_state(),
+                                                          item_count);
 
   auto result = e->Initialize(user_index, app_id, open_message, close_message,
                               flags, extra_size, nullptr);
@@ -103,7 +103,7 @@ static uint32_t XTitleServerCreateEnumerator(
   const auto servers = XLiveAPI::GetServers();
 
   for (const auto& server : servers) {
-    XTitleServer* item = e->AppendItem();
+    X_TITLE_SERVER* item = e->AppendItem();
 
     *item = server;
   }
