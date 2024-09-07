@@ -1027,7 +1027,7 @@ std::unique_ptr<SessionObjectJSON> XLiveAPI::XSessionGet(uint64_t sessionId) {
   return session;
 }
 
-std::vector<XTitleServer> XLiveAPI::GetServers() {
+std::vector<X_TITLE_SERVER> XLiveAPI::GetServers() {
   std::string endpoint =
       fmt::format("title/{:08X}/servers", kernel_state()->title_id());
 
@@ -1050,7 +1050,7 @@ std::vector<XTitleServer> XLiveAPI::GetServers() {
   doc.Parse(response->RawResponse().response);
 
   for (const auto& server_data : doc.GetArray()) {
-    XTitleServer server{};
+    X_TITLE_SERVER server{};
 
     server.server_address = ip_to_in_addr(server_data["address"].GetString());
 
@@ -1068,13 +1068,13 @@ std::vector<XTitleServer> XLiveAPI::GetServers() {
   return xlsp_servers;
 }
 
-XONLINE_SERVICE_INFO XLiveAPI::GetServiceInfoById(uint32_t serviceId) {
+X_ONLINE_SERVICE_INFO XLiveAPI::GetServiceInfoById(uint32_t serviceId) {
   std::string endpoint = fmt::format("title/{:08X}/services/{:08X}",
                                      kernel_state()->title_id(), serviceId);
 
   std::unique_ptr<HTTPResponseObjectJSON> response = Get(endpoint);
 
-  XONLINE_SERVICE_INFO service{};
+  X_ONLINE_SERVICE_INFO service{};
 
   if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_OK) {
     XELOGE("GetServiceById error message: {}", response->Message());
