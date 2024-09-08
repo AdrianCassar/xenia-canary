@@ -12,7 +12,15 @@
 #include <algorithm>
 #include <string>
 
+#ifdef XE_PLATFORM_WIN32
+// clang-format off
+ #include "xenia/base/platform_win.h"
+// clang-format on
+#include "winnt.h"
+#elif XE_PLATFORM_LINUX
 #include "third_party/pe/pe_image.h"
+#endif
+
 #include "xenia/base/atomic.h"
 #include "xenia/base/chrono.h"
 #include "xenia/base/logging.h"
