@@ -13,10 +13,12 @@
 #include "xenia/base/byte_order.h"
 
 #ifdef XE_PLATFORM_WIN32
-// NOTE: must be included last as it expects windows.h to already be included.
 #define _WINSOCK_DEPRECATED_NO_WARNINGS  // inet_addr
-#include <WS2tcpip.h>                    // NOLINT(build/include_order)
-#include <winsock2.h>                    // NOLINT(build/include_order)
+// clang-format off
+#include "xenia/base/platform_win.h"
+// clang-format on
+#include <inaddr.h>
+#include <winapifamily.h>
 #endif
 
 namespace xe {
