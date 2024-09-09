@@ -51,6 +51,20 @@ namespace xe {
 #define X_ONLINE_E_SESSION_NOT_FOUND                        X_HRESULT_FROM_WIN32(X_ERROR_SESSION_NOT_FOUND)
 #define X_ONLINE_E_SESSION_FULL                             X_HRESULT_FROM_WIN32(X_ERROR_SESSION_FULL)
 
+#define X_ONLINE_FRIENDSTATE_FLAG_NONE              0x00000000
+#define X_ONLINE_FRIENDSTATE_FLAG_ONLINE            0x00000001
+#define X_ONLINE_FRIENDSTATE_FLAG_PLAYING           0x00000002
+#define X_ONLINE_FRIENDSTATE_FLAG_JOINABLE          0x00000010
+
+#define X_ONLINE_FRIENDSTATE_ENUM_ONLINE            0x00000000
+#define X_ONLINE_FRIENDSTATE_ENUM_AWAY              0x00010000
+#define X_ONLINE_FRIENDSTATE_ENUM_BUSY              0x00020000
+#define X_ONLINE_FRIENDSTATE_MASK_USER_STATE        0x000F0000
+
+#define X_ONLINE_MAX_FRIENDS                        100
+#define X_ONLINE_PEER_SUBSCRIPTIONS                 400
+#define X_MAX_RICHPRESENCE_SIZE                     64
+
 #define X_CONTEXT_PRESENCE  0x00008001
 #define X_CONTEXT_GAME_TYPE 0x0000800A
 #define X_CONTEXT_GAME_MODE 0x0000800B
@@ -132,6 +146,40 @@ struct X_MUTE_LIST_SET_STATE {
   bool set_muted;
 };
 
+// struct FILETIME {
+//   xe::be<uint32_t> dwHighDateTime;
+//   xe::be<uint32_t> dwLowDateTime;
+// };
+
+#pragma pack(push, 4)
+
+struct X_ONLINE_PRESENCE {
+  xe::be<uint64_t> xuid;
+  xe::be<uint32_t> state;
+  XNKID session_id;
+  xe::be<uint32_t> title_id;
+  xe::be<uint64_t> state_change_time;  // filetime
+  xe::be<uint32_t> cchRichPresence;
+  xe::be<char16_t> wszRichPresence[64];
+};
+static_assert_size(X_ONLINE_PRESENCE, 0xA4);
+
+struct X_ONLINE_FRIEND {
+  xe::be<uint64_t> xuid;
+  char Gamertag[16];
+  xe::be<uint32_t> state;
+  XNKID session_id;
+  xe::be<uint32_t> title_id;
+  xe::be<uint64_t> ftUserTime;
+  XNKID xnkidInvite;
+  xe::be<uint64_t> gameinviteTime;
+  xe::be<uint32_t> cchRichPresence;
+  xe::be<char16_t> wszRichPresence[X_MAX_RICHPRESENCE_SIZE];
+};
+static_assert_size(X_ONLINE_FRIEND, 0xC4);
+
+#pragma pack(pop)
+
 struct X_DATA_58024 {
   X_ARGUEMENT_ENTRY xuid;
   X_ARGUEMENT_ENTRY ukn2;  // 125
@@ -150,4 +198,5 @@ static_assert_size(X_DATA_5801C, 0x30);
 
 }  // namespace kernel
 }  // namespace xe
+
 #endif  // XENIA_KERNEL_XNET_H_

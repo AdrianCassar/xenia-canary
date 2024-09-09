@@ -9,6 +9,7 @@
 
 #include <random>
 
+#include <rapidcsv/src/rapidcsv.h>
 #include "xenia/base/cvar.h"
 #include "xenia/base/logging.h"
 #include "xenia/base/string_util.h"
@@ -39,6 +40,9 @@ DEFINE_bool(xlink_kai_systemlink_hack, false,
             "Live");
 
 DEFINE_string(network_guid, "", "Network Interface GUID", "Live");
+
+DEFINE_string(friends_xuids, "", "Comma delimited list of XUIDs. (Max 100)",
+              "Live");
 
 DECLARE_string(upnp_root);
 
@@ -98,42 +102,78 @@ const uint64_t XLiveAPI::GetLocalMachineId() {
 
 XLiveAPI::InitState XLiveAPI::GetInitState() { return initialized_; }
 
+std::vector<std::string> XLiveAPI::ParseDelimitedList(std::string_view csv,
+                                                      const uint32_t count) {
+  std::vector<std::string> parsed_list;
+
+  std::stringstream sstream(csv.data());
+
+  rapidcsv::Document delimiter(
+      sstream, rapidcsv::LabelParams(-1, -1), rapidcsv::SeparatorParams(),
+      rapidcsv::ConverterParams(),
+      rapidcsv::LineReaderParams(true /* pSkipCommentLines */,
+                                 '#' /* pCommentPrefix */,
+                                 true /* pSkipEmptyLines */));
+
+  if (!delimiter.GetRowCount()) {
+    return parsed_list;
+  }
+
+  parsed_list = delimiter.GetRow<std::string>(0);
+
+  return parsed_list;
+}
+
 std::vector<std::string> XLiveAPI::ParseAPIList() {
   if (cvars::api_list.empty()) {
     OVERRIDE_string(api_list, default_public_server_ + ",");
   }
 
-  std::unordered_set<std::string> unique_api_addresses;
-  std::vector<std::string> api_addresses;
+  std::vector<std::string> api_addresses =
+      ParseDelimitedList(cvars::api_list, 10);
 
-  std::stringstream api_list(cvars::api_list);
-  std::string api_address;
+  const std::string api_address = GetApiAddress();
 
-  while (std::getline(api_list, api_address, ',')) {
-    if (api_addresses.size() >= 10) {
-      break;
-    }
-
-    api_address = xe::string_util::trim(api_address);
-
-    if (api_address.empty()) {
-      continue;
-    }
-
-    // Check if address is unique
-    if (unique_api_addresses.insert(api_address).second) {
-      api_addresses.push_back(api_address);
-    }
-  }
-
-  if (api_addresses.size() < 10) {
-    if (unique_api_addresses.insert(GetApiAddress()).second) {
-      OVERRIDE_string(api_list, cvars::api_list + GetApiAddress() + ",");
-      api_addresses.push_back(GetApiAddress());
-    }
+  if (std::find(api_addresses.begin(), api_addresses.end(), api_address) ==
+      api_addresses.end()) {
+    OVERRIDE_string(api_list, cvars::api_list + api_address + ",");
+    api_addresses.push_back(api_address);
   }
 
   return api_addresses;
+}
+
+std::vector<std::uint64_t> XLiveAPI::ParseFriendsXUIDs() {
+  const auto& xuids = cvars::friends_xuids;
+
+  const std::vector<std::string> friends_xuids =
+      ParseDelimitedList(xuids, X_ONLINE_MAX_FRIENDS);
+
+  std::vector<std::uint64_t> xuids_parsed;
+
+  uint32_t index = 0;
+  for (const auto& friend_xuid : friends_xuids) {
+    const uint64_t xuid = string_util::from_string<uint64_t>(
+        xe::string_util::trim(friend_xuid), true);
+
+    if (xuid == 0) {
+      XELOGI("{}: Skip adding invalid friend XUID!", __func__);
+      continue;
+    }
+
+    if (index == 0 && xuid <= X_ONLINE_MAX_FRIENDS) {
+      dummy_friends_count = static_cast<uint32_t>(xuid);
+
+      index++;
+      continue;
+    }
+
+    xuids_parsed.push_back(xuid);
+
+    index++;
+  }
+
+  return xuids_parsed;
 }
 
 void XLiveAPI::SetAPIAddress(std::string address) {
@@ -233,6 +273,16 @@ void XLiveAPI::Init() {
 
   std::unique_ptr<HTTPResponseObjectJSON> reg_result = RegisterPlayer();
 
+  if (reg_result &&
+      reg_result->StatusCode() == HTTP_STATUS_CODE::HTTP_CREATED) {
+    const uint32_t index = 0;
+    const auto profile = kernel_state()->xam_state()->GetUserProfile(index);
+
+    if (profile->GetFriends().size() < dummy_friends_count) {
+      profile->AddDummyFriends(dummy_friends_count);
+    }
+  }
+  
   initialized_ = InitState::Success;
 
   // Delete sessions on start-up.
@@ -1189,6 +1239,36 @@ void XLiveAPI::SessionLeaveRemote(uint64_t sessionId,
     XELOGE("SessionLeaveRemote error message: {}", response->Message());
     assert_always();
   }
+}
+
+std::unique_ptr<FriendsPresenceObjectJSON> XLiveAPI::GetFriendsPresence(
+    const std::vector<uint64_t>& xuids) {
+  const std::string endpoint = "players/presence";
+
+  std::unique_ptr<FriendsPresenceObjectJSON> friends =
+      std::make_unique<FriendsPresenceObjectJSON>();
+
+  friends->XUIDs(xuids);
+
+  std::string xuids_list;
+  bool valid = friends->Serialize(xuids_list);
+  assert_true(valid);
+
+  const uint8_t* xuids_data =
+      reinterpret_cast<const uint8_t*>(xuids_list.c_str());
+
+  std::unique_ptr<HTTPResponseObjectJSON> response = Post(endpoint, xuids_data);
+
+  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_CREATED) {
+    XELOGE("FriendsPresence error message: {}", response->Message());
+    assert_always();
+
+    return friends;
+  }
+
+  friends = response->Deserialize<FriendsPresenceObjectJSON>();
+
+  return friends;
 }
 
 std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::PraseResponse(
