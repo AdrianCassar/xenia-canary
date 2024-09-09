@@ -333,6 +333,9 @@ void ProfileManager::Login(const uint64_t xuid, const uint8_t user_index,
   if (XLiveAPI::GetInitState() == XLiveAPI::InitState::Success) {
     std::unique_ptr<HTTPResponseObjectJSON> reg_result =
         XLiveAPI::RegisterPlayer();
+
+    logged_profiles_[assigned_user_slot]->AddDummyFriends(
+        XLiveAPI::dummy_friends_count);
   }
 }
 
