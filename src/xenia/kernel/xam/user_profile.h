@@ -21,6 +21,7 @@
 #include "xenia/kernel/xam/user_property.h"
 #include "xenia/kernel/xam/xdbf/gpd_info_profile.h"
 #include "xenia/kernel/xam/xdbf/gpd_info_title.h"
+#include "xenia/kernel/xnet.h"
 #include "xenia/xbox.h"
 
 DECLARE_bool(offline_mode);
@@ -158,6 +159,26 @@ class UserProfile {
   friend class UserTracker;
   friend class GpdAchievementBackend;
 
+  static X_ONLINE_FRIEND GenerateDummyFriend();
+
+  void AddDummyFriends(const uint32_t friends_count);
+
+  bool GetFriendPresenceFromXUID(const uint64_t xuid,
+                                 X_ONLINE_PRESENCE* presence);
+
+  bool SetFriend(const X_ONLINE_FRIEND& update_peer);
+  bool AddFriendFromXUID(const uint64_t xuid);
+  bool AddFriend(X_ONLINE_FRIEND* add_friend);
+  bool RemoveFriend(const X_ONLINE_FRIEND& peer);
+  bool RemoveFriend(const uint64_t xuid);
+
+  bool GetFriendFromIndex(const uint32_t index, X_ONLINE_FRIEND* peer);
+  bool GetFriendFromXUID(const uint64_t xuid, X_ONLINE_FRIEND* peer);
+  bool IsFriend(const uint64_t xuid, X_ONLINE_FRIEND* peer = nullptr);
+
+  const std::vector<X_ONLINE_FRIEND> GetFriends() const { return friends_; }
+  const std::vector<uint64_t> GetFriendsXUIDs() const;
+
  private:
   uint64_t xuid_;
   X_XAMACCOUNTINFO account_info_;
@@ -165,7 +186,8 @@ class UserProfile {
   GpdInfoProfile dashboard_gpd_;
   std::map<uint32_t, GpdInfoTitle> games_gpd_;
   std::vector<Property> properties_;  // Includes contexts!
-
+  std::vector<X_ONLINE_FRIEND> friends_;
+  
   std::map<XTileType, std::vector<uint8_t>> profile_images_;
 
   GpdInfo* GetGpd(const uint32_t title_id);
