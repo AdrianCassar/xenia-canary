@@ -20,6 +20,7 @@
 #include "xenia/kernel/xnet.h"
 
 #include "xenia/kernel/arbitration_object_json.h"
+#include "xenia/kernel/friend_presence_object_json.h"
 #include "xenia/kernel/http_response_object_json.h"
 #include "xenia/kernel/leaderboard_object_json.h"
 #include "xenia/kernel/player_object_json.h"
@@ -41,7 +42,12 @@ class XLiveAPI {
 
   static InitState GetInitState();
 
+  static std::vector<std::string> ParseDelimitedList(std::string_view csv,
+                                                     uint32_t count);
+
   static std::vector<std::string> ParseAPIList();
+
+  static std::vector<std::uint64_t> XLiveAPI::ParseFriendsXUIDs();
 
   static void SetAPIAddress(std::string address);
 
@@ -129,6 +135,9 @@ class XLiveAPI {
   static void SessionLeaveRemote(uint64_t sessionId,
                                  const std::vector<xe::be<uint64_t>> xuids);
 
+  static std::unique_ptr<FriendsPresenceObjectJSON> GetFriendsPresence(
+      const std::vector<uint64_t>& xuids);
+
   static std::unique_ptr<HTTPResponseObjectJSON> PraseResponse(
       response_data response);
 
@@ -173,6 +182,8 @@ class XLiveAPI {
   inline static xe::be<uint64_t> systemlink_id = 0;
 
   inline static bool xuid_mismatch = false;
+
+  inline static uint32_t dummy_friends_count = 0;
 
   inline static int8_t version_status;
 
