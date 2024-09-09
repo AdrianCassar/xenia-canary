@@ -13,6 +13,7 @@
 #include "xenia/base/logging.h"
 #include "xenia/base/threading.h"
 #include "xenia/kernel/util/shim_utils.h"
+#include "xenia/kernel/xnet.h"
 
 #ifdef XE_PLATFORM_WIN32
 // NOTE: must be included last as it expects windows.h to already be included.
@@ -44,6 +45,15 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
   auto buffer = memory_->TranslateVirtual(buffer_ptr);
 
   switch (message) {
+    case 0x00050002: {
+      // Current session must have PRESENCE flag.
+
+      XELOGD("XInviteSend({:08X}, {:08X})", buffer_ptr, buffer_length);
+      uint32_t* marshalled_object_ptr =
+          memory_->TranslateVirtual<uint32_t*>(buffer_ptr);
+
+      return X_E_SUCCESS;
+    }
     case 0x00058003: {
       // Called on startup of dashboard (netplay build)
       XELOGD("XLiveBaseLogonGetHR({:08X}, {:08X})", buffer_ptr, buffer_length);
@@ -260,7 +270,7 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
           "CXLiveMessaging::XMessageGameInviteGetAcceptedInfo({:08X}, {:08X}) "
           "unimplemented",
           buffer_ptr, buffer_length);
-      return cvars::stub_xlivebase ? X_E_SUCCESS : X_E_FAIL;
+      return X_E_SUCCESS;
     }
     case 0x00058032: {
       XELOGD("XGetTaskProgress({:08X}, {:08X}) unimplemented", buffer_ptr,
@@ -321,7 +331,7 @@ X_HRESULT XLiveBaseApp::XPresenceInitialize(uint32_t buffer_length) {
   uint32_t max_peer_subscriptions =
       xe::load_and_swap<uint32_t>(memory->TranslateVirtual(entry->object_ptr));
 
-  if (max_peer_subscriptions > 0x190) {
+  if (max_peer_subscriptions > X_ONLINE_PEER_SUBSCRIPTIONS) {
     return X_E_INVALIDARG;
   }
 
@@ -379,11 +389,15 @@ X_HRESULT XLiveBaseApp::CreateFriendsEnumerator(uint32_t buffer_args) {
   const uint32_t friends_amount = xe::load_and_swap<uint32_t>(
       memory->TranslateVirtual(arg_list->entry[2].object_ptr));
 
-  if (friends_starting_index >= 0x64) {
+  if (user_index >= X_USER_MAX_USERS) {
     return X_E_INVALIDARG;
   }
 
-  if (friends_amount > 0x64) {
+  if (friends_starting_index >= X_ONLINE_MAX_FRIENDS) {
+    return X_E_INVALIDARG;
+  }
+
+  if (friends_amount > X_ONLINE_MAX_FRIENDS) {
     return X_E_INVALIDARG;
   }
 
@@ -401,18 +415,46 @@ X_HRESULT XLiveBaseApp::CreateFriendsEnumerator(uint32_t buffer_args) {
   uint32_t* buffer_ptr = memory->TranslateVirtual<uint32_t*>(buffer_address);
   uint32_t* handle_ptr = memory->TranslateVirtual<uint32_t*>(handle_address);
 
-  // TODO(Gliniak): Enumerator itself stores user_index XUID at enumerator
-  // address + 0x24
-  auto e =
-      make_object<XStaticUntypedEnumerator>(kernel_state_, friends_amount, 0);
-  auto result = e->Initialize(-1, app_id(), 0x58021, 0x58022, 0, 0x10, nullptr);
+  if (!kernel_state()->xam_state()->IsUserSignedIn(user_index)) {
+    return X_E_NO_SUCH_USER;
+  }
+
+  auto const profile = kernel_state()->xam_state()->GetUserProfile(user_index);
+
+  auto e = make_object<XStaticEnumerator<X_ONLINE_FRIEND>>(kernel_state_,
+                                                           friends_amount);
+  auto result = e->Initialize(-1, app_id(), 0x58021, 0x58022, 0);
 
   if (XFAILED(result)) {
     return result;
   }
 
-  const uint32_t received_friends_count = 0;
-  *buffer_ptr = xe::byte_swap<uint32_t>(received_friends_count * 0xC4);
+  const std::vector<uint64_t> peer_xuids = profile->GetFriendsXUIDs();
+
+  const auto presences = XLiveAPI::GetFriendsPresence(peer_xuids);
+
+  for (const auto& player : presences->PlayersPresence()) {
+    X_ONLINE_FRIEND peer = player.GetFriendPresence();
+
+    profile->SetFriend(peer);
+  }
+
+  for (auto i = friends_starting_index; i < e->items_per_enumerate(); i++) {
+    X_ONLINE_FRIEND peer = {};
+
+    const bool is_friend = profile->GetFriendFromIndex(i, &peer);
+
+    if (is_friend) {
+      auto item = e->AppendItem();
+
+      memcpy(item, &peer, sizeof(X_ONLINE_FRIEND));
+    }
+  }
+
+  const uint32_t friends_buffer_size =
+      static_cast<uint32_t>(e->items_per_enumerate() * e->item_size());
+
+  *buffer_ptr = xe::byte_swap<uint32_t>(friends_buffer_size);
 
   *handle_ptr = xe::byte_swap<uint32_t>(e->handle());
   return X_E_SUCCESS;

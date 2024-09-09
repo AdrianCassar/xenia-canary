@@ -591,10 +591,10 @@ dword_result_t XamUserGetMembershipTierFromXUID_entry(qword_t xuid) {
 }
 DECLARE_XAM_EXPORT1(XamUserGetMembershipTierFromXUID, kUserProfiles, kStub);
 
-dword_result_t XamUserAreUsersFriends_entry(dword_t user_index, dword_t unk1,
-                                            dword_t unk2, lpdword_t out_value,
-                                            dword_t overlapped_ptr) {
-  uint32_t are_friends = 0;
+dword_result_t XamUserAreUsersFriends_entry(
+    dword_t user_index, pointer_t<xe::be<uint64_t>> xuids_ptr,
+    dword_t xuids_count, lpdword_t out_value, dword_t overlapped_ptr) {
+  bool are_friends = false;
   X_RESULT result;
 
   if (user_index >= XUserMaxUserCount) {
@@ -606,8 +606,19 @@ dword_result_t XamUserAreUsersFriends_entry(dword_t user_index, dword_t unk1,
       if (user_profile->signin_state() == X_USER_SIGNIN_STATE::NotSignedIn) {
         result = X_ERROR_NOT_LOGGED_ON;
       } else {
-        // No friends!
-        are_friends = 0;
+        uint32_t friend_count = 0;
+
+        for (uint32_t i = 0; i < xuids_count; i++) {
+          const xe::be<uint64_t> xuid = xuids_ptr[i];
+
+          const bool is_friend = user_profile->IsFriend(xuid);
+
+          if (is_friend) {
+            friend_count++;
+          }
+        }
+
+        are_friends = friend_count == xuids_count;
         result = X_ERROR_SUCCESS;
       }
     } else {
