@@ -22,6 +22,7 @@
 #include "xenia/kernel/util/property.h"
 #include "xenia/kernel/util/xuserdata.h"
 #include "xenia/kernel/xam/achievement_manager.h"
+#include "xenia/kernel/xnet.h"
 #include "xenia/xbox.h"
 
 DECLARE_bool(offline_mode);
@@ -197,6 +198,26 @@ class UserProfile {
     return account_info_.GetSubscriptionTier();
   }
 
+  static X_ONLINE_FRIEND GenerateDummyFriend();
+
+  void AddDummyFriends(const uint32_t friends_count);
+
+  bool GetFriendPresenceFromXUID(const uint64_t xuid,
+                                 X_ONLINE_PRESENCE* presence);
+
+  bool SetFriend(const X_ONLINE_FRIEND& update_peer);
+  bool AddFriendFromXUID(const uint64_t xuid);
+  bool AddFriend(X_ONLINE_FRIEND* add_friend);
+  bool RemoveFriend(const X_ONLINE_FRIEND& peer);
+  bool RemoveFriend(const uint64_t xuid);
+
+  bool GetFriendFromIndex(const uint32_t index, X_ONLINE_FRIEND* peer);
+  bool GetFriendFromXUID(const uint64_t xuid, X_ONLINE_FRIEND* peer);
+  bool IsFriend(const uint64_t xuid, X_ONLINE_FRIEND* peer = nullptr);
+
+  const std::vector<X_ONLINE_FRIEND> GetFriends() const { return friends_; }
+  const std::vector<uint64_t> GetFriendsXUIDs() const;
+
   void AddSetting(std::unique_ptr<UserSetting> setting);
   UserSetting* GetSetting(uint32_t setting_id);
 
@@ -220,6 +241,7 @@ class UserProfile {
   std::vector<std::unique_ptr<UserSetting>> setting_list_;
   std::unordered_map<uint32_t, UserSetting*> settings_;
   std::map<uint32_t, std::vector<AchievementGpdStructure>> achievements_;
+  std::vector<X_ONLINE_FRIEND> friends_;
 
   std::vector<Property> properties_;
 
