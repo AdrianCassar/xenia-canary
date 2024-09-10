@@ -344,7 +344,7 @@ X_HRESULT XLiveBaseApp::GetServiceInfo(uint32_t serviceid,
       XLiveAPI::GetServiceInfoById(serviceid);
 
   if (retrieved_service_info.ip.s_addr == 0) {
-    return X_ERROR_SERVICE_NOT_FOUND;
+    return X_ERROR_LOGON_SERVICE_NOT_REQUESTED;
     // return X_ERROR_CONNECTION_INVALID;
     // return -1;           // ERROR_FUNCTION_FAILED
   }
