@@ -65,6 +65,7 @@ namespace kernel {
 struct XNKID {
   uint8_t ab[8];
   uint64_t as_uint64() { return *reinterpret_cast<uint64_t*>(&ab); }
+  uint64_t as_uintBE64() { return xe::byte_swap(as_uint64()); }
 };
 
 struct XNKEY {
