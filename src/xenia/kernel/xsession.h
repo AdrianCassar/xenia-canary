@@ -343,8 +343,6 @@ class XSession : public XObject {
   static constexpr uint8_t XNKID_ONLINE = 0xAE;
   static constexpr uint8_t XNKID_SYSTEM_LINK = 0x00;
 
-  // static constexpr uint32_t ERROR_SESSION_WRONG_STATE = 0x80155206;
-
   static void GenerateIdentityExchangeKey(XNKEY* key) {
     for (uint8_t i = 0; i < sizeof(XNKEY); i++) {
       key->ab[i] = i;
