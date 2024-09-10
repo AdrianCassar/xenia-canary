@@ -120,7 +120,8 @@ class XLiveAPI {
 
   static std::vector<X_TITLE_SERVER> GetServers();
 
-  static X_ONLINE_SERVICE_INFO GetServiceInfoById(uint32_t serviceId);
+  static HTTP_STATUS_CODE GetServiceInfoById(
+      uint32_t serviceId, X_ONLINE_SERVICE_INFO* session_info);
 
   static void SessionJoinRemote(
       uint64_t sessionId, const std::unordered_map<uint64_t, bool> members);

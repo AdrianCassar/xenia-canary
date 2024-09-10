@@ -330,27 +330,29 @@ X_HRESULT XLiveBaseApp::XPresenceInitialize(uint32_t buffer_length) {
 
 X_HRESULT XLiveBaseApp::GetServiceInfo(uint32_t serviceid,
                                        uint32_t serviceinfo) {
-  if (serviceinfo == NULL) {
+  if (!XLiveAPI::IsOnline()) {
+    return X_ONLINE_E_LOGON_NOT_LOGGED_ON;
+  }
+
+  if (!serviceinfo) {
     return X_E_SUCCESS;
   }
 
-  X_ONLINE_SERVICE_INFO* service_info =
-      reinterpret_cast<X_ONLINE_SERVICE_INFO*>(
-          memory_->TranslateVirtual(serviceinfo));
+  X_ONLINE_SERVICE_INFO* service_info_ptr =
+      memory_->TranslateVirtual<X_ONLINE_SERVICE_INFO*>(serviceinfo);
 
-  memset(service_info, 0, sizeof(X_ONLINE_SERVICE_INFO));
+  memset(service_info_ptr, 0, sizeof(X_ONLINE_SERVICE_INFO));
 
-  X_ONLINE_SERVICE_INFO retrieved_service_info =
-      XLiveAPI::GetServiceInfoById(serviceid);
+  X_ONLINE_SERVICE_INFO service_info = {};
 
-  if (retrieved_service_info.ip.s_addr == 0) {
-    return X_ERROR_LOGON_SERVICE_NOT_REQUESTED;
-    // return X_ERROR_CONNECTION_INVALID;
-    // return -1;           // ERROR_FUNCTION_FAILED
+  HTTP_STATUS_CODE status =
+      XLiveAPI::GetServiceInfoById(serviceid, &service_info);
+
+  if (status != HTTP_STATUS_CODE::HTTP_OK) {
+    return X_ONLINE_E_LOGON_SERVICE_NOT_REQUESTED;
   }
 
-  service_info->ip.s_addr = retrieved_service_info.ip.s_addr;
-  service_info->port = retrieved_service_info.port;
+  memcpy(service_info_ptr, &service_info, sizeof(X_ONLINE_SERVICE_INFO));
 
   return X_E_SUCCESS;
 }
