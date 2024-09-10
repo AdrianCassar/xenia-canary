@@ -1057,7 +1057,7 @@ dword_result_t NetDll_XNetQosListen_entry(
     return X_ERROR_SUCCESS;
   }
 
-  const uint64_t session_id = xe::byte_swap(sessionId->as_uint64());
+  const uint64_t session_id = sessionId->as_uintBE64();
 
   XSession::IsValidXNKID(session_id);
 
@@ -1209,7 +1209,7 @@ dword_result_t NetDll_XNetQosLookup_entry(
   const uint32_t probes = qos->count - countOffset;
 
   for (uint32_t i = 0; i < probes; i++) {
-    uint64_t session_id = xe::byte_swap(session_ids[i].as_uint64());
+    uint64_t session_id = session_ids[i].as_uintBE64();
     response_data chunk = XLiveAPI::QoSGet(session_id);
 
     if (chunk.http_code == HTTP_STATUS_CODE::HTTP_OK ||
@@ -1935,7 +1935,7 @@ dword_result_t NetDll_XNetRegisterKey_entry(dword_t caller,
                                             pointer_t<XNKID> session_key,
                                             pointer_t<XNKEY> exchange_key) {
   // Very hacky needs fixing!
-  XLiveAPI::systemlink_id = session_key->as_uint64();
+  XLiveAPI::systemlink_id = session_key->as_uintBE64();
   return 0;
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetRegisterKey, kNetworking, kStub);
