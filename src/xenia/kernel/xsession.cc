@@ -148,7 +148,7 @@ X_RESULT XSession::CreateHostSession(XSESSION_INFO* session_info,
   session_data->num_slots_private = private_slots;
   session_data->flags = flags;
 
-  const uint64_t systemlink_id = xe::byte_swap(XLiveAPI::systemlink_id);
+  const uint64_t systemlink_id = XLiveAPI::systemlink_id;
 
   if (IsSystemlink()) {
     XELOGI("Creating systemlink session");
@@ -213,15 +213,16 @@ X_RESULT XSession::JoinExistingSession(XSESSION_INFO* session_info) {
 }
 
 X_RESULT XSession::DeleteSession() {
-  state_ |= STATE_FLAGS_DELETED;
-
   // Begin XNetUnregisterKey?
+
+  state_ |= STATE_FLAGS_DELETED;
 
   if (IsHost() && IsXboxLive()) {
     XLiveAPI::DeleteSession(session_id_);
   }
 
-  // session_id_ = 0;
+  session_id_ = 0;
+  XLiveAPI::systemlink_id = session_id_;
 
   local_details_.eState = XSESSION_STATE::DELETED;
   // local_details_.sessionInfo.sessionID = XNKID{};
@@ -904,7 +905,7 @@ void XSession::PrintSessionDetails() {
       local_details_.AvailablePublicSlots.get(),
       local_details_.ActualMemberCount.get(),
       local_details_.ReturnedMemberCount.get(),
-      local_details_.xnkidArbitration.as_uint64());
+      local_details_.xnkidArbitration.as_uintBE64());
 
   uint32_t index = 0;
 
