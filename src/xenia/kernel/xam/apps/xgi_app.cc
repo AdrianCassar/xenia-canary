@@ -196,6 +196,10 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
         }
       }
 
+      if (xuidsJsonArray.Empty()) {
+        return X_E_SUCCESS;
+      }
+
       doc.AddMember("players", xuidsJsonArray, doc.GetAllocator());
 
       std::string title_id = fmt::format("{:08x}", kernel_state()->title_id());
