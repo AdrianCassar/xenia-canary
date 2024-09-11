@@ -1966,8 +1966,19 @@ void EmulatorWindow::NetplayStatus() {
       msg += fmt::format("Network Interface GUID: {}", cvars::network_guid);
     }
   } else {
-    msg += fmt::format("Network Interface: {}",
-                       xe::kernel::XLiveAPI::interface_name);
+    std::string WAN_interface = xe::kernel::XLiveAPI::adapter_has_wan_routing
+                                    ? "(Internet)"
+                                    : "(No Internet)";
+
+    std::string interface_format = "Network Interface: {}";
+
+    if (xe::kernel::XLiveAPI::GetInitState() !=
+        xe::kernel::XLiveAPI::InitState::Pending) {
+      interface_format = "Network Interface: {} - {}";
+    }
+
+    msg += fmt::format(interface_format, xe::kernel::XLiveAPI::interface_name,
+                       WAN_interface);
   }
 
   msg += "\n";

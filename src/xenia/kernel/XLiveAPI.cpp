@@ -212,7 +212,7 @@ void XLiveAPI::Init() {
 
   if (!IsOnline()) {
     // Assign online ip as local ip to ensure XNADDR is not 0 for systemlink
-    //online_ip_ = local_ip_;
+    // online_ip_ = local_ip_;
 
     // Fixes 4D53085F from crashing when joining via systemlink.
     kernel_state()->BroadcastNotification(kXNotificationIDLiveConnectionChanged,
@@ -1428,8 +1428,12 @@ void XLiveAPI::SelectNetworkInterface() {
     }
   }
 
-  XELOGI("Set network interface: {} {} {}", interface_name, cvars::network_guid,
-         ip_to_string(local_ip_));
+  std::string WAN_interface = xe::kernel::XLiveAPI::adapter_has_wan_routing
+                                  ? "(Internet)"
+                                  : "(No Internet)";
+
+  XELOGI("Set network interface: {} {} {} {}", interface_name,
+         cvars::network_guid, LocalIP_str(), WAN_interface);
 
   assert_false(cvars::network_guid == "");
 }
