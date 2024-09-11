@@ -164,6 +164,8 @@ class XLiveAPI {
 
   inline static std::vector<IP_ADAPTER_ADDRESSES> adapter_addresses{};
 
+  inline static bool adapter_has_wan_routing = false;
+
   inline static std::map<uint32_t, uint64_t> sessionIdCache{};
   inline static std::map<uint32_t, uint64_t> macAddressCache{};
   inline static std::map<uint64_t, std::vector<uint8_t>> qos_payload_cache{};
@@ -179,8 +181,6 @@ class XLiveAPI {
       "https://xenia-netplay-2a0298c0e3f4.herokuapp.com/";
 
   inline static InitState initialized_ = InitState::Pending;
-
-  inline static bool adapter_has_wan_routing = false;
 
   static std::unique_ptr<HTTPResponseObjectJSON> Get(std::string endpoint);
 
