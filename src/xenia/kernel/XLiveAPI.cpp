@@ -60,13 +60,17 @@ namespace kernel {
 void XLiveAPI::IpGetConsoleXnAddr(XNADDR* XnAddr_ptr) {
   memset(XnAddr_ptr, 0, sizeof(XNADDR));
 
-  if (IsOnline()) {
-    XnAddr_ptr->ina = OnlineIP().sin_addr;
-    XnAddr_ptr->inaOnline = OnlineIP().sin_addr;
+  if (!cvars::offline_mode) {
+    if (IsOnline() && adapter_has_wan_routing) {
+      XnAddr_ptr->ina = OnlineIP().sin_addr;
+      XnAddr_ptr->inaOnline = OnlineIP().sin_addr;
+    } else {
+      XnAddr_ptr->ina = LocalIP().sin_addr;
+      XnAddr_ptr->inaOnline = LocalIP().sin_addr;
+    }
+
     XnAddr_ptr->wPortOnline = GetPlayerPort();
   }
-
-  // XnAddr_ptr->ina = LocalIP().sin_addr;
 
   memcpy(XnAddr_ptr->abEnet, mac_address_->raw(), sizeof(MacAddress));
   memcpy(XnAddr_ptr->abOnline, mac_address_->raw(), sizeof(MacAddress));
@@ -208,7 +212,7 @@ void XLiveAPI::Init() {
 
   if (!IsOnline()) {
     // Assign online ip as local ip to ensure XNADDR is not 0 for systemlink
-    online_ip_ = local_ip_;
+    //online_ip_ = local_ip_;
 
     // Fixes 4D53085F from crashing when joining via systemlink.
     kernel_state()->BroadcastNotification(kXNotificationIDLiveConnectionChanged,
@@ -1342,11 +1346,15 @@ bool XLiveAPI::UpdateNetworkInterface(sockaddr_in local_ip,
       if (cvars::network_guid.empty()) {
         if (local_ip.sin_addr.s_addr == adapter_addr.sin_addr.s_addr ||
             local_ip.sin_addr.s_addr == 0) {
+          adapter_has_wan_routing =
+              (local_ip.sin_addr.s_addr == adapter_addr.sin_addr.s_addr);
           local_ip_ = adapter_addr;
           OVERRIDE_string(network_guid, adapter.AdapterName);
           return true;
         }
       } else {
+        adapter_has_wan_routing =
+            local_ip.sin_addr.s_addr == adapter_addr.sin_addr.s_addr;
         local_ip_ = adapter_addr;
         OVERRIDE_string(network_guid, adapter.AdapterName);
         return true;
@@ -1420,7 +1428,8 @@ void XLiveAPI::SelectNetworkInterface() {
     }
   }
 
-  XELOGI("Set network interface: {} {}", interface_name, cvars::network_guid);
+  XELOGI("Set network interface: {} {} {}", interface_name, cvars::network_guid,
+         ip_to_string(local_ip_));
 
   assert_false(cvars::network_guid == "");
 }
