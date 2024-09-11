@@ -2196,6 +2196,13 @@ void EmulatorWindow::NetplayStatus() {
       xe::kernel::XLiveAPI::InitState::Pending) {
     msg += "\n";
 
+    if (xe::kernel::XLiveAPI::GetInitState() !=
+        xe::kernel::XLiveAPI::InitState::Pending) {
+      if (xe::kernel::XLiveAPI::xuid_mismatch) {
+        msg += "XUID mismatch expect unstable netplay!\n";
+      }
+    }
+
     if (xe::kernel::XLiveAPI::GetInitState() ==
         xe::kernel::XLiveAPI::InitState::Success) {
       msg += "Communication succeeded with api_address: " + cvars::api_address;
