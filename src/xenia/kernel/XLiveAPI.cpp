@@ -530,9 +530,12 @@ std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::RegisterPlayer() {
 
   // Check for errnours profile lookup
   if (player_lookup->XUID() != player.XUID()) {
-    XELOGI("XLiveAPI:: Player 0 XUID mismatch!");
+    XELOGI("XLiveAPI:: {} XUID mismatch!", player.Gamertag());
+    xuid_mismatch = true;
 
-    assert_always();
+    // assert_always();
+  } else {
+    xuid_mismatch = false;
   }
 
   return response;

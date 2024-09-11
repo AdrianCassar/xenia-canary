@@ -172,6 +172,8 @@ class XLiveAPI {
 
   inline static xe::be<uint64_t> systemlink_id = 0;
 
+  inline static bool xuid_mismatch = false;
+
   inline static int8_t version_status;
 
  private:
