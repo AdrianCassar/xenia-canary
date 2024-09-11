@@ -180,6 +180,8 @@ class XLiveAPI {
 
   inline static InitState initialized_ = InitState::Pending;
 
+  inline static bool adapter_has_wan_routing = false;
+
   static std::unique_ptr<HTTPResponseObjectJSON> Get(std::string endpoint);
 
   static std::unique_ptr<HTTPResponseObjectJSON> Post(std::string endpoint,
