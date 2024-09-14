@@ -222,7 +222,9 @@ X_RESULT XSession::DeleteSession() {
   }
 
   session_id_ = 0;
-  XLiveAPI::systemlink_id = session_id_;
+
+  // Multiple sessions cause issues
+  // XLiveAPI::systemlink_id = session_id_;
 
   local_details_.eState = XSESSION_STATE::DELETED;
   // local_details_.sessionInfo.sessionID = XNKID{};
