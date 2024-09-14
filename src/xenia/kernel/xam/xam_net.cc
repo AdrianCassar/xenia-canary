@@ -46,6 +46,8 @@ DECLARE_bool(log_mask_ips);
 
 DECLARE_bool(offline_mode);
 
+DECLARE_bool(xlink_kai_systemlink_hack);
+
 enum XNET_QOS {
   LISTEN_ENABLE = 0x01,
   LISTEN_DISABLE = 0x02,
@@ -1491,6 +1493,11 @@ dword_result_t NetDll_bind_entry(dword_t caller, dword_t socket_handle,
   if (!socket) {
     XThread::SetLastError(uint32_t(X_WSAError::X_WSAENOTSOCK));
     return -1;
+  }
+
+  if (!XLiveAPI::adapter_has_wan_routing && cvars::xlink_kai_systemlink_hack) {
+    // Force socket to bind to the IP of the selected interface
+    name->address_ip = XLiveAPI::LocalIP().sin_addr;
   }
 
   X_STATUS status = socket->Bind(name, namelen);
