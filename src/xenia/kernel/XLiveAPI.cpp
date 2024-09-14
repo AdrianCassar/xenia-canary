@@ -33,6 +33,10 @@ DEFINE_bool(log_mask_ips, true, "Do not include P2P IPs inside the log",
 DEFINE_bool(offline_mode, false, "Offline Mode e.g. not connected to a LAN",
             "Live");
 
+DEFINE_bool(xlink_kai_systemlink_hack, false,
+            "Enable hacks for XLink Kai support. May break some games. See: https://www.teamxlink.co.uk/wiki/Xenia_Support", "Live");
+
+
 DEFINE_string(network_guid, "", "Network Interface GUID", "Live");
 
 DECLARE_string(upnp_root);
