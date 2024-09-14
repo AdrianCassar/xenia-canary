@@ -870,7 +870,7 @@ dword_result_t NetDll_XNetInAddrToXnAddr_entry(dword_t caller, dword_t in_addr,
           xe::byte_swap(XLiveAPI::sessionIdCache[xn_addr->inaOnline.s_addr]);
     }
 
-    XSession::IsValidXNKID(xe::byte_swap(*sessionId_ptr));
+    XSession::IsValidXNKID(*sessionId_ptr);
   }
 
   return X_STATUS_SUCCESS;
