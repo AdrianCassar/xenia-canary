@@ -12,6 +12,7 @@
 
 #include "xenia/base/logging.h"
 #include "xenia/base/threading.h"
+#include "xenia/kernel/XLiveAPI.h"
 #include "xenia/kernel/util/shim_utils.h"
 #include "xenia/kernel/xnet.h"
 
@@ -22,8 +23,6 @@
 #elif XE_PLATFORM_LINUX
 #include <netinet/in.h>
 #endif
-
-#include "xenia/kernel/XLiveAPI.h"
 
 DEFINE_bool(stub_xlivebase, false,
             "Return success for all unimplemented XLiveBase calls.", "Live");
@@ -247,14 +246,16 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
       return X_E_SUCCESS;
     }
     case 0x00058019: {
+      // 54510846
       XELOGD("XPresenceCreateEnumerator({:08X}, {:08X}) unimplemented",
              buffer_ptr, buffer_length);
-      return X_E_SUCCESS;
+      return XPresenceCreateEnumerator(buffer_length);
     }
     case 0x0005801E: {
+      // 54510846
       XELOGD("XPresenceSubscribe({:08X}, {:08X}) unimplemented", buffer_ptr,
              buffer_length);
-      return X_E_SUCCESS;
+      return XPresenceSubscribe(buffer_length);
     }
     case 0x00058020: {
       // 0x00058004 is called right before this.
@@ -293,14 +294,12 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
     case 0x00058044: {
       XELOGD("XPresenceUnsubscribe({:08X}, {:08X}) unimplemented", buffer_ptr,
              buffer_length);
-      return X_E_SUCCESS;
+      return XPresenceUnsubscribe(buffer_length);
     }
     case 0x00058046: {
       // Used in newer games such as Forza 4, MW3, FH2
       //
       // Required to be successful for 4D530910 to detect signed-in profile
-      // Doesn't seem to set anything in the given buffer, probably only takes
-      // input
       XELOGD("XPresenceInitialize({:08X}, {:08X}) unimplemented", buffer_ptr,
              buffer_length);
       return XPresenceInitialize(buffer_length);
@@ -318,6 +317,9 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
   return cvars::stub_xlivebase ? X_E_SUCCESS : X_E_FAIL;
 }
 
+uint32_t MAX_TITLE_SUBSCRIPTIONS = 0;
+uint32_t ACTIVE_TITLE_SUBSCRIPTIONS = 0;
+
 X_HRESULT XLiveBaseApp::XPresenceInitialize(uint32_t buffer_length) {
   if (!buffer_length) {
     return X_E_INVALIDARG;
@@ -325,15 +327,246 @@ X_HRESULT XLiveBaseApp::XPresenceInitialize(uint32_t buffer_length) {
 
   Memory* memory = kernel_state_->memory();
 
-  X_ARGUEMENT_ENTRY* entry =
+  const X_ARGUEMENT_ENTRY* entry =
       memory->TranslateVirtual<X_ARGUEMENT_ENTRY*>(buffer_length);
 
-  uint32_t max_peer_subscriptions =
+  const uint32_t max_peer_subscriptions =
       xe::load_and_swap<uint32_t>(memory->TranslateVirtual(entry->object_ptr));
 
   if (max_peer_subscriptions > X_ONLINE_PEER_SUBSCRIPTIONS) {
     return X_E_INVALIDARG;
   }
+
+  MAX_TITLE_SUBSCRIPTIONS = max_peer_subscriptions;
+
+  return X_E_SUCCESS;
+}
+
+// Presence information for peers will be registered if they're not friends and
+// will be retuned in XPresenceCreateEnumerator.
+X_HRESULT XLiveBaseApp::XPresenceSubscribe(uint32_t buffer_length) {
+  if (!buffer_length) {
+    return X_E_INVALIDARG;
+  }
+
+  Memory* memory = kernel_state_->memory();
+
+  const X_PRESENCE_SUBSCRIBE* args_list =
+      memory->TranslateVirtual<X_PRESENCE_SUBSCRIBE*>(buffer_length);
+
+  const uint32_t user_index = xe::load_and_swap<uint32_t>(
+      memory->TranslateVirtual(args_list->user_index.object_ptr));
+  const uint32_t num_peers = xe::load_and_swap<uint32_t>(
+      memory->TranslateVirtual(args_list->peers.object_ptr));
+
+  if (!kernel_state()->xam_state()->IsUserSignedIn(user_index)) {
+    return X_E_INVALIDARG;
+  }
+
+  if (num_peers <= 0) {
+    return X_E_INVALIDARG;
+  }
+
+  const uint32_t xuid_address = args_list->peer_xuids_ptr.object_ptr;
+
+  if (!xuid_address) {
+    return X_E_INVALIDARG;
+  }
+
+  const xe::be<uint64_t>* peer_xuids =
+      memory->TranslateVirtual<xe::be<uint64_t>*>(xuid_address);
+
+  if (!kernel_state()->xam_state()->IsUserSignedIn(user_index)) {
+    return X_E_NO_SUCH_USER;
+  }
+
+  const auto profile = kernel_state()->xam_state()->GetUserProfile(user_index);
+
+  for (uint32_t i = 0; i < num_peers; i++) {
+    const xe::be<uint64_t> xuid = peer_xuids[i];
+
+    if (!xuid) {
+      continue;
+    }
+
+    if (profile->IsFriend(xuid)) {
+      continue;
+    }
+
+    if (ACTIVE_TITLE_SUBSCRIPTIONS <= MAX_TITLE_SUBSCRIPTIONS) {
+      ACTIVE_TITLE_SUBSCRIPTIONS++;
+
+      profile->SubscribeFromXUID(xuid);
+    } else {
+      XELOGI("Max subscriptions reached");
+    }
+  }
+
+  return X_E_SUCCESS;
+}
+
+// Presence information for peers will not longer be retuned in
+// XPresenceCreateEnumerator unless they're friends.
+X_HRESULT XLiveBaseApp::XPresenceUnsubscribe(uint32_t buffer_length) {
+  if (!buffer_length) {
+    return X_E_INVALIDARG;
+  }
+
+  Memory* memory = kernel_state_->memory();
+
+  const X_PRESENCE_UNSUBSCRIBE* args_list =
+      memory->TranslateVirtual<X_PRESENCE_UNSUBSCRIBE*>(buffer_length);
+
+  const uint32_t user_index = xe::load_and_swap<uint32_t>(
+      memory->TranslateVirtual(args_list->user_index.object_ptr));
+  const uint32_t num_peers = xe::load_and_swap<uint32_t>(
+      memory->TranslateVirtual(args_list->peers.object_ptr));
+
+  if (!kernel_state()->xam_state()->IsUserSignedIn(user_index)) {
+    return X_E_INVALIDARG;
+  }
+
+  if (num_peers <= 0) {
+    return X_E_INVALIDARG;
+  }
+
+  const uint32_t xuid_address = args_list->peer_xuids_ptr.object_ptr;
+
+  if (!xuid_address) {
+    return X_E_INVALIDARG;
+  }
+
+  const xe::be<uint64_t>* peer_xuids =
+      memory->TranslateVirtual<xe::be<uint64_t>*>(xuid_address);
+
+  if (!kernel_state()->xam_state()->IsUserSignedIn(user_index)) {
+    return X_E_NO_SUCH_USER;
+  }
+
+  const auto profile = kernel_state()->xam_state()->GetUserProfile(user_index);
+
+  for (uint32_t i = 0; i < num_peers; i++) {
+    const xe::be<uint64_t> xuid = peer_xuids[i];
+
+    if (!xuid) {
+      continue;
+    }
+
+    if (profile->IsFriend(xuid)) {
+      continue;
+    }
+
+    if (ACTIVE_TITLE_SUBSCRIPTIONS > 0) {
+      ACTIVE_TITLE_SUBSCRIPTIONS--;
+
+      profile->UnsubscribeFromXUID(xuid);
+    }
+  }
+
+  return X_E_SUCCESS;
+}
+
+// Return presence information for a user's friends and subscribed peers.
+X_HRESULT XLiveBaseApp::XPresenceCreateEnumerator(uint32_t buffer_length) {
+  if (!buffer_length) {
+    return X_E_INVALIDARG;
+  }
+
+  Memory* memory = kernel_state_->memory();
+
+  const X_PRESENCE_CREATE* args_list = reinterpret_cast<X_PRESENCE_CREATE*>(
+      memory->TranslateVirtual(buffer_length));
+
+  const uint32_t user_index = xe::load_and_swap<uint32_t>(
+      memory->TranslateVirtual(args_list->user_index.object_ptr));
+  const uint32_t num_peers = xe::load_and_swap<uint32_t>(
+      memory->TranslateVirtual(args_list->num_peers.object_ptr));
+  const uint32_t max_peers = xe::load_and_swap<uint32_t>(
+      memory->TranslateVirtual(args_list->max_peers.object_ptr));
+  const uint32_t starting_index = xe::load_and_swap<uint32_t>(
+      memory->TranslateVirtual(args_list->starting_index.object_ptr));
+
+  if (!kernel_state()->xam_state()->IsUserSignedIn(user_index)) {
+    return X_E_INVALIDARG;
+  }
+
+  if (num_peers <= 0) {
+    return X_E_INVALIDARG;
+  }
+
+  if (max_peers > X_ONLINE_MAX_FRIENDS) {
+    return X_E_INVALIDARG;
+  }
+
+  if (starting_index > num_peers) {
+    return X_E_INVALIDARG;
+  }
+
+  const uint32_t xuid_address = args_list->peer_xuids_ptr.object_ptr;
+  const uint32_t buffer_address = args_list->buffer_length_ptr.object_ptr;
+  const uint32_t handle_address = args_list->enumerator_handle_ptr.object_ptr;
+
+  if (!xuid_address) {
+    return X_E_INVALIDARG;
+  }
+
+  if (!buffer_address) {
+    return X_E_INVALIDARG;
+  }
+
+  if (!handle_address) {
+    return X_E_INVALIDARG;
+  }
+
+  if (!kernel_state()->xam_state()->IsUserSignedIn(user_index)) {
+    return X_E_NO_SUCH_USER;
+  }
+
+  const auto profile = kernel_state()->xam_state()->GetUserProfile(user_index);
+
+  auto e = make_object<XStaticEnumerator<X_ONLINE_PRESENCE>>(kernel_state_,
+                                                             num_peers);
+  auto result = e->Initialize(user_index, app_id(), 0x5801A, 0x5801B, 0);
+
+  if (XFAILED(result)) {
+    return result;
+  }
+
+  const xe::be<uint64_t>* peer_xuids_ptr =
+      memory->TranslateVirtual<xe::be<uint64_t>*>(xuid_address);
+
+  const auto peer_xuids =
+      std::vector<uint64_t>(peer_xuids_ptr, peer_xuids_ptr + num_peers);
+
+  UpdatePresenceXUIDs(peer_xuids, user_index);
+
+  for (auto i = starting_index; i < e->items_per_enumerate(); i++) {
+    const xe::be<uint64_t> xuid = peer_xuids[i];
+
+    if (!xuid) {
+      continue;
+    }
+
+    if (profile->IsFriend(xuid)) {
+      auto item = e->AppendItem();
+
+      profile->GetFriendPresenceFromXUID(xuid, item);
+    } else if (profile->IsSubscribed(xuid)) {
+      auto item = e->AppendItem();
+
+      profile->GetSubscriptionFromXUID(xuid, item);
+    }
+  }
+
+  uint32_t* buffer_ptr = memory->TranslateVirtual<uint32_t*>(buffer_address);
+  uint32_t* handle_ptr = memory->TranslateVirtual<uint32_t*>(handle_address);
+
+  const uint32_t presence_buffer_size =
+      static_cast<uint32_t>(e->items_per_enumerate() * e->item_size());
+
+  *buffer_ptr = xe::byte_swap<uint32_t>(presence_buffer_size);
+
+  *handle_ptr = xe::byte_swap<uint32_t>(e->handle());
 
   return X_E_SUCCESS;
 }
@@ -429,15 +662,7 @@ X_HRESULT XLiveBaseApp::CreateFriendsEnumerator(uint32_t buffer_args) {
     return result;
   }
 
-  const std::vector<uint64_t> peer_xuids = profile->GetFriendsXUIDs();
-
-  const auto presences = XLiveAPI::GetFriendsPresence(peer_xuids);
-
-  for (const auto& player : presences->PlayersPresence()) {
-    X_ONLINE_FRIEND peer = player.GetFriendPresence();
-
-    profile->SetFriend(peer);
-  }
+  UpdateFriendPresence(user_index);
 
   for (auto i = friends_starting_index; i < e->items_per_enumerate(); i++) {
     X_ONLINE_FRIEND peer = {};
@@ -458,6 +683,49 @@ X_HRESULT XLiveBaseApp::CreateFriendsEnumerator(uint32_t buffer_args) {
 
   *handle_ptr = xe::byte_swap<uint32_t>(e->handle());
   return X_E_SUCCESS;
+}
+
+void XLiveBaseApp::UpdateFriendPresence(const uint32_t user_index) {
+  if (!kernel_state()->xam_state()->IsUserSignedIn(user_index)) {
+    return;
+  }
+
+  auto const profile = kernel_state()->xam_state()->GetUserProfile(user_index);
+
+  const std::vector<uint64_t> peer_xuids = profile->GetFriendsXUIDs();
+
+  UpdatePresenceXUIDs(peer_xuids, user_index);
+}
+
+void XLiveBaseApp::UpdatePresenceXUIDs(const std::vector<uint64_t>& xuids,
+                                       const uint32_t user_index) {
+  if (!kernel_state()->xam_state()->IsUserSignedIn(user_index)) {
+    return;
+  }
+
+  auto const profile = kernel_state()->xam_state()->GetUserProfile(user_index);
+
+  const auto presences = XLiveAPI::GetFriendsPresence(xuids);
+
+  for (const auto& player : presences->PlayersPresence()) {
+    const uint64_t xuid = player.XUID();
+
+    if (!profile->IsFriend(xuid) && !profile->IsSubscribed(xuid)) {
+      XELOGI("Requested unknown peer presence: {} - {:016X}", player.Gamertag(),
+             xuid);
+      continue;
+    }
+
+    if (profile->IsFriend(xuid)) {
+      X_ONLINE_FRIEND peer = player.GetFriendPresence();
+
+      profile->SetFriend(peer);
+    } else if (profile->IsSubscribed(xuid)) {
+      X_ONLINE_PRESENCE presence = player.ToOnlineRichPresence();
+
+      profile->SetSubscriptionFromXUID(xuid, &presence);
+    }
+  }
 }
 
 X_HRESULT XLiveBaseApp::XStringVerify(uint32_t buffer_ptr,
