@@ -56,6 +56,9 @@ namespace xe {
 #define X_ONLINE_FRIENDSTATE_FLAG_PLAYING           0x00000002
 #define X_ONLINE_FRIENDSTATE_FLAG_JOINABLE          0x00000010
 
+#define X_ONLINE_FRIENDSTATE_FLAG_INVITEACCEPTED    0x10000000
+#define X_ONLINE_FRIENDSTATE_FLAG_SENTINVITE        0x04000000
+
 #define X_ONLINE_FRIENDSTATE_ENUM_ONLINE            0x00000000
 #define X_ONLINE_FRIENDSTATE_ENUM_AWAY              0x00010000
 #define X_ONLINE_FRIENDSTATE_ENUM_BUSY              0x00020000
@@ -65,12 +68,12 @@ namespace xe {
 #define X_ONLINE_PEER_SUBSCRIPTIONS                 400
 #define X_MAX_RICHPRESENCE_SIZE                     64
 
-#define X_CONTEXT_PRESENCE  0x00008001
-#define X_CONTEXT_GAME_TYPE 0x0000800A
-#define X_CONTEXT_GAME_MODE 0x0000800B
+#define X_CONTEXT_PRESENCE                          0x00008001
+#define X_CONTEXT_GAME_TYPE                         0x0000800A
+#define X_CONTEXT_GAME_MODE                         0x0000800B
 
-#define X_CONTEXT_GAME_TYPE_RANKED      0x0
-#define X_CONTEXT_GAME_TYPE_STANDARD    0x1
+#define X_CONTEXT_GAME_TYPE_RANKED                  0x0
+#define X_CONTEXT_GAME_TYPE_STANDARD                0x1
 
 // clang-format on
 
@@ -144,6 +147,28 @@ struct X_MUTE_LIST_SET_STATE {
   xe::be<uint32_t> user_index;
   xe::be<uint64_t> remote_xuid;
   bool set_muted;
+};
+
+struct X_PRESENCE_SUBSCRIBE {
+  X_ARGUEMENT_ENTRY user_index;
+  X_ARGUEMENT_ENTRY peers;
+  X_ARGUEMENT_ENTRY peer_xuids_ptr;
+};
+
+struct X_PRESENCE_UNSUBSCRIBE {
+  X_ARGUEMENT_ENTRY user_index;
+  X_ARGUEMENT_ENTRY peers;
+  X_ARGUEMENT_ENTRY peer_xuids_ptr;
+};
+
+struct X_PRESENCE_CREATE {
+  X_ARGUEMENT_ENTRY user_index;
+  X_ARGUEMENT_ENTRY num_peers;
+  X_ARGUEMENT_ENTRY peer_xuids_ptr;
+  X_ARGUEMENT_ENTRY starting_index;
+  X_ARGUEMENT_ENTRY max_peers;
+  X_ARGUEMENT_ENTRY buffer_length_ptr;      // output
+  X_ARGUEMENT_ENTRY enumerator_handle_ptr;  // output
 };
 
 // struct FILETIME {
