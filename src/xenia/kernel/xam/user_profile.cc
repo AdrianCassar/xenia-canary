@@ -15,6 +15,7 @@
 #include "xenia/base/filesystem.h"
 #include "xenia/base/logging.h"
 #include "xenia/base/mapped_memory.h"
+#include "xenia/emulator.h"
 #include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/util/shim_utils.h"
 #include "xenia/kernel/xam/user_profile.h"
@@ -32,6 +33,7 @@ UserProfile::UserProfile(uint64_t xuid, X_XAMACCOUNTINFO* account_info)
   // "You do not have permissions to perform this operation."
 
   friends_ = std::vector<X_ONLINE_FRIEND>();
+  subscriptions_ = std::map<uint64_t, X_ONLINE_PRESENCE>();
 
   for (const auto& friend_xuid : XLiveAPI::ParseFriendsXUIDs()) {
     AddFriendFromXUID(friend_xuid);
@@ -303,6 +305,68 @@ const std::vector<uint64_t> UserProfile::GetFriendsXUIDs() const {
   }
 
   return xuids;
+}
+
+bool UserProfile::SetSubscriptionFromXUID(const uint64_t xuid,
+                                          X_ONLINE_PRESENCE* peer) {
+  if (peer == nullptr) {
+    return false;
+  }
+
+  memcpy(&subscriptions_[xuid], &peer, sizeof(X_ONLINE_PRESENCE));
+
+  return true;
+}
+
+bool UserProfile::GetSubscriptionFromXUID(const uint64_t xuid,
+                                          X_ONLINE_PRESENCE* peer) {
+  if (!IsSubscribed(xuid)) {
+    return false;
+  }
+
+  if (peer == nullptr) {
+    return false;
+  }
+
+  memcpy(peer, &subscriptions_[xuid], sizeof(X_ONLINE_PRESENCE));
+
+  return true;
+}
+
+bool UserProfile::SubscribeFromXUID(const uint64_t xuid) {
+  if (subscriptions_.size() >= X_ONLINE_PEER_SUBSCRIPTIONS) {
+    return false;
+  }
+
+  subscriptions_[xuid] = {};
+
+  return true;
+}
+
+bool UserProfile::UnsubscribeFromXUID(const uint64_t xuid) {
+  if (!IsSubscribed(xuid)) {
+    return true;
+  }
+
+  if (subscriptions_.erase(xuid)) {
+    return true;
+  }
+
+  return false;
+}
+
+bool UserProfile::IsSubscribed(const uint64_t xuid) {
+  return subscriptions_.count(xuid) != 0;
+}
+
+const std::vector<uint64_t> UserProfile::GetSubscribedXUIDs() const {
+  std::vector<uint64_t> subscribed_xuids;
+
+  for (const auto& [key, _] : subscriptions_) {
+    subscribed_xuids.push_back(key);
+  }
+
+  return subscribed_xuids;
 }
 
 void UserProfile::AddSetting(std::unique_ptr<UserSetting> setting) {
