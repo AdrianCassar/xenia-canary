@@ -195,6 +195,14 @@ class UserProfile {
   const std::vector<X_ONLINE_FRIEND> GetFriends() const { return friends_; }
   const std::vector<uint64_t> GetFriendsXUIDs() const;
 
+  bool SetSubscriptionFromXUID(const uint64_t xuid, X_ONLINE_PRESENCE* peer);
+  bool GetSubscriptionFromXUID(const uint64_t xuid, X_ONLINE_PRESENCE* peer);
+  bool SubscribeFromXUID(const uint64_t xuid);
+  bool UnsubscribeFromXUID(const uint64_t xuid);
+  bool IsSubscribed(const uint64_t xuid);
+
+  const std::vector<uint64_t> GetSubscribedXUIDs() const;
+
  private:
   uint64_t xuid_;
   X_XAMACCOUNTINFO account_info_;
@@ -205,7 +213,8 @@ class UserProfile {
   std::mutex prop_mutex;              // 5841089C
 
   std::vector<X_ONLINE_FRIEND> friends_;
-  
+  std::map<uint64_t, X_ONLINE_PRESENCE> subscriptions_;
+
   std::map<XTileType, std::vector<uint8_t>> profile_images_;
 
   GpdInfo* GetGpd(const uint32_t title_id);
