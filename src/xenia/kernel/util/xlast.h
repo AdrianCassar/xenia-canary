@@ -11,6 +11,7 @@
 #define XENIA_KERNEL_UTIL_XLAST_H_
 
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -53,11 +54,18 @@ class XLast {
   std::u16string GetTitleName();
   std::u16string GetLocalizedString(uint32_t string_id, XLanguage language);
   XLastMatchmakingQuery* GetMatchmakingQuery(uint32_t query_id);
+  const std::optional<uint32_t> GetPresenceStringId(const uint32_t context_id);
+  const uint32_t GetPropertyStringId(const uint32_t property_id);
+  const uint32_t GetContextStringId(const uint32_t context_id,
+                                    const uint32_t context_value);
+
   static std::vector<uint32_t> GetAllValuesFromNode(
       const pugi::xpath_node node, const std::string child_name,
       const std::string attirbute_name);
 
   void Dump(std::string file_name);
+
+  const bool HasXLast() const { return !xlast_decompressed_xml_.empty(); };
 
  private:
   std::string GetLocaleStringFromLanguage(XLanguage language);

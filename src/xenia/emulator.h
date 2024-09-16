@@ -164,6 +164,8 @@ class Emulator {
 
   patcher::PluginLoader* plugin_loader() const { return plugin_loader_.get(); }
 
+  kernel::util::XLast* xlast() const { return title_xlast_.get(); }
+
   // Initializes the emulator and configures all components.
   // The given window is used for display and the provided functions are used
   // to create subsystems as required.

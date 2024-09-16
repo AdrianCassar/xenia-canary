@@ -102,6 +102,10 @@ std::u16string XLast::GetLocalizedString(uint32_t string_id,
       "LocalizedString[@id = \"{}\"]",
       string_id);
 
+  if (!HasXLast()) {
+    return std::u16string();
+  }
+
   const pugi::xpath_node node = parsed_xlast_->select_node(xpath.c_str());
   if (!node) {
     return std::u16string();
@@ -131,6 +135,78 @@ XLastMatchmakingQuery* XLast::GetMatchmakingQuery(const uint32_t query_id) {
   }
 
   return new XLastMatchmakingQuery(node);
+}
+
+const std::optional<uint32_t> XLast::GetPresenceStringId(
+    const uint32_t context_id) {
+  std::string xpath = fmt::format(
+      "/XboxLiveSubmissionProject/GameConfigProject/Presence/"
+      "PresenceMode[@contextValue = \"{}\"]",
+      context_id);
+
+  std::optional<uint32_t> id = std::nullopt;
+
+  if (!HasXLast()) {
+    return id;
+  }
+
+  pugi::xpath_node node = parsed_xlast_->select_node(xpath.c_str());
+
+  if (node) {
+    const auto string_id = node.node().attribute("stringId").value();
+    id = xe::string_util::from_string<uint32_t>(string_id);
+  }
+
+  return id;
+}
+
+const uint32_t XLast::GetPropertyStringId(const uint32_t property_id) {
+  std::string xpath = fmt::format(
+      "/XboxLiveSubmissionProject/GameConfigProject/Properties/Property[@id = "
+      "\"0x{:08X}\"]",
+      property_id);
+
+  uint32_t value = 0;
+
+  if (!HasXLast()) {
+    return value;
+  }
+
+  pugi::xpath_node node = parsed_xlast_->select_node(xpath.c_str());
+
+  if (node) {
+    const auto string_id_value = node.node().attribute("stringId").value();
+    value = xe::string_util::from_string<uint32_t>(string_id_value);
+  }
+
+  return value;
+}
+
+const uint32_t XLast::GetContextStringId(const uint32_t context_id,
+                                         const uint32_t context_value) {
+  std::string xpath = fmt::format(
+      "/XboxLiveSubmissionProject/GameConfigProject/Contexts/Context[@id = "
+      "\"0x{:08X}\"]/ContextValue[@value = \"{}\"]",
+      context_id, context_value);
+
+  uint32_t value = 0;
+
+  if (!HasXLast()) {
+    return value;
+  }
+
+  pugi::xpath_node node = parsed_xlast_->select_node(xpath.c_str());
+
+  if (node) {
+    // const auto default_value =
+    //     node.node().parent().attribute("defaultValue").value();
+    // value = xe::string_util::from_string<uint32_t>(default_value);
+
+    const auto string_id_value = node.node().attribute("stringId").value();
+    value = xe::string_util::from_string<uint32_t>(string_id_value);
+  }
+
+  return value;
 }
 
 std::vector<uint32_t> XLast::GetAllValuesFromNode(

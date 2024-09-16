@@ -235,6 +235,14 @@ class UserProfile {
   const std::vector<X_ONLINE_FRIEND> GetFriends() const { return friends_; }
   const std::vector<uint64_t> GetFriendsXUIDs() const;
 
+  bool SetSubscriptionFromXUID(const uint64_t xuid, X_ONLINE_PRESENCE* peer);
+  bool GetSubscriptionFromXUID(const uint64_t xuid, X_ONLINE_PRESENCE* peer);
+  bool SubscribeFromXUID(const uint64_t xuid);
+  bool UnsubscribeFromXUID(const uint64_t xuid);
+  bool IsSubscribed(const uint64_t xuid);
+
+  const std::vector<uint64_t> GetSubscribedXUIDs() const;
+
   void AddSetting(std::unique_ptr<UserSetting> setting);
   UserSetting* GetSetting(uint32_t setting_id);
 
@@ -247,6 +255,7 @@ class UserProfile {
   std::vector<std::unique_ptr<UserSetting>> setting_list_;
   std::unordered_map<uint32_t, UserSetting*> settings_;
   std::vector<X_ONLINE_FRIEND> friends_;
+  std::map<uint64_t, X_ONLINE_PRESENCE> subscriptions_;
 
   void LoadSetting(UserSetting*);
   void SaveSetting(UserSetting*);
