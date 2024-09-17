@@ -428,6 +428,10 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
             kernel_state_->xam_state()->GetUserProfile(user_index);
         if (user_profile) {
           user_profile->contexts_[context_id] = context_value;
+
+          if (context_id == X_CONTEXT_PRESENCE) {
+            auto presence = user_profile->GetPresenceString();
+          }
         }
       }
       return X_E_SUCCESS;
