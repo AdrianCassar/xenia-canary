@@ -454,6 +454,10 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
         kernel_state_->xam_state()->user_tracker()->UpdateContext(
             user->xuid(), xgi_context->context.context_id,
             xgi_context->context.value);
+
+        if (xgi_context->context.context_id == X_CONTEXT_PRESENCE) {
+          auto presence = user->GetPresenceString();
+        }
       }
       return X_E_SUCCESS;
     }

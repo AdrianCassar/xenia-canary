@@ -187,6 +187,8 @@ class UserProfile {
 
   const std::vector<uint64_t> GetSubscribedXUIDs() const;
 
+  std::string GetPresenceString();
+
  private:
   uint64_t xuid_;
   X_XAMACCOUNTINFO account_info_;
