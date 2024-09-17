@@ -149,6 +149,7 @@ class GameInfoDatabase {
   std::vector<Achievement> GetAchievements() const;
   std::vector<StatsView> GetStatsViews() const;
 
+  const bool HasXLast() const { return xlast_gamedata_.get(); };
   XLast* GetXLast() const { return xlast_gamedata_.get(); };
 
  private:
