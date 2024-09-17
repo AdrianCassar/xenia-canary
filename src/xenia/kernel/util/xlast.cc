@@ -12,6 +12,7 @@
 #include "xenia/base/filesystem.h"
 #include "xenia/base/logging.h"
 #include "xenia/base/string_util.h"
+#include "xenia/kernel/util/presence_string_builder.h"
 
 namespace xe {
 namespace kernel {
