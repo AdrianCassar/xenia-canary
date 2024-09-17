@@ -175,6 +175,7 @@ class GameInfoDatabase {
   std::vector<PresenceMode> GetPresenceModes() const;
   std::vector<StatsView> GetStatsViews() const;
 
+  const bool HasXLast() const { return xlast_gamedata_.get(); };
   XLast* GetXLast() const { return xlast_gamedata_.get(); };
 
  private:
