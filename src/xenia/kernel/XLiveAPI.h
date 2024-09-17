@@ -184,7 +184,8 @@ class XLiveAPI {
 
   inline static InitState initialized_ = InitState::Pending;
 
-  static std::unique_ptr<HTTPResponseObjectJSON> Get(std::string endpoint);
+  static std::unique_ptr<HTTPResponseObjectJSON> Get(
+      std::string endpoint, const uint32_t timeout = 0);
 
   static std::unique_ptr<HTTPResponseObjectJSON> Post(std::string endpoint,
                                                       const uint8_t* data,
