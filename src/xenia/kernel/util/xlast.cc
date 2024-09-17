@@ -11,6 +11,7 @@
 #include "third_party/zlib/zlib.h"
 #include "xenia/base/logging.h"
 #include "xenia/base/string_util.h"
+#include "xenia/kernel/util/presence_string_builder.h"
 
 namespace xe {
 namespace kernel {
@@ -180,6 +181,20 @@ const uint32_t XLast::GetPropertyStringId(const uint32_t property_id) {
   }
 
   return value;
+}
+
+const std::u16string XLast::GetPresenceRawString(const uint32_t presence_value,
+                                                 const XLanguage language) {
+  const std::optional<uint32_t> presence_string_id =
+      GetPresenceStringId(presence_value);
+
+  std::u16string raw_presence = u"";
+
+  if (presence_string_id.has_value()) {
+    raw_presence = GetLocalizedString(presence_string_id.value(), language);
+  }
+
+  return raw_presence;
 }
 
 const uint32_t XLast::GetContextStringId(const uint32_t context_id,

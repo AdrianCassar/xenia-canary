@@ -55,6 +55,8 @@ class XLast {
   std::u16string GetLocalizedString(uint32_t string_id, XLanguage language);
   XLastMatchmakingQuery* GetMatchmakingQuery(uint32_t query_id);
   const std::optional<uint32_t> GetPresenceStringId(const uint32_t context_id);
+  const std::u16string GetPresenceRawString(const uint32_t presence_value,
+                                            const XLanguage language);
   const uint32_t GetPropertyStringId(const uint32_t property_id);
   const uint32_t GetContextStringId(const uint32_t context_id,
                                     const uint32_t context_value);
