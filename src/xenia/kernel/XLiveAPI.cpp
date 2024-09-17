@@ -34,8 +34,9 @@ DEFINE_bool(offline_mode, false, "Offline Mode e.g. not connected to a LAN",
             "Live");
 
 DEFINE_bool(xlink_kai_systemlink_hack, false,
-            "Enable hacks for XLink Kai support. May break some games. See: https://www.teamxlink.co.uk/wiki/Xenia_Support", "Live");
-
+            "Enable hacks for XLink Kai support. May break some games. See: "
+            "https://www.teamxlink.co.uk/wiki/Xenia_Support",
+            "Live");
 
 DEFINE_string(network_guid, "", "Network Interface GUID", "Live");
 
@@ -244,7 +245,8 @@ void XLiveAPI::clearXnaddrCache() {
 }
 
 // Request data from the server
-std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::Get(std::string endpoint) {
+std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::Get(std::string endpoint,
+                                                      const uint32_t timeout) {
   response_data chunk = {};
   CURL* curl_handle = curl_easy_init();
   CURLcode result;
@@ -275,6 +277,10 @@ std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::Get(std::string endpoint) {
 
   if (headers == NULL) {
     return PraseResponse(chunk);
+  }
+
+  if (timeout > 0) {
+    curl_easy_setopt(curl_handle, CURLOPT_TIMEOUT, timeout);
   }
 
   curl_easy_setopt(curl_handle, CURLOPT_URL, endpoint_API.c_str());
@@ -433,7 +439,9 @@ std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::Delete(std::string endpoint) {
 
 // Check connection to xenia web server.
 sockaddr_in XLiveAPI::Getwhoami() {
-  std::unique_ptr<HTTPResponseObjectJSON> response = Get("whoami");
+  const uint32_t timeout = 3;
+
+  std::unique_ptr<HTTPResponseObjectJSON> response = Get("whoami", timeout);
 
   sockaddr_in addr{};
 
