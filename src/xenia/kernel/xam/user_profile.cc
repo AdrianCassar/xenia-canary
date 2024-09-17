@@ -9,6 +9,8 @@
 
 #include <sstream>
 
+#include <xenia/kernel/util/game_info_database.h>
+#include <xenia/kernel/util/presence_string_builder.h>
 #include "third_party/fmt/include/fmt/format.h"
 #include "xenia/base/clock.h"
 #include "xenia/base/cvar.h"
@@ -18,6 +20,7 @@
 #include "xenia/emulator.h"
 #include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/util/shim_utils.h"
+#include "xenia/kernel/util/xlast.h"
 #include "xenia/kernel/xam/user_profile.h"
 
 #include "xenia/kernel/XLiveAPI.h"
@@ -367,6 +370,34 @@ const std::vector<uint64_t> UserProfile::GetSubscribedXUIDs() const {
   }
 
   return subscribed_xuids;
+}
+
+std::string UserProfile::GetPresenceString() {
+  if (contexts_.find(X_CONTEXT_PRESENCE) == contexts_.end()) {
+    return "";
+  }
+
+  const auto gdb = kernel_state()->emulator()->game_info_database();
+
+  if (!gdb->HasXLast()) {
+    return "";
+  }
+
+  const auto xlast = gdb->GetXLast();
+
+  const std::u16string raw_presence = xlast->GetPresenceRawString(
+      contexts_[X_CONTEXT_PRESENCE], XLanguage::kEnglish);
+
+  const auto presence_string_formatter =
+      util::AttributeStringFormatter::AttributeStringFormatter(
+          xe::to_utf8(raw_presence), xlast, contexts_);
+
+  auto presence_parsed = presence_string_formatter.GetPresenceString();
+
+  XELOGI("Raw Presence: {}", xe::to_utf8(raw_presence.c_str()));
+  XELOGI("Parsed Presence: {}", presence_parsed);
+
+  return presence_parsed;
 }
 
 void UserProfile::AddSetting(std::unique_ptr<UserSetting> setting) {
