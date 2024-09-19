@@ -106,6 +106,10 @@ class UserProfile {
     return cvars::offline_mode ? X_USER_SIGNIN_STATE::SignedInLocally
                                : X_USER_SIGNIN_STATE::SignedInToLive;
   }
+  uint32_t type() const {
+    return static_cast<uint32_t>(X_USER_SIGNIN_STATE::SignedInLocally) |
+           static_cast<uint32_t>(X_USER_SIGNIN_STATE::SignedInToLive);
+  }
 
   uint32_t GetReservedFlags() const {
     return account_info_.GetReservedFlags();
