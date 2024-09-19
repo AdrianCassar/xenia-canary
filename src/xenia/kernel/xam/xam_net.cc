@@ -788,7 +788,10 @@ dword_result_t NetDll_XNetXnAddrToInAddr_entry(dword_t caller,
     return X_ERROR_SUCCESS;
   }
 
-  // What if it's a local IP (ina) instead of online?
+  if (XLiveAPI::IsConnectedToLAN()) {
+    in_addr->s_addr = xn_addr->ina.s_addr;
+  }
+
   if (XLiveAPI::IsOnline()) {
     in_addr->s_addr = xn_addr->inaOnline.s_addr;
   }
