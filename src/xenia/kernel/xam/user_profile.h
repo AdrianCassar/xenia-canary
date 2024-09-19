@@ -171,6 +171,10 @@ class UserProfile {
     return cvars::offline_mode ? X_USER_SIGNIN_STATE::SignedInLocally
                                : X_USER_SIGNIN_STATE::SignedInToLive;
   }
+  uint32_t type() const {
+    return static_cast<uint32_t>(X_USER_SIGNIN_STATE::SignedInLocally) |
+           static_cast<uint32_t>(X_USER_SIGNIN_STATE::SignedInToLive);
+  }
 
   void AddSetting(std::unique_ptr<UserSetting> setting);
   UserSetting* GetSetting(uint32_t setting_id);
