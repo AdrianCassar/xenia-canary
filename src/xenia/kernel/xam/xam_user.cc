@@ -53,14 +53,12 @@ X_HRESULT_result_t XamUserGetXUID_entry(dword_t user_index, dword_t type_mask,
   uint32_t result = X_E_NO_SUCH_USER;
   uint64_t xuid = 0;
 
-  const uint32_t singin_state =
-      static_cast<uint32_t>(user_profile->signin_state());
   const uint32_t local =
       static_cast<uint32_t>(X_USER_SIGNIN_STATE::SignedInLocally);
   const uint32_t live =
       static_cast<uint32_t>(X_USER_SIGNIN_STATE::SignedInToLive);
 
-  uint32_t type = singin_state & type_mask;
+  auto type = user_profile->type() & type_mask;
 
   if (type & (live | 4)) {
     // Online XUID
