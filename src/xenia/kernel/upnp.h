@@ -62,6 +62,8 @@ class UPnP {
                           bool verbose = true);
   void RefreshPortsTimer();
 
+  void InitializeSearch();
+
   bool LoadSavedUPnPDevice();
   const UPNPDev* SearchUPnPDevice();
   const UPNPDev* GetDeviceByName(const UPNPDev* device_list,

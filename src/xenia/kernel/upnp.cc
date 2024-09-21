@@ -8,6 +8,7 @@
  */
 
 #include "xenia/kernel/upnp.h"
+#include "util/net_utils.h"
 #include "xenia/base/cvar.h"
 #include "xenia/base/logging.h"
 
@@ -127,22 +128,7 @@ void UPnP::Initialize() {
     return;
   }
 
-  const UPNPDev* device = SearchUPnPDevice();
-  if (!device) {
-    XELOGE("No UPNP device was found");
-    return;
-  }
-
-  if (!GetAndParseUPnPXmlData(device->descURL)) {
-    XELOGE("Failed to retrieve UPNP xml for {}", device->descURL);
-    return;
-  }
-
-  XELOGI("Found UPnP device type : {} at {}", device->st, device->descURL);
-
-  cvars::upnp_root = device->descURL;
-  OVERRIDE_string(upnp_root, cvars::upnp_root);
-
+  InitializeSearch();
   RefreshPortsTimer();
   active_ = true;
 };
@@ -174,6 +160,15 @@ void UPnP::AddPort(std::string_view addr, uint16_t internal_port,
         "Xenia", protocol.data(), nullptr, "0");
   }
 
+  if (result == HTTP_UNAUTHORIZED && !cvars::upnp_root.empty()) {
+    XELOGI("Unauthorized, outdated upnp_root.");
+    active_ = false;
+    InitializeSearch();
+    active_ = true;
+    AddPort(addr, internal_port, protocol);
+    return;
+  }
+
   if (result != UPNPCOMMAND_SUCCESS) {
     XELOGI("Failed to bind port!!! {}:{}({}) to IGD:{}", addr, internal_port,
            protocol, external_port);
@@ -197,6 +192,25 @@ void UPnP::AddPort(std::string_view addr, uint16_t internal_port,
          internal_port, protocol, external_port);
 
   port_binding_results_[std::string(protocol)][external_port] = result;
+}
+
+void UPnP::InitializeSearch() {
+  const UPNPDev* device = SearchUPnPDevice();
+  if (!device) {
+    XELOGE("No UPNP device was found");
+    return;
+  }
+
+  if (!GetAndParseUPnPXmlData(device->descURL)) {
+    XELOGE("Failed to retrieve UPNP xml for {}", device->descURL);
+    return;
+  }
+
+  XELOGI("Found UPnP device type : {} at {}", device->st, device->descURL);
+
+  cvars::upnp_root = device->descURL;
+  OVERRIDE_string(upnp_root, cvars::upnp_root);
+  return;
 }
 
 void UPnP::RemovePort(uint16_t internal_port, std::string_view protocol) {
