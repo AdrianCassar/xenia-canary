@@ -1523,8 +1523,19 @@ dword_result_t NetDll_bind_entry(dword_t caller, dword_t socket_handle,
   }
 
   // Can be called multiple times.
-  XLiveAPI::upnp_handler->AddPort(XLiveAPI::LocalIP_str(), upnp_internal_port,
-                                  "UDP");
+  const uint32_t result = XLiveAPI::upnp_handler->AddPort(
+      XLiveAPI::LocalIP_str(), upnp_internal_port, "UDP");
+
+  // Only scan once
+  if (result == HTTP_UNAUTHORIZED &&
+      !XLiveAPI::upnp_handler->GetRefreshedUnauthorized()) {
+    XLiveAPI::upnp_handler->SearchUPnP();
+
+    XLiveAPI::upnp_handler->SetRefreshedUnauthorized(true);
+
+    XLiveAPI::upnp_handler->AddPort(XLiveAPI::LocalIP_str(), upnp_internal_port,
+                                    "UDP");
+  }
 
   return 0;
 }
