@@ -233,8 +233,9 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
       std::unique_ptr<HTTPResponseObjectJSON> chunk =
           XLiveAPI::LeaderboardsFind((uint8_t*)buffer.GetString());
 
-      if (chunk->RawResponse().response == nullptr) {
-        return X_E_SUCCESS;
+      if (chunk->RawResponse().response == nullptr ||
+          chunk->StatusCode() != HTTP_STATUS_CODE::HTTP_CREATED) {
+        return X_ERROR_FUNCTION_FAILED;
       }
 
       Document leaderboards;
