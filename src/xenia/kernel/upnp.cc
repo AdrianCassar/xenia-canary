@@ -8,6 +8,7 @@
  */
 
 #include "xenia/kernel/upnp.h"
+#include "util/net_utils.h"
 #include "xenia/base/cvar.h"
 #include "xenia/base/logging.h"
 
@@ -100,7 +101,7 @@ const UPNPDev* UPnP::GetDeviceByName(const UPNPDev* device_list,
   return device;
 }
 
-const UPNPDev* UPnP::SearchUPnPDevice() {
+const UPNPDev* UPnP::DiscoverUPnPDevice() {
   XELOGI("UPnP: Starting UPnP search");
 
   int error = 0;
@@ -127,7 +128,16 @@ void UPnP::Initialize() {
     return;
   }
 
-  const UPNPDev* device = SearchUPnPDevice();
+  SearchUPnP();
+
+  RefreshPortsTimer();
+  active_ = true;
+};
+
+void UPnP::SearchUPnP() {
+  std::lock_guard lock(mutex_);
+
+  const UPNPDev* device = DiscoverUPnPDevice();
   if (!device) {
     XELOGE("No UPNP device was found");
     return;
@@ -142,15 +152,12 @@ void UPnP::Initialize() {
 
   cvars::upnp_root = device->descURL;
   OVERRIDE_string(upnp_root, cvars::upnp_root);
-
-  RefreshPortsTimer();
-  active_ = true;
 };
 
-void UPnP::AddPort(std::string_view addr, uint16_t internal_port,
-                   std::string_view protocol) {
+uint32_t UPnP::AddPort(std::string_view addr, uint16_t internal_port,
+                       std::string_view protocol) {
   if (!active_) {
-    return;
+    return UPNPCOMMAND_UNKNOWN_ERROR;
   }
 
   std::lock_guard lock(mutex_);
@@ -175,12 +182,16 @@ void UPnP::AddPort(std::string_view addr, uint16_t internal_port,
   }
 
   if (result != UPNPCOMMAND_SUCCESS) {
+    if (result == HTTP_UNAUTHORIZED) {
+      XELOGI("UPnP Unauthorized!");
+    }
+
     XELOGI("Failed to bind port!!! {}:{}({}) to IGD:{}", addr, internal_port,
            protocol, external_port);
 
     XELOGI("UPnP error code {}", result);
     port_binding_results_[std::string(protocol)][external_port] = result;
-    return;
+    return result;
   }
 
   const bool is_bound =
@@ -197,6 +208,8 @@ void UPnP::AddPort(std::string_view addr, uint16_t internal_port,
          internal_port, protocol, external_port);
 
   port_binding_results_[std::string(protocol)][external_port] = result;
+
+  return result;
 }
 
 void UPnP::RemovePort(uint16_t internal_port, std::string_view protocol) {
@@ -308,11 +321,19 @@ uint16_t UPnP::GetMappedBindPort(uint16_t external_port) {
   return external_port;
 }
 
+const bool UPnP::GetRefreshedUnauthorized() const {
+  return refreshed_unauthorized_;
+}
+
+void UPnP::SetRefreshedUnauthorized(const bool refreshed) {
+  refreshed_unauthorized_ = refreshed;
+}
+
 const std::string UPnP::GetLocalIP() {
   char lanaddr[64] = "";
   int size = 0;
   miniwget_getaddr(cvars::upnp_root.c_str(), &size, lanaddr, sizeof(lanaddr), 0,
-                   NULL);
+                   0);
 
   return lanaddr;
 }
