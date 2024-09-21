@@ -22,11 +22,14 @@ class UPnP {
   ~UPnP();
 
   void Initialize();
+
+  void SearchUPnP();
+
   bool is_active() const { return active_; }
 
   // internal port is in BE notation.
-  void AddPort(std::string_view addr, uint16_t internal_port,
-               std::string_view protocol);
+  uint32_t AddPort(std::string_view addr, uint16_t internal_port,
+                   std::string_view protocol);
 
   // internal port is in BE notation.
   void RemovePort(uint16_t internal_port, std::string_view protocol);
@@ -49,6 +52,10 @@ class UPnP {
     return &port_binding_results_;
   };
 
+  const bool GetRefreshedUnauthorized() const;
+
+  void SetRefreshedUnauthorized(const bool refreshed);
+
   static const std::string GetLocalIP();
 
  private:
@@ -63,7 +70,7 @@ class UPnP {
   void RefreshPortsTimer();
 
   bool LoadSavedUPnPDevice();
-  const UPNPDev* SearchUPnPDevice();
+  const UPNPDev* DiscoverUPnPDevice();
   const UPNPDev* GetDeviceByName(const UPNPDev* device_list,
                                  std::string device_name);
   bool GetAndParseUPnPXmlData(std::string url);
@@ -71,6 +78,7 @@ class UPnP {
   std::shared_mutex mutex_;
   std::atomic<bool> active_ = false;
   std::atomic<bool> leases_supported_ = true;
+  std::atomic<bool> refreshed_unauthorized_ = false;
 
   IGDdatas* igd_data_ = new IGDdatas();
   UPNPUrls* igd_urls_ = new UPNPUrls();
