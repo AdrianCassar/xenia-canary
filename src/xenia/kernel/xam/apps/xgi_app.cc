@@ -578,7 +578,15 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
       XSessionSearchByIDs* data =
           reinterpret_cast<XSessionSearchByIDs*>(buffer);
 
-      return XSession::GetSessionByIDs(memory_, data);
+      const X_RESULT result = XSession::GetSessionByIDs(memory_, data);
+
+      SEARCH_RESULTS* search_results =
+          memory_->TranslateVirtual<SEARCH_RESULTS*>(data->search_results_ptr);
+
+      XELOGI("XSessionSearchByIds found {} session(s).",
+             search_results->header.search_results_count.get());
+
+      return result;
     }
     case 0x000B0065: {
       XELOGI("XSessionSearchWeighted unimplemented");
