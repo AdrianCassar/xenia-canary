@@ -666,8 +666,22 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
     case 0x000B003D: {
       // Used in 5451082A, 5553081E
       // XUserGetCachedANID
-      XELOGI("XUserGetANID({:08X}, {:08X})", buffer_ptr, buffer_length);
-      return X_E_FAIL;
+      XELOGI("XUserGetANID");
+      XUSER_ANID* data = reinterpret_cast<XUSER_ANID*>(buffer);
+
+      if (!kernel_state()->xam_state()->IsUserSignedIn(data->user_index)) {
+        return X_ERROR_NOT_LOGGED_ON;
+      }
+
+      uint8_t* AnIdBuffer =
+          memory_->TranslateVirtual<uint8_t*>(data->pszAnIdBuffer);
+
+      // Game calls HexDecodeDigit on AnIdBuffer
+      for (uint32_t i = 0; i < data->cchAnIdBuffer - 1; i++) {
+        AnIdBuffer[i] = i % 10;
+      }
+
+      return X_E_SUCCESS;
     }
     case 0x000B0041: {
       assert_true(!buffer_length ||
