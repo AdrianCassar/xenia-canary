@@ -308,7 +308,42 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
             stat[statIndex].ColumnId = (*statObjectPtr)["id"].GetUint();
             stat[statIndex].Value.type = (*statObjectPtr)["type"].GetUint();
 
-            switch (stat[statIndex].Value.type) {
+            uint8_t stat_type = stat[statIndex].Value.type;
+
+            switch (stat_type) {
+              case 0: {
+                XELOGW("Statistic type: CONTENT");
+              } break;
+              case 1: {
+                XELOGW("Statistic type: INT32");
+              } break;
+              case 2: {
+                XELOGW("Statistic type: INT64");
+              } break;
+              case 3: {
+                XELOGW("Statistic type: DOUBLE");
+              } break;
+              case 4: {
+                XELOGW("Statistic type: WSTRING");
+              } break;
+              case 5: {
+                XELOGW("Statistic type: FLOAT");
+              } break;
+              case 6: {
+                XELOGW("Statistic type: BINARY");
+              } break;
+              case 7: {
+                XELOGW("Statistic type: DATETIME");
+              } break;
+              case 0xFF: {
+                XELOGW("Statistic type: UNSET");
+              } break;
+              default:
+                XELOGW("Unsupported statistic type.", stat_type);
+                break;
+            }
+
+            switch (stat_type) {
               case 1:
                 stat[statIndex].Value.dword_data =
                     (*statObjectPtr)["value"].GetUint();
@@ -318,11 +353,10 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
                     (*statObjectPtr)["value"].GetUint64();
                 break;
               default:
-                XELOGW("Unimplemented stat type for read, will attempt anyway.",
-                       stat[statIndex].Value.type);
-                if ((*statObjectPtr)["value"].IsNumber())
+                if ((*statObjectPtr)["value"].IsNumber()) {
                   stat[statIndex].Value.qword_data =
                       (*statObjectPtr)["value"].GetUint64();
+                }
             }
 
             stat[statIndex].Value.type = (*statObjectPtr)["type"].GetInt();
