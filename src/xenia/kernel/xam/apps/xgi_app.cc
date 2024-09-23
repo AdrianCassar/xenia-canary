@@ -72,6 +72,13 @@ struct XUSER_STATS_RESET {
   xe::be<uint32_t> view_id;
 };
 
+struct XUSER_ANID {
+  xe::be<uint32_t> user_index;
+  xe::be<uint32_t> cchAnIdBuffer;
+  xe::be<uint32_t> pszAnIdBuffer;
+  xe::be<uint32_t> value_const;  // 1
+};
+
 XgiApp::XgiApp(KernelState* kernel_state) : App(kernel_state, 0xFB) {}
 
 // http://mb.mirage.org/bugzilla/xliveless/main.c
@@ -632,6 +639,27 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
     case 0x000B0020: {
       XELOGI("XUserResetStatsView");
       XUSER_STATS_RESET* data = reinterpret_cast<XUSER_STATS_RESET*>(buffer);
+
+      return X_E_SUCCESS;
+    }
+    case 0x000B003D: {
+      // Used in 5451082A, 5553081E
+
+      // XUserGetCachedANID
+      XELOGI("XUserGetANID");
+      XUSER_ANID* data = reinterpret_cast<XUSER_ANID*>(buffer);
+
+      if (!kernel_state()->IsUserSignedIn(data->user_index)) {
+        return X_ERROR_NOT_LOGGED_ON;
+      }
+
+      uint8_t* AnIdBuffer =
+          memory_->TranslateVirtual<uint8_t*>(data->pszAnIdBuffer);
+
+      // Game calls HexDecodeDigit on AnIdBuffer
+      for (uint32_t i = 0; i < data->cchAnIdBuffer - 1; i++) {
+        AnIdBuffer[i] = i % 10;
+      }
 
       return X_E_SUCCESS;
     }
