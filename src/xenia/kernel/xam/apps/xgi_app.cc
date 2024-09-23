@@ -311,7 +311,43 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
             stat[statIndex].Value.type = static_cast<X_USER_DATA_TYPE>(
                 (*statObjectPtr)["type"].GetUint());
 
-            switch (stat[statIndex].Value.type) {
+            X_USER_DATA_TYPE stat_type = stat[statIndex].Value.type;
+
+            switch (stat_type) {
+              case X_USER_DATA_TYPE::CONTENT: {
+                XELOGW("Statistic type: CONTENT");
+              } break;
+              case X_USER_DATA_TYPE::INT32: {
+                XELOGW("Statistic type: INT32");
+              } break;
+              case X_USER_DATA_TYPE::INT64: {
+                XELOGW("Statistic type: INT64");
+              } break;
+              case X_USER_DATA_TYPE::DOUBLE: {
+                XELOGW("Statistic type: DOUBLE");
+              } break;
+              case X_USER_DATA_TYPE::WSTRING: {
+                XELOGW("Statistic type: WSTRING");
+              } break;
+              case X_USER_DATA_TYPE::FLOAT: {
+                XELOGW("Statistic type: FLOAT");
+              } break;
+              case X_USER_DATA_TYPE::BINARY: {
+                XELOGW("Statistic type: BINARY");
+              } break;
+              case X_USER_DATA_TYPE::DATETIME: {
+                XELOGW("Statistic type: DATETIME");
+              } break;
+              case X_USER_DATA_TYPE::UNSET: {
+                XELOGW("Statistic type: UNSET");
+              } break;
+              default:
+                XELOGW("Unsupported statistic type.",
+                       static_cast<uint32_t>(stat_type));
+                break;
+            }
+
+            switch (stat_type) {
               case X_USER_DATA_TYPE::INT32:
                 stat[statIndex].Value.s32 = (*statObjectPtr)["value"].GetUint();
                 break;
@@ -322,13 +358,15 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
               default:
                 XELOGW("Unimplemented stat type for read, will attempt anyway.",
                        static_cast<uint32_t>(stat[statIndex].Value.type));
-                if ((*statObjectPtr)["value"].IsNumber())
+                if ((*statObjectPtr)["value"].IsNumber()) {
                   stat[statIndex].Value.s64 =
                       (*statObjectPtr)["value"].GetUint64();
+                }
             }
 
             stat[statIndex].Value.type = static_cast<X_USER_DATA_TYPE>(
                 (*statObjectPtr)["type"].GetUint());
+
             statIndex++;
           }
 
