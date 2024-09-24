@@ -135,7 +135,9 @@ void UPnP::Initialize() {
 };
 
 void UPnP::SearchUPnP() {
-  std::lock_guard lock(mutex_);
+  if (active_) {
+    std::lock_guard lock(mutex_);
+  }
 
   const UPNPDev* device = DiscoverUPnPDevice();
   if (!device) {
