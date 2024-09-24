@@ -34,6 +34,10 @@ class SessionObjectJSON : public BaseObjectJSON {
   void SessionID(const std::string& sessionid) { sessionid_ = sessionid; }
 
   const uint64_t SessionID_UInt() const {
+    if (sessionid_.empty()) {
+      return 0;
+    }
+
     return string_util::from_string<uint64_t>(sessionid_, true);
   }
 
