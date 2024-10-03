@@ -145,6 +145,13 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
              buffer_length);
       return X_E_SUCCESS;
     }
+    case 0x00050038: {
+      // 4D5307D3
+      // 4D5307D1
+      XELOGD("XOnlineQuerySearch({:08X}, {:08X}) unimplemented", buffer_ptr,
+             buffer_length);
+      return X_E_SUCCESS;
+    }
     case 0x00050077: {
       // Called on blades dashboard v1888
       // Current Balance in sub menus:
