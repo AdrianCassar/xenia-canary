@@ -24,7 +24,8 @@ DEFINE_string(api_address, "192.168.0.1:36000/",
 
 DEFINE_string(
     api_list, "https://xenia-netplay-2a0298c0e3f4.herokuapp.com/,",
-    "Comma delimited list URL1, URL2. Set api_address during runtime.", "Live");
+    "Comma delimited list URL1, URL2 (Max 10). Set api_address during runtime.",
+    "Live");
 
 DEFINE_bool(logging, false, "Log Network Activity & Stats", "Live");
 
@@ -109,8 +110,8 @@ std::vector<std::string> XLiveAPI::ParseDelimitedList(std::string_view csv,
   std::stringstream sstream(csv.data());
 
   rapidcsv::Document delimiter(
-      sstream, rapidcsv::LabelParams(-1, -1), rapidcsv::SeparatorParams(),
-      rapidcsv::ConverterParams(),
+      sstream, rapidcsv::LabelParams(-1, -1),
+      rapidcsv::SeparatorParams(',', true), rapidcsv::ConverterParams(),
       rapidcsv::LineReaderParams(true /* pSkipCommentLines */,
                                  '#' /* pCommentPrefix */,
                                  true /* pSkipEmptyLines */));
@@ -120,6 +121,12 @@ std::vector<std::string> XLiveAPI::ParseDelimitedList(std::string_view csv,
   }
 
   parsed_list = delimiter.GetRow<std::string>(0);
+
+  parsed_list.erase(std::remove_if(parsed_list.begin(), parsed_list.end(),
+                                   [](const std::string& element) {
+                                     return element.empty();
+                                   }),
+                    parsed_list.end());
 
   return parsed_list;
 }
