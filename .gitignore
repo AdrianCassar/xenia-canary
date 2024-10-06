@@ -116,3 +116,4 @@ node_modules/.bin/
 /cache0
 /devkit
 recent.toml
+/src/xenia/debug/gdb/premake5.lua
