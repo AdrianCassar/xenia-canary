@@ -1617,6 +1617,8 @@ void DebugWindow::OnDetached() {
   }
 }
 
+void DebugWindow::OnUnhandledException(Exception* ex) {}
+
 void DebugWindow::OnExecutionPaused() {
   UpdateCache();
   Focus();
