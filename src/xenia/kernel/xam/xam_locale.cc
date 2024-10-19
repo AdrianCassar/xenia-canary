@@ -303,6 +303,13 @@ dword_result_t XamGetLanguageString_entry(dword_t id, dword_t buffer_length,
 }
 DECLARE_XAM_EXPORT1(XamGetLanguageString, kLocale, kImplemented);
 
+dword_result_t XamGetLanguage_entry(unknown_t r3, unknown_t r4, unknown_t r5,
+                                    unknown_t r6, unknown_t r7, unknown_t r8,
+                                    unknown_t r9) {
+  return X_STATUS_SUCCESS;
+}
+DECLARE_XAM_EXPORT1(XamGetLanguage, kNone, kStub);
+
 dword_result_t XamGetLanguageLocaleString_entry(dword_t language_id,
                                                 dword_t locale_id,
                                                 dword_t buffer_length,

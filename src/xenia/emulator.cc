@@ -414,6 +414,10 @@ X_STATUS Emulator::MountPath(const std::filesystem::path& path,
   // Create symlinks to the device.
   file_system_->RegisterSymbolicLink(kDefaultGameSymbolicLink, mount_path);
   file_system_->RegisterSymbolicLink(kDefaultPartitionSymbolicLink, mount_path);
+  file_system_->RegisterSymbolicLink("media:", mount_path);
+  file_system_->RegisterSymbolicLink("font:", mount_path);
+  file_system_->RegisterSymbolicLink("DASHUSER:", mount_path);
+  file_system_->RegisterSymbolicLink("Update:", mount_path);
 
   return X_STATUS_SUCCESS;
 }
