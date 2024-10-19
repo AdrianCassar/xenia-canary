@@ -23,6 +23,7 @@
 #include "xenia/base/math.h"
 #include "xenia/base/profiling.h"
 #include "xenia/base/threading.h"
+#include "xenia/config.h"
 #include "xenia/gpu/command_processor.h"
 #include "xenia/gpu/gpu_flags.h"
 #include "xenia/kernel/kernel_state.h"
@@ -30,27 +31,36 @@
 #include "xenia/ui/window.h"
 #include "xenia/ui/windowed_app_context.h"
 
-DEFINE_int32(internal_display_resolution, 8,
-             "Allow game that support different resolutions to be rendered "
-             "in specific resolution.\n"
-             "   0=640x480\n"
-             "   1=640x576\n"
-             "   2=720x480\n"
-             "   3=720x576\n"
-             "   4=800x600\n"
-             "   5=848x480\n"
-             "   6=1024x768\n"
-             "   7=1152x864\n"
-             "   8=1280x720 (Default)\n"
-             "   9=1280x768\n"
-             "   10=1280x960\n"
-             "   11=1280x1024\n"
-             "   12=1360x768\n"
-             "   13=1440x900\n"
-             "   14=1680x1050\n"
-             "   15=1920x540\n"
-             "   16=1920x1080\n",
-             "Video");
+DEFINE_uint32(internal_display_resolution, 8,
+              "Allow games that support different resolutions to render "
+              "in a specific resolution.\n"
+              "This is not guaranteed to work with all games or improve "
+              "performance."
+              "   0=640x480\n"
+              "   1=640x576\n"
+              "   2=720x480\n"
+              "   3=720x576\n"
+              "   4=800x600\n"
+              "   5=848x480\n"
+              "   6=1024x768\n"
+              "   7=1152x864\n"
+              "   8=1280x720 (Default)\n"
+              "   9=1280x768\n"
+              "   10=1280x960\n"
+              "   11=1280x1024\n"
+              "   12=1360x768\n"
+              "   13=1440x900\n"
+              "   14=1680x1050\n"
+              "   15=1920x540\n"
+              "   16=1920x1080\n"
+              "   17=internal_display_resolution_x/y",
+              "Video");
+DEFINE_uint32(internal_display_resolution_x, 1280,
+              "Custom width. See internal_display_resolution. Range 1-1920.",
+              "Video");
+DEFINE_uint32(internal_display_resolution_y, 720,
+              "Custom height. See internal_display_resolution. Range 1-1080.\n",
+              "Video");
 
 DEFINE_bool(
     store_shaders, true,
@@ -92,6 +102,21 @@ X_STATUS GraphicsSystem::Setup(cpu::Processor* processor,
 
   scaled_aspect_x_ = 16;
   scaled_aspect_y_ = 9;
+
+  auto custom_res_x = cvars::internal_display_resolution_x;
+  auto custom_res_y = cvars::internal_display_resolution_y;
+  if (!custom_res_x || custom_res_x > 1920 || !custom_res_y ||
+      custom_res_y > 1080) {
+    OVERRIDE_uint32(internal_display_resolution_x,
+                    internal_display_resolution_entries[8].first);
+    OVERRIDE_uint32(internal_display_resolution_y,
+                    internal_display_resolution_entries[8].second);
+    config::SaveConfig();
+    xe::FatalError(fmt::format(
+        "Invalid custom resolution specified: {}x{}\n"
+        "Width must be between 1-1920.\nHeight must be between 1-1080.",
+        custom_res_x, custom_res_y));
+  }
 
   if (provider_) {
     // Safe if either the UI thread call or the presenter creation fails.
@@ -406,9 +431,10 @@ bool GraphicsSystem::Restore(ByteStream* stream) {
 }
 
 std::pair<uint16_t, uint16_t> GraphicsSystem::GetInternalDisplayResolution() {
-  if (cvars::internal_display_resolution >
+  if (cvars::internal_display_resolution >=
       internal_display_resolution_entries.size()) {
-    return internal_display_resolution_entries[8];
+    return {cvars::internal_display_resolution_x,
+            cvars::internal_display_resolution_y};
   }
   return internal_display_resolution_entries
       [cvars::internal_display_resolution];

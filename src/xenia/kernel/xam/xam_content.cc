@@ -46,7 +46,10 @@ dword_result_t XamContentGetLicenseMask_entry(lpdword_t mask_ptr,
   auto run = [mask_ptr](uint32_t& extended_error, uint32_t& length) {
     X_RESULT result = X_ERROR_FUNCTION_FAILED;
 
-    if (kernel_state()->deployment_type_ != XDeploymentType::kOpticalDisc) {
+    // Remark: This cannot be reflected as on console. Xenia can boot games
+    // directly and XBLA games can be repacked to ZAR. For these titles we must
+    // provide some license. Normally it should fail for OpticalDisc type.
+    if (kernel_state()->deployment_type_ != XDeploymentType::kUnknown) {
       // Each bit in the mask represents a granted license. Available licenses
       // seems to vary from game to game, but most appear to use bit 0 to
       // indicate if the game is purchased or not.
@@ -270,7 +273,7 @@ dword_result_t xeXamContentCreate(dword_t user_index, lpstring_t root_name,
     if (disposition == kDispositionState::Create) {
       result = content_manager->CreateContent(root_name, xuid, content_data);
       if (XSUCCEEDED(result)) {
-        content_manager->WriteContentHeaderFile(xuid, &content_data);
+        content_manager->WriteContentHeaderFile(xuid, content_data);
       }
     } else if (disposition == kDispositionState::Open) {
       result = content_manager->OpenContent(root_name, xuid, content_data,
@@ -518,20 +521,21 @@ DECLARE_XAM_EXPORT1(XamContentSetThumbnail, kContent, kImplemented);
 dword_result_t XamContentDelete_entry(dword_t user_index,
                                       lpvoid_t content_data_ptr,
                                       lpunknown_t overlapped_ptr) {
-  if (user_index >= XUserMaxUserCount) {
-    return X_ERROR_ACCESS_DENIED;
-  }
+  uint64_t xuid = 0;
+  if (user_index != XUserIndexNone) {
+    const auto& user = kernel_state()->xam_state()->GetUserProfile(user_index);
 
-  const auto& user = kernel_state()->xam_state()->GetUserProfile(user_index);
+    if (!user) {
+      return X_ERROR_NO_SUCH_USER;
+    }
 
-  if (!user) {
-    return X_ERROR_NO_SUCH_USER;
+    xuid = user->xuid();
   }
 
   XCONTENT_AGGREGATE_DATA content_data = *content_data_ptr.as<XCONTENT_DATA*>();
 
-  auto result = kernel_state()->content_manager()->DeleteContent(user->xuid(),
-                                                                 content_data);
+  auto result =
+      kernel_state()->content_manager()->DeleteContent(xuid, content_data);
 
   if (overlapped_ptr) {
     kernel_state()->CompleteOverlappedImmediate(overlapped_ptr, result);
