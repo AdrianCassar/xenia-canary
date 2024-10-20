@@ -6,6 +6,17 @@
 
 <h1 align="center">Xenia Canary - Xbox 360 Emulator</h1>
 
+## dbexperiment
+
+dbexperiment is a fork of Xenia Canary that aims to optimize dashboard use as much as possible.
+
+Notes:
+Dashboards' features and functionality are not guaranteed, so do not expect anything to work as expected, since this is for cosmetic purposes only.
+
+Credits to @The-Little-Wolf for the code provided in this build.
+[Compatibility](https://docs.google.com/spreadsheets/d/1R4DbWGdugFojU-aP-nKfDTd6XgdvjQh16cNyJ-0UeEA/)
+
+
 Xenia Canary is an experimental fork of the Xenia emulator. For more information, see the
 [Xenia Canary wiki](https://github.com/xenia-canary/xenia-canary/wiki).
 
