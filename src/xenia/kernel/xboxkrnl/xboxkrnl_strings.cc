@@ -8,6 +8,7 @@
  */
 
 #include "xenia/kernel/xboxkrnl/xboxkrnl_strings.h"
+#include "xenia/cpu/processor.h"
 #include "xenia/kernel/util/shim_utils.h"
 #include "xenia/kernel/xboxkrnl/xboxkrnl_private.h"
 
@@ -641,6 +642,10 @@ dword_result_t DbgPrint_entry(lpstring_t format, const ppc_context_t& ctx) {
 
   // trim whitespace from end of message
   XELOGI("(DbgPrint) {}", string_util::rtrim(data.str()));
+
+  if (cpu::DebugListener* listener = ctx->processor->debug_listener()) {
+    listener->OnDebugPrint(string_util::rtrim(data.str()));
+  }
 
   return X_STATUS_SUCCESS;
 }
