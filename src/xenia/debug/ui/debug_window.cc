@@ -1604,6 +1604,8 @@ void DebugWindow::OnBreakpointHit(Breakpoint* breakpoint,
   Focus();
 }
 
+void DebugWindow::OnDebugPrint(const std::string_view message) {}
+
 void DebugWindow::Focus() const {
   app_context_.CallInUIThread([this]() { window_->Focus(); });
 }
