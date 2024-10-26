@@ -25,10 +25,33 @@ dword_result_t XamAvatarInitialize_entry(
     lpunknown_t unk5,          // ptr in data segment
     dword_t unk6               // flags - 0x00300000, 0x30, etc
 ) {
-  // Negative to fail. Game should immediately call XamAvatarShutdown.
-  return ~0u;
+  return X_STATUS_SUCCESS;
 }
 DECLARE_XAM_EXPORT1(XamAvatarInitialize, kAvatars, kStub);
+
+dword_result_t XamAvatarLoadAnimation_entry(lpunknown_t r3, unknown_t r4,
+                                            unknown_t r5, unknown_t r6,
+                                            unknown_t r7, unknown_t r8,
+                                            unknown_t r9) {
+  return X_STATUS_SUCCESS;
+}
+DECLARE_XAM_EXPORT1(XamAvatarLoadAnimation, kAvatars, kStub);
+
+dword_result_t XamAvatarGetManifestLocalUser_entry(lpunknown_t r3, unknown_t r4,
+                                                   unknown_t r5, unknown_t r6,
+                                                   unknown_t r7, unknown_t r8,
+                                                   unknown_t r9) {
+  return X_STATUS_SUCCESS;
+}
+DECLARE_XAM_EXPORT1(XamAvatarGetManifestLocalUser, kAvatars, kStub);
+
+dword_result_t XamAvatarSetManifest_entry(lpunknown_t r3, unknown_t r4,
+                                          unknown_t r5, unknown_t r6,
+                                          unknown_t r7, unknown_t r8,
+                                          unknown_t r9) {
+  return X_STATUS_SUCCESS;
+}
+DECLARE_XAM_EXPORT1(XamAvatarSetManifest, kAvatars, kStub);
 
 void XamAvatarShutdown_entry() {
   // No-op.

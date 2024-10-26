@@ -723,6 +723,29 @@ dword_result_t IoCreateDevice_entry(dword_t driver_object,
 }
 DECLARE_XBOXKRNL_EXPORT1(IoCreateDevice, kFileSystem, kStub);
 
+dword_result_t IoSynchronousDeviceIoControlRequest_entry(
+    dword_t control_code, lpvoid_t derefed_device_obj, lpvoid_t input_buffer,
+    dword_t input_buffer_length, lpvoid_t output_buffer,
+    dword_t output_buffer_length, lpdword_t output_buffer_returned_length,
+    dword_t ioctl_internal, const ppc_context_t& ctx) {
+  if (control_code == 0x4D014 && input_buffer_length == 36) {
+    uint32_t* ptr_ptr_out =
+        ctx.TranslateVirtual<uint32_t*>(input_buffer.guest_address() + 0x10);
+
+    uint32_t dvd_drive_query_output_ptr =
+        xe::load_and_swap<uint32_t>(ptr_ptr_out);
+
+	char* put_6_here =
+        ctx.TranslateVirtual<char*>(dvd_drive_query_output_ptr + 0xA);
+    *put_6_here = 6;
+
+  }
+  return 259;
+}
+
+DECLARE_XBOXKRNL_EXPORT1(IoSynchronousDeviceIoControlRequest, kFileSystem,
+                         kStub);
+
 // supposed to invoke a callback on the driver object! its some sort of
 // destructor function intended to be called for all devices created from the
 // driver

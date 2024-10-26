@@ -26,6 +26,38 @@ namespace xe {
 namespace kernel {
 namespace xam {
 
+dword_result_t XamProfileOpen_entry(qword_t xuid, lpstring_t mount_name) {
+  std::string guest_name = mount_name;
+  bool result = kernel_state()->xam_state()->GetUserProfile(xuid);
+
+  if (!result) {
+    return X_ERROR_FUNCTION_FAILED;
+  }
+  return X_ERROR_SUCCESS;
+}
+DECLARE_XAM_EXPORT1(XamProfileOpen, kUserProfiles, kStub);
+
+struct X_PROFILEENUMRESULT {
+  xe::be<uint64_t> xuid_offline;  // E0.....
+  X_XAMACCOUNTINFO account;
+  xe::be<uint32_t> device_id;
+};
+static_assert_size(X_PROFILEENUMRESULT, 0x188);
+
+dword_result_t XamProfileCreateEnumerator_entry(dword_t device_id,
+                                                lpdword_t handle_out) {
+  assert_not_null(handle_out);
+
+  auto e = new XStaticUntypedEnumerator(kernel_state(), 0,
+                                        sizeof(X_PROFILEENUMRESULT));
+
+  e->Initialize(0xFF, 0xFF, 0x23001, 0x23003, 0x28);
+
+  *handle_out = e->handle();
+  return X_ERROR_SUCCESS;
+}
+DECLARE_XAM_EXPORT1(XamProfileCreateEnumerator, kUserProfiles, kStub);
+
 X_HRESULT_result_t XamUserGetXUID_entry(dword_t user_index, dword_t type_mask,
                                         lpqword_t xuid_ptr) {
   assert_true(type_mask == 1 || type_mask == 2 || type_mask == 3 ||
@@ -502,6 +534,31 @@ DECLARE_XAM_EXPORT1(XamUserContentRestrictionCheckAccess, kUserProfiles, kStub);
 dword_result_t XamUserIsOnlineEnabled_entry(dword_t user_index) { return 1; }
 DECLARE_XAM_EXPORT1(XamUserIsOnlineEnabled, kUserProfiles, kStub);
 
+dword_result_t XamUserLogon_entry(lpqword_t xuid, dword_t unk,
+                                  dword_t overlapped_ptr) {
+  uint64_t profile_xuid = *xuid;
+
+  auto run = [profile_xuid](uint32_t& extended_error,
+                            uint32_t& length) -> X_RESULT {
+    // kernel_state()->profile_manager()->Login(profile_xuid); // log in to
+    // profile and swap account data
+    extended_error = 0;
+    length = 0;
+    return X_ERROR_SUCCESS;
+  };
+
+  if (overlapped_ptr) {
+    kernel_state()->CompleteOverlappedDeferredEx(run, overlapped_ptr);
+    return X_ERROR_IO_PENDING;
+  } else {
+    uint32_t extended_error;
+    uint32_t item_count;
+    X_RESULT result = run(extended_error, item_count);
+  }
+  return X_ERROR_SUCCESS;
+}
+DECLARE_XAM_EXPORT1(XamUserLogon, kUserProfiles, kStub);
+
 dword_result_t XamUserGetMembershipTier_entry(dword_t user_index) {
   if (user_index >= XUserMaxUserCount) {
     return X_ERROR_INVALID_PARAMETER;
@@ -513,6 +570,12 @@ dword_result_t XamUserGetMembershipTier_entry(dword_t user_index) {
   return 6 /* 6 appears to be Gold */;
 }
 DECLARE_XAM_EXPORT1(XamUserGetMembershipTier, kUserProfiles, kStub);
+
+// https://answers.microsoft.com/en-us/xbox/forum/all/what-does-the-tenure-mean/07793391-78af-4709-b54a-5adf4366be7e
+dword_result_t XamUserGetUserTenure_entry() {
+  return 0xC; /* Development for Xenia Started in 2013 (11 yrs)*/
+}
+DECLARE_XAM_EXPORT1(XamUserGetUserTenure, kUserProfiles, kStub);
 
 dword_result_t XamUserAreUsersFriends_entry(dword_t user_index, dword_t unk1,
                                             dword_t unk2, lpdword_t out_value,
@@ -751,6 +814,18 @@ dword_result_t XamUserCreateStatsEnumerator_entry(
   return X_ERROR_SUCCESS;
 }
 DECLARE_XAM_EXPORT1(XamUserCreateStatsEnumerator, kUserProfiles, kSketchy);
+
+dword_result_t XamProfileClose_entry(lpstring_t mount_name) {
+  std::string guest_name = mount_name;
+  bool result =
+      kernel_state()->file_system()->UnregisterDevice(guest_name + ':');
+
+  if (!result) {
+    return X_ERROR_FUNCTION_FAILED;
+  }
+  return X_ERROR_SUCCESS;
+}
+DECLARE_XAM_EXPORT1(XamProfileClose, kUserProfiles, kStub);
 
 }  // namespace xam
 }  // namespace kernel

@@ -17,6 +17,17 @@ namespace xe {
 namespace kernel {
 namespace xboxkrnl {
 
+void HalOpenCloseODDTray_entry(dword_t set_tray) {
+  // void
+  // IN		DWORD setTray
+
+  // TODO(The-Little-Wolf): changes tray state
+}
+DECLARE_XBOXKRNL_EXPORT1(HalOpenCloseODDTray, kNone, kStub);
+
+void HalSendSMCMessage_entry(lpvoid_t msg, lpvoid_t resp) {}
+DECLARE_XBOXKRNL_EXPORT2(HalSendSMCMessage, kNone, kStub, kImportant);
+
 void HalReturnToFirmware_entry(dword_t routine) {
   // void
   // IN FIRMWARE_REENTRY  Routine
