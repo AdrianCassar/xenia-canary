@@ -86,6 +86,12 @@ DECLARE_int32(user_language);
 
 DECLARE_bool(allow_plugins);
 
+DEFINE_int32(priority_class, 0,
+             "Forces Xenia to use different process priority than default one. "
+             "It might affect performance and cause unexpected bugs. Possible "
+             "values: 0 - Normal, 1 - Above normal, 2 - High",
+             "General");
+
 namespace xe {
 using namespace xe::literals;
 
@@ -114,6 +120,7 @@ Emulator::Emulator(const std::filesystem::path& command_line,
       display_window_(nullptr),
       memory_(),
       audio_system_(),
+      audio_media_player_(),
       graphics_system_(),
       input_system_(),
       export_resolver_(),
@@ -125,6 +132,13 @@ Emulator::Emulator(const std::filesystem::path& command_line,
       paused_(false),
       restoring_(false),
       restore_fence_() {
+  if (cvars::priority_class != 0) {
+    if (SetProcessPriorityClass(cvars::priority_class)) {
+      XELOGI("Higher priority class request: Successful. New priority: {}",
+             cvars::priority_class);
+    }
+  }
+
 #if XE_PLATFORM_WIN32 == 1
   // Show a disclaimer that links to the quickstart
   // guide the first time they ever open the emulator
@@ -163,6 +177,7 @@ Emulator::~Emulator() {
   input_system_.reset();
   graphics_system_.reset();
   audio_system_.reset();
+  audio_media_player_.reset();
 
   kernel_state_.reset();
   file_system_.reset();
@@ -298,6 +313,9 @@ X_STATUS Emulator::Setup(
     if (result) {
       return result;
     }
+    audio_media_player_ = std::make_unique<apu::AudioMediaPlayer>(
+        audio_system_.get(), kernel_state_.get());
+    audio_media_player_->Setup();
   }
 
   // Initialize emulator fallback exception handling last.

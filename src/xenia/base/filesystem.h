@@ -17,6 +17,7 @@
 #include <string>
 #include <string_view>
 #include <vector>
+#include <optional>
 
 #include "xenia/base/platform.h"
 #include "xenia/base/string.h"
@@ -122,7 +123,8 @@ struct FileInfo {
   uint64_t access_timestamp;
   uint64_t write_timestamp;
 };
-bool GetInfo(const std::filesystem::path& path, FileInfo* out_info);
+
+std::optional<FileInfo> GetInfo(const std::filesystem::path& path);
 std::vector<FileInfo> ListFiles(const std::filesystem::path& path);
 std::vector<FileInfo> ListDirectories(const std::filesystem::path& path);
 std::vector<FileInfo> FilterByName(const std::vector<FileInfo>& files,
