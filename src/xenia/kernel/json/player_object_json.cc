@@ -10,7 +10,7 @@
 #include <string>
 
 #include "xenia/base/string_util.h"
-#include "xenia/kernel/player_object_json.h"
+#include "xenia/kernel/json/player_object_json.h"
 #include "xenia/kernel/util/net_utils.h"
 
 namespace xe {

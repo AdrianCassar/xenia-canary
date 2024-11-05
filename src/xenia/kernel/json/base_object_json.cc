@@ -9,7 +9,7 @@
 
 #include <string>
 
-#include "base_object_json.h"
+#include "xenia/kernel/json/base_object_json.h"
 
 namespace xe {
 namespace kernel {
