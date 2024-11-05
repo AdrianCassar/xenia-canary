@@ -11,7 +11,7 @@
 #define XENIA_KERNEL_LEADERBOARD_OBJECT_JSON_H_
 
 #include "xenia//kernel/xsession.h"
-#include "xenia/kernel/base_object_json.h"
+#include "xenia/kernel/json/base_object_json.h"
 
 namespace xe {
 namespace kernel {
