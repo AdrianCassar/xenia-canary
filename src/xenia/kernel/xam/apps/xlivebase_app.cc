@@ -629,7 +629,7 @@ X_HRESULT XLiveBaseApp::CreateFriendsEnumerator(uint32_t buffer_args) {
   const uint32_t friends_amount = xe::load_and_swap<uint32_t>(
       memory->TranslateVirtual(arg_list->entry[2].object_ptr));
 
-  if (user_index >= X_USER_MAX_USERS) {
+  if (user_index >= XUserMaxUserCount) {
     return X_E_INVALIDARG;
   }
 

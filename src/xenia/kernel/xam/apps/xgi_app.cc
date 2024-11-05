@@ -113,7 +113,7 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
 
       uint32_t num_users = 0;
 
-      for (uint32_t i = 0; i < X_USER_MAX_USERS; i++) {
+      for (uint32_t i = 0; i < XUserMaxUserCount; i++) {
         if (kernel_state()->xam_state()->IsUserSignedIn(i)) {
           num_users++;
         }
