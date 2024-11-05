@@ -864,18 +864,20 @@ dword_result_t NetDll_XNetInAddrToXnAddr_entry(dword_t caller, dword_t in_addr,
   std::memcpy(xn_addr->abOnline, mac.raw(), sizeof(MacAddress));
 
   if (xid_ptr != nullptr) {
-    uint64_t* sessionId_ptr =
-        kernel_memory()->TranslateVirtual<uint64_t*>(xid_ptr);
+    XNKID* sessionId_ptr = kernel_memory()->TranslateVirtual<XNKID*>(xid_ptr);
+    uint64_t session_id = 0;
 
     // FIXME
     if (XLiveAPI::systemlink_id) {
-      *sessionId_ptr = XLiveAPI::systemlink_id;
+      session_id = xe::byte_swap(XLiveAPI::systemlink_id);
     } else {
-      *sessionId_ptr =
+      session_id =
           xe::byte_swap(XLiveAPI::sessionIdCache[xn_addr->inaOnline.s_addr]);
     }
 
-    XSession::IsValidXNKID(*sessionId_ptr);
+    memcpy(sessionId_ptr, &session_id, sizeof(uint64_t));
+
+    XSession::IsValidXNKID(sessionId_ptr->as_uintBE64());
   }
 
   return X_STATUS_SUCCESS;
