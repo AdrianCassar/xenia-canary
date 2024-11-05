@@ -10,7 +10,7 @@
 #include <string>
 
 #include "xenia/base/string_util.h"
-#include "xenia/kernel/arbitration_object_json.h"
+#include "xenia/kernel/json/arbitration_object_json.h"
 #include "xenia/kernel/util/net_utils.h"
 
 namespace xe {
