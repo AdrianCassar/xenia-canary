@@ -9,7 +9,7 @@
 
 #include <string>
 
-#include "xenia/kernel/session_object_json.h"
+#include "xenia/kernel/json/session_object_json.h"
 
 namespace xe {
 namespace kernel {

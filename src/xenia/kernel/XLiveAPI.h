@@ -19,12 +19,12 @@
 #include "xenia/kernel/util/net_utils.h"
 #include "xenia/kernel/xnet.h"
 
-#include "xenia/kernel/arbitration_object_json.h"
-#include "xenia/kernel/friend_presence_object_json.h"
-#include "xenia/kernel/http_response_object_json.h"
-#include "xenia/kernel/leaderboard_object_json.h"
-#include "xenia/kernel/player_object_json.h"
-#include "xenia/kernel/session_object_json.h"
+#include "xenia/kernel/json/arbitration_object_json.h"
+#include "xenia/kernel/json/friend_presence_object_json.h"
+#include "xenia/kernel/json/http_response_object_json.h"
+#include "xenia/kernel/json/leaderboard_object_json.h"
+#include "xenia/kernel/json/player_object_json.h"
+#include "xenia/kernel/json/session_object_json.h"
 #include "xenia/kernel/xsession.h"
 
 #ifdef XE_PLATFORM_WIN32

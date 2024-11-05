@@ -12,7 +12,7 @@
 
 #include <vector>
 
-#include "xenia/kernel/base_object_json.h"
+#include "xenia/kernel/json/base_object_json.h"
 
 namespace xe {
 namespace kernel {
