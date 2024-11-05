@@ -10,7 +10,7 @@
 #include <string>
 
 #include "xenia/base/string_util.h"
-#include "xenia/kernel/friend_presence_object_json.h"
+#include "xenia/kernel/json/friend_presence_object_json.h"
 #include "xenia/kernel/util/net_utils.h"
 
 namespace xe {
