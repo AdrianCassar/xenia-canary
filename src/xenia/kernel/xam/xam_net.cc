@@ -1956,7 +1956,15 @@ dword_result_t NetDll_XNetRegisterKey_entry(dword_t caller,
                                             pointer_t<XNKID> session_key,
                                             pointer_t<XNKEY> exchange_key) {
   // Very hacky needs fixing!
-  XLiveAPI::systemlink_id = session_key->as_uintBE64();
+  const uint64_t session_id = session_key->as_uintBE64();
+
+  if (XSession::IsSystemlink(session_id)) {
+    XELOGI("XNetRegisterKey: Systemlink");
+    XLiveAPI::systemlink_id = session_id;
+  } else {
+    XELOGI("XNetRegisterKey: Xbox Live");
+  }
+
   return 0;
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetRegisterKey, kNetworking, kStub);
