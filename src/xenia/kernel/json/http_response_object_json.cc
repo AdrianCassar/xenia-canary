@@ -7,7 +7,7 @@
  ******************************************************************************
  */
 
-#include "xenia/kernel/http_response_object_json.h"
+#include "xenia/kernel/json/http_response_object_json.h"
 
 namespace xe {
 namespace kernel {
