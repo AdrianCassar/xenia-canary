@@ -7,7 +7,7 @@
  ******************************************************************************
  */
 
-#include "xenia/kernel/leaderboard_object_json.h"
+#include "xenia/kernel/json/leaderboard_object_json.h"
 #include "xenia/kernel/util/shim_utils.h"
 
 namespace xe {
