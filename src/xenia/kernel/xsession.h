@@ -192,6 +192,23 @@ struct XSessionSearchByIDs {
   xe::be<uint32_t> value_const3;  // 0
 };
 
+struct XSessionSearchWeighted {
+  xe::be<uint32_t> proc_index;
+  xe::be<uint32_t> user_index;
+  xe::be<uint32_t> num_results;
+  xe::be<uint16_t> num_weighted_properties;
+  xe::be<uint16_t> num_weighted_contexts;
+  xe::be<uint32_t> weighted_search_properties_ptr;
+  xe::be<uint32_t> weighted_search_contexts_ptr;
+  xe::be<uint16_t> num_props;
+  xe::be<uint16_t> num_ctx;
+  xe::be<uint32_t> non_weighted_search_properties_ptr;
+  xe::be<uint32_t> non_weighted_search_contexts_ptr;
+  xe::be<uint32_t> results_buffer_size;
+  xe::be<uint32_t> search_results_ptr;
+  xe::be<uint32_t> num_users;
+};
+
 struct XSessionDetails {
   xe::be<uint32_t> obj_ptr;
   xe::be<uint32_t> details_buffer_size;
@@ -304,6 +321,12 @@ struct XUSER_CONTEXT {
   xe::be<uint32_t> value;
 };
 
+struct XUSER_WEIGHTED_CONTEXT {
+  xe::be<uint32_t> context_id;
+  xe::be<uint32_t> value;
+  xe::be<float> weight;
+};
+
 class XSession : public XObject {
  public:
   static const Type kObjectType = Type::Session;
@@ -331,6 +354,9 @@ class XSession : public XObject {
 
   static X_RESULT GetSessions(Memory* memory, XSessionSearch* search_data,
                               uint32_t num_users);
+  static X_RESULT GetWeightedSessions(Memory* memory,
+                                      XSessionSearchWeighted* search_data,
+                                      uint32_t num_users);
   static X_RESULT GetSessionByID(Memory* memory,
                                  XSessionSearchByID* search_data);
   static X_RESULT GetSessionByIDs(Memory* memory,

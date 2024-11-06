@@ -31,6 +31,12 @@ struct XUSER_PROPERTY {
   X_USER_DATA data;
 };
 
+struct XUSER_WEIGHTED_PROPERTY {
+  xe::be<uint32_t> property_id;
+  X_USER_DATA data;
+  xe::be<float> weight;
+};
+
 class Property : public UserData {
  public:
   Property();
