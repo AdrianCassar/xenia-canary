@@ -32,8 +32,9 @@ DEFINE_bool(logging, false, "Log Network Activity & Stats", "Live");
 DEFINE_bool(log_mask_ips, true, "Do not include P2P IPs inside the log",
             "Live");
 
-DEFINE_bool(offline_mode, false, "Offline Mode e.g. not connected to a LAN",
-            "Live");
+DEFINE_int32(network_mode, 2,
+             "Network mode types: 0 - Offline, 1 - Systemlink, 2 - Xbox Live.",
+             "Live");
 
 DEFINE_bool(xlink_kai_systemlink_hack, false,
             "Enable hacks for XLink Kai support. May break some games. See: "
@@ -70,8 +71,8 @@ namespace kernel {
 void XLiveAPI::IpGetConsoleXnAddr(XNADDR* XnAddr_ptr) {
   memset(XnAddr_ptr, 0, sizeof(XNADDR));
 
-  if (!cvars::offline_mode) {
-    if (IsOnline() && adapter_has_wan_routing) {
+  if (cvars::network_mode != NETWORK_MODE::OFFLINE) {
+    if (IsConnectedToServer() && adapter_has_wan_routing) {
       XnAddr_ptr->ina = OnlineIP().sin_addr;
       XnAddr_ptr->inaOnline = OnlineIP().sin_addr;
     } else {
@@ -198,6 +199,21 @@ void XLiveAPI::SetNetworkInterfaceByGUID(std::string guid) {
   }
 }
 
+void XLiveAPI::SetNetworkMode(int32_t mode) {
+  OVERRIDE_int32(network_mode, mode);
+
+  if (mode == NETWORK_MODE::OFFLINE && IsConnectedToServer()) {
+    DeleteAllSessionsByMac();
+  }
+
+  // Initialize Server
+  if (initialized_ != InitState::Pending) {
+    initialized_ = InitState::Pending;
+
+    Init();
+  }
+}
+
 std::string XLiveAPI::GetApiAddress() {
   cvars::api_address = xe::string_util::trim(cvars::api_address);
 
@@ -214,9 +230,9 @@ std::string XLiveAPI::GetApiAddress() {
 }
 
 // If online NAT open, otherwise strict.
-uint32_t XLiveAPI::GetNatType() { return IsOnline() ? 1 : 3; }
+uint32_t XLiveAPI::GetNatType() { return IsConnectedToServer() ? 1 : 3; }
 
-bool XLiveAPI::IsOnline() { return OnlineIP().sin_addr.s_addr != 0; }
+bool XLiveAPI::IsConnectedToServer() { return OnlineIP().sin_addr.s_addr != 0; }
 
 bool XLiveAPI::IsConnectedToLAN() { return LocalIP().sin_addr.s_addr != 0; }
 
@@ -225,7 +241,6 @@ uint16_t XLiveAPI::GetPlayerPort() { return 36000; }
 int8_t XLiveAPI::GetVersionStatus() { return version_status; }
 
 void XLiveAPI::Init() {
-  // Only initialize once
   if (GetInitState() != InitState::Pending) {
     return;
   }
@@ -244,10 +259,15 @@ void XLiveAPI::Init() {
     }
   }
 
-  upnp_handler = new UPnP();
-  mac_address_ = new MacAddress(GetMACaddress());
+  if (!upnp_handler) {
+    upnp_handler = new UPnP();
+  }
 
-  if (cvars::offline_mode) {
+  if (!mac_address_) {
+    mac_address_ = new MacAddress(GetMACaddress());
+  }
+
+  if (cvars::network_mode == NETWORK_MODE::OFFLINE) {
     XELOGI("XLiveAPI:: Offline mode enabled!");
     initialized_ = InitState::Failed;
     return;
@@ -262,7 +282,7 @@ void XLiveAPI::Init() {
 
   online_ip_ = Getwhoami();
 
-  if (!IsOnline()) {
+  if (!IsConnectedToServer()) {
     // Assign online ip as local ip to ensure XNADDR is not 0 for systemlink
     // online_ip_ = local_ip_;
 
@@ -289,7 +309,7 @@ void XLiveAPI::Init() {
       profile->AddDummyFriends(dummy_friends_count);
     }
   }
-  
+
   initialized_ = InitState::Success;
 
   // Delete sessions on start-up.
@@ -1531,8 +1551,8 @@ void XLiveAPI::SelectNetworkInterface() {
   }
 
   std::string WAN_interface = xe::kernel::XLiveAPI::adapter_has_wan_routing
-                                  ? "(Internet)"
-                                  : "(No Internet)";
+                                  ? "(Default)"
+                                  : "(Non Default)";
 
   XELOGI("Set network interface: {} {} {} {}", interface_name,
          cvars::network_guid, LocalIP_str(), WAN_interface);
