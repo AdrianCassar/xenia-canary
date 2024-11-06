@@ -580,7 +580,7 @@ X_HRESULT XLiveBaseApp::XPresenceCreateEnumerator(uint32_t buffer_length) {
 
 X_HRESULT XLiveBaseApp::GetServiceInfo(uint32_t serviceid,
                                        uint32_t serviceinfo) {
-  if (!XLiveAPI::IsOnline()) {
+  if (!XLiveAPI::IsConnectedToServer()) {
     return X_ONLINE_E_LOGON_NOT_LOGGED_ON;
   }
 
