@@ -33,6 +33,12 @@ struct XUSER_PROPERTY {
 };
 static_assert_size(XUSER_PROPERTY, 0x18);
 
+struct XUSER_WEIGHTED_PROPERTY {
+  xe::be<uint32_t> property_id;
+  X_USER_DATA data;
+  xe::be<float> weight;
+};
+
 class Property : public UserData {
  public:
   Property() = default;
