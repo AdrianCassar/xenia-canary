@@ -44,7 +44,7 @@ DECLARE_bool(logging);
 
 DECLARE_bool(log_mask_ips);
 
-DECLARE_bool(offline_mode);
+DECLARE_int32(network_mode);
 
 DECLARE_bool(xlink_kai_systemlink_hack);
 
@@ -639,7 +639,8 @@ dword_result_t NetDll_XNetGetTitleXnAddr_entry(dword_t caller,
                    XnAddrStatus::XNET_GET_XNADDR_GATEWAY |
                    XnAddrStatus::XNET_GET_XNADDR_DNS;
 
-  if (XLiveAPI::IsOnline()) {
+  if (XLiveAPI::IsConnectedToServer() &&
+      cvars::network_mode == NETWORK_MODE::XBOXLIVE) {
     status |= XnAddrStatus::XNET_GET_XNADDR_ONLINE;
   }
 
@@ -788,7 +789,7 @@ dword_result_t NetDll_XNetXnAddrToInAddr_entry(dword_t caller,
     in_addr->s_addr = xn_addr->ina.s_addr;
   }
 
-  if (XLiveAPI::IsOnline()) {
+  if (XLiveAPI::IsConnectedToServer()) {
     in_addr->s_addr = xn_addr->inaOnline.s_addr;
   }
 
@@ -912,7 +913,7 @@ dword_result_t NetDll_XNetGetBroadcastVersionStatus_entry(dword_t caller,
 DECLARE_XAM_EXPORT1(NetDll_XNetGetBroadcastVersionStatus, kNetworking, kStub);
 
 dword_result_t NetDll_XNetGetEthernetLinkStatus_entry(dword_t caller) {
-  if (cvars::offline_mode) {
+  if (cvars::network_mode == NETWORK_MODE::OFFLINE) {
     return 0;
   }
 
