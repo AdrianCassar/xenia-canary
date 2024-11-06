@@ -725,6 +725,26 @@ X_RESULT XSession::GetSessions(Memory* memory, XSessionSearch* search_data,
   return X_ERROR_SUCCESS;
 }
 
+X_RESULT XSession::GetWeightedSessions(
+    Memory* memory, XSessionSearchWeighted* weighted_search_data,
+    uint32_t num_users) {
+  XSessionSearch search_data = {};
+
+  search_data.proc_index = weighted_search_data->proc_index;
+  search_data.user_index = weighted_search_data->user_index;
+  search_data.num_results = weighted_search_data->num_results;
+  search_data.num_props = weighted_search_data->num_props;
+  search_data.num_ctx = weighted_search_data->num_ctx;
+  search_data.props_ptr =
+      weighted_search_data->non_weighted_search_properties_ptr;
+  search_data.ctx_ptr =
+      weighted_search_data->non_weighted_search_properties_ptr;
+  search_data.results_buffer_size = weighted_search_data->results_buffer_size;
+  search_data.search_results_ptr = weighted_search_data->search_results_ptr;
+
+  return GetSessions(memory, &search_data, num_users);
+}
+
 X_RESULT XSession::GetSessionByID(Memory* memory,
                                   XSessionSearchByID* search_data) {
   if (!search_data->results_buffer_size) {
