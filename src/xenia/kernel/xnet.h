@@ -79,6 +79,8 @@ namespace xe {
 
 namespace kernel {
 
+enum NETWORK_MODE : int32_t { OFFLINE, LAN, XBOXLIVE };
+
 struct XNKID {
   uint8_t ab[8];
   uint64_t as_uint64() { return *reinterpret_cast<uint64_t*>(&ab); }
