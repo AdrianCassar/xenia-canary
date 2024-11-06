@@ -25,6 +25,12 @@ struct XUSER_PROPERTY {
   X_USER_DATA data;
 };
 
+struct XUSER_WEIGHTED_PROPERTY {
+  xe::be<uint32_t> property_id;
+  X_USER_DATA data;
+  xe::be<float> weight;
+};
+
 using userDataVariant = std::variant<uint32_t, uint64_t, float, double,
                                      std::u16string, std::vector<uint8_t> >;
 

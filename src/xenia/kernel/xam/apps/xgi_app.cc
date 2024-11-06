@@ -111,13 +111,10 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
       XELOGI("XSessionSearch");
       XSessionSearch* data = reinterpret_cast<XSessionSearch*>(buffer);
 
-      uint32_t num_users = 0;
-
-      for (uint32_t i = 0; i < XUserMaxUserCount; i++) {
-        if (kernel_state()->xam_state()->IsUserSignedIn(i)) {
-          num_users++;
-        }
-      }
+      const uint32_t num_users = kernel_state()
+                                     ->xam_state()
+                                     ->profile_manager()
+                                     ->CountSignedInProfiles();
 
       return XSession::GetSessions(memory_, data, num_users);
     }
@@ -639,8 +636,17 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
       return result;
     }
     case 0x000B0065: {
-      XELOGI("XSessionSearchWeighted unimplemented");
-      return X_E_SUCCESS;
+      XELOGI("XSessionSearchWeighted");
+
+      XSessionSearchWeighted* data =
+          reinterpret_cast<XSessionSearchWeighted*>(buffer);
+
+      const uint32_t num_users = kernel_state()
+                                     ->xam_state()
+                                     ->profile_manager()
+                                     ->CountSignedInProfiles();
+
+      return XSession::GetWeightedSessions(memory_, data, num_users);
     }
     case 0x000B0026: {
       XELOGI("XSessionFlushStats unimplemented");

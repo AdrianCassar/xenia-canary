@@ -112,6 +112,7 @@ class ProfileManager {
     return static_cast<uint32_t>(accounts_.size());
   }
   bool IsAnyProfileSignedIn() const { return !logged_profiles_.empty(); }
+  uint32_t CountSignedInProfiles() const { return !logged_profiles_.size(); }
 
   std::filesystem::path GetProfileContentPath(
       const uint64_t xuid, const uint32_t title_id = -1) const;
