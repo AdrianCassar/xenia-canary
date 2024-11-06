@@ -25,7 +25,7 @@
 #include "xenia/kernel/xnet.h"
 #include "xenia/xbox.h"
 
-DECLARE_bool(offline_mode);
+DECLARE_int32(network_mode);
 
 namespace xe {
 namespace kernel {
@@ -185,8 +185,9 @@ class UserProfile {
   uint64_t xuid() const { return xuid_; }
   std::string name() const { return account_info_.GetGamertagString(); }
   X_USER_SIGNIN_STATE signin_state() const {
-    return cvars::offline_mode ? X_USER_SIGNIN_STATE::SignedInLocally
-                               : X_USER_SIGNIN_STATE::SignedInToLive;
+    return cvars::network_mode == NETWORK_MODE::XBOXLIVE
+               ? X_USER_SIGNIN_STATE::SignedInToLive
+               : X_USER_SIGNIN_STATE::SignedInLocally;
   }
   uint32_t type() const {
     return static_cast<uint32_t>(X_USER_SIGNIN_STATE::SignedInLocally) |
