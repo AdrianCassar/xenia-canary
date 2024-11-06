@@ -53,11 +53,13 @@ class XLiveAPI {
 
   static void SetNetworkInterfaceByGUID(std::string guid);
 
+  static void SetNetworkMode(int32_t mode);
+
   static std::string GetApiAddress();
 
   static uint32_t GetNatType();
 
-  static bool IsOnline();
+  static bool IsConnectedToServer();
 
   static bool IsConnectedToLAN();
 
