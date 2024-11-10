@@ -1273,22 +1273,19 @@ dword_result_t NetDll_XNetQosLookup_entry(
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetQosLookup, kNetworking, kImplemented);
 
-dword_result_t NetDll_XNetQosGetListenStats_entry(dword_t caller,
-                                                  dword_t pxnkid,
-                                                  lpdword_t pQosListenStats) {
+dword_result_t NetDll_XNetQosGetListenStats_entry(
+    dword_t caller, pointer_t<XNKID> xnkid_ptr,
+    pointer_t<XNQOSLISTENSTATS> qos_stats_ptr) {
   XELOGI("XNetQosGetListenStats({:08X}, {:08X}, {:08X})", caller.value(),
-         pxnkid.value(), pQosListenStats.guest_address());
+         xnkid_ptr.guest_address(), qos_stats_ptr.guest_address());
 
-  if (pQosListenStats) {
-    auto qos = kernel_memory()->TranslateVirtual<XNQOSLISTENSTATS*>(
-        pQosListenStats.guest_address());
-
-    qos->requests_received_count = 1;
-    qos->probes_received_count = 1;
-    qos->slots_full_discards_count = 1;
-    qos->data_replies_sent_count = 1;
-    qos->data_reply_bytes_sent = 1;
-    qos->probe_replies_sent_count = 1;
+  if (qos_stats_ptr) {
+    qos_stats_ptr->requests_received_count = 1;
+    qos_stats_ptr->probes_received_count = 1;
+    qos_stats_ptr->slots_full_discards_count = 1;
+    qos_stats_ptr->data_replies_sent_count = 1;
+    qos_stats_ptr->data_reply_bytes_sent = 1;
+    qos_stats_ptr->probe_replies_sent_count = 1;
   }
 
   return X_ERROR_SUCCESS;
