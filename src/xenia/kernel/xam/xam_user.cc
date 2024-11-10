@@ -647,6 +647,39 @@ dword_result_t XamUserAreUsersFriends_entry(
 }
 DECLARE_XAM_EXPORT1(XamUserAreUsersFriends, kUserProfiles, kStub);
 
+dword_result_t XamUserGetAgeGroup_entry(
+    dword_t user_index, lpdword_t age_ptr,
+    pointer_t<XAM_OVERLAPPED> overlapped_ptr) {
+  if (!age_ptr) {
+    return X_ERROR_INVALID_PARAMETER;
+  }
+
+  if (!kernel_state()->xam_state()->IsUserSignedIn(user_index)) {
+    return X_ERROR_NO_SUCH_USER;
+  }
+
+  auto run = [user_index, age_ptr, overlapped_ptr](
+                 uint32_t& extended_error, uint32_t& length) -> X_RESULT {
+    X_RESULT result = X_ERROR_SUCCESS;
+
+    *age_ptr = X_USER_AGE_GROUP::ADULT;
+
+    extended_error = X_HRESULT_FROM_WIN32(result);
+    length = 0;
+
+    return result;
+  };
+
+  if (!overlapped_ptr) {
+    uint32_t extended_error, length;
+    return run(extended_error, length);
+  } else {
+    kernel_state()->CompleteOverlappedDeferredEx(run, overlapped_ptr);
+    return X_ERROR_IO_PENDING;
+  }
+}
+DECLARE_XAM_EXPORT1(XamUserGetAgeGroup, kUserProfiles, kImplemented);
+
 dword_result_t XamUserCreateAchievementEnumerator_entry(
     dword_t title_id, dword_t user_index, qword_t xuid, dword_t flags,
     dword_t offset, dword_t count, lpdword_t buffer_size_ptr,
