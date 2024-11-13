@@ -25,6 +25,8 @@
 #include "xenia/ui/windowed_app_context.h"
 #include "xenia/xbox.h"
 
+DECLARE_bool(xconfig_initial_setup);
+
 DEFINE_bool(storage_selection_dialog, false,
             "Show storage device selection dialog when the game requests it.",
             "UI");
@@ -437,6 +439,14 @@ static dword_result_t XamShowMessageBoxUi(
   }
   return result;
 }
+
+dword_result_t XamDoesOmniNeedConfiguration_entry() { return 0; }
+DECLARE_XAM_EXPORT1(XamDoesOmniNeedConfiguration, kMisc, kStub);
+
+dword_result_t XamFirstRunExperienceShouldRun_entry() {
+  return cvars::xconfig_initial_setup;
+}
+DECLARE_XAM_EXPORT1(XamFirstRunExperienceShouldRun, kMisc, kStub);
 
 // https://www.se7ensins.com/forums/threads/working-xshowmessageboxui.844116/
 dword_result_t XamShowMessageBoxUI_entry(

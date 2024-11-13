@@ -443,12 +443,6 @@ bool D3D12Provider::Initialize() {
     programmable_sample_positions_tier_ =
         options2.ProgrammableSamplePositionsTier;
   }
-  D3D12_FEATURE_DATA_D3D12_OPTIONS8 options8;
-  if (SUCCEEDED(device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS8,
-                                            &options8, sizeof(options8)))) {
-    unaligned_block_textures_supported_ =
-        bool(options8.UnalignedBlockTexturesSupported);
-  }
   virtual_address_bits_per_resource_ = 0;
   D3D12_FEATURE_DATA_GPU_VIRTUAL_ADDRESS_SUPPORT virtual_address_support;
   if (SUCCEEDED(device->CheckFeatureSupport(

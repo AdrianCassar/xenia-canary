@@ -212,10 +212,16 @@ dword_result_t XamGetSystemVersion_entry() {
 }
 DECLARE_XAM_EXPORT1(XamGetSystemVersion, kNone, kStub);
 
-void XCustomRegisterDynamicActions_entry() {
-  // ???
+dword_result_t XamUpdateGetBaseSystemVersion_entry() {
+  return XamGetSystemVersion_entry();
 }
-DECLARE_XAM_EXPORT1(XCustomRegisterDynamicActions, kNone, kStub);
+DECLARE_XAM_EXPORT1(XamUpdateGetBaseSystemVersion, kNone, kStub);
+
+// https://github.com/oukiar/freestyledash/blob/master/Freestyle/Tools/Generic/XamExports.h#L77
+dword_result_t XamUpdateGetCurrentSystemVersion_entry() {
+  return XamGetSystemVersion_entry();
+    }
+DECLARE_XAM_EXPORT1(XamUpdateGetCurrentSystemVersion, kNone, kStub);
 
 dword_result_t XGetAVPack_entry() {
   // Value from
@@ -392,6 +398,11 @@ void XamLoaderLaunchTitle_entry(lpstring_t raw_name_ptr, dword_t flags) {
   kernel_state()->TerminateTitle();
 }
 DECLARE_XAM_EXPORT1(XamLoaderLaunchTitle, kNone, kSketchy);
+
+// https://www.se7ensins.com/forums/threads/interested-in-programming-here-are-some-tips.1503852/
+void XamLoaderLaunchTitleEx_entry(lpstring_t launch_path, lpstring_t mount_path,
+                                  lpstring_t cmdLine, dword_t flags) {}
+DECLARE_XAM_EXPORT1(XamLoaderLaunchTitleEx, kNone, kSketchy);
 
 void XamLoaderTerminateTitle_entry() {
   // This function does not return.
