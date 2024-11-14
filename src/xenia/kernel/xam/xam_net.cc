@@ -983,31 +983,33 @@ DECLARE_XAM_EXPORT1(NetDll_XNetDnsRelease, kNetworking, kStub);
 
 dword_result_t NetDll_XNetQosServiceLookup_entry(dword_t caller, dword_t flags,
                                                  dword_t event_handle,
-                                                 lpdword_t pqos) {
+                                                 lpdword_t qos_ptr) {
   XELOGI("XNetQosServiceLookup({:08X}, {:08X}, {:08X}, {:08X})", caller.value(),
-         flags.value(), event_handle.value(), pqos.guest_address());
+         flags.value(), event_handle.value(), qos_ptr.guest_address());
 
-  if (pqos) {
-    auto qos_guest = kernel_memory()->SystemHeapAlloc(sizeof(XNQOS));
-    auto qos = kernel_memory()->TranslateVirtual<XNQOS*>(qos_guest);
+  if (!qos_ptr) {
+    return static_cast<uint32_t>(X_WSAError::X_WSAEINVAL);
+  }
+
+  if (qos_ptr) {
+    const uint32_t qos_guest = kernel_memory()->SystemHeapAlloc(sizeof(XNQOS));
+    XNQOS* qos = kernel_memory()->TranslateVirtual<XNQOS*>(qos_guest);
 
     qos->count = 1;
+    qos->count_pending = 0;
 
     qos->info[0].probes_xmit = 4;
     qos->info[0].probes_recv = 4;
-    qos->info[0].data_len = sizeof("A");
-    qos->info[0].data_ptr = *(uint8_t*)"A";
-    qos->info[0].rtt_min_in_msecs = 4;
+    qos->info[0].data_len = 0;
+    qos->info[0].data_ptr = 0;
+    qos->info[0].rtt_min_in_msecs = 10;
     qos->info[0].rtt_med_in_msecs = 10;
     qos->info[0].up_bits_per_sec = 1024 * 1024;
     qos->info[0].down_bits_per_sec = 1024 * 1024;
-    qos->info[0].flags = XNET_XNQOSINFO::COMPLETE |
-                         XNET_XNQOSINFO::TARGET_CONTACTED |
-                         XNET_XNQOSINFO::DATA_RECEIVED;
+    qos->info[0].flags =
+        XNET_XNQOSINFO::COMPLETE | XNET_XNQOSINFO::TARGET_CONTACTED;
 
-    qos->count_pending = 0;
-
-    *pqos = qos_guest;
+    *qos_ptr = qos_guest;
   }
 
   if (event_handle) {
@@ -1022,12 +1024,12 @@ dword_result_t NetDll_XNetQosServiceLookup_entry(dword_t caller, dword_t flags,
 DECLARE_XAM_EXPORT1(NetDll_XNetQosServiceLookup, kNetworking, kStub);
 
 dword_result_t NetDll_XNetQosRelease_entry(dword_t caller,
-                                           pointer_t<XNQOS> qos) {
-  if (!qos) {
-    return X_STATUS_INVALID_PARAMETER;
+                                           pointer_t<XNQOS> qos_ptr) {
+  if (!qos_ptr) {
+    return static_cast<uint32_t>(X_WSAError::X_WSAEINVAL);
   }
 
-  kernel_memory()->SystemHeapFree(qos.guest_address());
+  kernel_memory()->SystemHeapFree(qos_ptr.guest_address());
   return 0;
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetQosRelease, kNetworking, kStub);
@@ -1202,8 +1204,8 @@ dword_result_t NetDll_XNetQosLookup_entry(
 
   const uint32_t size =
       sizeof(XNQOS) + (sizeof(XNQOSINFO) * (count - 1) + countOffset);
-  const auto qos_guest = kernel_memory()->SystemHeapAlloc(size);
-  const auto qos = kernel_memory()->TranslateVirtual<XNQOS*>(qos_guest);
+  const uint32_t qos_guest = kernel_memory()->SystemHeapAlloc(size);
+  XNQOS* qos = kernel_memory()->TranslateVirtual<XNQOS*>(qos_guest);
 
   /*
    GoW 3 - TU 0
@@ -1245,10 +1247,10 @@ dword_result_t NetDll_XNetQosLookup_entry(
 
       qos->info[i].probes_xmit = 4;
       qos->info[i].probes_recv = 4;
-      qos->info[i].rtt_min_in_msecs = 4;
+      qos->info[i].rtt_min_in_msecs = 10;
       qos->info[i].rtt_med_in_msecs = 10;
-      qos->info[i].up_bits_per_sec = 20 * 1024;
-      qos->info[i].down_bits_per_sec = 20 * 1024;
+      qos->info[i].up_bits_per_sec = 1024 * 1024;
+      qos->info[i].down_bits_per_sec = 1024 * 1024;
 
       qos->count_pending =
           std::max(static_cast<int>(qos->count_pending - 1), 0);
