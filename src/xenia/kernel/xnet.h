@@ -79,6 +79,8 @@ namespace xe {
 
 namespace kernel {
 
+constexpr uint8_t XUserMaxStatsAttributes = 64;
+
 enum NETWORK_MODE : int32_t { OFFLINE, LAN, XBOXLIVE };
 
 enum X_USER_AGE_GROUP : uint32_t { CHILD, TEEN, ADULT };
