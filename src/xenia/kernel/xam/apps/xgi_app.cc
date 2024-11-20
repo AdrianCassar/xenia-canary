@@ -79,6 +79,12 @@ struct XUSER_STATS_COLUMN {
   X_USER_DATA Value;
 };
 
+struct XUSER_STATS_SPEC {
+  xe::be<uint32_t> ViewId;
+  xe::be<uint32_t> NumColumnIds;
+  xe::be<uint16_t> rgwColumnIds[XUserMaxStatsAttributes];
+};
+
 struct XUSER_STATS_RESET {
   xe::be<uint32_t> user_index;
   xe::be<uint32_t> view_id;
@@ -103,12 +109,6 @@ struct XUSER_STATS_ROW {
   CHAR szGamertag[16];
   xe::be<uint32_t> NumColumns;
   xe::be<uint32_t> pColumns;
-};
-
-struct XUSER_STATS_SPEC {
-  xe::be<uint32_t> ViewId;
-  xe::be<uint32_t> NumColumnIds;
-  xe::be<uint16_t> rgwColumnIds[0x40];
 };
 
 XgiApp::XgiApp(KernelState* kernel_state) : App(kernel_state, 0xFB) {}
@@ -219,12 +219,12 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
       auto xuids = memory_->TranslateVirtual<xe::be<uint64_t>*>(
           data->xuids_guest_address);
 
-      for (unsigned int playerIndex = 0; playerIndex < data->xuids_count;
-           playerIndex++) {
-        xe::be<uint64_t> xuid = xuids[playerIndex];
+      for (uint32_t player_index = 0; player_index < data->xuids_count;
+           player_index++) {
+        const xe::be<uint64_t> xuid = xuids[player_index];
 
         if (xuid) {
-          std::string xuid_str = xe::string_util::to_hex_string(xuid);
+          std::string xuid_str = string_util::to_hex_string(xuid);
 
           Value value;
           value.SetString(xuid_str.c_str(), 16, doc.GetAllocator());
@@ -250,10 +250,17 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
         Value queryObject(kObjectType);
         queryObject.AddMember("id", queries[queryIndex].ViewId,
                               doc.GetAllocator());
+
+        assert_false(queries[queryIndex].NumColumnIds >
+                     XUserMaxStatsAttributes);
+
+        const uint32_t num_column_ids = std::min<uint32_t>(
+            queries[queryIndex].NumColumnIds, XUserMaxStatsAttributes);
+
         Value statIdsArray(kArrayType);
-        for (uint32_t statIdIndex = 0;
-             statIdIndex < queries[queryIndex].NumColumnIds; statIdIndex++) {
-          statIdsArray.PushBack(queries[queryIndex].rgwColumnIds[statIdIndex],
+        for (uint32_t stat_id_index = 0; stat_id_index < num_column_ids;
+             stat_id_index++) {
+          statIdsArray.PushBack(queries[queryIndex].rgwColumnIds[stat_id_index],
                                 doc.GetAllocator());
         }
         queryObject.AddMember("statisticIds", statIdsArray, doc.GetAllocator());
