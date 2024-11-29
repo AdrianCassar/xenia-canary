@@ -163,38 +163,6 @@ struct SGADDR {
   uint8_t unkn[4];
 };
 
-struct XnAddrStatus {
-  // Address acquisition is not yet complete
-  static const uint32_t XNET_GET_XNADDR_PENDING = 0x00000000;
-  // XNet is uninitialized or no debugger found
-  static const uint32_t XNET_GET_XNADDR_NONE = 0x00000001;
-  // Host has ethernet address (no IP address)
-  static const uint32_t XNET_GET_XNADDR_ETHERNET = 0x00000002;
-  // Host has statically assigned IP address
-  static const uint32_t XNET_GET_XNADDR_STATIC = 0x00000004;
-  // Host has DHCP assigned IP address
-  static const uint32_t XNET_GET_XNADDR_DHCP = 0x00000008;
-  // Host has PPPoE assigned IP address
-  static const uint32_t XNET_GET_XNADDR_PPPOE = 0x00000010;
-  // Host has one or more gateways configured
-  static const uint32_t XNET_GET_XNADDR_GATEWAY = 0x00000020;
-  // Host has one or more DNS servers configured
-  static const uint32_t XNET_GET_XNADDR_DNS = 0x00000040;
-  // Host is currently connected to online service
-  static const uint32_t XNET_GET_XNADDR_ONLINE = 0x00000080;
-  // Network configuration requires troubleshooting
-  static const uint32_t XNET_GET_XNADDR_TROUBLESHOOT = 0x00008000;
-};
-
-// https://github.com/ILOVEPIE/Cxbx-Reloaded/blob/master/src/CxbxKrnl/EmuXOnline.h#L39
-struct XEthernetStatus {
-  static const uint32_t XNET_ETHERNET_LINK_ACTIVE = 0x01;
-  static const uint32_t XNET_ETHERNET_LINK_100MBPS = 0x02;
-  static const uint32_t XNET_ETHERNET_LINK_10MBPS = 0x04;
-  static const uint32_t XNET_ETHERNET_LINK_FULL_DUPLEX = 0x08;
-  static const uint32_t XNET_ETHERNET_LINK_HALF_DUPLEX = 0x10;
-};
-
 typedef struct {
   uint32_t size_of_struct;
   uint32_t requests_received_count;
@@ -626,7 +594,7 @@ DECLARE_XAM_EXPORT1(XamQueryLiveHiveA, kNone, kStub);
 // Sets the console IP address.
 dword_result_t NetDll_XNetGetTitleXnAddr_entry(dword_t caller,
                                                pointer_t<XNADDR> XnAddr_ptr) {
-  memset(XnAddr_ptr, 0, sizeof(XNADDR));
+  XnAddr_ptr.Zero();
 
   // Wait for NetDll_WSAStartup or XNetStartup to setup XLiveAPI.
   if (XLiveAPI::GetInitState() == XLiveAPI::InitState::Pending) {
@@ -634,20 +602,22 @@ dword_result_t NetDll_XNetGetTitleXnAddr_entry(dword_t caller,
     // XNetGetTitleXnAddr.
     XLiveAPI::Init();
 
-    return XnAddrStatus::XNET_GET_XNADDR_PENDING;
+    return XNADDR_STATUS::XNADDR_PENDING;
   }
 
   uint8_t status = 0;
 
+  if (cvars::network_mode == NETWORK_MODE::OFFLINE) {
+    status |= XNADDR_STATUS::XNADDR_ETHERNET | XNADDR_STATUS::XNADDR_STATIC;
+  }
+
   if (cvars::network_mode != NETWORK_MODE::OFFLINE) {
-    status |= XnAddrStatus::XNET_GET_XNADDR_ETHERNET |
-              XnAddrStatus::XNET_GET_XNADDR_STATIC |
-              XnAddrStatus::XNET_GET_XNADDR_GATEWAY |
-              XnAddrStatus::XNET_GET_XNADDR_DNS;
+    status |= XNADDR_STATUS::XNADDR_ETHERNET | XNADDR_STATUS::XNADDR_STATIC |
+              XNADDR_STATUS::XNADDR_GATEWAY | XNADDR_STATUS::XNADDR_DNS;
   }
 
   if (cvars::network_mode == NETWORK_MODE::XBOXLIVE) {
-    status |= XnAddrStatus::XNET_GET_XNADDR_ONLINE;
+    status |= XNADDR_STATUS::XNADDR_ONLINE;
   }
 
   XLiveAPI::IpGetConsoleXnAddr(XnAddr_ptr);
@@ -666,14 +636,14 @@ dword_result_t NetDll_XNetGetTitleXnAddr_entry(dword_t caller,
 
   return status;
 }
-DECLARE_XAM_EXPORT1(NetDll_XNetGetTitleXnAddr, kNetworking, kStub);
+DECLARE_XAM_EXPORT1(NetDll_XNetGetTitleXnAddr, kNetworking, kImplemented);
 
 dword_result_t NetDll_XNetGetDebugXnAddr_entry(dword_t caller,
                                                pointer_t<XNADDR> addr_ptr) {
   addr_ptr.Zero();
 
-  // XNET_GET_XNADDR_NONE causes caller to gracefully return.
-  return XnAddrStatus::XNET_GET_XNADDR_NONE;
+  // XNADDR_NONE causes caller to gracefully return.
+  return XNADDR_STATUS::XNADDR_NONE;
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetGetDebugXnAddr, kNetworking, kStub);
 
@@ -922,14 +892,15 @@ DECLARE_XAM_EXPORT1(NetDll_XNetGetBroadcastVersionStatus, kNetworking, kStub);
 
 dword_result_t NetDll_XNetGetEthernetLinkStatus_entry(dword_t caller) {
   if (cvars::network_mode == NETWORK_MODE::OFFLINE) {
-    return 0;
+    return ETHERNET_STATUS::ETHERNET_LINK_NONE;
   }
 
-  return XEthernetStatus::XNET_ETHERNET_LINK_ACTIVE |
-         XEthernetStatus::XNET_ETHERNET_LINK_100MBPS |
-         XEthernetStatus::XNET_ETHERNET_LINK_FULL_DUPLEX;
+  return ETHERNET_STATUS::ETHERNET_LINK_ACTIVE |
+         ETHERNET_STATUS::ETHERNET_LINK_100MBPS |
+         ETHERNET_STATUS::ETHERNET_LINK_FULL_DUPLEX;
 }
-DECLARE_XAM_EXPORT1(NetDll_XNetGetEthernetLinkStatus, kNetworking, kStub);
+DECLARE_XAM_EXPORT1(NetDll_XNetGetEthernetLinkStatus, kNetworking,
+                    kImplemented);
 
 dword_result_t NetDll_XNetDnsLookup_entry(dword_t caller, lpstring_t host,
                                           dword_t event_handle,

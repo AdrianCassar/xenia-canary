@@ -75,6 +75,29 @@ namespace xe {
 #define X_CONTEXT_GAME_TYPE_RANKED                  0x0
 #define X_CONTEXT_GAME_TYPE_STANDARD                0x1
 
+enum XNADDR_STATUS : uint32_t {
+  XNADDR_PENDING = 0x00000000,              // Address acquisition is not yet complete
+  XNADDR_NONE = 0x00000001,                 // XNet is uninitialized or no debugger found
+  XNADDR_ETHERNET = 0x00000002,             // Host has ethernet address (no IP address)
+  XNADDR_STATIC = 0x00000004,               // Host has statically assigned IP address
+  XNADDR_DHCP = 0x00000008,                 // Host has DHCP assigned IP address
+  XNADDR_PPPOE = 0x00000010,                // Host has PPPoE assigned IP address
+  XNADDR_GATEWAY = 0x00000020,              // Host has one or more gateways configured
+  XNADDR_DNS = 0x00000040,                  // Host has one or more DNS servers configured
+  XNADDR_ONLINE = 0x00000080,               // Host is currently connected to online service
+  XNADDR_TROUBLESHOOT = 0x00008000          // Network configuration requires troubleshooting
+};
+
+enum ETHERNET_STATUS : uint32_t {
+  ETHERNET_LINK_NONE = 0x00000000,          // Ethernet cable is not connected
+  ETHERNET_LINK_ACTIVE = 0x00000001,        // Ethernet cable is connected and active
+  ETHERNET_LINK_100MBPS = 0x00000002,       // Ethernet link is set to 100 Mbps
+  ETHERNET_LINK_10MBPS = 0x00000004,        // Ethernet link is set to 10 Mbps
+  ETHERNET_LINK_FULL_DUPLEX = 0x00000008,   // Ethernet link is in full duplex mode
+  ETHERNET_LINK_HALF_DUPLEX = 0x00000010,   // Ethernet link is in half duplex mode
+  ETHERNET_LINK_WIRELESS = 0x00000020       // Ethernet link is wireless (802.11 based)
+};
+
 // clang-format on
 
 namespace kernel {
