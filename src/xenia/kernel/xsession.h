@@ -366,45 +366,15 @@ class XSession : public XObject {
                                   uint32_t search_results_ptr,
                                   uint32_t results_buffer_size);
 
-  static constexpr uint8_t XNKID_ONLINE = 0xAE;
-  static constexpr uint8_t XNKID_SYSTEM_LINK = 0x00;
-
   static void GenerateIdentityExchangeKey(XNKEY* key) {
     for (uint8_t i = 0; i < sizeof(XNKEY); i++) {
       key->ab[i] = i;
     }
   }
 
-  static const uint64_t GenerateSessionId(uint8_t mask) {
-    std::random_device rd;
-    std::uniform_int_distribution<uint64_t> dist(0, -1);
-
-    return ((uint64_t)mask << 56) | (dist(rd) & 0x0000FFFFFFFFFFFF);
-  }
-
-  static const bool IsOnlinePeer(uint64_t session_id) {
-    return ((session_id >> 56) & 0xFF) == XNKID_ONLINE;
-  }
-
-  static const bool IsSystemlink(uint64_t session_id) {
-    return ((session_id >> 56) & 0xFF) == XNKID_SYSTEM_LINK;
-  }
-
   const bool IsXboxLive() { return !is_systemlink_; }
 
   const bool IsSystemlink() { return is_systemlink_; }
-
-  static const bool IsValidXNKID(uint64_t session_id) {
-    if (!XSession::IsOnlinePeer(session_id) &&
-            !XSession::IsSystemlink(session_id) ||
-        session_id == 0) {
-      assert_always();
-
-      return false;
-    }
-
-    return true;
-  }
 
   static const bool IsSystemlinkFlags(uint8_t flags) {
     const uint32_t systemlink = HOST | STATS | PEER_NETWORK;

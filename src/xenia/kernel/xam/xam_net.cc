@@ -7,6 +7,8 @@
  ******************************************************************************
  */
 
+#include <random>
+
 #include "xenia/base/logging.h"
 #include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/util/shim_utils.h"
@@ -21,7 +23,6 @@
 #include "xenia/xbox.h"
 
 #ifdef XE_PLATFORM_WIN32
-#include <random>
 // NOTE: must be included last as it expects windows.h to already be included.
 #define _WINSOCK_DEPRECATED_NO_WARNINGS  // inet_addr
 #include <WS2tcpip.h>                    // NOLINT(build/include_order)
@@ -810,7 +811,7 @@ dword_result_t NetDll_XNetInAddrToXnAddr_entry(dword_t caller, dword_t in_addr,
 
     // FIXME
     if (!XLiveAPI::systemlink_id) {
-      XSession::IsValidXNKID(player->SessionID());
+      IsValidXNKID(player->SessionID());
 
       XLiveAPI::sessionIdCache.emplace(xn_addr->inaOnline.s_addr,
                                        player->SessionID());
@@ -854,7 +855,7 @@ dword_result_t NetDll_XNetInAddrToXnAddr_entry(dword_t caller, dword_t in_addr,
 
     memcpy(sessionId_ptr, &session_id, sizeof(uint64_t));
 
-    XSession::IsValidXNKID(sessionId_ptr->as_uintBE64());
+    IsValidXNKID(sessionId_ptr->as_uintBE64());
   }
 
   return X_STATUS_SUCCESS;
@@ -1046,7 +1047,7 @@ dword_result_t NetDll_XNetQosListen_entry(
 
   const uint64_t session_id = sessionId->as_uintBE64();
 
-  XSession::IsValidXNKID(session_id);
+  IsValidXNKID(session_id);
 
   if (flags & LISTEN_SET_DATA) {
     std::vector<uint8_t> qos_buffer(data_size);
@@ -1921,8 +1922,7 @@ DECLARE_XAM_EXPORT1(NetDll_getsockname, kNetworking, kImplemented);
 dword_result_t NetDll_XNetCreateKey_entry(dword_t caller,
                                           pointer_t<XNKID> session_key,
                                           pointer_t<XNKEY> exchange_key) {
-  const xe::be<uint64_t> xnkid =
-      XSession::GenerateSessionId(XSession::XNKID_SYSTEM_LINK);
+  const xe::be<uint64_t> xnkid = GenerateSessionId(XNKID_SYSTEM_LINK);
   memcpy(session_key->ab, &xnkid, sizeof(XNKID));
 
   XSession::GenerateIdentityExchangeKey(exchange_key);
@@ -1937,7 +1937,7 @@ dword_result_t NetDll_XNetRegisterKey_entry(dword_t caller,
   // Very hacky needs fixing!
   const uint64_t session_id = session_key->as_uintBE64();
 
-  if (XSession::IsSystemlink(session_id)) {
+  if (IsSystemlink(session_id)) {
     XELOGI("XNetRegisterKey: Systemlink");
     XLiveAPI::systemlink_id = session_id;
   } else {
