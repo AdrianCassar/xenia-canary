@@ -137,6 +137,17 @@ bool KernelState::is_title_system_type(uint32_t title_id) {
   return (title_id >> 16) == 0xFFFE;
 }
 
+XNKEY* KernelState::title_lan_key() const {
+  if (!executable_module_) {
+    return nullptr;
+  }
+
+  xex2_opt_lan_key* opt_lan_key_ptr = 0;
+  executable_module_->GetOptHeader(XEX_HEADER_LAN_KEY, &opt_lan_key_ptr);
+
+  return reinterpret_cast<XNKEY*>(opt_lan_key_ptr->key);
+}
+
 util::XdbfGameData KernelState::title_xdbf() const {
   return module_xdbf(executable_module_);
 }
