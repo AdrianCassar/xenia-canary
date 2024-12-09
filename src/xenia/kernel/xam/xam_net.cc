@@ -1923,6 +1923,7 @@ dword_result_t NetDll_XNetCreateKey_entry(dword_t caller,
   memcpy(session_key->ab, &xnkid, sizeof(XNKID));
 
   XSession::GenerateIdentityExchangeKey(exchange_key);
+  // memcpy(exchange_key, kernel_state()->title_lan_key(), sizeof(XNKEY));
 
   return 0;
 }
