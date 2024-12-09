@@ -177,6 +177,8 @@ class KernelState {
   xex2_opt_execution_info* GetExecutionInfo() const;
   uint32_t title_id() const;
   bool is_title_open() const;
+  static bool is_title_system_type(uint32_t title_id);
+  XNKEY* title_lan_key() const;
   const std::unique_ptr<xam::SpaInfo> title_xdbf() const;
   const std::unique_ptr<xam::SpaInfo> module_xdbf(
       object_ref<UserModule> exec_module) const;
