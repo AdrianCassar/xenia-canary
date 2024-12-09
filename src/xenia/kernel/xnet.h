@@ -10,6 +10,8 @@
 #ifndef XENIA_KERNEL_XNET_H_
 #define XENIA_KERNEL_XNET_H_
 
+#include <random>
+
 #include "xenia/base/byte_order.h"
 
 #ifdef XE_PLATFORM_WIN32
@@ -249,6 +251,35 @@ struct X_DATA_5801C {
 static_assert_size(X_DATA_5801C, 0x30);
 
 #pragma endregion
+
+constexpr uint8_t XNKID_ONLINE = 0xAE;
+constexpr uint8_t XNKID_SYSTEM_LINK = 0x00;
+
+inline bool IsOnlinePeer(uint64_t session_id) {
+  return ((session_id >> 56) & 0xFF) == XNKID_ONLINE;
+}
+
+inline bool IsSystemlink(uint64_t session_id) {
+  return ((session_id >> 56) & 0xFF) == XNKID_SYSTEM_LINK;
+}
+
+inline bool IsValidXNKID(uint64_t session_id) {
+  if (!IsOnlinePeer(session_id) && !IsSystemlink(session_id) ||
+      session_id == 0) {
+    assert_always();
+
+    return false;
+  }
+
+  return true;
+}
+
+inline uint64_t GenerateSessionId(uint8_t mask) {
+  std::random_device rnd;
+  std::uniform_int_distribution<uint64_t> dist(0, -1);
+
+  return (static_cast<uint64_t>(mask) << 56) | (dist(rnd) & 0x0000FFFFFFFFFFFF);
+}
 
 }  // namespace kernel
 }  // namespace xe
