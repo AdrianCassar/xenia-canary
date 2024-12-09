@@ -190,9 +190,9 @@ X_RESULT XSession::JoinExistingSession(XSESSION_INFO* session_info) {
   session_id_ = XNKIDtoUint64(&session_info->sessionID);
   XELOGI("Joining session {:016X}", session_id_);
 
-  XSession::IsValidXNKID(session_id_);
+  IsValidXNKID(session_id_);
 
-  if (IsSystemlink(session_id_)) {
+  if (kernel::IsSystemlink(session_id_)) {
     XELOGI("Joining systemlink session");
     is_systemlink_ = true;
     return X_ERROR_SUCCESS;
