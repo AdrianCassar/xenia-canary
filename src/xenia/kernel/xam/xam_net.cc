@@ -264,7 +264,7 @@ dword_result_t XNetLogonGetMachineID_entry(lpqword_t machine_id_ptr) {
 
   // if (XLiveAPI::GetInitState() != XLiveAPI::InitState::Success) {
   //   *machine_id_ptr = 0;
-  //   return 0x80151802;  // ERROR_CONNECTION_INVALID
+  //   return X_ERROR_LOGON_NOT_LOGGED_ON;
   // }
 
   return X_STATUS_SUCCESS;
@@ -649,11 +649,6 @@ DECLARE_XAM_EXPORT1(NetDll_XNetGetDebugXnAddr, kNetworking, kStub);
 dword_result_t NetDll_XNetXnAddrToMachineId_entry(dword_t caller,
                                                   pointer_t<XNADDR> addr_ptr,
                                                   lpqword_t id_ptr) {
-  // Tell the caller we're not signed in to live (non-zero ret)
-  // if (addr_ptr->inaOnline.S_un.S_un_b.s_b4 == 170) *id_ptr =
-  // 0xFA000000049B679F; else
-  //  *id_ptr = 0xFA000000039E7542;
-
   if (!addr_ptr->inaOnline.s_addr) {
     *id_ptr = 0;
     return static_cast<uint32_t>(X_WSAError::X_WSAEINVAL);
@@ -676,7 +671,6 @@ dword_result_t NetDll_XNetUnregisterInAddr_entry(dword_t caller, dword_t addr) {
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetUnregisterInAddr, kNetworking, kStub);
 
-// https://github.com/pnill/cartographer/blob/28aa77ba9a1062aec4638b34a01c1a4e77e25e04/xlive/xlivedefs.h#L218
 dword_result_t NetDll_XNetConnect_entry(dword_t caller, dword_t addr) {
   XELOGI("XNetConnect({:08X})", cvars::log_mask_ips ? 0 : addr.value());
 
@@ -684,7 +678,6 @@ dword_result_t NetDll_XNetConnect_entry(dword_t caller, dword_t addr) {
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetConnect, kNetworking, kStub);
 
-// https://github.com/pnill/cartographer/blob/28aa77ba9a1062aec4638b34a01c1a4e77e25e04/xlive/xlivedefs.h#L219
 dword_result_t NetDll_XNetGetConnectStatus_entry(dword_t caller, dword_t addr) {
   XELOGI("XNetGetConnectStatus({:08X})",
          cvars::log_mask_ips ? 0 : addr.value());
