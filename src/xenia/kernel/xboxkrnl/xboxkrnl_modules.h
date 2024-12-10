@@ -16,6 +16,8 @@ namespace xe {
 namespace kernel {
 namespace xboxkrnl {
 
+bool XexCheckExecutablePrivilege(uint32_t privilege);
+
 dword_result_t XexGetModuleHandle(std::string module_name,
                                   xe::be<uint32_t>* hmodule_ptr);
 
