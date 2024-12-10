@@ -84,6 +84,7 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
       return XStorageDownloadToMemory(buffer_ptr);
     }
     case 0x0005000A: {
+      // 4D5307D3
       XELOGD("XStorageEnumerate({:08X}, {:08X}) unimplemented", buffer_ptr,
              buffer_length);
       return X_E_SUCCESS;
@@ -751,9 +752,17 @@ X_HRESULT XLiveBaseApp::XStringVerify(uint32_t buffer_ptr,
 }
 
 X_HRESULT XLiveBaseApp::XStorageDownloadToMemory(uint32_t buffer_ptr) {
+  // 41560817, 513107D5, 513107D9 has issues with X_E_FAIL.
+  // 513107D5, 513107D9 prefer X_ERROR_FUNCTION_FAILED.
+
   if (!buffer_ptr) {
     return X_E_INVALIDARG;
   }
+
+  // 415607DD has issues with X_E_SUCCESS and X_ERROR_FUNCTION_FAILED.
+  // if (kernel_state()->title_id() == 0x415607DD) {
+  //  return X_E_FAIL;
+  // }
 
   return X_E_SUCCESS;
 }
