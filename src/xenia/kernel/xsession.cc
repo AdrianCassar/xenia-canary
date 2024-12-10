@@ -511,6 +511,8 @@ X_RESULT XSession::ModifySession(XSessionModify* data) {
 }
 
 X_RESULT XSession::GetSessionDetails(XSessionDetails* data) {
+  // 4E4D085C checks ReturnedMemberCount when creating a session
+
   auto local_details_ptr =
       kernel_state_->memory()->TranslateVirtual<XSESSION_LOCAL_DETAILS*>(
           data->session_details_ptr);
