@@ -16,6 +16,7 @@
 #include "xenia/kernel/xam/xam_net.h"
 #include "xenia/kernel/xam/xam_private.h"
 #include "xenia/kernel/xboxkrnl/xboxkrnl_error.h"
+#include "xenia/kernel/xboxkrnl/xboxkrnl_modules.h"
 #include "xenia/kernel/xboxkrnl/xboxkrnl_threading.h"
 #include "xenia/kernel/xevent.h"
 #include "xenia/kernel/xsocket.h"
@@ -178,8 +179,6 @@ typedef struct {
 } XNQOSLISTENSTATS;
 
 XNetStartupParams xnet_startup_params{};
-
-uint16_t systemlink_port = 5000;
 
 void Update_XNetStartupParams(XNetStartupParams& dest,
                               const XNetStartupParams& src) {
@@ -852,23 +851,30 @@ DECLARE_XAM_EXPORT1(NetDll_XNetInAddrToXnAddr, kNetworking, kImplemented);
 // https://www.google.com/patents/WO2008112448A1?cl=en
 // Reserves a port for use by system link
 dword_result_t NetDll_XNetSetSystemLinkPort_entry(dword_t caller, word_t port) {
+  if (!xboxkrnl::XexCheckExecutablePrivilege(
+          XEX_PRIVILEGE_CROSSPLATFORM_SYSTEM_LINK)) {
+    return static_cast<uint32_t>(X_WSAError::X_WSAEACCES);
+  }
+
+  // XNET_SYSTEMLINK_PORT = port;
+
   XELOGI("XNetSetSystemLinkPort: {}", port.value());
 
-  systemlink_port = port;
-
-  return X_STATUS_SUCCESS;
+  return static_cast<uint32_t>(X_WSAError::X_WSAEADDRINUSE);
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetSetSystemLinkPort, kNetworking, kImplemented);
 
 dword_result_t NetDll_XNetGetSystemLinkPort_entry(dword_t caller,
                                                   lpword_t port) {
-  if (!port) {
-    return X_STATUS_INVALID_PARAMETER;
+  if (!xboxkrnl::XexCheckExecutablePrivilege(
+          XEX_PRIVILEGE_CROSSPLATFORM_SYSTEM_LINK)) {
+    XELOGW("Title not allowed to set System Link port!");
+    return static_cast<uint32_t>(X_WSAError::X_WSAEACCES);
   }
 
-  XELOGI("XNetGetSystemLinkPort: {}", static_cast<uint16_t>(*port));
+  *port = XNET_SYSTEMLINK_PORT;
 
-  *port = systemlink_port;
+  XELOGI("XNetGetSystemLinkPort: {}", static_cast<uint16_t>(*port));
 
   return X_STATUS_SUCCESS;
 }
