@@ -104,7 +104,11 @@ enum ETHERNET_STATUS : uint32_t {
 
 namespace kernel {
 
+constexpr uint16_t XNET_SYSTEMLINK_PORT = 3074;
+
 constexpr uint8_t XUserMaxStatsAttributes = 64;
+
+constexpr uint32_t XEX_PRIVILEGE_CROSSPLATFORM_SYSTEM_LINK = 14;
 
 enum NETWORK_MODE : int32_t { OFFLINE, LAN, XBOXLIVE };
 
