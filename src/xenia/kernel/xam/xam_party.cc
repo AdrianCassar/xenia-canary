@@ -16,16 +16,15 @@ namespace xe {
 namespace kernel {
 namespace xam {
 
-// XamPartyPartyCreate, XamPartyLeave, XamPartySendInvite, XamPartyJoinEx, &
-// XamPartyRemoveLocalUsers share one function
-
-dword_result_t XamPartyGetUserList_entry(dword_t caller,
-                                         lpvoid_t party_list_ptr) {
-  if (caller != 1) {
-    return X_E_NOT_IMPLEMENTED;
+dword_result_t XamPartyGetUserList_entry(
+    dword_t player_count, pointer_t<X_PARTY_USER_LIST> party_list_ptr) {
+  if (party_list_ptr) {
+    party_list_ptr.Zero();
   }
-  // 5345085D, 45410923
-  return 0x807D0003;  // X_PARTY_E_NOT_IN_PARTY
+
+  // 5345085D wants specifically this code to skip loading party data.
+  // This code is not documented in NT_STATUS code list
+  return X_PARTY_E_NOT_IN_PARTY;
 }
 DECLARE_XAM_EXPORT1(XamPartyGetUserList, kNone, kStub);
 
