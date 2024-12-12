@@ -65,12 +65,6 @@ struct X_KSESSION {
 };
 static_assert_size(X_KSESSION, 4);
 
-struct XSESSION_INFO {
-  XNKID sessionID;
-  XNADDR hostAddress;
-  XNKEY keyExchangeKey;
-};
-
 struct XSESSION_REGISTRANT {
   xe::be<uint64_t> MachineID;
   xe::be<uint32_t> Trustworthiness;
