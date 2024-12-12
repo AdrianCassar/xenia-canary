@@ -52,6 +52,7 @@ namespace xe {
 #define X_ONLINE_E_SESSION_JOIN_ILLEGAL                     X_HRESULT_FROM_WIN32(X_ERROR_SESSION_JOIN_ILLEGAL)
 #define X_ONLINE_E_SESSION_NOT_FOUND                        X_HRESULT_FROM_WIN32(X_ERROR_SESSION_NOT_FOUND)
 #define X_ONLINE_E_SESSION_FULL                             X_HRESULT_FROM_WIN32(X_ERROR_SESSION_FULL)
+#define X_PARTY_E_NOT_IN_PARTY                              static_cast<X_HRESULT>(0x807D0003L)
 
 #define X_ONLINE_FRIENDSTATE_FLAG_NONE              0x00000000
 #define X_ONLINE_FRIENDSTATE_FLAG_ONLINE            0x00000001
@@ -131,6 +132,33 @@ struct XNADDR {
   xe::be<uint16_t> wPortOnline;  // Online port
   uint8_t abEnet[6];             // Ethernet MAC address
   uint8_t abOnline[20];          // Online identification
+};
+
+struct XSESSION_INFO {
+  XNKID sessionID;
+  XNADDR hostAddress;
+  XNKEY keyExchangeKey;
+};
+
+struct X_PARTY_CUSTOM_DATA {
+  xe::be<uint64_t> First;
+  xe::be<uint64_t> Second;
+};
+
+struct X_PARTY_USER_INFO {
+  xe::be<uint64_t> Xuid;
+  char GamerTag[16];
+  xe::be<uint32_t> UserIndex;
+  xe::be<uint32_t> NatType;
+  xe::be<uint32_t> TitleId;
+  xe::be<uint32_t> Flags;
+  XSESSION_INFO SessionInfo;
+  X_PARTY_CUSTOM_DATA CustomData;
+};
+
+struct X_PARTY_USER_LIST {
+  xe::be<uint32_t> UserCount;
+  X_PARTY_USER_INFO Users[7];  // Unknown size?
 };
 
 struct X_ONLINE_SERVICE_INFO {
