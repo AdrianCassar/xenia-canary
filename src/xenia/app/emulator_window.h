@@ -85,6 +85,9 @@ class EmulatorWindow {
   void UpdateTitle();
   void SetFullscreen(bool fullscreen);
   void ToggleFullscreen();
+  void SetAPIAddress(std::string address);
+  void SetNetworkInterfaceByGUID(std::string guid);
+  void SetNetworkMode(int32_t mode);
   void SetInitializingShaderStorage(bool initializing);
 
   void TakeScreenshot();
@@ -218,6 +221,7 @@ class EmulatorWindow {
   void ExtractZarchive();
   void CreateZarchive();
   void ShowContentDirectory();
+  void DumpXLast();
   void CpuTimeScalarReset();
   void CpuTimeScalarSetHalf();
   void CpuTimeScalarSetDouble();
@@ -237,6 +241,7 @@ class EmulatorWindow {
   void GamepadHotKeys();
   void ToggleGPUSetting(gpu_cvar index);
   bool IsUseNexusForGameBarEnabled();
+  void NetplayStatus();
   void DisplayHotKeysConfig();
 
   static std::string CanonicalizeFileExtension(

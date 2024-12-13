@@ -28,6 +28,7 @@
 #include "xenia/kernel/xboxkrnl/xboxkrnl_threading.h"
 #include "xenia/kernel/xevent.h"
 #include "xenia/kernel/xmodule.h"
+#include "xenia/kernel/xnet.h"
 #include "xenia/kernel/xnotifylistener.h"
 #include "xenia/kernel/xobject.h"
 #include "xenia/kernel/xthread.h"
@@ -41,6 +42,8 @@ DEFINE_uint32(kernel_build_version, 1888, "Define current kernel version",
               "Kernel");
 
 DECLARE_string(cl);
+
+DECLARE_int32(network_mode);
 
 namespace xe {
 namespace kernel {
@@ -132,6 +135,17 @@ bool KernelState::is_title_system_type(uint32_t title_id) {
   }
 
   return (title_id >> 16) == 0xFFFE;
+}
+
+XNKEY* KernelState::title_lan_key() const {
+  if (!executable_module_) {
+    return nullptr;
+  }
+
+  xex2_opt_lan_key* opt_lan_key_ptr = 0;
+  executable_module_->GetOptHeader(XEX_HEADER_LAN_KEY, &opt_lan_key_ptr);
+
+  return reinterpret_cast<XNKEY*>(opt_lan_key_ptr->key);
 }
 
 util::XdbfGameData KernelState::title_xdbf() const {
@@ -872,6 +886,22 @@ void KernelState::RegisterNotifyListener(XNotifyListener* listener) {
     // XN_SYS_SIGNINCHANGED x2
     listener->EnqueueNotification(kXNotificationIDSystemSignInChanged, 1);
     listener->EnqueueNotification(kXNotificationIDSystemSignInChanged, 1);
+  }
+
+  // LIVE
+  if (listener->mask() & kXNotifyLive) {
+    const uint32_t live_connection_state =
+        cvars::network_mode == NETWORK_MODE::XBOXLIVE
+            ? X_ONLINE_S_LOGON_CONNECTION_ESTABLISHED
+            : X_ONLINE_S_LOGON_DISCONNECTED;
+
+    const uint32_t ethernet_link_state =
+        cvars::network_mode == NETWORK_MODE::OFFLINE ? 0 : 1;
+
+    listener->EnqueueNotification(kXNotificationIDLiveConnectionChanged,
+                                  live_connection_state);
+    listener->EnqueueNotification(kXNotificationIDLiveLinkStateChanged,
+                                  ethernet_link_state);
   }
 }
 

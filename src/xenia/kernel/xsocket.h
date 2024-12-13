@@ -11,20 +11,46 @@
 #define XENIA_KERNEL_XSOCKET_H_
 
 #include <cstring>
+#include <future>
 #include <queue>
 
 #include "xenia/base/byte_order.h"
 #include "xenia/base/math.h"
 #include "xenia/kernel/xobject.h"
 
+#ifdef XE_PLATFORM_WIN32
+// clang-format off
+#define _WINSOCK_DEPRECATED_NO_WARNINGS  // inet_addr
+#include "xenia/base/platform_win.h"
+#include <WS2tcpip.h>
+#include <WinSock2.h>
+// clang-format on
+#else
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <netinet/ip.h>
+#include <poll.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#endif
+
 namespace xe {
 namespace kernel {
 enum class X_WSAError : uint32_t {
   X_WSA_INVALID_PARAMETER = 0x0057,
+  X_WSA_OPERATION_ABORTED = 0x03E3,
+  X_WSA_IO_INCOMPLETE = 0x03E4,
+  X_WSA_IO_PENDING = 0x03E5,
+  X_WSAEACCES = 0x271D,
   X_WSAEFAULT = 0x271E,
   X_WSAEINVAL = 0x2726,
+  X_WSAEWOULDBLOCK = 0x2733,
   X_WSAENOTSOCK = 0x2736,
   X_WSAEMSGSIZE = 0x2738,
+  X_WSAENETDOWN = 0x2742,
+  X_WSANO_DATA = 0x2AFC,
+  X_WSANOTINITIALISED = 0x276D,
+  X_WSAEADDRINUSE = 0x2740,
 };
 
 struct XSOCKADDR {
@@ -32,47 +58,38 @@ struct XSOCKADDR {
   char sa_data[14];
 };
 
-struct N_XSOCKADDR {
-  N_XSOCKADDR() {}
-  N_XSOCKADDR(const XSOCKADDR* other) { *this = *other; }
-  N_XSOCKADDR& operator=(const XSOCKADDR& other) {
-    address_family = other.address_family;
-    std::memcpy(sa_data, other.sa_data, xe::countof(sa_data));
-    return *this;
-  }
-
-  uint16_t address_family;
-  char sa_data[14];
-};
-
 struct XSOCKADDR_IN {
-  xe::be<uint16_t> sin_family;
+  xe::be<uint16_t> address_family;
+  xe::be<uint16_t> address_port;
+  in_addr address_ip;
+  char sa_zero[8];
 
-  // Always big-endian!
-  xe::be<uint16_t> sin_port;
-  xe::be<uint32_t> sin_addr;
-  // sin_zero is defined as __pad on Android, so prefixed here.
-  char x_sin_zero[8];
-};
+  const sockaddr to_host() {
+    sockaddr sa = {};
+    std::memcpy(&sa, this, sizeof(sockaddr));
 
-// Xenia native sockaddr_in
-struct N_XSOCKADDR_IN {
-  N_XSOCKADDR_IN() {}
-  N_XSOCKADDR_IN(const XSOCKADDR_IN* other) { *this = *other; }
-  N_XSOCKADDR_IN& operator=(const XSOCKADDR_IN& other) {
-    sin_family = other.sin_family;
-    sin_port = other.sin_port;
-    sin_addr = other.sin_addr;
-    std::memset(x_sin_zero, 0, sizeof(x_sin_zero));
-
-    return *this;
+    sa.sa_family = xe::byte_swap(sa.sa_family);
+    // port is already in correct endianness
+    return sa;
   }
 
-  uint16_t sin_family;
-  xe::be<uint16_t> sin_port;
-  xe::be<uint32_t> sin_addr;
-  // sin_zero is defined as __pad on Android, so prefixed here.
-  char x_sin_zero[8];
+  void to_guest(const sockaddr* host) {
+    std::memcpy(this, host, sizeof(sockaddr));
+    address_family = host->sa_family;
+  }
+};
+
+struct XWSABUF {
+  xe::be<uint32_t> len;
+  xe::be<uint32_t> buf_ptr;
+};
+
+struct XWSAOVERLAPPED {
+  xe::be<uint32_t> internal;
+  xe::be<uint32_t> internal_high;
+  xe::be<uint32_t> offset;
+  xe::be<uint32_t> offset_high;
+  xe::be<uint32_t> event_handle;
 };
 
 class XSocket : public XObject {
@@ -80,22 +97,22 @@ class XSocket : public XObject {
   static const XObject::Type kObjectType = XObject::Type::Socket;
 
   enum AddressFamily {
-    AF_INET = 2,
+    X_AF_INET = 2,
   };
 
   enum Type {
-    SOCK_STREAM = 1,
-    SOCK_DGRAM = 2,
+    X_SOCK_STREAM = 1,
+    X_SOCK_DGRAM = 2,
   };
 
   enum Protocol {
-    IPPROTO_TCP = 6,
-    IPPROTO_UDP = 17,
+    X_IPPROTO_TCP = 6,
+    X_IPPROTO_UDP = 17,
 
     // LIVE Voice and Data Protocol
     // https://blog.csdn.net/baozi3026/article/details/4277227
     // Format: [cbGameData][GameData(encrypted)][VoiceData(unencrypted)]
-    IPPROTO_VDP = 254,
+    X_IPPROTO_VDP = 254,
   };
 
   XSocket(KernelState* kernel_state);
@@ -113,20 +130,33 @@ class XSocket : public XObject {
                      uint32_t optlen);
   X_STATUS IOControl(uint32_t cmd, uint8_t* arg_ptr);
 
-  X_STATUS Connect(N_XSOCKADDR* name, int name_len);
-  X_STATUS Bind(N_XSOCKADDR_IN* name, int name_len);
+  X_STATUS Connect(const XSOCKADDR_IN* name, int name_len);
+  X_STATUS Bind(const XSOCKADDR_IN* name, int name_len);
   X_STATUS Listen(int backlog);
-  X_STATUS GetSockName(uint8_t* buf, int* buf_len);
-  object_ref<XSocket> Accept(N_XSOCKADDR* name, int* name_len);
+  X_STATUS GetPeerName(XSOCKADDR_IN* name, int* name_len);
+  X_STATUS GetSockName(XSOCKADDR_IN* buf, int* buf_len);
+  object_ref<XSocket> Accept(XSOCKADDR_IN* name, int* name_len);
   int Shutdown(int how);
 
   int Recv(uint8_t* buf, uint32_t buf_len, uint32_t flags);
   int Send(const uint8_t* buf, uint32_t buf_len, uint32_t flags);
 
   int RecvFrom(uint8_t* buf, uint32_t buf_len, uint32_t flags,
-               N_XSOCKADDR_IN* from, uint32_t* from_len);
-  int SendTo(uint8_t* buf, uint32_t buf_len, uint32_t flags, N_XSOCKADDR_IN* to,
+               XSOCKADDR_IN* from, uint32_t* from_len);
+  int SendTo(uint8_t* buf, uint32_t buf_len, uint32_t flags, XSOCKADDR_IN* to,
              uint32_t to_len);
+
+  int WSAEventSelect(uint64_t socket_handle, uint64_t event_handle,
+                     uint32_t flags);
+
+  int WSARecvFrom(XWSABUF* buffers, uint32_t num_buffers,
+                  xe::be<uint32_t>* num_bytes_recv_ptr,
+                  xe::be<uint32_t>* flags_ptr, XSOCKADDR_IN* from_ptr,
+                  xe::be<uint32_t>* fromlen_ptr,
+                  XWSAOVERLAPPED* overlapped_ptr);
+  bool WSAGetOverlappedResult(XWSAOVERLAPPED* overlapped_ptr,
+                              xe::be<uint32_t>* bytes_transferred, bool wait,
+                              xe::be<uint32_t>* flags_ptr);
 
   uint32_t GetLastWSAError() const;
 
@@ -153,13 +183,28 @@ class XSocket : public XObject {
   bool secure_ = true;  // Secure socket (encryption enabled)
 
   bool bound_ = false;  // Explicitly bound to an IP address?
-  uint16_t bound_port_ = 0;
+
+  // Special exception for port!
+  // port is always stored in NBO (Network byte order).
+  // which is basically BE.
+  xe::be<uint16_t> bound_port_ = 0;
 
   bool broadcast_socket_ = false;
 
   std::unique_ptr<xe::threading::Event> event_;
   std::mutex incoming_packet_mutex_;
   std::queue<uint8_t*> incoming_packets_;
+
+  std::future<int> polling_task_;
+
+  std::mutex receive_mutex_;
+  std::condition_variable receive_cv_;
+  std::mutex receive_socket_mutex_;
+  XWSAOVERLAPPED* active_overlapped_ = nullptr;
+
+  int PollWSARecvFrom(bool wait, struct WSARecvFromData data);
+
+  void SetLastWSAError(X_WSAError) const;
 };
 
 }  // namespace kernel

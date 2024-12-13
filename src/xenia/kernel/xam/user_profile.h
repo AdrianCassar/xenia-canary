@@ -12,15 +12,20 @@
 
 #include <map>
 #include <memory>
+#include <random>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
 #include "xenia/base/byte_stream.h"
+#include "xenia/base/cvar.h"
 #include "xenia/kernel/util/property.h"
 #include "xenia/kernel/util/xuserdata.h"
 #include "xenia/kernel/xam/achievement_manager.h"
+#include "xenia/kernel/xnet.h"
 #include "xenia/xbox.h"
+
+DECLARE_int32(network_mode);
 
 namespace xe {
 namespace kernel {
@@ -33,6 +38,12 @@ enum class X_USER_PROFILE_SETTING_SOURCE : uint32_t {
   DEFAULT = 1,
   TITLE = 2,
   UNKNOWN = 3,
+};
+
+enum class X_USER_SIGNIN_STATE : uint32_t {
+  NotSignedIn,
+  SignedInLocally,
+  SignedInToLive
 };
 
 // Each setting contains 0x18 bytes long header
@@ -158,13 +169,50 @@ class UserProfile {
 
   uint64_t xuid() const { return xuid_; }
   std::string name() const { return account_info_.GetGamertagString(); }
-  uint32_t signin_state() const { return 1; }
-  uint32_t type() const { return 1 | 2; /* local | online profile? */ }
+  X_USER_SIGNIN_STATE signin_state() const {
+    return cvars::network_mode == NETWORK_MODE::XBOXLIVE
+               ? X_USER_SIGNIN_STATE::SignedInToLive
+               : X_USER_SIGNIN_STATE::SignedInLocally;
+  }
+  uint32_t type() const {
+    return static_cast<uint32_t>(X_USER_SIGNIN_STATE::SignedInLocally) |
+           static_cast<uint32_t>(X_USER_SIGNIN_STATE::SignedInToLive);
+  }
 
   uint32_t GetCachedFlags() const { return account_info_.GetCachedFlags(); };
   uint32_t GetSubscriptionTier() const {
     return account_info_.GetSubscriptionTier();
   }
+
+  static X_ONLINE_FRIEND GenerateDummyFriend();
+
+  void AddDummyFriends(const uint32_t friends_count);
+
+  bool GetFriendPresenceFromXUID(const uint64_t xuid,
+                                 X_ONLINE_PRESENCE* presence);
+
+  bool SetFriend(const X_ONLINE_FRIEND& update_peer);
+  bool AddFriendFromXUID(const uint64_t xuid);
+  bool AddFriend(X_ONLINE_FRIEND* add_friend);
+  bool RemoveFriend(const X_ONLINE_FRIEND& peer);
+  bool RemoveFriend(const uint64_t xuid);
+
+  bool GetFriendFromIndex(const uint32_t index, X_ONLINE_FRIEND* peer);
+  bool GetFriendFromXUID(const uint64_t xuid, X_ONLINE_FRIEND* peer);
+  bool IsFriend(const uint64_t xuid, X_ONLINE_FRIEND* peer = nullptr);
+
+  const std::vector<X_ONLINE_FRIEND> GetFriends() const { return friends_; }
+  const std::vector<uint64_t> GetFriendsXUIDs() const;
+
+  bool SetSubscriptionFromXUID(const uint64_t xuid, X_ONLINE_PRESENCE* peer);
+  bool GetSubscriptionFromXUID(const uint64_t xuid, X_ONLINE_PRESENCE* peer);
+  bool SubscribeFromXUID(const uint64_t xuid);
+  bool UnsubscribeFromXUID(const uint64_t xuid);
+  bool IsSubscribed(const uint64_t xuid);
+
+  const std::vector<uint64_t> GetSubscribedXUIDs() const;
+
+  std::string GetPresenceString();
 
   void AddSetting(std::unique_ptr<UserSetting> setting);
   UserSetting* GetSetting(uint32_t setting_id);
@@ -189,6 +237,8 @@ class UserProfile {
   std::vector<std::unique_ptr<UserSetting>> setting_list_;
   std::unordered_map<uint32_t, UserSetting*> settings_;
   std::map<uint32_t, std::vector<AchievementGpdStructure>> achievements_;
+  std::vector<X_ONLINE_FRIEND> friends_;
+  std::map<uint64_t, X_ONLINE_PRESENCE> subscriptions_;
 
   std::vector<Property> properties_;
 

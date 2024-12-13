@@ -128,6 +128,12 @@ typedef uint32_t X_HRESULT;
 #define X_E_NOTFOUND                            X_HRESULT_FROM_WIN32(X_ERROR_NOT_FOUND)
 #define X_E_NO_SUCH_USER                        X_HRESULT_FROM_WIN32(X_ERROR_NO_SUCH_USER)
 
+#define X_USER_GET_SIGNIN_INFO_OFFLINE_XUID_ONLY     0x00000001
+#define X_USER_GET_SIGNIN_INFO_ONLINE_XUID_ONLY      0x00000002
+
+#define X_USER_INFO_FLAG_LIVE_ENABLED    0x00000001
+#define X_USER_INFO_FLAG_GUEST           0x00000002
+
 //IOCTL_, used by NtDeviceIoControlFile
 constexpr uint32_t X_IOCTL_DISK_GET_DRIVE_GEOMETRY = 0x70000;
 constexpr uint32_t X_IOCTL_DISK_GET_PARTITION_INFO = 0x74004;
@@ -616,7 +622,7 @@ struct X_XAMACCOUNTINFO {
                              AccountReservedFlags::kPasswordProtected);
   }
 
-  bool IsLiveEnabled() {
+  bool IsLiveEnabled() const {
     return static_cast<bool>(reserved_flags &
                              AccountReservedFlags::kLiveEnabled);
   }

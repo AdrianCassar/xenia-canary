@@ -63,6 +63,8 @@
 
 #include "third_party/fmt/include/fmt/format.h"
 
+#include "xenia/kernel/XLiveAPI.h"
+
 DEFINE_string(apu, "any", "Audio system. Use: [any, nop, sdl, xaudio2]", "APU");
 DEFINE_string(gpu, "any", "Graphics system. Use: [any, d3d12, vulkan, null]",
               "GPU");
@@ -106,6 +108,8 @@ DECLARE_bool(debug);
 DEFINE_bool(discord, true, "Enable Discord rich presence", "General");
 
 DECLARE_bool(widescreen);
+
+DECLARE_bool(upnp);
 
 namespace xe {
 namespace app {
@@ -445,12 +449,21 @@ bool EmulatorApp::OnInitialize() {
     discord::DiscordPresence::NotPlaying();
   }
 
+  // Initialize Curl
+  CURLcode status = curl_global_init(CURL_GLOBAL_DEFAULT);
+  if (status != CURLE_OK) {
+    XELOGE("Cannot initialize CURL! Error code: {}", status);
+  }
+
   // Create the emulator but don't initialize so we can setup the window.
   emulator_ =
       std::make_unique<Emulator>("", storage_root, content_root, cache_root);
 
   // Determine window size based on user setting.
   auto res = xe::gpu::GraphicsSystem::GetInternalDisplayResolution();
+
+  // Discover network interfaces so they can be displayed in toolbar.
+  xe::kernel::XLiveAPI::DiscoverNetworkInterfaces();
 
   // Main emulator display window.
   emulator_window_ = EmulatorWindow::Create(emulator_.get(), app_context(),
@@ -479,6 +492,18 @@ void EmulatorApp::OnDestroy() {
   Profiler::Dump();
   // The profiler needs to shut down before the graphics context.
   Profiler::Shutdown();
+
+#pragma region NetplayCleanup
+  // UPnP Shutdown
+  if (cvars::upnp) {
+    delete xe::kernel::XLiveAPI::upnp_handler;
+  }
+
+  // Delete sessions on shutdown.
+  xe::kernel::XLiveAPI::DeleteAllSessionsByMac();
+
+  curl_global_cleanup();
+#pragma endregion
 
   // Write all cvar overrides to the config.
   config::SaveConfig();

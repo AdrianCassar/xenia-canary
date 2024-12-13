@@ -17,10 +17,13 @@
 #include "xenia/kernel/xam/user_profile.h"
 #include "xenia/kernel/xam/xam_private.h"
 #include "xenia/kernel/xenumerator.h"
+#include "xenia/kernel/xsession.h"
 #include "xenia/kernel/xthread.h"
 #include "xenia/xbox.h"
 
 DECLARE_int32(user_language);
+
+DECLARE_int32(user_country);
 
 namespace xe {
 namespace kernel {
@@ -50,16 +53,23 @@ X_HRESULT_result_t XamUserGetXUID_entry(dword_t user_index, dword_t type_mask,
   uint32_t result = X_E_NO_SUCH_USER;
   uint64_t xuid = 0;
 
+  const uint32_t local =
+      static_cast<uint32_t>(X_USER_SIGNIN_STATE::SignedInLocally);
+  const uint32_t live =
+      static_cast<uint32_t>(X_USER_SIGNIN_STATE::SignedInToLive);
+
   auto type = user_profile->type() & type_mask;
-  if (type & (2 | 4)) {
-    // maybe online profile?
+
+  if (type & (live | 4)) {
+    // Online XUID
     xuid = user_profile->xuid();
     result = X_E_SUCCESS;
-  } else if (type & 1) {
-    // maybe offline profile?
+  } else if (type & local) {
+    // Offline XUID
     xuid = user_profile->xuid();
     result = X_E_SUCCESS;
   }
+
   *xuid_ptr = xuid;
   return result;
 }
@@ -89,9 +99,9 @@ DECLARE_XAM_EXPORT1(XamUserGetIndexFromXUID, kUserProfiles, kImplemented);
 dword_result_t XamUserGetSigninState_entry(dword_t user_index) {
   // Yield, as some games spam this.
   xe::threading::MaybeYield();
-  uint32_t signin_state = 0;
+  X_USER_SIGNIN_STATE signin_state = X_USER_SIGNIN_STATE::NotSignedIn;
   if (user_index >= XUserMaxUserCount) {
-    return signin_state;
+    return static_cast<uint32_t>(signin_state);
   }
 
   if (kernel_state()->xam_state()->IsUserSignedIn(user_index)) {
@@ -99,17 +109,18 @@ dword_result_t XamUserGetSigninState_entry(dword_t user_index) {
         kernel_state()->xam_state()->GetUserProfile(user_index);
     signin_state = user_profile->signin_state();
   }
-  return signin_state;
+
+  return static_cast<uint32_t>(signin_state);
 }
 DECLARE_XAM_EXPORT2(XamUserGetSigninState, kUserProfiles, kImplemented,
                     kHighFrequency);
 
 typedef struct {
   xe::be<uint64_t> xuid;
-  xe::be<uint32_t> unk08;  // maybe zero?
+  xe::be<uint32_t> flags;
   xe::be<uint32_t> signin_state;
-  xe::be<uint32_t> unk10;  // ?
-  xe::be<uint32_t> unk14;  // ?
+  xe::be<uint32_t> guest_num;
+  xe::be<uint32_t> user_index;
   char name[16];
 } X_USER_SIGNIN_INFO;
 static_assert_size(X_USER_SIGNIN_INFO, 40);
@@ -128,8 +139,22 @@ X_HRESULT_result_t XamUserGetSigninInfo_entry(
   if (kernel_state()->xam_state()->IsUserSignedIn(user_index)) {
     const auto& user_profile =
         kernel_state()->xam_state()->GetUserProfile(user_index);
-    info->xuid = user_profile->xuid();
-    info->signin_state = user_profile->signin_state();
+
+    if (flags | X_USER_GET_SIGNIN_INFO_ONLINE_XUID_ONLY) {
+      info->xuid = user_profile->xuid();
+    }
+
+    if (flags | X_USER_GET_SIGNIN_INFO_OFFLINE_XUID_ONLY) {
+      info->xuid = user_profile->xuid();
+    }
+
+    info->signin_state = static_cast<uint32_t>(user_profile->signin_state());
+
+    if (user_profile->signin_state() == X_USER_SIGNIN_STATE::SignedInToLive) {
+      // Tell the title we are online.
+      info->flags = X_USER_INFO_FLAG_LIVE_ENABLED;
+    }
+
     xe::string_util::copy_truncating(info->name, user_profile->name(),
                                      xe::countof(info->name));
   } else {
@@ -458,7 +483,7 @@ dword_result_t XamUserWriteProfileSettings_entry(
 }
 DECLARE_XAM_EXPORT1(XamUserWriteProfileSettings, kUserProfiles, kImplemented);
 
-dword_result_t XamUserCheckPrivilege_entry(dword_t user_index, dword_t mask,
+dword_result_t XamUserCheckPrivilege_entry(dword_t user_index, dword_t type,
                                            lpdword_t out_value) {
   // checking all users?
   if (user_index != XUserIndexAny) {
@@ -473,6 +498,15 @@ dword_result_t XamUserCheckPrivilege_entry(dword_t user_index, dword_t mask,
 
   // If we deny everything, games should hopefully not try to do stuff.
   *out_value = 0;
+
+  const auto& user_profile =
+      kernel_state()->xam_state()->GetUserProfile(user_index);
+
+  // Allow all privileges including multiplayer
+  if (user_profile->signin_state() == X_USER_SIGNIN_STATE::SignedInToLive) {
+    *out_value = 1;
+  }
+
   return X_ERROR_SUCCESS;
 }
 DECLARE_XAM_EXPORT1(XamUserCheckPrivilege, kUserProfiles, kStub);
@@ -536,10 +570,20 @@ dword_result_t XamUserGetMembershipTier_entry(dword_t user_index) {
 }
 DECLARE_XAM_EXPORT1(XamUserGetMembershipTier, kUserProfiles, kStub);
 
-dword_result_t XamUserAreUsersFriends_entry(dword_t user_index, dword_t unk1,
-                                            dword_t unk2, lpdword_t out_value,
-                                            dword_t overlapped_ptr) {
-  uint32_t are_friends = 0;
+dword_result_t XamUserGetOnlineCountryFromXUID_entry(qword_t xuid) {
+  return cvars::user_country;
+}
+DECLARE_XAM_EXPORT1(XamUserGetOnlineCountryFromXUID, kUserProfiles, kStub);
+
+dword_result_t XamUserGetMembershipTierFromXUID_entry(qword_t xuid) {
+  return 6 /* 6 appears to be Gold */;
+}
+DECLARE_XAM_EXPORT1(XamUserGetMembershipTierFromXUID, kUserProfiles, kStub);
+
+dword_result_t XamUserAreUsersFriends_entry(
+    dword_t user_index, pointer_t<xe::be<uint64_t>> xuids_ptr,
+    dword_t xuids_count, lpdword_t out_value, dword_t overlapped_ptr) {
+  bool are_friends = false;
   X_RESULT result;
 
   if (user_index >= XUserMaxUserCount) {
@@ -548,11 +592,22 @@ dword_result_t XamUserAreUsersFriends_entry(dword_t user_index, dword_t unk1,
     if (kernel_state()->xam_state()->IsUserSignedIn(user_index)) {
       const auto& user_profile =
           kernel_state()->xam_state()->GetUserProfile(user_index);
-      if (user_profile->signin_state() == 0) {
+      if (user_profile->signin_state() == X_USER_SIGNIN_STATE::NotSignedIn) {
         result = X_ERROR_NOT_LOGGED_ON;
       } else {
-        // No friends!
-        are_friends = 0;
+        uint32_t friend_count = 0;
+
+        for (uint32_t i = 0; i < xuids_count; i++) {
+          const xe::be<uint64_t> xuid = xuids_ptr[i];
+
+          const bool is_friend = user_profile->IsFriend(xuid);
+
+          if (is_friend) {
+            friend_count++;
+          }
+        }
+
+        are_friends = friend_count == xuids_count;
         result = X_ERROR_SUCCESS;
       }
     } else {
@@ -580,6 +635,39 @@ dword_result_t XamUserAreUsersFriends_entry(dword_t user_index, dword_t unk1,
   }
 }
 DECLARE_XAM_EXPORT1(XamUserAreUsersFriends, kUserProfiles, kStub);
+
+dword_result_t XamUserGetAgeGroup_entry(
+    dword_t user_index, lpdword_t age_ptr,
+    pointer_t<XAM_OVERLAPPED> overlapped_ptr) {
+  if (!age_ptr) {
+    return X_ERROR_INVALID_PARAMETER;
+  }
+
+  if (!kernel_state()->xam_state()->IsUserSignedIn(user_index)) {
+    return X_ERROR_NO_SUCH_USER;
+  }
+
+  auto run = [user_index, age_ptr, overlapped_ptr](
+                 uint32_t& extended_error, uint32_t& length) -> X_RESULT {
+    X_RESULT result = X_ERROR_SUCCESS;
+
+    *age_ptr = X_USER_AGE_GROUP::ADULT;
+
+    extended_error = X_HRESULT_FROM_WIN32(result);
+    length = 0;
+
+    return result;
+  };
+
+  if (!overlapped_ptr) {
+    uint32_t extended_error, length;
+    return run(extended_error, length);
+  } else {
+    kernel_state()->CompleteOverlappedDeferredEx(run, overlapped_ptr);
+    return X_ERROR_IO_PENDING;
+  }
+}
+DECLARE_XAM_EXPORT1(XamUserGetAgeGroup, kUserProfiles, kImplemented);
 
 dword_result_t XamUserCreateAchievementEnumerator_entry(
     dword_t title_id, dword_t user_index, qword_t xuid, dword_t flags,
@@ -715,20 +803,30 @@ dword_result_t XamWriteGamerTile_entry(dword_t arg1, dword_t arg2, dword_t arg3,
 DECLARE_XAM_EXPORT1(XamWriteGamerTile, kUserProfiles, kStub);
 
 dword_result_t XamSessionCreateHandle_entry(lpdword_t handle_ptr) {
-  *handle_ptr = 0xCAFEDEAD;
+  auto e = object_ref<XSession>(new XSession(kernel_state()));
+  auto result = (uint32_t)e->Initialize();
+  if (XFAILED(result)) {
+    return result;
+  }
+
+  *handle_ptr = e->handle();
   return X_ERROR_SUCCESS;
 }
-DECLARE_XAM_EXPORT1(XamSessionCreateHandle, kUserProfiles, kStub);
+DECLARE_XAM_EXPORT1(XamSessionCreateHandle, kUserProfiles, kImplemented);
 
 dword_result_t XamSessionRefObjByHandle_entry(dword_t handle,
                                               lpdword_t obj_ptr) {
-  assert_true(handle == 0xCAFEDEAD);
-  // TODO(PermaNull): Implement this properly,
-  // For the time being returning 0xDEADF00D will prevent crashing.
-  *obj_ptr = 0xDEADF00D;
+  auto object = kernel_state()->object_table()->LookupObject<XSession>(handle);
+  if (!object) {
+    return X_STATUS_INVALID_HANDLE;
+  }
+
+  object->RetainHandle();
+
+  *obj_ptr = (uint32_t)object->guest_object();
   return X_ERROR_SUCCESS;
 }
-DECLARE_XAM_EXPORT1(XamSessionRefObjByHandle, kUserProfiles, kStub);
+DECLARE_XAM_EXPORT1(XamSessionRefObjByHandle, kUserProfiles, kImplemented);
 
 dword_result_t XamUserIsUnsafeProgrammingAllowed_entry(dword_t user_index,
                                                        dword_t unk,

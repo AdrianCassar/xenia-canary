@@ -11,6 +11,10 @@ project("xenia-kernel")
     "fmt",
     "zlib",
     "pugixml",
+    "libcurl",
+    "miniupnp",
+    "zlib",
+    "pugixml",
     "xenia-apu",
     "xenia-base",
     "xenia-cpu",
@@ -18,6 +22,8 @@ project("xenia-kernel")
     "xenia-vfs",
   })
   defines({
+    "CURL_STATICLIB",
+    "MINIUPNP_STATICLIB"
   })
   recursive_platform_files()
   files({

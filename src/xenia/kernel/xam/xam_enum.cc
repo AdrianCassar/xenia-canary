@@ -20,7 +20,7 @@
 #include "xenia/base/platform_win.h"
 #endif
 
-#include "third_party/fmt/include/fmt/format.h"
+#include <xenia/kernel/XLiveAPI.h>
 
 namespace xe {
 namespace kernel {
@@ -86,20 +86,70 @@ dword_result_t XamEnumerate_entry(dword_t handle, dword_t flags,
 }
 DECLARE_XAM_EXPORT1(XamEnumerate, kNone, kImplemented);
 
-dword_result_t XamCreateEnumeratorHandle_entry(
-    dword_t user_index, dword_t app_id, dword_t open_message,
-    dword_t close_message, dword_t extra_size, dword_t item_count,
-    dword_t flags, lpdword_t out_handle) {
-  auto e = object_ref<XStaticUntypedEnumerator>(
-      new XStaticUntypedEnumerator(kernel_state(), item_count, extra_size));
+static uint32_t XTitleServerCreateEnumerator(
+    uint32_t user_index, uint32_t app_id, uint32_t open_message,
+    uint32_t close_message, uint32_t extra_size, uint32_t item_count,
+    uint32_t flags, uint32_t* out_handle) {
+  auto e = make_object<XStaticEnumerator<X_TITLE_SERVER>>(kernel_state(),
+                                                          item_count);
 
   auto result = e->Initialize(user_index, app_id, open_message, close_message,
                               flags, extra_size, nullptr);
+
   if (XFAILED(result)) {
     return result;
   }
 
+  const auto servers = XLiveAPI::GetServers();
+
+  for (const auto& server : servers) {
+    X_TITLE_SERVER* item = e->AppendItem();
+
+    *item = server;
+  }
+
+  XELOGI("XTitleServerCreateEnumerator: added {} items to enumerator",
+         e->item_count());
+
   *out_handle = e->handle();
+  return X_ERROR_SUCCESS;
+}
+
+constexpr uint32_t XTitleServerMessage = 0x58039;
+
+dword_result_t XamCreateEnumeratorHandle_entry(
+    dword_t user_index, dword_t app_id, dword_t open_message,
+    dword_t close_message, dword_t extra_size, dword_t item_count,
+    dword_t flags, lpdword_t out_handle) {
+  uint32_t out_handle_ptr = 0;
+
+  switch (open_message) {
+    case XTitleServerMessage: {
+      auto result = XTitleServerCreateEnumerator(
+          user_index, app_id, open_message, close_message, extra_size,
+          item_count, flags, &out_handle_ptr);
+
+      if (XFAILED(result)) {
+        return result;
+      }
+
+      *out_handle = out_handle_ptr;
+    } break;
+    default: {
+      auto e = object_ref<XStaticUntypedEnumerator>(
+          new XStaticUntypedEnumerator(kernel_state(), item_count, extra_size));
+
+      auto result =
+          e->Initialize(user_index, app_id, open_message, close_message, flags);
+
+      if (XFAILED(result)) {
+        return result;
+      }
+
+      *out_handle = e->handle();
+    } break;
+  }
+
   return X_ERROR_SUCCESS;
 }
 DECLARE_XAM_EXPORT1(XamCreateEnumeratorHandle, kNone, kImplemented);

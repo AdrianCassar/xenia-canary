@@ -122,6 +122,9 @@ class GameInfoDatabase {
   // TODO: Implement it in the future.
   std::vector<StatsView> GetStatsViews() const;
 
+  const bool HasXLast() const { return xlast_gamedata_.get(); };
+  XLast* GetXLast() const { return xlast_gamedata_.get(); };
+
  private:
   bool is_valid_ = false;
   std::unique_ptr<XdbfGameData> xdbf_gamedata_;

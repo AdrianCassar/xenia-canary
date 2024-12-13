@@ -39,6 +39,7 @@
 #include "xenia/gpu/graphics_system.h"
 #include "xenia/hid/input_driver.h"
 #include "xenia/hid/input_system.h"
+#include "xenia/kernel/XLiveAPI.h"
 #include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/user_module.h"
 #include "xenia/kernel/util/gameinfo_utils.h"
@@ -963,6 +964,19 @@ X_STATUS Emulator::CreateZarchivePackage(
   return X_STATUS_SUCCESS;
 }
 
+void Emulator::DumpXLast() {
+  if (game_info_database_) {
+    if (game_info_database_->GetXLast()) {
+      const std::string title_ver =
+          title_version().empty() ? "" : " - " + title_version();
+      game_info_database_->GetXLast()->Dump(
+          fmt::format("{:08X}{}", title_id(), title_ver));
+    } else {
+      XELOGI("XLast data not found");
+    }
+  }
+}
+
 void Emulator::Pause() {
   if (paused_) {
     return;
@@ -1223,6 +1237,8 @@ bool Emulator::ExceptionCallback(Exception* ex) {
       xe::ui::ImGuiDialog::ShowMessageBox(imgui_drawer_, "Uh-oh!", crash_dlg);
     });
   }
+
+  xe::kernel::XLiveAPI::DeleteAllSessionsByMac();
 
   // Now suspend ourself (we should be a guest thread).
   current_thread->Suspend(nullptr);

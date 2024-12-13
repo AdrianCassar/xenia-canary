@@ -255,6 +255,7 @@ workspace("xenia")
   include("third_party/tomlplusplus.lua")
   include("third_party/FFmpeg/premake5.lua")
   include("third_party/fmt.lua")
+  include("third_party/libcurl.lua")
   include("third_party/glslang-spirv.lua")
   include("third_party/imgui.lua")
   include("third_party/mspack.lua")
@@ -264,6 +265,9 @@ workspace("xenia")
   include("third_party/zstd.lua")
   include("third_party/zlib.lua")
   include("third_party/pugixml.lua")
+  include("third_party/rapidjson.lua")
+  include("third_party/miniupnp.lua")
+  include("third_party/wolfssl.lua")
 
   if not os.istarget("android") then
     -- SDL2 requires sdl2-config, and as of November 2020 isn't high-quality on
