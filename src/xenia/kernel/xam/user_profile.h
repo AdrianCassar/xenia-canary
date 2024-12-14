@@ -183,15 +183,22 @@ class UserProfile {
   UserProfile(uint64_t xuid, X_XAMACCOUNTINFO* account_info);
 
   uint64_t xuid() const { return xuid_; }
+  uint64_t GetOnlineXUID() const {
+    return IsLiveEnabled() ? static_cast<uint64_t>(account_info_.xuid_online)
+                           : 0;
+  }
+  uint64_t GetLogonXUID() const {
+    return IsLiveEnabled() &&
+                   signin_state() == X_USER_SIGNIN_STATE::SignedInToLive
+               ? static_cast<uint64_t>(account_info_.xuid_online)
+               : xuid();
+  }
+  uint64_t IsLiveEnabled() const { return account_info_.IsLiveEnabled(); }
   std::string name() const { return account_info_.GetGamertagString(); }
   X_USER_SIGNIN_STATE signin_state() const {
-    return cvars::network_mode == NETWORK_MODE::XBOXLIVE
+    return IsLiveEnabled() && cvars::network_mode == NETWORK_MODE::XBOXLIVE
                ? X_USER_SIGNIN_STATE::SignedInToLive
                : X_USER_SIGNIN_STATE::SignedInLocally;
-  }
-  uint32_t type() const {
-    return static_cast<uint32_t>(X_USER_SIGNIN_STATE::SignedInLocally) |
-           static_cast<uint32_t>(X_USER_SIGNIN_STATE::SignedInToLive);
   }
 
   uint32_t GetCachedFlags() const { return account_info_.GetCachedFlags(); };

@@ -49,13 +49,38 @@ UserProfile* XamState::GetUserProfile(uint64_t xuid) const {
   return profile_manager_->GetProfile(xuid);
 }
 
+UserProfile* XamState::GetUserProfileLive(uint64_t xuid) const {
+  return profile_manager_->GetProfileLive(xuid);
+}
+
+UserProfile* XamState::GetUserProfileAny(uint64_t xuid) const {
+  auto profile = profile_manager_->GetProfile(xuid);
+
+  if (profile != nullptr) {
+    return profile;
+  }
+
+  return profile_manager_->GetProfileLive(xuid);
+}
+
+uint8_t XamState::GetUserIndexAssignedToProfileFromXUID(uint64_t xuid) const {
+  const uint8_t user_index =
+      profile_manager_->GetUserIndexAssignedToProfile(xuid);
+
+  if (user_index != XUserIndexAny) {
+    return user_index;
+  }
+
+  return profile_manager_->GetUserIndexAssignedToLiveProfile(xuid);
+}
+
 bool XamState::IsUserSignedIn(uint32_t user_index) const {
   return profile_manager_->GetProfile(static_cast<uint8_t>(user_index)) !=
          nullptr;
 }
 
 bool XamState::IsUserSignedIn(uint64_t xuid) const {
-  return GetUserProfile(xuid) != nullptr;
+  return GetUserProfileAny(xuid) != nullptr;
 }
 
 }  // namespace xam

@@ -103,7 +103,7 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
       const uint32_t num_users = kernel_state()
                                      ->xam_state()
                                      ->profile_manager()
-                                     ->CountSignedInProfiles();
+                                     ->SignedInProfilesCount();
 
       return XSession::GetSessions(memory_, data, num_users);
     }
@@ -180,6 +180,8 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
       for (uint32_t player_index = 0; player_index < data->xuids_count;
            player_index++) {
         const xe::be<uint64_t> xuid = xuids[player_index];
+
+        assert_true(IsValidXUID(xuid));
 
         if (xuid) {
           std::string xuid_str = string_util::to_hex_string(xuid);
@@ -641,7 +643,7 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
       const uint32_t num_users = kernel_state()
                                      ->xam_state()
                                      ->profile_manager()
-                                     ->CountSignedInProfiles();
+                                     ->SignedInProfilesCount();
 
       return XSession::GetWeightedSessions(memory_, data, num_users);
     }

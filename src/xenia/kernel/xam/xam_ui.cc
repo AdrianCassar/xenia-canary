@@ -1522,17 +1522,17 @@ bool xeDrawProfileContent(ui::ImGuiDrawer* imgui_drawer, const uint64_t xuid,
   ImGui::SetCursorPosY(current_drawing_position.y +
                        2 * ImGui::GetTextLineHeight());
 
+  const std::string live_enabled = fmt::format(
+      "Xbox Live Enabled: {}", account->IsLiveEnabled() ? "True" : "False");
+
+  ImGui::TextUnformatted(live_enabled.c_str());
+
+  ImGui::SameLine();
+  ImGui::SetCursorPos(current_drawing_position);
+  ImGui::SetCursorPosY(current_drawing_position.y +
+                       3 * ImGui::GetTextLineHeight());
+
   if (user_index != XUserIndexAny) {
-    const std::string live_enabled = fmt::format(
-        "Xbox Live Enabled: {}", account->IsLiveEnabled() ? "True" : "False");
-
-    ImGui::TextUnformatted(live_enabled.c_str());
-
-    ImGui::SameLine();
-    ImGui::SetCursorPos(current_drawing_position);
-    ImGui::SetCursorPosY(current_drawing_position.y +
-                         3 * ImGui::GetTextLineHeight());
-
     ImGui::TextUnformatted(
         fmt::format("Assigned to slot: {}\n", user_index + 1).c_str());
   } else {
@@ -1583,6 +1583,25 @@ bool xeDrawProfileContent(ui::ImGuiDrawer* imgui_drawer, const uint64_t xuid,
       }
       ImGui::EndDisabled();
 
+      if (ImGui::BeginMenu("Copy")) {
+        if (ImGui::MenuItem("Gamertag")) {
+          ImGui::SetClipboardText(account->GetGamertagString().c_str());
+        }
+
+        if (ImGui::MenuItem("XUID")) {
+          ImGui::SetClipboardText(fmt::format("{:016X}", xuid).c_str());
+        }
+
+        if (account->IsLiveEnabled()) {
+          if (ImGui::MenuItem("XUID Online")) {
+            ImGui::SetClipboardText(
+                fmt::format("{:016X}", account->xuid_online.get()).c_str());
+          }
+        }
+
+        ImGui::EndMenu();
+      }
+
       const bool is_signedin = profile_manager->GetProfile(xuid) != nullptr;
       ImGui::BeginDisabled(!is_signedin);
       if (ImGui::MenuItem("Show Achievements")) {
@@ -1605,6 +1624,49 @@ bool xeDrawProfileContent(ui::ImGuiDrawer* imgui_drawer, const uint64_t xuid,
 
       if (!kernel_state()->emulator()->is_title_open()) {
         ImGui::Separator();
+
+        if (account->IsLiveEnabled()) {
+          if (ImGui::BeginMenu("Convert to Offline Profile")) {
+            ImGui::BeginTooltip();
+            ImGui::TextUnformatted(
+                fmt::format(
+                    "You're about to convert profile: {} (XUID: {:016X}) "
+                    "to an offline profile. Are you sure?",
+                    account->GetGamertagString(), xuid)
+                    .c_str());
+            ImGui::EndTooltip();
+
+            if (ImGui::MenuItem("Yes, convert it!")) {
+              profile_manager->ConvertToOfflineProfile(xuid);
+              ImGui::EndMenu();
+              ImGui::EndPopup();
+              return false;
+            }
+
+            ImGui::EndMenu();
+          }
+        } else {
+          if (ImGui::BeginMenu("Convert to Xbox Live-Enabled Profile")) {
+            ImGui::BeginTooltip();
+            ImGui::TextUnformatted(
+                fmt::format(
+                    "You're about to convert profile: {} (XUID: {:016X}) "
+                    "to an Xbox Live-Enabled profile. Are you sure?",
+                    account->GetGamertagString(), xuid)
+                    .c_str());
+            ImGui::EndTooltip();
+
+            if (ImGui::MenuItem("Yes, convert it!")) {
+              profile_manager->ConvertToXboxLiveEnabledProfile(xuid);
+              ImGui::EndMenu();
+              ImGui::EndPopup();
+              return false;
+            }
+
+            ImGui::EndMenu();
+          }
+        }
+
         if (ImGui::BeginMenu("Delete Profile")) {
           ImGui::BeginTooltip();
           ImGui::TextUnformatted(
@@ -1634,11 +1696,17 @@ bool xeDrawProfileContent(ui::ImGuiDrawer* imgui_drawer, const uint64_t xuid,
 
 class SigninDialog : public XamDialog {
  public:
-  SigninDialog(xe::ui::ImGuiDrawer* imgui_drawer, uint32_t users_needed)
+  SigninDialog(xe::ui::ImGuiDrawer* imgui_drawer, uint32_t users_needed,
+               uint32_t flags)
       : XamDialog(imgui_drawer),
         users_needed_(users_needed),
+        flags_(flags),
         title_("Sign In") {
     last_user_ = kernel_state()->emulator()->input_system()->GetLastUsedSlot();
+
+    if (flags_ & X_UI_FLAGS_ONLINEENABLED) {
+      title_ = "Sign In - Xbox Live Enabled Profiles";
+    }
 
     for (uint8_t slot = 0; slot < XUserMaxUserCount; slot++) {
       std::string name = fmt::format("Slot {:d}", slot + 1);
@@ -1654,7 +1722,7 @@ class SigninDialog : public XamDialog {
       ImGui::OpenPopup(title_.c_str());
       has_opened_ = true;
       first_draw = true;
-      ReloadProfiles(true);
+      ReloadProfiles(true, flags_);
     }
     if (ImGui::BeginPopupModal(title_.c_str(), nullptr,
                                ImGuiWindowFlags_AlwaysAutoResize)) {
@@ -1782,13 +1850,23 @@ class SigninDialog : public XamDialog {
           const std::string gamertag_string = gamertag_;
           bool valid = profile_manager->IsGamertagValid(gamertag_string);
 
+          ImGui::Checkbox("Xbox Live Enabled", &live_enabled_profile_);
+
           ImGui::BeginDisabled(!valid);
           if (ImGui::Button("Create")) {
-            profile_manager->CreateProfile(gamertag_string, false);
+            uint32_t reserved_flags = 0;
+
+            if (live_enabled_profile_) {
+              reserved_flags |=
+                  X_XAMACCOUNTINFO::AccountReservedFlags::kLiveEnabled;
+            }
+
+            profile_manager->CreateProfile(gamertag_string, false, false,
+                                           reserved_flags);
             std::fill(std::begin(gamertag_), std::end(gamertag_), '\0');
             ImGui::CloseCurrentPopup();
             creating_profile_ = false;
-            ReloadProfiles(false);
+            ReloadProfiles(false, flags_);
           }
           ImGui::EndDisabled();
           ImGui::SameLine();
@@ -1834,13 +1912,19 @@ class SigninDialog : public XamDialog {
     }
   }
 
-  void ReloadProfiles(bool first_draw) {
+  void ReloadProfiles(bool first_draw, uint32_t flags) {
     auto profile_manager = kernel_state()->xam_state()->profile_manager();
     auto profiles = profile_manager->GetAccounts();
 
     profile_data_.clear();
     for (auto& [xuid, account] : *profiles) {
-      profile_data_.push_back({xuid, account.GetGamertagString()});
+      if (flags_ & X_UI_FLAGS_ONLINEENABLED) {
+        if (account.IsLiveEnabled()) {
+          profile_data_.push_back({xuid, account.GetGamertagString()});
+        }
+      } else {
+        profile_data_.push_back({xuid, account.GetGamertagString()});
+      }
     }
 
     if (first_draw) {
@@ -1870,6 +1954,7 @@ class SigninDialog : public XamDialog {
  private:
   bool has_opened_ = false;
   std::string title_;
+  uint32_t flags_ = 0;
   uint32_t users_needed_ = 1;
   uint32_t last_user_ = 0;
 
@@ -1879,6 +1964,7 @@ class SigninDialog : public XamDialog {
   uint64_t chosen_xuids_[XUserMaxUserCount] = {};
 
   bool creating_profile_ = false;
+  bool live_enabled_profile_ = true;
   char gamertag_[16] = "";
 };
 
@@ -1911,7 +1997,7 @@ X_RESULT xeXamShowSigninUI(uint32_t user_index, uint32_t users_needed,
   const Emulator* emulator = kernel_state()->emulator();
   ui::ImGuiDrawer* imgui_drawer = emulator->imgui_drawer();
   return xeXamDispatchDialogAsync<SigninDialog>(
-      new SigninDialog(imgui_drawer, users_needed), close);
+      new SigninDialog(imgui_drawer, users_needed, flags), close);
 }
 
 dword_result_t XamShowSigninUI_entry(dword_t users_needed, dword_t flags) {

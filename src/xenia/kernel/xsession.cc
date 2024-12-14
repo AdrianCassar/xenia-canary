@@ -273,45 +273,44 @@ X_RESULT XSession::JoinSession(XSessionJoin* data) {
         return X_E_FAIL;
       }
 
-      const auto profile =
+      const auto user_profile =
           kernel_state()->xam_state()->GetUserProfile(user_index);
-      const xe::be<uint64_t> xuid = profile->xuid();
+      const xe::be<uint64_t> xuid_online = user_profile->GetLogonXUID();
 
-      const bool is_member_added =
-          local_members_.find(xuid) != local_members_.end();
+      assert_true(IsValidXUID(xuid_online));
 
-      if (is_member_added) {
-        member = &local_members_[xuid];
+      if (local_members_.count(xuid_online)) {
+        return X_ERROR_SUCCESS;
       }
 
-      member->OnlineXUID = xuid;
+      member->OnlineXUID = xuid_online;
       member->UserIndex = user_index;
 
       local_details_.ActualMemberCount = std::min<int32_t>(
           XUserMaxUserCount, local_details_.ActualMemberCount + 1);
     } else {
-      // Default member
-      const xe::be<uint64_t> xuid = xuid_array[i];
-      const uint32_t user_index = XUserIndexNone;
+      const xe::be<uint64_t> xuid_online = xuid_array[i];
+      uint8_t user_index =
+          kernel_state()->xam_state()->GetUserIndexAssignedToProfileFromXUID(
+              xuid_online);
 
-      const bool is_member_added =
-          remote_members_.find(xuid) != remote_members_.end();
-
-      if (is_member_added) {
-        member = &remote_members_[xuid];
+      if (user_index == XUserIndexAny) {
+        user_index = XUserIndexNone;
       }
 
-      member->OnlineXUID = xuid;
+      assert_true(IsValidXUID(xuid_online));
+
+      if (remote_members_.count(xuid_online)) {
+        return X_ERROR_SUCCESS;
+      }
+
+      member->OnlineXUID = xuid_online;
       member->UserIndex = user_index;
 
-      bool is_local_member = IsMemberLocallySignedIn(xuid, user_index);
+      const bool is_local_member =
+          kernel_state()->xam_state()->IsUserSignedIn(xuid_online);
 
       if (is_local_member) {
-        const auto profile_manager =
-            kernel_state()->xam_state()->profile_manager();
-        member->UserIndex =
-            profile_manager->GetUserIndexAssignedToProfile(xuid);
-
         local_details_.ActualMemberCount = std::min<int32_t>(
             XUserMaxUserCount, local_details_.ActualMemberCount + 1);
       }
@@ -375,6 +374,8 @@ X_RESULT XSession::LeaveSession(XSessionLeave* data) {
   bool is_arbitrated = HasSessionFlag(
       static_cast<SessionFlags>((uint32_t)local_details_.Flags), ARBITRATION);
 
+  const auto profile_manager = kernel_state()->xam_state()->profile_manager();
+
   for (uint32_t i = 0; i < data->array_count; i++) {
     XSESSION_MEMBER* member = new XSESSION_MEMBER();
 
@@ -385,29 +386,27 @@ X_RESULT XSession::LeaveSession(XSessionLeave* data) {
         return X_E_FAIL;
       }
 
-      const auto profile =
+      const auto user_profile =
           kernel_state()->xam_state()->GetUserProfile(user_index);
-      const xe::be<uint64_t> xuid = profile->xuid();
+      const xe::be<uint64_t> xuid_online = user_profile->GetLogonXUID();
 
-      const bool is_member_added =
-          local_members_.find(xuid) != local_members_.end();
+      assert_true(IsValidXUID(xuid_online));
 
-      if (!is_member_added) {
+      if (!local_members_.count(xuid_online)) {
         return X_ERROR_SUCCESS;
       }
 
-      member = &local_members_[xuid];
+      member = &local_members_[xuid_online];
     } else {
-      const xe::be<uint64_t> xuid = xuid_array[i];
+      const xe::be<uint64_t> xuid_online = xuid_array[i];
 
-      const bool is_member_added =
-          remote_members_.find(xuid) != remote_members_.end();
+      assert_true(IsValidXUID(xuid_online));
 
-      if (!is_member_added) {
+      if (!remote_members_.count(xuid_online)) {
         return X_ERROR_SUCCESS;
       }
 
-      member = &remote_members_[xuid];
+      member = &remote_members_[xuid_online];
     }
 
     if (member->IsPrivate()) {
@@ -439,21 +438,21 @@ X_RESULT XSession::LeaveSession(XSessionLeave* data) {
       XELOGI("XUID: {:016X} - Leaving {} slot", member->OnlineXUID.get(),
              member->IsPrivate() ? "private" : "public");
 
-      const xe::be<uint64_t> xuid = member->OnlineXUID;
+      const xe::be<uint64_t> xuid_online = member->OnlineXUID;
 
       if (leave_local) {
-        removed = local_members_.erase(member->OnlineXUID);
+        removed = local_members_.erase(xuid_online);
       } else {
-        removed = remote_members_.erase(member->OnlineXUID);
+        removed = remote_members_.erase(xuid_online);
       }
 
       assert_true(removed);
 
       if (removed) {
-        xuids.push_back(xuid);
+        xuids.push_back(xuid_online);
 
-        bool is_local_member =
-            IsMemberLocallySignedIn(member->OnlineXUID, member->UserIndex);
+        const bool is_local_member =
+            kernel_state()->xam_state()->IsUserSignedIn(xuid_online);
 
         if (is_local_member) {
           local_details_.ActualMemberCount =
