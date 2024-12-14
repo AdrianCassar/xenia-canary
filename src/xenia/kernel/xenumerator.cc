@@ -191,6 +191,12 @@ uint32_t XUserStatsEnumerator::WriteItems(uint8_t* buffer_data,
 
   size_t size = count * item_size();
 
+  auto details = reinterpret_cast<X_USER_STATS_SPEC*>(buffer_data);
+
+  if (written_count) {
+    *written_count = static_cast<uint32_t>(count);
+  }
+
   return X_ERROR_SUCCESS;
 }
 
