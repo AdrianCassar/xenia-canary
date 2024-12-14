@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "xenia/kernel/xam/achievement_manager.h"
+#include "xenia/kernel/xnet.h"
 #include "xenia/kernel/xobject.h"
 #include "xenia/xbox.h"
 
@@ -177,20 +178,23 @@ class XAchievementEnumerator : public XEnumerator {
 
 class XUserStatsEnumerator : public XEnumerator {
  public:
-  struct XUSER_STATS_SPEC {
-    xe::be<uint32_t> ViewId;
-    xe::be<uint32_t> NumColumnIds;
-    xe::be<uint16_t> rgwColumnIds[0x40];
+  struct StatsSpec {
+    uint32_t ViewId;
+    uint32_t NumColumnIds;
+    uint16_t rgwColumnIds[kXUserMaxStatsAttributes];
   };
 
-  XUserStatsEnumerator(KernelState* kernel_state, size_t items_per_enumerate)
+  XUserStatsEnumerator(KernelState* kernel_state, size_t items_per_enumerate,
+                       uint32_t enumerator_type)
       : XEnumerator(kernel_state, items_per_enumerate, 0) {}
+
+  void AppendItem(StatsSpec item) { items_.push_back(std::move(item)); }
 
   uint32_t WriteItems(uint32_t buffer_ptr, uint8_t* buffer_data,
                       uint32_t* written_count) override;
 
  private:
-  std::vector<XUSER_STATS_SPEC> items_;
+  std::vector<StatsSpec> items_;
   size_t current_item_ = 0;
 };
 
