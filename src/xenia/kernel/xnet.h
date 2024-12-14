@@ -107,13 +107,22 @@ namespace kernel {
 
 constexpr uint16_t XNET_SYSTEMLINK_PORT = 3074;
 
-constexpr uint8_t XUserMaxStatsAttributes = 64;
-
 constexpr uint32_t XEX_PRIVILEGE_CROSSPLATFORM_SYSTEM_LINK = 14;
+
+constexpr uint8_t kXUserMaxStatsRows = 100;
+
+constexpr uint8_t kXUserMaxStatsAttributes = 64;
 
 enum NETWORK_MODE : int32_t { OFFLINE, LAN, XBOXLIVE };
 
 enum X_USER_AGE_GROUP : uint32_t { CHILD, TEEN, ADULT };
+
+enum X_STATS_ENUMERATOR_TYPE : uint32_t {
+  XUID,
+  RANK,
+  RANK_PER_SPEC,
+  BY_RATING
+};
 
 struct XNKID {
   uint8_t ab[8];
@@ -160,6 +169,18 @@ struct X_PARTY_USER_LIST {
   xe::be<uint32_t> UserCount;
   X_PARTY_USER_INFO Users[7];  // Unknown size?
 };
+
+struct X_USER_STATS_READ_RESULTS {
+  xe::be<uint32_t> NumViews;
+  xe::be<uint32_t> Views_ptr;
+};
+
+struct X_USER_STATS_SPEC {
+  xe::be<uint32_t> view_id;
+  xe::be<uint32_t> num_column_ids;
+  xe::be<uint16_t> column_Ids[kXUserMaxStatsAttributes];
+};
+static_assert_size(X_USER_STATS_SPEC, 8 + kXUserMaxStatsAttributes * 2);
 
 struct X_ONLINE_SERVICE_INFO {
   xe::be<uint32_t> id;
