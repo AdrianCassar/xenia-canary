@@ -1477,8 +1477,6 @@ void EmulatorWindow::SetNetworkInterfaceByGUID(std::string guid) {
 }
 
 void EmulatorWindow::SetNetworkMode(int32_t mode) {
-  // sign out and sign in profiles to take affect properly?
-
   if (cvars::network_mode == mode) {
     return;
   }
