@@ -790,7 +790,7 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
       xe::to_utf8(load_and_swap<std::u16string>(filename_ptr));
 
   XELOGI("XStorageBuildServerPath: Requesting file: {} From storage type: {}",
-         filename, static_cast<uint32_t>(args->storage_location));
+         filename, args->storage_location.get());
 
   if (args->server_path_ptr) {
     const std::string server_path = fmt::format(

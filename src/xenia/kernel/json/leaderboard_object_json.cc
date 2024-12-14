@@ -22,8 +22,7 @@ bool LeaderboardObjectJSON::Deserialize(const rapidjson::Value& obj) {
 
 bool LeaderboardObjectJSON::Serialize(
     rapidjson::PrettyWriter<rapidjson::StringBuffer>* writer) const {
-  const std::string xuid =
-      fmt::format("{:016X}", static_cast<uint64_t>(stats_.xuid));
+  const std::string xuid = fmt::format("{:016X}", stats_.xuid.get());
 
   writer->StartObject();
 
@@ -48,7 +47,7 @@ bool LeaderboardObjectJSON::Serialize(
       const XUSER_PROPERTY& stat = statistics_ptr[i];
 
       const std::string property_id =
-          fmt::format("{:08X}", static_cast<uint32_t>(stat.property_id));
+          fmt::format("{:08X}", stat.property_id.get());
 
       // Write each stat ID
       writer->Key(property_id);
