@@ -295,8 +295,7 @@ dword_result_t NetDll_XNetGetOpt_entry(dword_t caller, dword_t option_id,
       std::memcpy(buffer_ptr, &xnet_startup_params, sizeof(XNetStartupParams));
       return 0;
     default:
-      XELOGE("NetDll_XNetGetOpt: option {} unimplemented",
-             static_cast<uint32_t>(option_id));
+      XELOGE("NetDll_XNetGetOpt: option {} unimplemented", option_id.value());
       return uint32_t(X_WSAError::X_WSAEINVAL);
   }
 }
