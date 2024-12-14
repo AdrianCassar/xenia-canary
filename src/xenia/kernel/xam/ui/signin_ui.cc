@@ -16,12 +16,17 @@ namespace ui {
 
 SigninUI::SigninUI(xe::ui::ImGuiDrawer* imgui_drawer,
                    ProfileManager* profile_manager, uint32_t last_used_slot,
-                   uint32_t users_needed)
+                   uint32_t users_needed, uint32_t flags)
     : XamDialog(imgui_drawer),
       profile_manager_(profile_manager),
       last_user_(last_used_slot),
       users_needed_(users_needed),
-      title_("Sign In") {}
+      flags_(flags),
+      title_("Sign In") {
+  if (flags_ & X_UI_FLAGS_ONLINEENABLED) {
+    title_ = "Sign In - Xbox Live Enabled Profiles";
+  }
+}
 
 void SigninUI::OnDraw(ImGuiIO& io) {
   bool first_draw = false;
@@ -29,7 +34,7 @@ void SigninUI::OnDraw(ImGuiIO& io) {
     ImGui::OpenPopup(title_.c_str());
     has_opened_ = true;
     first_draw = true;
-    ReloadProfiles(true);
+    ReloadProfiles(true, flags_);
   }
   if (ImGui::BeginPopupModal(title_.c_str(), nullptr,
                              ImGuiWindowFlags_AlwaysAutoResize)) {
@@ -153,13 +158,24 @@ void SigninUI::OnDraw(ImGuiIO& io) {
               profile_manager_->IsGamertagValid(std::string(gamertag_));
         }
 
+        ImGui::Checkbox("Xbox Live Enabled", &live_enabled_profile_);
+
         ImGui::BeginDisabled(!valid_gamertag_);
         if (ImGui::Button("Create")) {
-          profile_manager_->CreateProfile(std::string(gamertag_), false);
+          uint32_t reserved_flags = 0;
+
+          if (live_enabled_profile_) {
+            reserved_flags |=
+                X_XAMACCOUNTINFO::AccountReservedFlags::kLiveEnabled;
+          }
+
+          profile_manager_->CreateProfile(std::string(gamertag_), false, false,
+                                          reserved_flags);
+
           std::fill(std::begin(gamertag_), std::end(gamertag_), '\0');
           ImGui::CloseCurrentPopup();
           creating_profile_ = false;
-          ReloadProfiles(false);
+          ReloadProfiles(false, flags_);
         }
         ImGui::EndDisabled();
         ImGui::SameLine();
@@ -205,13 +221,19 @@ void SigninUI::OnDraw(ImGuiIO& io) {
   }
 }
 
-void SigninUI::ReloadProfiles(bool first_draw) {
+void SigninUI::ReloadProfiles(bool first_draw, uint32_t flags) {
   auto profile_manager = kernel_state()->xam_state()->profile_manager();
   auto profiles = profile_manager->GetAccounts();
 
   profile_data_.clear();
   for (auto& [xuid, account] : *profiles) {
-    profile_data_.push_back({xuid, account.GetGamertagString()});
+    if (flags_ & X_UI_FLAGS_ONLINEENABLED) {
+      if (account.IsLiveEnabled()) {
+        profile_data_.push_back({xuid, account.GetGamertagString()});
+      }
+    } else {
+      profile_data_.push_back({xuid, account.GetGamertagString()});
+    }
   }
 
   if (first_draw) {
