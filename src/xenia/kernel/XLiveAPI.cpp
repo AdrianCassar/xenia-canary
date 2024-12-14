@@ -62,7 +62,6 @@ using namespace rapidjson;
 // API endpoint lookup table
 //
 // Extract stat descriptions from XDBF.
-// Profiles have offline and online XUIDs we only use online.
 
 // https://patents.google.com/patent/US20060287099A1
 namespace xe {
@@ -586,20 +585,37 @@ std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::RegisterPlayer() {
   const uint32_t index = 0;
 
   if (!kernel_state()->xam_state()->IsUserSignedIn(index)) {
-    XELOGE("Cancelled Registering Player, player not signed in!");
+    XELOGE("Cancelled registering profile, profile not signed in!");
     return response;
   }
 
   if (!mac_address_) {
-    XELOGE("Cancelled Registering Player");
+    XELOGE("Cancelled registering profile!");
     return response;
+  }
+
+  const auto user_profile = kernel_state()->xam_state()->GetUserProfile(index);
+
+  if (cvars::network_mode == NETWORK_MODE::XBOXLIVE &&
+      !user_profile->IsLiveEnabled()) {
+    XELOGE("Cancelled registering profile, profile is not live enabled!");
+    return response;
+  }
+
+  uint64_t xuid = user_profile->GetOnlineXUID();
+
+  // Register offline profile for systemlink usage
+  if (cvars::network_mode == NETWORK_MODE::LAN &&
+      !user_profile->IsLiveEnabled()) {
+    xuid = user_profile->xuid();
+
+    XELOGI("Registering offline profile {:016X} for systemlink usage", xuid);
   }
 
   PlayerObjectJSON player = PlayerObjectJSON();
 
-  // User index hard-coded
-  player.XUID(kernel_state()->xam_state()->GetUserProfile(index)->xuid());
-  player.Gamertag(kernel_state()->xam_state()->GetUserProfile(index)->name());
+  player.XUID(xuid);
+  player.Gamertag(user_profile->name());
   player.MachineID(GetLocalMachineId());
   player.HostAddress(OnlineIP_str());
   player.MacAddress(mac_address_->to_uint64());
@@ -828,7 +844,7 @@ std::unique_ptr<SessionObjectJSON> XLiveAPI::XSessionMigration(
     const auto& profile =
         kernel_state()->xam_state()->GetUserProfile(data->user_index);
 
-    xuid = profile->xuid();
+    xuid = profile->GetOnlineXUID();
   } else {
     XELOGI("New host is remote.");
   }
@@ -1001,7 +1017,7 @@ void XLiveAPI::XSessionCreate(uint64_t sessionId, XSessionData* data) {
     const auto& profile =
         kernel_state()->xam_state()->GetUserProfile(data->user_index);
 
-    xuid = profile->xuid();
+    xuid = profile->GetOnlineXUID();
   }
 
   const std::string xuid_str = fmt::format("{:016X}", xuid.get());
