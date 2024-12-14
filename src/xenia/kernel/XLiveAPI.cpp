@@ -287,8 +287,8 @@ void XLiveAPI::Init() {
     // online_ip_ = local_ip_;
 
     // Fixes 4D53085F from crashing when joining via systemlink.
-    kernel_state()->BroadcastNotification(kXNotificationIDLiveConnectionChanged,
-                                          X_ONLINE_S_LOGON_DISCONNECTED);
+    // kernel_state()->BroadcastNotification(kXNotificationIDLiveConnectionChanged,
+    //                                      X_ONLINE_S_LOGON_DISCONNECTED);
 
     XELOGE("XLiveAPI:: Cannot reach API server.");
     initialized_ = InitState::Failed;
