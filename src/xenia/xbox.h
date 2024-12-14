@@ -138,6 +138,13 @@ typedef uint32_t X_HRESULT;
 #define X_USER_INFO_FLAG_LIVE_ENABLED    0x00000001
 #define X_USER_INFO_FLAG_GUEST           0x00000002
 
+#define X_USER_XUID_OFFLINE             0x00000001
+#define X_USER_XUID_ONLINE              0x00000002
+#define X_USER_XUID_GUEST               0x00000004
+
+#define X_UI_FLAGS_LOCALSIGNIN          0x00000001
+#define X_UI_FLAGS_ONLINEENABLED        0x00000002
+
 //IOCTL_, used by NtDeviceIoControlFile
 constexpr uint32_t X_IOCTL_DISK_GET_DRIVE_GEOMETRY = 0x70000;
 constexpr uint32_t X_IOCTL_DISK_GET_PARTITION_INFO = 0x74004;

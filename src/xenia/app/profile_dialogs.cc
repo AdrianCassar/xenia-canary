@@ -224,6 +224,25 @@ void ProfileConfigDialog::OnDraw(ImGuiIO& io) {
               emulator_window_->emulator()->kernel_state(), xuid);
         }
 
+        if (ImGui::BeginMenu("Copy")) {
+          if (ImGui::MenuItem("Gamertag")) {
+            ImGui::SetClipboardText(account.GetGamertagString().c_str());
+          }
+
+          if (ImGui::MenuItem("XUID")) {
+            ImGui::SetClipboardText(fmt::format("{:016X}", xuid).c_str());
+          }
+
+          if (account.IsLiveEnabled()) {
+            if (ImGui::MenuItem("XUID Online")) {
+              ImGui::SetClipboardText(
+                  fmt::format("{:016X}", account.xuid_online.get()).c_str());
+            }
+          }
+
+          ImGui::EndMenu();
+        }
+
         const bool is_signedin = profile_manager->GetProfile(xuid) != nullptr;
         ImGui::BeginDisabled(!is_signedin);
         if (ImGui::MenuItem("Show Played Titles")) {
@@ -247,6 +266,49 @@ void ProfileConfigDialog::OnDraw(ImGuiIO& io) {
 
         if (!emulator_window_->emulator()->is_title_open()) {
           ImGui::Separator();
+
+          if (account.IsLiveEnabled()) {
+            if (ImGui::BeginMenu("Convert to Offline Profile")) {
+              ImGui::BeginTooltip();
+              ImGui::TextUnformatted(
+                  fmt::format(
+                      "You're about to convert profile: {} (XUID: {:016X}) "
+                      "to an offline profile. Are you sure?",
+                      account.GetGamertagString(), xuid)
+                      .c_str());
+              ImGui::EndTooltip();
+
+              if (ImGui::MenuItem("Yes, convert it!")) {
+                profile_manager->ConvertToOfflineProfile(xuid);
+                ImGui::EndMenu();
+                ImGui::EndPopup();
+                return false;
+              }
+
+              ImGui::EndMenu();
+            }
+          } else {
+            if (ImGui::BeginMenu("Convert to Xbox Live-Enabled Profile")) {
+              ImGui::BeginTooltip();
+              ImGui::TextUnformatted(
+                  fmt::format(
+                      "You're about to convert profile: {} (XUID: {:016X}) "
+                      "to an Xbox Live-Enabled profile. Are you sure?",
+                      account.GetGamertagString(), xuid)
+                      .c_str());
+              ImGui::EndTooltip();
+
+              if (ImGui::MenuItem("Yes, convert it!")) {
+                profile_manager->ConvertToXboxLiveEnabledProfile(xuid);
+                ImGui::EndMenu();
+                ImGui::EndPopup();
+                return false;
+              }
+
+              ImGui::EndMenu();
+            }
+          }
+
           if (ImGui::BeginMenu("Delete Profile")) {
             ImGui::BeginTooltip();
             ImGui::TextUnformatted(

@@ -376,11 +376,6 @@ class XSession : public XObject {
     return (flags & ~systemlink) == 0;
   }
 
-  const bool IsMemberLocallySignedIn(uint64_t xuid, uint32_t user_index) const {
-    return kernel_state()->xam_state()->IsUserSignedIn(xuid) ||
-           kernel_state()->xam_state()->IsUserSignedIn(user_index);
-  }
-
   const uint32_t GetMembersCount() const {
     const uint32_t max_slots =
         local_details_.MaxPrivateSlots + local_details_.MaxPublicSlots;

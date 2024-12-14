@@ -20,14 +20,14 @@ namespace ui {
 class SigninUI final : public XamDialog {
  public:
   SigninUI(xe::ui::ImGuiDrawer* imgui_drawer, ProfileManager* profile_manager,
-           uint32_t last_used_slot, uint32_t users_needed);
+           uint32_t last_used_slot, uint32_t users_needed, uint32_t flags);
 
   ~SigninUI() = default;
 
  private:
   void OnDraw(ImGuiIO& io) override;
 
-  void ReloadProfiles(bool first_draw);
+  void ReloadProfiles(bool first_draw, uint32_t flags);
 
   const std::map<uint8_t, std::string> slot_data_ = {
       {0, "Slot 0"}, {1, "Slot 1"}, {2, "Slot 2"}, {3, "Slot 3"}};
@@ -37,6 +37,7 @@ class SigninUI final : public XamDialog {
   bool has_opened_ = false;
   std::string title_;
   uint32_t users_needed_ = 1;
+  uint32_t flags_ = 0;
   uint32_t last_user_ = 0;
 
   std::vector<std::pair<uint64_t, std::string>> profile_data_;
@@ -44,6 +45,7 @@ class SigninUI final : public XamDialog {
   uint64_t chosen_xuids_[XUserMaxUserCount] = {};
 
   bool creating_profile_ = false;
+  bool live_enabled_profile_ = true;
   char gamertag_[16] = "";
 };
 
