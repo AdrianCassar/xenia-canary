@@ -335,7 +335,7 @@ DECLARE_XAM_EXPORT1(XamGetLanguageLocaleString, kLocale, kImplemented);
 void XamGetOnlineLanguageAndCountry_entry(qword_t xuid,
                                           dword_t language_result_buffer,
                                           dword_t country_result_buffer) {
-  const auto user = kernel_state()->xam_state()->GetUserProfile(xuid);
+  const auto user = kernel_state()->xam_state()->GetUserProfileAny(xuid);
   if (country_result_buffer) {
     uint8_t* country_buffer =
         kernel_memory()->TranslateVirtual<uint8_t*>(country_result_buffer);

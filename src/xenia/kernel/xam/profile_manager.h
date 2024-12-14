@@ -77,6 +77,13 @@ class ProfileManager {
 
   bool DeleteProfile(const uint64_t xuid);
 
+  bool ModifyAccount(const uint64_t xuid, X_XAMACCOUNTINFO* account,
+                     std::function<bool(X_XAMACCOUNTINFO* account)> action);
+
+  bool ConvertToXboxLiveEnabledProfile(const uint64_t xuid);
+
+  bool ConvertToOfflineProfile(const uint64_t xuid);
+
   bool MountProfile(const uint64_t xuid, std::string mount_path = "");
   bool DismountProfile(const uint64_t xuid);
   bool DismountProfile(const std::string_view mount_path);
@@ -92,8 +99,10 @@ class ProfileManager {
   void ReloadProfile(const uint64_t xuid);
 
   UserProfile* GetProfile(const uint64_t xuid) const;
+  UserProfile* GetProfileLive(const uint64_t xuid) const;
   UserProfile* GetProfile(const uint8_t user_index) const;
   uint8_t GetUserIndexAssignedToProfile(const uint64_t xuid) const;
+  uint8_t GetUserIndexAssignedToLiveProfile(const uint64_t xuid_online) const;
 
   const std::map<uint64_t, X_XAMACCOUNTINFO>* GetAccounts() {
     return &accounts_;
@@ -107,7 +116,7 @@ class ProfileManager {
   bool IsAnyProfileSlotFree() const {
     return logged_profiles_.size() < XUserMaxUserCount;
   }
-  uint32_t CountSignedInProfiles() const { return !logged_profiles_.size(); }
+  uint32_t SignedInProfilesCount() const { return !logged_profiles_.size(); }
 
   std::filesystem::path GetProfileContentPath(
       const uint64_t xuid, const uint32_t title_id = -1,
