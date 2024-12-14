@@ -947,13 +947,13 @@ bool xeDrawProfileContent(xe::ui::ImGuiDrawer* imgui_drawer,
       ImGui::TextUnformatted(
           fmt::format("User: {}\n", account->GetGamertagString()).c_str());
       ImGui::TextUnformatted(fmt::format("XUID: {:016X}  \n", xuid).c_str());
+
+      const std::string live_enabled = fmt::format(
+          "Xbox Live Enabled: {}", account->IsLiveEnabled() ? "True" : "False");
+
+      ImGui::TextUnformatted(live_enabled.c_str());
+
       if (is_signed_in) {
-        const std::string live_enabled =
-            fmt::format("Xbox Live Enabled: {}",
-                        account->IsLiveEnabled() ? "True" : "False");
-
-        ImGui::TextUnformatted(live_enabled.c_str());
-
         ImGui::TextColored(
             ImVec4(0.4f, 0.9f, 0.4f, 1.0f), "%s",
             fmt::format("Assigned to slot: {}\n", user_index + 1).c_str());
@@ -1030,7 +1030,7 @@ X_RESULT xeXamShowSigninUI(uint32_t user_index, uint32_t users_needed,
       [&]() {
         return new ui::SigninUI(
             imgui_drawer, kernel_state()->xam_state()->profile_manager(),
-            emulator->input_system()->GetLastUsedSlot(), users_needed);
+            emulator->input_system()->GetLastUsedSlot(), users_needed, flags);
       },
       close);
 }
