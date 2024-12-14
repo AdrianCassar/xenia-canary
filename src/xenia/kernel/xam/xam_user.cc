@@ -885,44 +885,78 @@ dword_result_t XamUserGetUserFlagsFromXUID_entry(qword_t xuid) {
 }
 DECLARE_XAM_EXPORT1(XamUserGetUserFlagsFromXUID, kUserProfiles, kImplemented);
 
-constexpr uint8_t kStatsMaxAmount = 64;
-
-struct X_STATS_DETAILS {
-  xe::be<uint32_t> id;
-  xe::be<uint32_t> stats_amount;
-  xe::be<uint16_t> stats[kStatsMaxAmount];
-};
-static_assert_size(X_STATS_DETAILS, 8 + kStatsMaxAmount * 2);
-
 dword_result_t XamUserCreateStatsEnumerator_entry(
-    dword_t title_id, dword_t user_index, dword_t count, dword_t flags,
-    dword_t size, pointer_t<X_STATS_DETAILS> stats_ptr,
-    lpdword_t buffer_size_ptr, lpdword_t handle_ptr) {
-  if (!count || !buffer_size_ptr || !handle_ptr || !stats_ptr) {
+    dword_t title_id, dword_t enumerator_type, qword_t pivot_user,
+    dword_t num_rows, dword_t num_stats_specs,
+    pointer_t<X_USER_STATS_SPEC> stats_ptr, lpdword_t buffer_size_ptr,
+    lpdword_t handle_ptr) {
+  assert_false(enumerator_type > X_STATS_ENUMERATOR_TYPE::BY_RATING);
+
+  if (!pivot_user || !stats_ptr || !buffer_size_ptr || !handle_ptr) {
     return X_ERROR_INVALID_PARAMETER;
   }
 
-  if (user_index >= XUserMaxUserCount) {
+  if (!num_rows || num_rows > kXUserMaxStatsRows) {
     return X_ERROR_INVALID_PARAMETER;
   }
 
-  if (!flags || flags > 0x64) {
+  if (!num_stats_specs) {
     return X_ERROR_INVALID_PARAMETER;
   }
 
-  if (!size) {
-    return X_ERROR_INVALID_PARAMETER;
-  }
+  // auto e = object_ref<XUserStatsEnumerator>(new XUserStatsEnumerator(
+  //     kernel_state(), stats_ptr->num_column_ids, enumerator_type));
 
-  if (buffer_size_ptr) {
-    *buffer_size_ptr = 0;  // sizeof(X_STATS_DETAILS) * stats_ptr->stats_amount;
-  }
+  auto e = make_object<XStaticEnumerator<X_USER_STATS_SPEC>>(
+      kernel_state(), stats_ptr->num_column_ids);
 
-  auto e = object_ref<XUserStatsEnumerator>(
-      new XUserStatsEnumerator(kernel_state(), 0));
-  const X_STATUS result = e->Initialize(user_index, 0xFB, 0xB0023, 0xB0024, 0);
+  const X_STATUS result =
+      e->Initialize(XUserIndexNone, 0xFB, 0xB0023, 0xB0024, 0);
+
   if (XFAILED(result)) {
     return result;
+  }
+
+  const X_STATS_ENUMERATOR_TYPE type =
+      static_cast<X_STATS_ENUMERATOR_TYPE>(enumerator_type.value());
+
+  // pivot
+  uint64_t xuid = 0;
+
+  switch (type) {
+    case X_STATS_ENUMERATOR_TYPE::XUID: {
+      xuid = pivot_user;
+      XELOGI("XamUserCreateStatsEnumeratorByXuid: {:016X}", xuid);
+    } break;
+    case X_STATS_ENUMERATOR_TYPE::RANK: {
+      xuid = pivot_user & 0xFFFF;
+      XELOGI("XamUserCreateStatsEnumeratorByRank: {:08X}", xuid);
+    } break;
+    case X_STATS_ENUMERATOR_TYPE::RANK_PER_SPEC: {
+      xuid = pivot_user;
+      XELOGI("XamUserCreateStatsEnumeratorByRankPreSpec: {:016X}", xuid);
+    } break;
+    case X_STATS_ENUMERATOR_TYPE::BY_RATING: {
+      xuid = pivot_user;
+      XELOGI("XamUserCreateStatsEnumeratorByRating: {:016X}", xuid);
+    } break;
+    default:
+      break;
+  }
+
+  // start = Rank, Raiting, XUID?
+  for (auto i = 0; i < e->items_per_enumerate(); i++) {
+    //  XUserStatsEnumerator::StatsSpec stat = {};
+    //  stat.NumColumnIds = 0;
+    //  stat.ViewId = stats_ptr->view_id;
+    //  e->AppendItem(stat);
+
+    X_USER_STATS_SPEC* item = e->AppendItem();
+  }
+
+  // XUSER_STATS_READ_RESULTS?
+  if (buffer_size_ptr) {
+    *buffer_size_ptr = stats_ptr->num_column_ids * sizeof(X_USER_STATS_SPEC);
   }
 
   *handle_ptr = e->handle();
