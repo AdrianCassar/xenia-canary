@@ -142,7 +142,18 @@ ProfileManager::~ProfileManager() {}
 void ProfileManager::ReloadProfiles() { LoadAccounts(FindProfiles()); }
 
 UserProfile* ProfileManager::GetProfile(const uint64_t xuid) const {
-  const uint8_t user_index = GetUserIndexAssignedToProfile(xuid);
+  uint8_t user_index = GetUserIndexAssignedToProfile(xuid);
+
+  if (user_index >= XUserMaxUserCount) {
+    return nullptr;
+  }
+
+  return GetProfile(user_index);
+}
+
+UserProfile* ProfileManager::GetProfileLive(const uint64_t xuid) const {
+  uint8_t user_index = GetUserIndexAssignedToLiveProfile(xuid);
+
   if (user_index >= XUserMaxUserCount) {
     return nullptr;
   }
@@ -445,6 +456,22 @@ uint8_t ProfileManager::GetUserIndexAssignedToProfile(
   return XUserIndexAny;
 }
 
+uint8_t ProfileManager::GetUserIndexAssignedToLiveProfile(
+    const uint64_t xuid_online) const {
+  for (const auto& [index, entry] : logged_profiles_) {
+    if (!entry) {
+      continue;
+    }
+
+    if (entry->GetOnlineXUID() != xuid_online) {
+      continue;
+    }
+
+    return index;
+  }
+  return XUserIndexAny;
+}
+
 std::filesystem::path ProfileManager::GetProfileContentPath(
     const uint64_t xuid, const uint32_t title_id) const {
   std::filesystem::path profile_content_path =
@@ -470,17 +497,7 @@ std::filesystem::path ProfileManager::GetProfilePath(
 
 bool ProfileManager::CreateProfile(const std::string gamertag, bool autologin,
                                    bool default_xuid, uint32_t reserved_flags) {
-  uint64_t xuid = 0;
-
-  // We don't fully support offline and online XUIDs.
-  if (default_xuid) {
-    xuid = 0xB13EBABEBABEBABE;
-  } else {
-    const bool live_enabled =
-        reserved_flags & X_XAMACCOUNTINFO::AccountReservedFlags::kLiveEnabled;
-
-    xuid = live_enabled ? GenerateXuidOnline() : GenerateXuid();
-  }
+  const auto xuid = !default_xuid ? GenerateXuid() : 0xB13EBABEBABEBABE;
 
   if (!std::filesystem::create_directories(GetProfilePath(xuid))) {
     return false;
@@ -520,7 +537,7 @@ bool ProfileManager::CreateAccount(const uint64_t xuid,
   account.reserved_flags = reserved_flags;
 
   if (live_enabled) {
-    account.xuid_online = xuid;
+    account.xuid_online = GenerateXuidOnline();
   }
 
   UpdateAccount(xuid, &account);
@@ -603,6 +620,71 @@ bool ProfileManager::DeleteProfile(const uint64_t xuid) {
     return false;
   }
   return true;
+}
+
+bool ProfileManager::ModifyAccount(
+    const uint64_t xuid, xe::X_XAMACCOUNTINFO* account,
+    std::function<bool(xe::X_XAMACCOUNTINFO* account)> action) {
+  const uint8_t user_index = GetUserIndexAssignedToProfile(xuid);
+
+  if (user_index < XUserMaxUserCount) {
+    Logout(user_index);
+  }
+
+  if (!accounts_.count(xuid)) {
+    return false;
+  }
+
+  auto result = action(account);
+
+  if (!MountProfile(xuid)) {
+    return false;
+  }
+
+  if (!UpdateAccount(xuid, account)) {
+    return false;
+  }
+
+  if (!DismountProfile(xuid)) {
+    return false;
+  }
+
+  if (user_index < XUserMaxUserCount) {
+    Login(xuid);
+  }
+
+  return true;
+}
+
+bool ProfileManager::ConvertToXboxLiveEnabledProfile(const uint64_t xuid) {
+  xe::X_XAMACCOUNTINFO* account = &accounts_[xuid];
+
+  auto run = [this, account](X_XAMACCOUNTINFO* account) {
+    account->reserved_flags |=
+        X_XAMACCOUNTINFO::AccountReservedFlags::kLiveEnabled;
+
+    // Generate once
+    if (!account->xuid_online) {
+      account->xuid_online = GenerateXuidOnline();
+    }
+
+    return true;
+  };
+
+  return ModifyAccount(xuid, account, run);
+}
+
+bool ProfileManager::ConvertToOfflineProfile(const uint64_t xuid) {
+  xe::X_XAMACCOUNTINFO* account = &accounts_[xuid];
+
+  auto run = [account](X_XAMACCOUNTINFO* account) {
+    account->reserved_flags &=
+        ~X_XAMACCOUNTINFO::AccountReservedFlags::kLiveEnabled;
+
+    return true;
+  };
+
+  return ModifyAccount(xuid, account, run);
 }
 
 bool ProfileManager::IsGamertagValid(const std::string gamertag) {

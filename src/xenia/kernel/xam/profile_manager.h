@@ -84,6 +84,13 @@ class ProfileManager {
   // bool CreateProfile(const X_XAMACCOUNTINFO* account_info);
   bool DeleteProfile(const uint64_t xuid);
 
+  bool ModifyAccount(const uint64_t xuid, xe::X_XAMACCOUNTINFO* account,
+                     std::function<bool(xe::X_XAMACCOUNTINFO* account)> action);
+
+  bool ConvertToXboxLiveEnabledProfile(const uint64_t xuid);
+
+  bool ConvertToOfflineProfile(const uint64_t xuid);
+
   void ModifyGamertag(const uint64_t xuid, std::string gamertag);
 
   bool MountProfile(const uint64_t xuid);
@@ -100,8 +107,10 @@ class ProfileManager {
   void ReloadProfiles();
 
   UserProfile* GetProfile(const uint64_t xuid) const;
+  UserProfile* GetProfileLive(const uint64_t xuid) const;
   UserProfile* GetProfile(const uint8_t user_index) const;
   uint8_t GetUserIndexAssignedToProfile(const uint64_t xuid) const;
+  uint8_t GetUserIndexAssignedToLiveProfile(const uint64_t xuid_online) const;
 
   const std::map<uint64_t, X_XAMACCOUNTINFO>* GetAccounts() {
     return &accounts_;
@@ -112,7 +121,7 @@ class ProfileManager {
     return static_cast<uint32_t>(accounts_.size());
   }
   bool IsAnyProfileSignedIn() const { return !logged_profiles_.empty(); }
-  uint32_t CountSignedInProfiles() const { return !logged_profiles_.size(); }
+  uint32_t SignedInProfilesCount() const { return !logged_profiles_.size(); }
 
   std::filesystem::path GetProfileContentPath(
       const uint64_t xuid, const uint32_t title_id = -1) const;
