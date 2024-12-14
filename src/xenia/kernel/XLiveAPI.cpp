@@ -446,7 +446,8 @@ std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::Post(std::string endpoint,
   result = curl_easy_perform(curl_handle);
 
   if (result != CURLE_OK) {
-    XELOGE("XLiveAPI::Post: CURL Error Code: {}", static_cast<uint32_t>(result));
+    XELOGE("XLiveAPI::Post: CURL Error Code: {}",
+           static_cast<uint32_t>(result));
     return PraseResponse(chunk);
   }
 
@@ -496,7 +497,8 @@ std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::Delete(std::string endpoint) {
   result = curl_easy_perform(curl_handle);
 
   if (result != CURLE_OK) {
-    XELOGE("XLiveAPI::Delete: CURL Error Code: {}", static_cast<uint32_t>(result));
+    XELOGE("XLiveAPI::Delete: CURL Error Code: {}",
+           static_cast<uint32_t>(result));
     return PraseResponse(chunk);
   }
 
@@ -658,8 +660,7 @@ std::unique_ptr<PlayerObjectJSON> XLiveAPI::FindPlayer(std::string ip) {
 
   player = response->Deserialize<PlayerObjectJSON>();
 
-  XELOGI("Requesting {:016X} player details.",
-         static_cast<uint64_t>(player->XUID()));
+  XELOGI("Requesting {:016X} player details.", player->XUID().get());
 
   return player;
 }
@@ -832,8 +833,7 @@ std::unique_ptr<SessionObjectJSON> XLiveAPI::XSessionMigration(
     XELOGI("New host is remote.");
   }
 
-  const std::string xuid_str =
-      fmt::format("{:016X}", static_cast<uint64_t>(xuid));
+  const std::string xuid_str = fmt::format("{:016X}", xuid.get());
 
   doc.AddMember("xuid", xuid_str, doc.GetAllocator());
   doc.AddMember("hostAddress", OnlineIP_str(), doc.GetAllocator());
@@ -993,8 +993,7 @@ void XLiveAPI::XSessionCreate(uint64_t sessionId, XSessionData* data) {
                              ->opt_execution_info()
                              ->media_id;
 
-  const std::string mediaId_str =
-      fmt::format("{:08X}", static_cast<uint32_t>(media_id));
+  const std::string mediaId_str = fmt::format("{:08X}", media_id.get());
 
   xe::be<uint64_t> xuid = 0;
 
@@ -1005,8 +1004,7 @@ void XLiveAPI::XSessionCreate(uint64_t sessionId, XSessionData* data) {
     xuid = profile->xuid();
   }
 
-  const std::string xuid_str =
-      fmt::format("{:016X}", static_cast<uint64_t>(xuid));
+  const std::string xuid_str = fmt::format("{:016X}", xuid.get());
 
   SessionObjectJSON session = SessionObjectJSON();
 
