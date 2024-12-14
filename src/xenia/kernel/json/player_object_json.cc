@@ -68,10 +68,10 @@ bool PlayerObjectJSON::Serialize(
   writer->StartObject();
 
   writer->String("xuid");
-  writer->String(fmt::format("{:016X}", static_cast<uint64_t>(xuid_)));
+  writer->String(fmt::format("{:016X}", xuid_.get()));
 
   writer->String("machineId");
-  writer->String(fmt::format("{:016x}", static_cast<uint64_t>(machineId_)));
+  writer->String(fmt::format("{:016x}", machineId_.get()));
 
   writer->String("hostAddress");
   writer->String(hostAddress_);
@@ -80,7 +80,7 @@ bool PlayerObjectJSON::Serialize(
   writer->String(gamertag_);
 
   writer->String("macAddress");
-  writer->String(fmt::format("{:012x}", static_cast<uint64_t>(macAddress_)));
+  writer->String(fmt::format("{:012x}", macAddress_.get()));
 
   writer->EndObject();
 
