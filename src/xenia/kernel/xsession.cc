@@ -245,11 +245,9 @@ X_RESULT XSession::JoinSession(XSessionJoin* data) {
       join_local ? "XGISessionJoinLocal" : "XGISessionJoinRemote";
 
   XELOGI("{}({:08X}, {}, {:08X}, {:08X}, {:08X})", join_type,
-         static_cast<uint32_t>(data->obj_ptr),
-         static_cast<uint32_t>(data->array_count),
-         static_cast<uint32_t>(data->xuid_array_ptr),
-         static_cast<uint32_t>(data->indices_array_ptr),
-         static_cast<uint32_t>(data->private_slots_array_ptr));
+         data->obj_ptr.get(), data->array_count.get(),
+         data->xuid_array_ptr.get(), data->indices_array_ptr.get(),
+         data->private_slots_array_ptr.get());
 
   std::unordered_map<uint64_t, bool> members{};
 
@@ -331,8 +329,7 @@ X_RESULT XSession::JoinSession(XSessionJoin* data) {
           std::max<int32_t>(0, local_details_.AvailablePublicSlots - 1);
     }
 
-    XELOGI("XUID: {:016X} - Occupying {} slot",
-           static_cast<uint64_t>(member->OnlineXUID),
+    XELOGI("XUID: {:016X} - Occupying {} slot", member->OnlineXUID.get(),
            member->IsPrivate() ? "private" : "public");
 
     members[member->OnlineXUID] = member->IsPrivate();
@@ -359,11 +356,9 @@ X_RESULT XSession::LeaveSession(XSessionLeave* data) {
   std::string leave_type =
       leave_local ? "XGISessionLeaveLocal" : "XGISessionLeaveRemote";
 
-  XELOGI("{}({:08X}, {}, {:08X}, {:08X})", leave_type,
-         static_cast<uint32_t>(data->obj_ptr),
-         static_cast<uint32_t>(data->array_count),
-         static_cast<uint32_t>(data->xuid_array_ptr),
-         static_cast<uint32_t>(data->indices_array_ptr));
+  XELOGI("{}({:08X}, {}, {:08X}, {:08X})", leave_type, data->obj_ptr.get(),
+         data->array_count.get(), data->xuid_array_ptr.get(),
+         data->indices_array_ptr.get());
 
   // Server already knows slots types from joining so we only need to send
   // xuids.
@@ -441,8 +436,7 @@ X_RESULT XSession::LeaveSession(XSessionLeave* data) {
     if (!member->IsZombie()) {
       bool removed = false;
 
-      XELOGI("XUID: {:016X} - Leaving {} slot",
-             static_cast<uint64_t>(member->OnlineXUID),
+      XELOGI("XUID: {:016X} - Leaving {} slot", member->OnlineXUID.get(),
              member->IsPrivate() ? "private" : "public");
 
       const xe::be<uint64_t> xuid = member->OnlineXUID;
@@ -638,7 +632,7 @@ X_RESULT XSession::ModifySkill(XSessionModifySkill* data) {
   for (uint32_t i = 0; i < data->array_count; i++) {
     const auto& xuid = xuid_array[i];
 
-    XELOGI("ModifySkill XUID: {:016X}", static_cast<uint64_t>(xuid));
+    XELOGI("ModifySkill XUID: {:016X}", xuid.get());
   }
 
   return X_ERROR_SUCCESS;
