@@ -36,11 +36,6 @@ struct X_XUSER_ACHIEVEMENT {
   xe::be<uint32_t> achievement_id;
 };
 
-struct XUSER_STATS_READ_RESULTS {
-  xe::be<uint32_t> NumViews;
-  xe::be<uint32_t> pViews;
-};
-
 struct XUSER_STATS_VIEW {
   xe::be<uint32_t> ViewId;
   xe::be<uint32_t> TotalViewRows;
@@ -60,12 +55,6 @@ struct XUSER_STATS_ROW {
 struct XUSER_STATS_COLUMN {
   xe::be<uint16_t> ColumnId;
   X_USER_DATA Value;
-};
-
-struct XUSER_STATS_SPEC {
-  xe::be<uint32_t> ViewId;
-  xe::be<uint32_t> NumColumnIds;
-  xe::be<uint16_t> rgwColumnIds[XUserMaxStatsAttributes];
 };
 
 struct XUSER_STATS_RESET {
@@ -211,25 +200,25 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
       doc.AddMember("titleId", title_id, doc.GetAllocator());
 
       Value leaderboardQueryJsonArray(kArrayType);
-      auto queries = memory_->TranslateVirtual<XUSER_STATS_SPEC*>(
+      auto queries = memory_->TranslateVirtual<X_USER_STATS_SPEC*>(
           data->specs_guest_address);
 
       for (unsigned int queryIndex = 0; queryIndex < data->specs_count;
            queryIndex++) {
         Value queryObject(kObjectType);
-        queryObject.AddMember("id", queries[queryIndex].ViewId,
+        queryObject.AddMember("id", queries[queryIndex].view_id,
                               doc.GetAllocator());
 
-        assert_false(queries[queryIndex].NumColumnIds >
-                     XUserMaxStatsAttributes);
+        assert_false(queries[queryIndex].num_column_ids >
+                     kXUserMaxStatsAttributes);
 
         const uint32_t num_column_ids = std::min<uint32_t>(
-            queries[queryIndex].NumColumnIds, XUserMaxStatsAttributes);
+            queries[queryIndex].num_column_ids, kXUserMaxStatsAttributes);
 
         Value statIdsArray(kArrayType);
         for (uint32_t stat_id_index = 0; stat_id_index < num_column_ids;
              stat_id_index++) {
-          statIdsArray.PushBack(queries[queryIndex].rgwColumnIds[stat_id_index],
+          statIdsArray.PushBack(queries[queryIndex].column_Ids[stat_id_index],
                                 doc.GetAllocator());
         }
         queryObject.AddMember("statisticIds", statIdsArray, doc.GetAllocator());
@@ -263,10 +252,11 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
           sizeof(XUSER_STATS_VIEW) * leaderboardsArray.Size());
       auto leaderboard = memory_->TranslateVirtual<XUSER_STATS_VIEW*>(
           leaderboards_guest_address);
-      auto resultsHeader = memory_->TranslateVirtual<XUSER_STATS_READ_RESULTS*>(
-          data->results_guest_address);
+      auto resultsHeader =
+          memory_->TranslateVirtual<X_USER_STATS_READ_RESULTS*>(
+              data->results_guest_address);
       resultsHeader->NumViews = leaderboardsArray.Size();
-      resultsHeader->pViews = leaderboards_guest_address;
+      resultsHeader->Views_ptr = leaderboards_guest_address;
 
       uint32_t leaderboardIndex = 0;
       for (Value::ConstValueIterator leaderboardObjectPtr =
