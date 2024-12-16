@@ -43,7 +43,10 @@ class XLiveAPI {
   static InitState GetInitState();
 
   static std::vector<std::string> ParseDelimitedList(std::string_view csv,
-                                                     uint32_t count);
+                                                     uint32_t count = 0);
+
+  static std::string XLiveAPI::BuildCSVFromVector(
+      std::vector<std::string>& data, uint32_t count = 0);
 
   static std::vector<std::string> ParseAPIList();
 

@@ -104,7 +104,7 @@ const uint64_t XLiveAPI::GetLocalMachineId() {
 XLiveAPI::InitState XLiveAPI::GetInitState() { return initialized_; }
 
 std::vector<std::string> XLiveAPI::ParseDelimitedList(std::string_view csv,
-                                                      const uint32_t count) {
+                                                      uint32_t count) {
   std::vector<std::string> parsed_list;
 
   std::stringstream sstream(csv.data());
@@ -128,7 +128,32 @@ std::vector<std::string> XLiveAPI::ParseDelimitedList(std::string_view csv,
                                    }),
                     parsed_list.end());
 
+  if (count != 0 && parsed_list.size() > count) {
+    parsed_list.resize(count);
+  }
+
   return parsed_list;
+}
+
+std::string XLiveAPI::BuildCSVFromVector(std::vector<std::string>& data,
+                                         uint32_t count) {
+  rapidcsv::Document doc(
+      "", rapidcsv::LabelParams(-1, -1), rapidcsv::SeparatorParams(',', true),
+      rapidcsv::ConverterParams(),
+      rapidcsv::LineReaderParams(true /* pSkipCommentLines */,
+                                 '#' /* pCommentPrefix */,
+                                 true /* pSkipEmptyLines */));
+
+  std::ostringstream csv;
+
+  if (count != 0 && data.size() > count) {
+    data.resize(count);
+  }
+
+  doc.InsertRow(0, data);
+  doc.Save(csv);
+
+  return xe::string_util::trim(csv.str());
 }
 
 std::vector<std::string> XLiveAPI::ParseAPIList() {
@@ -136,16 +161,26 @@ std::vector<std::string> XLiveAPI::ParseAPIList() {
     OVERRIDE_string(api_list, default_public_server_ + ",");
   }
 
+  const uint32_t limit = 10;
+
   std::vector<std::string> api_addresses =
-      ParseDelimitedList(cvars::api_list, 10);
+      ParseDelimitedList(cvars::api_list, limit);
 
   const std::string api_address = GetApiAddress();
 
-  if (std::find(api_addresses.begin(), api_addresses.end(), api_address) ==
-      api_addresses.end()) {
-    OVERRIDE_string(api_list, cvars::api_list + api_address + ",");
-    api_addresses.push_back(api_address);
+  if (api_addresses.size() < limit) {
+    if (std::find(api_addresses.begin(), api_addresses.end(), api_address) ==
+        api_addresses.end()) {
+      OVERRIDE_string(api_list, cvars::api_list + api_address + ",");
+      api_addresses.push_back(api_address);
+    }
   }
+
+  // Enforce size limit
+  cvars::api_list = BuildCSVFromVector(api_addresses);
+
+  OVERRIDE_string(api_list, cvars::api_list);
+  OVERRIDE_string(api_address, cvars::api_address);
 
   return api_addresses;
 }
@@ -214,10 +249,13 @@ void XLiveAPI::SetNetworkMode(int32_t mode) {
 }
 
 std::string XLiveAPI::GetApiAddress() {
-  cvars::api_address = xe::string_util::trim(cvars::api_address);
+  std::vector<std::string> api_addresses =
+      ParseDelimitedList(cvars::api_address, 1);
 
-  if (cvars::api_address.empty()) {
+  if (api_addresses.empty()) {
     cvars::api_address = default_local_server_;
+  } else {
+    cvars::api_address = api_addresses.front();
   }
 
   // Add forward slash if not already added
