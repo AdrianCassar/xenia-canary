@@ -371,7 +371,8 @@ class XSession : public XObject {
   const bool IsSystemlink() { return is_systemlink_; }
 
   static const bool IsSystemlinkFlags(uint8_t flags) {
-    const uint32_t systemlink = HOST | STATS | PEER_NETWORK;
+    // STATS
+    const uint32_t systemlink = HOST | PEER_NETWORK;
 
     return (flags & ~systemlink) == 0;
   }
