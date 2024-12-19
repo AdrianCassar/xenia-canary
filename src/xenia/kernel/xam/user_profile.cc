@@ -69,7 +69,7 @@ UserProfile::UserProfile(uint64_t xuid, X_XAMACCOUNTINFO* account_info)
   // XPROFILE_GAMER_CONTROL_SENSITIVITY
   AddSetting(std::make_unique<UserSetting>(0x10040018, 0));
   // Preferred color 1
-  AddSetting(std::make_unique<UserSetting>(0x1004001D, 0xFFFF0000u));
+  AddSetting(std::make_unique<UserSetting>(0x1004001D, 0x00000000u));
   // Preferred color 2
   AddSetting(std::make_unique<UserSetting>(0x1004001E, 0xFF00FF00u));
   // XPROFILE_GAMER_ACTION_AUTO_AIM
