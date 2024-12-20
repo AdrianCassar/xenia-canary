@@ -218,6 +218,41 @@ std::vector<std::uint64_t> XLiveAPI::ParseFriendsXUIDs() {
   return xuids_parsed;
 }
 
+void XLiveAPI::AddFriend(uint64_t xuid) {
+  const auto delimeter = cvars::friends_xuids.empty() ? "" : ",";
+  const auto& xuids =
+      cvars::friends_xuids + fmt::format("{}{:016X}", delimeter, xuid);
+
+  std::vector<std::string> friend_xuids =
+      ParseDelimitedList(xuids, X_ONLINE_MAX_FRIENDS);
+
+  // Remove duplicate xuids
+  std::sort(friend_xuids.begin(), friend_xuids.end());
+  friend_xuids.erase(std::unique(friend_xuids.begin(), friend_xuids.end()),
+                     friend_xuids.end());
+
+  const std::string friends_list =
+      BuildCSVFromVector(friend_xuids, X_ONLINE_MAX_FRIENDS);
+
+  OVERRIDE_string(friends_xuids, friends_list);
+}
+
+void XLiveAPI::RemoveFriend(uint64_t xuid) {
+  auto xuid_str = fmt::format("{:016X}", xuid);
+
+  std::vector<std::string> friend_xuids =
+      ParseDelimitedList(cvars::friends_xuids, X_ONLINE_MAX_FRIENDS);
+
+  friend_xuids.erase(
+      std::remove(friend_xuids.begin(), friend_xuids.end(), xuid_str),
+      friend_xuids.end());
+
+  const std::string friends_list =
+      BuildCSVFromVector(friend_xuids, X_ONLINE_MAX_FRIENDS);
+
+  OVERRIDE_string(friends_xuids, friends_list);
+}
+
 void XLiveAPI::SetAPIAddress(std::string address) {
   if (initialized_ == InitState::Pending) {
     OVERRIDE_string(api_address, address);
