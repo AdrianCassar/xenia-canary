@@ -52,6 +52,10 @@ class XLiveAPI {
 
   static std::vector<std::uint64_t> XLiveAPI::ParseFriendsXUIDs();
 
+  static void AddFriend(uint64_t xuid);
+
+  static void RemoveFriend(uint64_t xuid);
+
   static void SetAPIAddress(std::string address);
 
   static void SetNetworkInterfaceByGUID(std::string guid);
