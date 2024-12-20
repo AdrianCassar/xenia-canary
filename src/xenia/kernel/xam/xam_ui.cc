@@ -23,6 +23,7 @@
 
 #include "xenia/kernel/xam/ui/create_profile_ui.h"
 #include "xenia/kernel/xam/ui/game_achievements_ui.h"
+#include "xenia/kernel/xam/ui/gamercard_from_xuid_ui.h"
 #include "xenia/kernel/xam/ui/gamercard_ui.h"
 #include "xenia/kernel/xam/ui/keyboard_ui.h"
 #include "xenia/kernel/xam/ui/message_box_ui.h"
@@ -1177,6 +1178,44 @@ dword_result_t XamShowEditProfileUI_entry(dword_t user_index) {
       close);
 }
 DECLARE_XAM_EXPORT1(XamShowEditProfileUI, kUserProfiles, kImplemented);
+
+dword_result_t XamShowGamerCardUIForXUID_entry(dword_t user_index,
+                                               qword_t xuid_player) {
+  if (user_index >= XUserMaxUserCount) {
+    return X_ERROR_INVALID_PARAMETER;
+  }
+
+  if (IsGuestXUID(xuid_player)) {
+    return X_ERROR_INVALID_PARAMETER;
+  }
+
+  auto user = kernel_state()->xam_state()->GetUserProfile(user_index);
+  if (!user) {
+    return X_ERROR_INVALID_PARAMETER;
+  }
+
+  if (xuid_player || xuid_player == user->xuid() ||
+      xuid_player == user->GetOnlineXUID()) {
+    if (kernel_state()->xam_state()->IsUIActive()) {
+      return X_ERROR_ACCESS_DENIED;
+    }
+
+    kernel_state()->xam_state()->SetUIActive(true);
+
+    auto close = [](ui::GamercardFromXUIDUI* dialog) -> void {};
+
+    const Emulator* emulator = kernel_state()->emulator();
+    xe::ui::ImGuiDrawer* imgui_drawer = emulator->imgui_drawer();
+    return xeXamDispatchDialogAsync<ui::GamercardFromXUIDUI>(
+        [&]() {
+          return new ui::GamercardFromXUIDUI(imgui_drawer, xuid_player, user);
+        },
+        close);
+  }
+
+  return X_ERROR_INVALID_PARAMETER;
+}
+DECLARE_XAM_EXPORT1(XamShowGamerCardUIForXUID, kUserProfiles, kStub);
 
 // UI
 dword_result_t XamShowNuiTroubleshooterUI_entry(dword_t user_index,
