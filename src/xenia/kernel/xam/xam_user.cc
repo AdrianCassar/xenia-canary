@@ -153,8 +153,12 @@ X_HRESULT_result_t XamUserGetSigninInfo_entry(
     info_ptr->xuid = user_profile->GetLogonXUID();
   }
 
+  // Contradictions:
+  // 41560817 uses offline XUID to create sessions
+  // 4D530919 uses offline XUID to join sessions
+  // 5841125A uses offline XUID to show gamer card
   if (flags & X_USER_GET_SIGNIN_INFO_OFFLINE_XUID_ONLY) {
-    info_ptr->xuid = user_profile->xuid();
+    info_ptr->xuid = user_profile->GetLogonXUID();
   }
 
   info_ptr->signin_state = static_cast<uint32_t>(user_profile->signin_state());
