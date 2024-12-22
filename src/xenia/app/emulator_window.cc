@@ -1476,7 +1476,7 @@ void EmulatorWindow::SetNetworkInterfaceByGUID(std::string guid) {
   xe::kernel::XLiveAPI::SetNetworkInterfaceByGUID(guid);
 }
 
-void EmulatorWindow::SetNetworkMode(int32_t mode) {
+void EmulatorWindow::SetNetworkMode(uint32_t mode) {
   if (cvars::network_mode == mode) {
     return;
   }
