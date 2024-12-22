@@ -87,7 +87,7 @@ class EmulatorWindow {
   void ToggleFullscreen();
   void SetAPIAddress(std::string address);
   void SetNetworkInterfaceByGUID(std::string guid);
-  void SetNetworkMode(int32_t mode);
+  void SetNetworkMode(uint32_t mode);
   void SetInitializingShaderStorage(bool initializing);
 
   void TakeScreenshot();

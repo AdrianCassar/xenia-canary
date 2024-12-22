@@ -233,7 +233,7 @@ void XLiveAPI::SetNetworkInterfaceByGUID(std::string guid) {
   }
 }
 
-void XLiveAPI::SetNetworkMode(int32_t mode) {
+void XLiveAPI::SetNetworkMode(uint32_t mode) {
   OVERRIDE_int32(network_mode, mode);
 
   if (mode == NETWORK_MODE::OFFLINE && IsConnectedToServer()) {
