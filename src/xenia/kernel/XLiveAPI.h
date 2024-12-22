@@ -56,7 +56,7 @@ class XLiveAPI {
 
   static void SetNetworkInterfaceByGUID(std::string guid);
 
-  static void SetNetworkMode(int32_t mode);
+  static void SetNetworkMode(uint32_t mode);
 
   static std::string GetApiAddress();
 
