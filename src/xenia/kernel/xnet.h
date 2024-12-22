@@ -113,7 +113,7 @@ constexpr uint8_t kXUserMaxStatsRows = 100;
 
 constexpr uint8_t kXUserMaxStatsAttributes = 64;
 
-enum NETWORK_MODE : int32_t { OFFLINE, LAN, XBOXLIVE };
+enum NETWORK_MODE : uint32_t { OFFLINE, LAN, XBOXLIVE };
 
 enum X_USER_AGE_GROUP : uint32_t { CHILD, TEEN, ADULT };
 
