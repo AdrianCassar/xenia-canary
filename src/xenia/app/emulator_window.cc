@@ -770,6 +770,16 @@ bool EmulatorWindow::Initialize() {
     Netplay_menu->AddChild(std::move(API_list_menu));
     Netplay_menu->AddChild(std::move(Network_interfaces_menu));
     Netplay_menu->AddChild(std::move(Network_mode_menu));
+
+    Netplay_menu->AddChild(MenuItem::Create(MenuItem::Type::kSeparator));
+
+    Netplay_menu->AddChild(
+        MenuItem::Create(MenuItem::Type::kString, "&Update Netplay", []() {
+          LaunchWebBrowser(
+              "https://nightly.link/AdrianCassar/xenia-canary/workflows/"
+              "Windows_build/netplay_canary_experimental/"
+              "xenia_canary_netplay_vs2022.zip");
+        }));
   }
   main_menu->AddChild(std::move(Netplay_menu));
 
