@@ -798,7 +798,7 @@ dword_result_t NetDll_XNetInAddrToXnAddr_entry(dword_t caller, dword_t in_addr,
     const auto player = XLiveAPI::FindPlayer(ip_to_string(xn_addr->inaOnline));
 
     // FIXME
-    if (!XLiveAPI::systemlink_id) {
+    if (!XLiveAPI::systemlink_id || EXPLICIT_XBOXLIVE_KEY) {
       IsValidXNKID(player->SessionID());
 
       XLiveAPI::sessionIdCache.emplace(xn_addr->inaOnline.s_addr,
@@ -1930,15 +1930,19 @@ DECLARE_XAM_EXPORT1(NetDll_XNetCreateKey, kNetworking, kStub);
 dword_result_t NetDll_XNetRegisterKey_entry(dword_t caller,
                                             pointer_t<XNKID> session_key,
                                             pointer_t<XNKEY> exchange_key) {
-  // Very hacky needs fixing!
-  const uint64_t session_id = session_key->as_uintBE64();
-
-  if (IsSystemlink(session_id)) {
+  if (IsSystemlink(session_key->as_uintBE64())) {
     XELOGI("XNetRegisterKey: Systemlink");
-    XLiveAPI::systemlink_id = session_id;
-  } else {
-    XELOGI("XNetRegisterKey: Xbox Live");
+    XLiveAPI::systemlink_id = session_key->as_uintBE64();
+    return 0;
   }
+
+  if (IsOnlinePeer(session_key->as_uintBE64())) {
+    XELOGI("XNetRegisterKey: Xbox Live");
+    EXPLICIT_XBOXLIVE_KEY = true;
+    return 0;
+  }
+
+  XELOGI("XNetRegisterKey: Unknown");
 
   return 0;
 }
@@ -1946,7 +1950,19 @@ DECLARE_XAM_EXPORT1(NetDll_XNetRegisterKey, kNetworking, kStub);
 
 dword_result_t NetDll_XNetUnregisterKey_entry(dword_t caller,
                                               pointer_t<XNKID> session_key) {
-  XLiveAPI::systemlink_id = 0;
+  if (XLiveAPI::systemlink_id) {
+    if (IsSystemlink(XLiveAPI::systemlink_id)) {
+      XELOGI("XNetUnregisterKey: Systemlink");
+    }
+
+    XLiveAPI::systemlink_id = 0;
+  }
+
+  if (EXPLICIT_XBOXLIVE_KEY) {
+    EXPLICIT_XBOXLIVE_KEY = false;
+
+    XELOGI("XNetUnregisterKey: Xbox Live");
+  }
 
   return 0;
 }
