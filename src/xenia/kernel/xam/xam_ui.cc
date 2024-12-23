@@ -1922,7 +1922,11 @@ class ShowGamerCardDialog : public XamDialog {
         const uint32_t title_id =
             string_util::from_string<uint32_t>(presence_.TitleID(), true);
 
-        if (title_id) {
+        if (title_id && title_id == kernel_state()->title_id()) {
+          ImGui::TextUnformatted(
+              fmt::format("Game: {}", kernel_state()->emulator()->title_name())
+                  .c_str());
+        } else {
           ImGui::TextUnformatted(
               fmt::format("Title ID: {}", presence_.TitleID()).c_str());
         }
