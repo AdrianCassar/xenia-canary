@@ -12,7 +12,12 @@
 
 namespace xe {
 namespace kernel {
-namespace xam {}  // namespace xam
+namespace xam {
+
+// Very hacky
+bool EXPLICIT_XBOXLIVE_KEY = false;
+
+}  // namespace xam
 }  // namespace kernel
 }  // namespace xe
 
