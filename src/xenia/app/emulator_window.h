@@ -97,6 +97,7 @@ class EmulatorWindow {
 
   void ToggleProfilesConfigDialog();
   void ToggleXMPConfigDialog();
+  void ToggleFriendsDialog();
   void SetHotkeysState(bool enabled) { disable_hotkeys_ = !enabled; }
 
   // Types of button functions for hotkeys.
@@ -324,6 +325,8 @@ class EmulatorWindow {
   std::unique_ptr<ProfileConfigDialog> profile_config_dialog_;
 
   std::unique_ptr<XMPConfigDialog> xmp_config_dialog_;
+
+  std::unique_ptr<FriendsManagerDialog> friends_manager_dialog_;
 
   std::vector<RecentTitleEntry> recently_launched_titles_;
 };
