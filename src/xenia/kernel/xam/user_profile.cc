@@ -310,6 +310,10 @@ const std::vector<uint64_t> UserProfile::GetFriendsXUIDs() const {
   return xuids;
 }
 
+const uint32_t UserProfile::GetFriendsCount() const {
+  return static_cast<uint32_t>(friends_.size());
+}
+
 bool UserProfile::SetSubscriptionFromXUID(const uint64_t xuid,
                                           X_ONLINE_PRESENCE* peer) {
   if (peer == nullptr) {

@@ -230,6 +230,8 @@ class UserProfile {
   const std::vector<X_ONLINE_FRIEND> GetFriends() const { return friends_; }
   const std::vector<uint64_t> GetFriendsXUIDs() const;
 
+  const uint32_t GetFriendsCount() const;
+
   bool SetSubscriptionFromXUID(const uint64_t xuid, X_ONLINE_PRESENCE* peer);
   bool GetSubscriptionFromXUID(const uint64_t xuid, X_ONLINE_PRESENCE* peer);
   bool SubscribeFromXUID(const uint64_t xuid);
