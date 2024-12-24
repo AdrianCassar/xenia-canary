@@ -66,6 +66,23 @@ class ProfileConfigDialog final : public ui::ImGuiDialog {
   EmulatorWindow* emulator_window_;
 };
 
+class FriendsManagerDialog final : public ui::ImGuiDialog {
+ public:
+  FriendsManagerDialog(ui::ImGuiDrawer* imgui_drawer,
+                       EmulatorWindow* emulator_window)
+      : ui::ImGuiDialog(imgui_drawer), emulator_window_(emulator_window) {}
+
+ protected:
+  void OnDraw(ImGuiIO& io) override;
+
+ private:
+  bool has_opened_ = false;
+  bool are_friends = false;
+  bool valid_xuid = false;
+  char add_xuid_[17] = "";
+  EmulatorWindow* emulator_window_;
+};
+
 }  // namespace app
 }  // namespace xe
 

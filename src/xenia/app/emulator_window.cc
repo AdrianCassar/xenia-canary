@@ -862,6 +862,10 @@ bool EmulatorWindow::Initialize() {
     Netplay_menu->AddChild(std::move(Network_interfaces_menu));
     Netplay_menu->AddChild(std::move(Network_mode_menu));
 
+    Netplay_menu->AddChild(MenuItem::Create(
+        MenuItem::Type::kString, "&Friends Manager", "",
+        std::bind(&EmulatorWindow::ToggleFriendsDialog, this)));
+
     Netplay_menu->AddChild(MenuItem::Create(MenuItem::Type::kSeparator));
 
     Netplay_menu->AddChild(
@@ -1619,6 +1623,21 @@ void EmulatorWindow::ToggleProfilesConfigDialog() {
   }
 }
 
+void EmulatorWindow::ToggleFriendsDialog() {
+  if (!friends_manager_dialog_) {
+    disable_hotkeys_ = true;
+    emulator_->kernel_state()->BroadcastNotification(kXNotificationSystemUI, 1);
+    friends_manager_dialog_ =
+        std::make_unique<FriendsManagerDialog>(imgui_drawer_.get(), this);
+    kernel::xam::xam_dialogs_shown_++;
+  } else {
+    disable_hotkeys_ = false;
+    emulator_->kernel_state()->BroadcastNotification(kXNotificationSystemUI, 0);
+    friends_manager_dialog_.reset();
+    kernel::xam::xam_dialogs_shown_--;
+  }
+}
+
 void EmulatorWindow::ToggleControllerVibration() {
   auto input_sys = emulator()->input_system();
   if (input_sys) {
@@ -2318,6 +2337,11 @@ xe::X_STATUS EmulatorWindow::RunTitle(
     display_config_dialog_.reset();
   }
 
+  if (friends_manager_dialog_) {
+    profile_config_dialog_.reset();
+    kernel::xam::xam_dialogs_shown_--;
+  }
+
   ClearDialogs();
 
   if (result) {
@@ -2453,6 +2477,10 @@ void EmulatorWindow::ClearDialogs() {
 
   if (display_config_dialog_) {
     display_config_dialog_.reset();
+  }
+
+  if (friends_manager_dialog_) {
+    friends_manager_dialog_.reset();
   }
 
   imgui_drawer_.get()->ClearDialogs();
