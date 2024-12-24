@@ -96,6 +96,7 @@ class EmulatorWindow {
                  const xe::ui::RawImage& image);
 
   void ToggleProfilesConfigDialog();
+  void ToggleFriendsDialog();
   void SetHotkeysState(bool enabled) { disable_hotkeys_ = !enabled; }
 
   // Types of button functions for hotkeys.
@@ -276,6 +277,8 @@ class EmulatorWindow {
   // Storing pointers and toggling dialog state is useful for broadcasting
   // messages back to guest.
   std::unique_ptr<ProfileConfigDialog> profile_config_dialog_;
+
+  std::unique_ptr<FriendsManagerDialog> friends_manager_dialog_;
 
   std::vector<RecentTitleEntry> recently_launched_titles_;
 };
