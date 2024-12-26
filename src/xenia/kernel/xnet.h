@@ -167,7 +167,7 @@ struct X_PARTY_USER_INFO {
 
 struct X_PARTY_USER_LIST {
   xe::be<uint32_t> UserCount;
-  X_PARTY_USER_INFO Users[7];  // Unknown size?
+  X_PARTY_USER_INFO Users[7];
 };
 
 struct X_USER_STATS_READ_RESULTS {
