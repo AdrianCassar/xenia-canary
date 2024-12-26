@@ -78,6 +78,8 @@ namespace xe {
 #define X_CONTEXT_GAME_TYPE_RANKED                  0x0
 #define X_CONTEXT_GAME_TYPE_STANDARD                0x1
 
+#define X_PARTY_MAX_USERS                           32
+
 enum XNADDR_STATUS : uint32_t {
   XNADDR_PENDING = 0x00000000,              // Address acquisition is not yet complete
   XNADDR_NONE = 0x00000001,                 // XNet is uninitialized or no debugger found
@@ -167,7 +169,7 @@ struct X_PARTY_USER_INFO {
 
 struct X_PARTY_USER_LIST {
   xe::be<uint32_t> UserCount;
-  X_PARTY_USER_INFO Users[7];
+  X_PARTY_USER_INFO Users[X_PARTY_MAX_USERS];
 };
 
 struct X_USER_STATS_READ_RESULTS {
