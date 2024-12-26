@@ -656,6 +656,9 @@ X_HRESULT XLiveBaseApp::CreateFriendsEnumerator(uint32_t buffer_args) {
   uint32_t* buffer_ptr = memory->TranslateVirtual<uint32_t*>(buffer_address);
   uint32_t* handle_ptr = memory->TranslateVirtual<uint32_t*>(handle_address);
 
+  *buffer_ptr = 0;
+  *handle_ptr = X_INVALID_HANDLE_VALUE;
+
   if (!kernel_state()->xam_state()->IsUserSignedIn(user_index)) {
     return X_E_NO_SUCH_USER;
   }
@@ -760,7 +763,9 @@ X_HRESULT XLiveBaseApp::XStorageDownloadToMemory(uint32_t buffer_ptr) {
   }
 
   // 415607DD has issues with X_E_SUCCESS and X_ERROR_FUNCTION_FAILED.
-  // if (kernel_state()->title_id() == 0x415607DD) {
+  // 41560834 fails on memcpy due to dwBytesTotal corruption.
+  // if (kernel_state()->title_id() == 0x415607DD ||
+  //    kernel_state()->title_id() == 0x41560834) {
   //  return X_E_FAIL;
   // }
 
