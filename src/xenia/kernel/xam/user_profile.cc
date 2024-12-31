@@ -90,6 +90,11 @@ UserProfile::UserProfile(uint64_t xuid, X_XAMACCOUNTINFO* account_info)
   AddSetting(std::make_unique<UserSetting>(0x10040038, 0));
   // XPROFILE_GAMERCARD_TITLE_ACHIEVEMENTS_EARNED
   AddSetting(std::make_unique<UserSetting>(0x10040039, 0));
+  // XPROFILE_GAMER_TYPE
+  AddSetting(std::make_unique<UserSetting>(0x10040001, 0));
+  // XPROFILE_GAMER_TIER
+  AddSetting(std::make_unique<UserSetting>(
+      0x1004003A, X_XAMACCOUNTINFO::kSubscriptionTierGold));
 
   // XPROFILE_GAMERCARD_MOTTO
   AddSetting(std::make_unique<UserSetting>(0x402C0011, u""));
