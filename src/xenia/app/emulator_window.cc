@@ -1544,19 +1544,71 @@ void EmulatorWindow::ToggleFullscreen() {
 }
 
 void EmulatorWindow::SetAPIAddress(std::string api_address) {
+  if (xe::kernel::XLiveAPI::GetInitState() ==
+      xe::kernel::XLiveAPI::InitState::Pending) {
+    app_context_.CallInUIThread([&]() {
+      new xe::ui::HostNotificationWindow(imgui_drawer(), "API Address",
+                                         api_address, 0);
+    });
+  } else {
+    app_context_.CallInUIThread([&]() {
+      new xe::ui::HostNotificationWindow(imgui_drawer(), "API Address",
+                                         "Failed - In-Game", 0);
+    });
+  }
+
   xe::kernel::XLiveAPI::SetAPIAddress(api_address);
 }
 
 void EmulatorWindow::SetNetworkInterfaceByGUID(std::string guid) {
+  if (xe::kernel::XLiveAPI::GetInitState() ==
+      xe::kernel::XLiveAPI::InitState::Pending) {
+    std::string interface_name = "Reset";
+
+    for (auto& adapter : xe::kernel::XLiveAPI::adapter_addresses) {
+      if (adapter.AdapterName == guid) {
+        interface_name = xe::kernel::XLiveAPI::GetNetworkFriendlyName(adapter);
+        break;
+      }
+    }
+
+    app_context_.CallInUIThread([&]() {
+      new xe::ui::HostNotificationWindow(imgui_drawer(), "Network Interface",
+                                         interface_name, 0);
+    });
+  } else {
+    app_context_.CallInUIThread([&]() {
+      new xe::ui::HostNotificationWindow(imgui_drawer(), "Network Interface",
+                                         "Failed - In-Game", 0);
+    });
+  }
+
   xe::kernel::XLiveAPI::SetNetworkInterfaceByGUID(guid);
 }
 
 void EmulatorWindow::SetNetworkMode(uint32_t mode) {
-  if (cvars::network_mode == mode) {
-    return;
+  std::string mode_desc = "";
+
+  switch (mode) {
+    case xe::kernel::NETWORK_MODE::OFFLINE: {
+      mode_desc = "Offline";
+    } break;
+    case xe::kernel::NETWORK_MODE::LAN: {
+      mode_desc = "LAN/Systemlink";
+    } break;
+    case xe::kernel::NETWORK_MODE::XBOXLIVE: {
+      mode_desc = "Xbox Live";
+    } break;
   }
 
-  std::string mode_desc = "";
+  if (cvars::network_mode == mode) {
+    app_context_.CallInUIThread([&]() {
+      new xe::ui::HostNotificationWindow(imgui_drawer(), "Network Mode",
+                                         mode_desc, 0);
+    });
+
+    return;
+  }
 
   switch (mode) {
     case xe::kernel::NETWORK_MODE::OFFLINE: {
