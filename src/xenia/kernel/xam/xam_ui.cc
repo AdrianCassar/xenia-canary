@@ -2222,8 +2222,15 @@ dword_result_t XamShowAchievementsUI_entry(dword_t user_index,
 }
 DECLARE_XAM_EXPORT1(XamShowAchievementsUI, kUserProfiles, kStub);
 
+static std::atomic<bool> gamercard_open = false;
+
 dword_result_t XamShowGamerCardUIForXUID_entry(dword_t user_index,
                                                qword_t xuid_player) {
+  // Prevent 584111F7 from opening gamercard multiple times.
+  if (gamercard_open) {
+    return X_ERROR_INVALID_PARAMETER;
+  }
+
   if (user_index >= XUserMaxUserCount) {
     return X_ERROR_INVALID_PARAMETER;
   }
@@ -2239,10 +2246,15 @@ dword_result_t XamShowGamerCardUIForXUID_entry(dword_t user_index,
 
   if (xuid_player || xuid_player == user->xuid() ||
       xuid_player == user->GetOnlineXUID()) {
-    auto close = [](ShowGamerCardDialog* dialog) -> void {};
+    auto close = [](ShowGamerCardDialog* dialog) -> void {
+      gamercard_open = false;
+    };
 
     const Emulator* emulator = kernel_state()->emulator();
     ui::ImGuiDrawer* imgui_drawer = emulator->imgui_drawer();
+
+    gamercard_open = true;
+
     return xeXamDispatchDialogAsync<ShowGamerCardDialog>(
         new ShowGamerCardDialog(imgui_drawer, xuid_player, user), close);
   }
