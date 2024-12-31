@@ -2261,7 +2261,31 @@ dword_result_t XamShowGamerCardUIForXUID_entry(dword_t user_index,
 
   return X_ERROR_INVALID_PARAMETER;
 }
-DECLARE_XAM_EXPORT1(XamShowGamerCardUIForXUID, kUserProfiles, kStub);
+DECLARE_XAM_EXPORT1(XamShowGamerCardUIForXUID, kUserProfiles, kSketchy);
+
+dword_result_t XamShowGamerCardUI_entry(dword_t user_index) {
+  if (user_index >= XUserMaxUserCount) {
+    return X_ERROR_ACCESS_DENIED;
+  }
+
+  auto user = kernel_state()->xam_state()->GetUserProfile(user_index);
+  if (!user) {
+    return X_ERROR_ACCESS_DENIED;
+  }
+
+  if (IsGuestXUID(user->xuid())) {
+    return X_ERROR_INVALID_PARAMETER;
+  }
+
+  const Emulator* emulator = kernel_state()->emulator();
+  ui::ImGuiDrawer* imgui_drawer = emulator->imgui_drawer();
+
+  auto close = [](ShowGamerCardDialog* dialog) -> void {};
+
+  return xeXamDispatchDialogAsync<ShowGamerCardDialog>(
+      new ShowGamerCardDialog(imgui_drawer, user->xuid(), user), close);
+}
+DECLARE_XAM_EXPORT1(XamShowGamerCardUI, kUserProfiles, kImplemented);
 
 }  // namespace xam
 }  // namespace kernel
