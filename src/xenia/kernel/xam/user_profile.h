@@ -251,6 +251,7 @@ class UserProfile {
   std::map<uint32_t, uint32_t> contexts_;
 
   friend class GpdAchievementBackend;
+  friend class HttpAchievementBackend;
 
  protected:
   AchievementGpdStructure* GetAchievement(const uint32_t title_id,
