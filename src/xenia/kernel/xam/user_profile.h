@@ -167,6 +167,7 @@ class UserProfile {
 
   friend class UserTracker;
   friend class GpdAchievementBackend;
+  friend class HttpAchievementBackend;
 
   static X_ONLINE_FRIEND GenerateDummyFriend();
 
