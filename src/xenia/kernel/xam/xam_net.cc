@@ -13,6 +13,7 @@
 #include <xenia/kernel/xboxkrnl/xboxkrnl_modules.h>
 #include "xenia/base/clock.h"
 #include "xenia/base/logging.h"
+#include "xenia/kernel/hinternet.h"
 #include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/util/shim_utils.h"
 #include "xenia/kernel/xam/xam_module.h"
@@ -173,6 +174,24 @@ typedef struct {
   uint32_t data_reply_bytes_sent;
   uint32_t probe_replies_sent_count;
 } XNQOSLISTENSTATS;
+
+typedef struct {
+  xe::be<uint32_t> dwStructSize;
+  xe::be<uint32_t> lpszScheme_ptr;
+  xe::be<uint32_t> dwScheme_length;
+  xe::be<uint32_t> nScheme;
+  xe::be<uint32_t> lpszHostName_ptr;
+  xe::be<uint32_t> dwHostName_length;
+  xe::be<uint32_t> nPort;
+  xe::be<uint32_t> lpszUserName_ptr;
+  xe::be<uint32_t> dwUserName_length;
+  xe::be<uint32_t> lpszPassword_ptr;
+  xe::be<uint32_t> dwPassword_length;
+  xe::be<uint32_t> lpszUrlPath_ptr;
+  xe::be<uint32_t> dwUrlPath_length;
+  xe::be<uint32_t> lpszExtraInfo_ptr;
+  xe::be<uint32_t> dwExtraInfo_length;
+} URL_COMPONENTS, *PURL_COMPONENTS;
 
 XNetStartupParams xnet_startup_params{};
 
@@ -1268,64 +1287,223 @@ dword_result_t XampXAuthStartup_entry(pointer_t<XAUTH_SETTINGS> setttings) {
 }
 DECLARE_XAM_EXPORT1(XampXAuthStartup, kNetworking, kStub);
 
+dword_result_t XampXAuthShutdown_entry(pointer_t<XAUTH_SETTINGS> setttings) {
+  return X_ERROR_SUCCESS;
+}
+DECLARE_XAM_EXPORT1(XampXAuthShutdown, kNetworking, kStub);
+
 dword_result_t NetDll_XHttpStartup_entry(dword_t caller, dword_t reserved,
                                          dword_t reserved_ptr) {
-  return 1;
+  return TRUE;
 }
 DECLARE_XAM_EXPORT1(NetDll_XHttpStartup, kNetworking, kStub);
 
-dword_result_t NetDll_XHttpDoWork_entry(dword_t caller, dword_t handle,
-                                        dword_t unk) {
-  XThread::SetLastError(0);
-  return 0;
+dword_result_t XamGetServiceEndpoint_entry(lpstring_t service_name,
+                                           lpstring_t service_endpoint,
+                                           dword_t service_endpoint_len,
+                                           dword_t overlapped) {
+  // This returns the title server(Xbox Live).
+  // the url is controlled via the config so
+  // nothing more is needed.
+  strncpy(service_endpoint, XLiveAPI::GetApiAddress().c_str(),
+          service_endpoint_len);
+  return X_ERROR_SUCCESS;
 }
-DECLARE_XAM_EXPORT1(NetDll_XHttpDoWork, kNetworking, kStub);
 
-dword_result_t NetDll_XHttpOpenRequest_entry(
-    dword_t caller, dword_t connect_handle, lpstring_t verb, lpstring_t path,
-    lpstring_t version, lpstring_t referrer, lpstring_t reserved,
-    dword_t flag) {
-  std::string http_verb = "";
-  std::string object_name = "";
+DECLARE_XAM_EXPORT1(XamGetServiceEndpoint, kNetworking, kStub);
 
-  if (verb) {
-    http_verb = verb;
-  }
+dword_result_t XamGetToken_entry(dword_t unkn1, lpstring_t url,
+                                 dword_t url_size, lpdword_t unkn3,
+                                 dword_t overlapped) {
+  // I doon't see any reason to add this as
+  // it can just be bypassed and ignored.
+  XELOGI("XamGetToken");
+  return false;
+}
+DECLARE_XAM_EXPORT1(XamGetToken, kNetworking, kStub);
 
-  if (path) {
-    object_name = path;
-  }
-
-  XELOGI("OpenRequest: {} {}", http_verb, object_name);
-
-  // Return invalid handle (not NULL)
+dword_result_t XamBackgroundDownloadSetMode_entry(dword_t mode) {
+  XELOGI("XamBackgroundDownloadSetMode | Mode: {}",
+         static_cast<uint32_t>(mode));
+  // 1) Active Mode: When the console is turned on and actively being used,
+  // downloads can proceed without restrictions.
+  //
+  // 2) Idle Mode: When the console is idle, it might continue downloading
+  // content but possibly at a reduced speed or with lower priority.
+  //
+  // 3) Low-Power State Mode: When the console is in a low-power state (similar
+  // to sleep mode), it may still download content if this mode is enabled,
+  // although this depends on the specific capabilities and settings of the
+  // console's firmware.
   return 1;
 }
-DECLARE_XAM_EXPORT1(NetDll_XHttpOpenRequest, kNetworking, kStub);
+DECLARE_XAM_EXPORT1(XamBackgroundDownloadSetMode, kNetworking, kStub);
+
+dword_result_t NetDll_XHttpOpen_entry(dword_t caller, lpstring_t user_agent,
+                                      dword_t access_type,
+                                      lpstring_t proxy_name,
+                                      lpstring_t proxy_bypass, dword_t flags) {
+  HINTERNET* hInternet = new HINTERNET(kernel_state());
+
+  return hInternet
+      ->CreateSessionHandle(user_agent ? (std::string)user_agent : "Xenia")
+      ->handle();
+}
+DECLARE_XAM_EXPORT1(NetDll_XHttpOpen, kNetworking, kImplemented);
+
+dword_result_t NetDll_XHttpCrackUrl_entry(
+    dword_t caller, lpstring_t pcszUrl, dword_t dwUrlLength, dword_t flags,
+    pointer_t<URL_COMPONENTS> pUrlComponents) {
+  XELOGI("HttpCrackUrl {} {} {:08x}", (std::string)pcszUrl,
+         static_cast<uint32_t>(dwUrlLength), static_cast<uint32_t>(flags));
+
+  if (!dwUrlLength || ((std::string)pcszUrl).find("\\") != 0) {
+    return false;
+  }
+  return true;
+}
+DECLARE_XAM_EXPORT1(NetDll_XHttpCrackUrl, kNetworking, kImplemented);
+
+dword_result_t NetDll_XHttpConnect_entry(dword_t caller, dword_t hSession,
+                                         lpstring_t host, dword_t port,
+                                         dword_t flags) {
+  // XamGetServiceEndpoint and XHttpConnect are not the same.
+  // XamGetServiceEndpoint returns the url for Xbox Live
+  // XHttpConnect create a HConnect handle from a
+  // hard coded url with the compiled games its self.
+  //
+  // Because xenia will NEVER connect to official servers
+  // We rerout to http://127.0.0.1 so later people can remake
+  // servers for games such as GTA Online(latest TU), Happy Wars, ect.
+  std::string hostname = "http://127.0.0.1/";
+  uint16_t connectPort = uint16_t(port);
+
+  XELOGI("HttpConnect: {:08x} {} {}", static_cast<uint32_t>(hSession), hostname,
+         connectPort);
+
+  if (!hSession) {
+    return -1;
+  }
+  auto hInternet =
+      kernel_state()->object_table()->LookupObject<HINTERNET>(hSession);
+
+  HINTERNET* hConnect =
+      hInternet->CreateConnectionHandle(hostname, connectPort);
+
+  hConnect->Connect();
+  if (hConnect->getLastError() != 0) {
+    return -1;
+  }
+
+  return hConnect->handle();
+}
+DECLARE_XAM_EXPORT1(NetDll_XHttpConnect, kNetworking, kImplemented);
+
+dword_result_t NetDll_XHttpOpenRequest_entry(dword_t caller, dword_t hConnect,
+                                             lpstring_t verb, lpstring_t path,
+                                             lpstring_t version,
+                                             lpstring_t referrer,
+                                             lpstring_t reserved,
+                                             dword_t flag) {
+  std::string url = path ? (std::string)path : "/";
+  std::string method = verb ? (std::string)verb : "GET";
+  if (!hConnect) {
+    return -1;
+  }
+  auto hInternet =
+      kernel_state()->object_table()->LookupObject<HINTERNET>(hConnect);
+
+  if (!hInternet) {
+    return -1;
+  }
+
+  return hInternet->CreateRequestHandle(url, method)->handle();
+}
+DECLARE_XAM_EXPORT1(NetDll_XHttpOpenRequest, kNetworking, kImplemented);
+
+dword_result_t NetDll_XHttpCloseHandle_entry(dword_t caller, dword_t handle) {
+  if (!handle) {
+    return false;
+  }
+  auto hInternet =
+      kernel_state()->object_table()->LookupObject<HINTERNET>(handle);
+
+  if (!hInternet) {
+    return false;
+  }
+  // hInternet->ReleaseHandle();
+  return true;
+}
+DECLARE_XAM_EXPORT1(NetDll_XHttpCloseHandle, kNetworking, kStub);
 
 dword_result_t NetDll_XHttpSetStatusCallback_entry(dword_t caller,
                                                    dword_t handle,
-                                                   lpdword_t callback_ptr,
+                                                   lpvoid_t callback_ptr,
                                                    dword_t flags, dword_t unk) {
-  return 1;
-}
-DECLARE_XAM_EXPORT1(NetDll_XHttpSetStatusCallback, kNetworking, kStub);
-
-dword_result_t NetDll_XHttpSendRequest_entry(dword_t caller, dword_t hrequest,
-                                             lpstring_t headers,
-                                             dword_t hlength, lpvoid_t unkn1,
-                                             dword_t unkn2, dword_t unk3,
-                                             dword_t unk4) {
-  std::string request_headers = "";
-
-  if (headers) {
-    request_headers = headers;
+  if (!handle) {
+    return -1;
+  }
+  auto hInternet =
+      kernel_state()->object_table()->LookupObject<HINTERNET>(handle);
+  if (!hInternet) {
+    return -1;
   }
 
-  XELOGI("Headers {}", request_headers);
-  return false;
+  return hInternet->handle();
 }
-DECLARE_XAM_EXPORT1(NetDll_XHttpSendRequest, kNetworking, kStub);
+DECLARE_XAM_EXPORT1(NetDll_XHttpSetStatusCallback, kNetworking, kStub);
+dword_result_t NetDll_XHttpSendRequest_entry(dword_t caller, dword_t hrequest,
+                                             lpstring_t headers,
+                                             dword_t hlength, dword_t buf_ptr,
+                                             dword_t buf_len,
+                                             dword_t caller_ptr) {
+  // caller_ptr is a pointer to the method that called HttpSendRequest.
+
+  if (!hrequest || !buf_ptr || !buf_len) {
+    return false;
+  }
+  auto hInternet =
+      kernel_state()->object_table()->LookupObject<HINTERNET>(hrequest);
+
+  if (!hInternet) {
+    return false;
+  }
+
+  uint32_t actual_value = buf_ptr.value();
+  std::string result(reinterpret_cast<char*>(&actual_value), buf_len);
+  hInternet->SendRequest(headers ? (std::string)headers : "", result);
+
+  if (hInternet->getLastError() != 0) {
+    return false;
+  }
+  return true;
+}
+DECLARE_XAM_EXPORT1(NetDll_XHttpSendRequest, kNetworking, kImplemented);
+
+dword_result_t NetDll_XHttpDoWork_entry(dword_t caller, dword_t hSession,
+                                        dword_t unk) {
+  // HttpDoWork is called on a regular basis to allow XHttp to
+  // process tasks and invoke status callbacks.
+  if (!hSession || !unk) {
+    return false;
+  }
+  auto hInternet =
+      kernel_state()->object_table()->LookupObject<HINTERNET>(hSession);
+
+  if (!hInternet) {
+    return false;
+  }
+
+  if (hInternet->getLastError() != 0) {
+    return false;
+  }
+
+  XELOGI("HttpDoWork: handle: {:08x} unk: {:08x}",
+         static_cast<uint32_t>(hSession), static_cast<uint32_t>(unk));
+
+  return true;
+}
+DECLARE_XAM_EXPORT1(NetDll_XHttpDoWork, kNetworking, kStub);
 
 dword_result_t NetDll_inet_addr_entry(lpstring_t addr_ptr) {
   if (!addr_ptr) {
