@@ -1270,7 +1270,7 @@ DECLARE_XAM_EXPORT1(XampXAuthStartup, kNetworking, kStub);
 
 dword_result_t NetDll_XHttpStartup_entry(dword_t caller, dword_t reserved,
                                          dword_t reserved_ptr) {
-  return 1;
+  return 0;
 }
 DECLARE_XAM_EXPORT1(NetDll_XHttpStartup, kNetworking, kStub);
 
