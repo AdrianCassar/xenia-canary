@@ -376,21 +376,32 @@ void FriendsManagerDialog::OnDraw(ImGuiIO& io) {
       emulator_window_->emulator()->kernel_state()->xam_state()->GetUserProfile(
           user_index);
 
+  const bool is_profile_signed_in = profile == nullptr;
+
   ImVec2 btn_size = ImVec2(ImGui::GetWindowSize().x * 0.4f, 0);
   ImVec2 btn2_size = ImVec2(ImGui::GetWindowSize().x * 0.2f, 0);
   ImVec2 btn3_size = ImVec2(ImGui::GetWindowSize().x * 0.215f, 0);
 
   if (ImGui::BeginPopupModal("Friends Manager", nullptr,
                              ImGuiWindowFlags_AlwaysAutoResize)) {
+    if (is_profile_signed_in) {
+      ImGui::Text("You're not logged into a profile!");
+      ImGui::Separator();
+    }
+
+    ImGui::BeginDisabled(is_profile_signed_in);
     if (ImGui::Button("Add Friend", btn_size)) {
       ImGui::OpenPopup("Add Friend");
     }
+    ImGui::EndDisabled();
 
     ImGui::SameLine();
 
+    ImGui::BeginDisabled(is_profile_signed_in);
     if (ImGui::Button("Remove All Friends", btn_size)) {
       ImGui::OpenPopup("Remove All Friends");
     }
+    ImGui::EndDisabled();
 
     if (ImGui::BeginPopupModal("Add Friend", nullptr,
                                ImGuiWindowFlags_AlwaysAutoResize)) {
@@ -485,7 +496,7 @@ void FriendsManagerDialog::OnDraw(ImGuiIO& io) {
       ImGui::Separator();
 
       if (ImGui::Button("Yes", btn2_size)) {
-        for (const auto friend_ : profile->GetFriends()) {
+        for (const auto& friend_ : profile->GetFriends()) {
           profile->RemoveFriend(friend_.xuid);
           xe::kernel::XLiveAPI::RemoveFriend(friend_.xuid);
         }
