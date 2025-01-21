@@ -83,10 +83,12 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
       return XStorageDownloadToMemory(buffer_ptr);
     }
     case 0x0005000A: {
-      // 4D5307D3
+      // 4D5307D3 needs X_E_SUCCESS
+      // 415607F7 needs X_E_FAIL to prevent crash.
+      // 584108F0
       XELOGD("XStorageEnumerate({:08X}, {:08X}) unimplemented", buffer_ptr,
              buffer_length);
-      return X_E_SUCCESS;
+      return cvars::stub_xlivebase ? X_E_SUCCESS : X_E_FAIL;
     }
     case 0x0005000B: {
       // Fixes Xbox Live error for 43430821
