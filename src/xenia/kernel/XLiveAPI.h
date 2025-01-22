@@ -24,6 +24,7 @@
 #include "xenia/kernel/json/http_response_object_json.h"
 #include "xenia/kernel/json/leaderboard_object_json.h"
 #include "xenia/kernel/json/player_object_json.h"
+#include "xenia/kernel/json/service_info_json.h"
 #include "xenia/kernel/json/session_object_json.h"
 #include "xenia/kernel/xsession.h"
 
