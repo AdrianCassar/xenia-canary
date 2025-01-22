@@ -1268,16 +1268,14 @@ HTTP_STATUS_CODE XLiveAPI::GetServiceInfoById(
     return status;
   }
 
-  Document doc;
-  doc.Parse(response->RawResponse().response);
+  std::unique_ptr<ServiceInfoObjectJSON> service_info =
+      response->Deserialize<ServiceInfoObjectJSON>();
 
-  for (const auto& service_info : doc.GetArray()) {
-    XELOGD("GetServiceById IP: {}", service_info["address"].GetString());
+  XELOGD("GetServiceById IP: {}", service_info->Address());
 
-    session_info->ip = ip_to_in_addr(service_info["address"].GetString());
-    session_info->port = service_info["port"].GetInt();
-    session_info->id = serviceId;
-  }
+  session_info->id = serviceId;
+  session_info->port = service_info->Port();
+  session_info->ip = ip_to_in_addr(service_info->Address());
 
   return status;
 }
