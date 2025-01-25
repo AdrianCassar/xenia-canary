@@ -13,7 +13,7 @@
 #include <span>
 #include <unordered_set>
 
-#include <third_party/libcurl/include/curl/curl.h>
+#include "third_party/libcurl/include/curl/curl.h"
 
 #include "xenia/base/byte_order.h"
 #include "xenia/kernel/upnp.h"
@@ -27,6 +27,7 @@
 #include "xenia/kernel/json/http_response_object_json.h"
 #include "xenia/kernel/json/leaderboard_object_json.h"
 #include "xenia/kernel/json/player_object_json.h"
+#include "xenia/kernel/json/properties_object_json.h"
 #include "xenia/kernel/json/service_info_json.h"
 #include "xenia/kernel/json/session_object_json.h"
 #include "xenia/kernel/json/xstorage_file_info_object_json.h"
@@ -116,6 +117,11 @@ class XLiveAPI {
                                 std::map<uint32_t, uint32_t> contexts);
 
   static const std::map<uint32_t, uint32_t> SessionContextGet(
+      uint64_t session_id);
+
+  static void SessionPropertiesSet(uint64_t session_id, uint32_t user_index);
+
+  static const std::vector<xam::Property> SessionPropertiesGet(
       uint64_t session_id);
 
   static const std::unique_ptr<SessionObjectJSON> SessionDetails(

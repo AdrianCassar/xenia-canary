@@ -19,8 +19,11 @@ class DiscordPresence {
  public:
   static void Initialize();
   static void NotPlaying();
-  static void PlayingTitle(const std::string_view game_title);
+  static void PlayingTitle(const std::string_view game_titleconst,
+                           std::string_view state);
   static void Shutdown();
+
+  inline static time_t start_time;
 };
 
 }  // namespace discord

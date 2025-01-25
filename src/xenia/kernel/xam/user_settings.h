@@ -510,6 +510,14 @@ constexpr std::optional<uint32_t> GetUserPreferenceWrittenBit(uint32_t mask) {
   }
 }
 
+enum GAMERCARD_ZONE_OPTIONS : uint32_t {
+  GAMERCARD_ZONE_XBOX_1,
+  GAMERCARD_ZONE_RR,
+  GAMERCARD_ZONE_PRO,
+  GAMERCARD_ZONE_FAMILY,
+  GAMERCARD_ZONE_UNDERGROUND
+};
+
 struct GamerPictureKey {
   char title_id[8];
   char big_tile_id[8];

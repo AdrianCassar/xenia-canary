@@ -9,15 +9,15 @@
 
 #include <random>
 
-#include <rapidcsv/src/rapidcsv.h>
+#include "third_party/rapidcsv/src/rapidcsv.h"
+
 #include "xenia/base/cvar.h"
 #include "xenia/base/logging.h"
 #include "xenia/base/string_util.h"
 #include "xenia/emulator.h"
+#include "xenia/kernel/XLiveAPI.h"
 #include "xenia/kernel/user_module.h"
 #include "xenia/kernel/util/shim_utils.h"
-
-#include "xenia/kernel/XLiveAPI.h"
 
 DEFINE_string(api_address, "192.168.0.1:36000/",
               "Xenia Server Address e.g. IP:PORT", "Live");
@@ -55,6 +55,10 @@ DEFINE_bool(
     xstorage_user_data_backend, false,
     "Store user data on backend (not recommended), otherwise fallback locally.",
     "Live");
+
+DEFINE_int32(discord_presence_user_index, 0,
+             "User profile index used for Discord rich presence [0, 3].",
+             "Live");
 
 DECLARE_string(upnp_root);
 
@@ -1190,66 +1194,78 @@ void XLiveAPI::XSessionCreate(uint64_t sessionId, XGI_SESSION_CREATE* data) {
   XELOGI("XSessionCreate POST Success");
 }
 
-void XLiveAPI::SessionContextSet(uint64_t session_id,
-                                 std::map<uint32_t, uint32_t> contexts) {
-  std::string endpoint = fmt::format("title/{:08X}/sessions/{:016x}/context",
+void XLiveAPI::SessionPropertiesSet(uint64_t session_id, uint32_t user_index) {
+  std::string endpoint = fmt::format("title/{:08X}/sessions/{:016x}/properties",
                                      kernel_state()->title_id(), session_id);
 
-  Document doc;
-  doc.SetObject();
+  std::unique_ptr<PropertiesObjectJSON> properties_json =
+      std::make_unique<PropertiesObjectJSON>();
 
-  Value contextsJson(kArrayType);
+  const auto user_profile =
+      kernel_state()->xam_state()->GetUserProfile(user_index);
 
-  for (const auto& entry : contexts) {
-    Value contextJson(kObjectType);
-    contextJson.AddMember("contextId", entry.first, doc.GetAllocator());
-    contextJson.AddMember("value", entry.second, doc.GetAllocator());
-    contextsJson.PushBack(contextJson.Move(), doc.GetAllocator());
+  const auto propertie_ids =
+      kernel_state()->xam_state()->user_tracker()->GetUserPropertyIds(
+          user_profile->xuid());
+
+  std::vector<xam::Property> properties = {};
+
+  for (const auto& property_attribute : propertie_ids) {
+    const xam::Property* property =
+        kernel_state()->xam_state()->user_tracker()->GetProperty(
+            user_profile->xuid(), property_attribute.value);
+
+    properties.push_back(*property);
   }
 
-  doc.AddMember("contexts", contextsJson, doc.GetAllocator());
+  std::vector<xam::Property> contexts = {};
 
-  rapidjson::StringBuffer buffer;
-  PrettyWriter<rapidjson::StringBuffer> writer(buffer);
-  doc.Accept(writer);
+  const auto contexts_ids =
+      kernel_state()->xam_state()->user_tracker()->GetUserContextIds(
+          user_profile->xuid());
 
-  std::unique_ptr<HTTPResponseObjectJSON> response =
-      Post(endpoint, (uint8_t*)buffer.GetString());
+  for (const auto& context_attribute : contexts_ids) {
+    const xam::Property* property =
+        kernel_state()->xam_state()->user_tracker()->GetProperty(
+            user_profile->xuid(), context_attribute.value);
+
+    properties.push_back(*property);
+  }
+
+  properties_json->Properties(properties);
+
+  std::string properties_seralized;
+  bool valid = properties_json->Serialize(properties_seralized);
+  assert_true(valid);
+
+  auto const post_data =
+      reinterpret_cast<const uint8_t*>(properties_seralized.c_str());
+
+  std::unique_ptr<HTTPResponseObjectJSON> response = Post(endpoint, post_data);
 
   if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_CREATED) {
-    XELOGE("SessionContextSet error message: {}", response->Message());
+    XELOGE("SessionPropertiesAdd error message: {}", response->Message());
     assert_always();
   }
 }
 
-const std::map<uint32_t, uint32_t> XLiveAPI::SessionContextGet(
+const std::vector<xam::Property> XLiveAPI::SessionPropertiesGet(
     uint64_t session_id) {
-  std::string endpoint = fmt::format("title/{:08X}/sessions/{:016x}/context",
+  std::string endpoint = fmt::format("title/{:08X}/sessions/{:016x}/properties",
                                      kernel_state()->title_id(), session_id);
-
-  std::map<uint32_t, uint32_t> result = {};
 
   std::unique_ptr<HTTPResponseObjectJSON> response = Get(endpoint);
 
   if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_OK) {
-    XELOGE("SessionContextGet error message: {}", response->Message());
+    XELOGE("SessionPropertiesGet error message: {}", response->Message());
     assert_always();
 
-    return result;
+    return {};
   }
 
-  Document doc;
-  doc.Parse(response->RawResponse().response);
+  const auto properties = response->Deserialize<PropertiesObjectJSON>();
 
-  const Value& contexts = doc["context"];
-
-  for (auto itr = contexts.MemberBegin(); itr != contexts.MemberEnd(); itr++) {
-    const uint32_t context_id =
-        xe::string_util::from_string<uint32_t>(itr->name.GetString(), true);
-    result.insert({context_id, itr->value.GetInt()});
-  }
-
-  return result;
+  return properties->Properties();
 }
 
 std::unique_ptr<SessionObjectJSON> XLiveAPI::XSessionGet(uint64_t sessionId) {
@@ -1357,13 +1373,12 @@ void XLiveAPI::SessionJoinRemote(uint64_t sessionId,
   for (const auto& [xuid, is_private] : members) {
     const std::string xuid_str = string_util::to_hex_string(xuid);
 
-    Value xuid_value;
-    xuid_value.SetString(xuid_str.c_str(), 16, doc.GetAllocator());
+    Value xuid_value = Value(xuid_str.c_str(), 16, doc.GetAllocator());
 
     Value is_private_value = Value(is_private);
 
-    xuidsJsonArray.PushBack(xuid_value, doc.GetAllocator());
-    privateSlotsJsonArray.PushBack(is_private_value, doc.GetAllocator());
+    xuidsJsonArray.PushBack(xuid_value.Move(), doc.GetAllocator());
+    privateSlotsJsonArray.PushBack(is_private_value.Move(), doc.GetAllocator());
   }
 
   doc.AddMember("xuids", xuidsJsonArray, doc.GetAllocator());
@@ -1392,13 +1407,12 @@ void XLiveAPI::SessionLeaveRemote(uint64_t sessionId,
 
   Value xuidsJsonArray(kArrayType);
 
-  for (const auto xuid : xuids) {
+  for (const auto& xuid : xuids) {
     const std::string xuid_str = string_util::to_hex_string(xuid);
 
-    Value value;
-    value.SetString(xuid_str.c_str(), 16, doc.GetAllocator());
+    Value xuid_value = Value(xuid_str.c_str(), 16, doc.GetAllocator());
 
-    xuidsJsonArray.PushBack(value, doc.GetAllocator());
+    xuidsJsonArray.PushBack(xuid_value.Move(), doc.GetAllocator());
   }
 
   doc.AddMember("xuids", xuidsJsonArray, doc.GetAllocator());
