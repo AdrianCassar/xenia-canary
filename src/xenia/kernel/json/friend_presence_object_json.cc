@@ -120,9 +120,9 @@ X_ONLINE_PRESENCE FriendPresenceObjectJSON::ToOnlineRichPresence() const {
   }
 
   presence.state_change_time = StateChangeTime();
-  presence.cchRichPresence = RichStatePresenceSize();
+  presence.cchRichPresence = RichStatePresenceMaxTruncatedSize();
 
-  const std::u16string presence_string = RichPresence();
+  const std::u16string presence_string = RichPresenceMaxTruncated();
 
   char16_t* rich_presence_ptr =
       reinterpret_cast<char16_t*>(presence.wszRichPresence);
@@ -148,9 +148,9 @@ X_ONLINE_FRIEND FriendPresenceObjectJSON::GetFriendPresence() const {
   }
 
   peer.ftUserTime = StateChangeTime();
-  peer.cchRichPresence = RichStatePresenceSize();
+  peer.cchRichPresence = RichStatePresenceMaxTruncatedSize();
 
-  const std::u16string presence_string = RichPresence();
+  const std::u16string presence_string = RichPresenceMaxTruncated();
 
   char16_t* rich_presence_ptr =
       reinterpret_cast<char16_t*>(peer.wszRichPresence);

@@ -244,7 +244,8 @@ class UserProfile {
 
   const std::vector<uint64_t> GetSubscribedXUIDs() const;
 
-  std::string GetPresenceString();
+  std::u16string GetPresenceString();
+  bool UpdatePresenceString();
 
   void AddSetting(std::unique_ptr<UserSetting> setting);
   UserSetting* GetSetting(uint32_t setting_id);
@@ -253,6 +254,7 @@ class UserProfile {
   Property* GetProperty(const AttributeKey id);
 
   std::map<uint32_t, uint32_t> contexts_;
+  std::vector<Property> properties_;
 
   friend class GpdAchievementBackend;
 
@@ -273,7 +275,7 @@ class UserProfile {
   std::vector<X_ONLINE_FRIEND> friends_;
   std::map<uint64_t, X_ONLINE_PRESENCE> subscriptions_;
 
-  std::vector<Property> properties_;
+  std::u16string online_presence_desc_ = u"";
 
   void LoadSetting(UserSetting*);
   void SaveSetting(UserSetting*);
