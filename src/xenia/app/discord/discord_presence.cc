@@ -7,9 +7,12 @@
 ******************************************************************************
 */
 
-#include "discord_presence.h"
 #include <ctime>
+#include <regex>
+
 #include "third_party/discord-rpc/include/discord_rpc.h"
+
+#include "xenia/app/discord/discord_presence.h"
 #include "xenia/base/string.h"
 
 // TODO: This library has been deprecated in favor of Discord's GameSDK.
@@ -37,23 +40,31 @@ void DiscordPresence::NotPlaying() {
   discordPresence.state = "Idle";
   discordPresence.details = "Standby";
   discordPresence.largeImageKey = "app";
-  discordPresence.largeImageText = "Xenia Canary - Experimental Testing branch";
+  discordPresence.largeImageText = "Xenia Canary - Netplay";
   discordPresence.startTimestamp = time(0);
   discordPresence.instance = 1;
   Discord_UpdatePresence(&discordPresence);
 }
 
-void DiscordPresence::PlayingTitle(const std::string_view game_title) {
+void DiscordPresence::PlayingTitle(const std::string_view game_title,
+                                   const std::string_view state) {
+  if (!start_time) {
+    start_time = time(0);
+  }
+
+  const std::string state_processed =
+      std::regex_replace(std::string(state), std::regex("\\n"), ", ");
+
   auto details = std::string(game_title);
   DiscordRichPresence discordPresence = {};
-  discordPresence.state = "In Game";
+  discordPresence.state = state_processed.data();
   discordPresence.details = details.c_str();
   // TODO(gibbed): we don't have state icons yet.
   // discordPresence.smallImageKey = "app";
   // discordPresence.largeImageKey = "state_ingame";
   discordPresence.largeImageKey = "app";
-  discordPresence.largeImageText = "Xenia Canary - Experimental Testing branch";
-  discordPresence.startTimestamp = time(0);
+  discordPresence.largeImageText = "Xenia Canary - Netplay";
+  discordPresence.startTimestamp = start_time;
   discordPresence.instance = 1;
   Discord_UpdatePresence(&discordPresence);
 }

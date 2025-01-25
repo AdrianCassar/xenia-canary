@@ -75,45 +75,112 @@ namespace xe {
 #define XHTTP_ERROR_NOT_INITIALIZED                         (XHTTP_ERROR_BASE + 172)
 #define XHTTP_ERROR_SECURE_FAILURE                          (XHTTP_ERROR_BASE + 175)
 
-#define X_ONLINE_FRIENDSTATE_FLAG_NONE              0x00000000
-#define X_ONLINE_FRIENDSTATE_FLAG_ONLINE            0x00000001
-#define X_ONLINE_FRIENDSTATE_FLAG_PLAYING           0x00000002
-#define X_ONLINE_FRIENDSTATE_FLAG_JOINABLE          0x00000010
+#define X_ONLINE_FRIENDSTATE_FLAG_NONE                      0x00000000
+#define X_ONLINE_FRIENDSTATE_FLAG_ONLINE                    0x00000001
+#define X_ONLINE_FRIENDSTATE_FLAG_PLAYING                   0x00000002
+#define X_ONLINE_FRIENDSTATE_FLAG_JOINABLE                  0x00000010
 
-#define X_ONLINE_FRIENDSTATE_FLAG_INVITEACCEPTED    0x10000000
-#define X_ONLINE_FRIENDSTATE_FLAG_SENTINVITE        0x04000000
+#define X_ONLINE_FRIENDSTATE_FLAG_INVITEACCEPTED            0x10000000
+#define X_ONLINE_FRIENDSTATE_FLAG_SENTINVITE                0x04000000
 
-#define X_ONLINE_FRIENDSTATE_ENUM_ONLINE            0x00000000
-#define X_ONLINE_FRIENDSTATE_ENUM_AWAY              0x00010000
-#define X_ONLINE_FRIENDSTATE_ENUM_BUSY              0x00020000
-#define X_ONLINE_FRIENDSTATE_MASK_USER_STATE        0x000F0000
+#define X_ONLINE_FRIENDSTATE_ENUM_ONLINE                    0x00000000
+#define X_ONLINE_FRIENDSTATE_ENUM_AWAY                      0x00010000
+#define X_ONLINE_FRIENDSTATE_ENUM_BUSY                      0x00020000
+#define X_ONLINE_FRIENDSTATE_MASK_USER_STATE                0x000F0000
 
-#define X_ONLINE_MAX_FRIENDS                        100
-#define X_ONLINE_PEER_SUBSCRIPTIONS                 400
-#define X_MAX_RICHPRESENCE_SIZE                     64
-#define X_ONLINE_MAX_PATHNAME_LENGTH                255
-#define X_STORAGE_MAX_MEMORY_BUFFER_SIZE            100000000
-#define X_STORAGE_MAX_RESULTS_TO_RETURN             256
-#define X_ONLINE_MAX_XSTRING_VERIFY_LOCALE          512
-#define X_ONLINE_MAX_XSTRING_VERIFY_STRING_DATA     10
+#define X_ONLINE_MAX_FRIENDS                                100
+#define X_ONLINE_PEER_SUBSCRIPTIONS                         400
+#define X_MAX_RICHPRESENCE_SIZE                             64
+#define X_ONLINE_MAX_PATHNAME_LENGTH                        255
+#define X_STORAGE_MAX_MEMORY_BUFFER_SIZE                    100000000
+#define X_STORAGE_MAX_RESULTS_TO_RETURN                     256
+#define X_ONLINE_MAX_XSTRING_VERIFY_LOCALE                  512
+#define X_ONLINE_MAX_XSTRING_VERIFY_STRING_DATA             10
+#define X_MAX_RICHPRESENCE_SIZE_EXTRA                       100 // 4D5308AB uses rich presence string > 64
 
-#define X_CONTEXT_PRESENCE                          0x00008001
-#define X_CONTEXT_GAME_TYPE                         0x0000800A
-#define X_CONTEXT_GAME_MODE                         0x0000800B
+#define X_PARTY_MAX_USERS                                   32
 
-#define X_CONTEXT_GAME_TYPE_RANKED                  0x0
-#define X_CONTEXT_GAME_TYPE_STANDARD                0x1
+#define X_PROPERTY_TYPE_MASK                                0xF0000000
+#define X_PROPERTY_SCOPE_MASK                               0x00008000
+#define X_PROPERTY_ID_MASK                                  0x00007FFF
 
-#define X_PARTY_MAX_USERS                           32
+#define X_CONTEXT_GAME_TYPE_RANKED                          0x0
+#define X_CONTEXT_GAME_TYPE_STANDARD                        0x1
 
-#define MAX_FIRSTNAME_SIZE                          64
-#define MAX_LASTNAME_SIZE                           64
-#define MAX_EMAIL_SIZE                              129
-#define MAX_STREET_SIZE                             128
-#define MAX_CITY_SIZE                               64
-#define MAX_DISTRICT_SIZE                           64
-#define MAX_STATE_SIZE                              64
-#define MAX_POSTALCODE_SIZE                         16
+#define MAX_FIRSTNAME_SIZE                                  64
+#define MAX_LASTNAME_SIZE                                   64
+#define MAX_EMAIL_SIZE                                      129
+#define MAX_STREET_SIZE                                     128
+#define MAX_CITY_SIZE                                       64
+#define MAX_DISTRICT_SIZE                                   64
+#define MAX_STATE_SIZE                                      64
+#define MAX_POSTALCODE_SIZE                                 16
+
+constexpr uint32_t PropertyID(bool system_property,
+                              kernel::xam::X_USER_DATA_TYPE type, uint16_t id) {
+  return ((system_property ? X_PROPERTY_SCOPE_MASK : 0) |
+          ((static_cast<uint8_t>(type) << 28) & X_PROPERTY_TYPE_MASK) |
+          (id & X_PROPERTY_ID_MASK));
+}
+
+constexpr uint32_t ContextID(bool system_property, uint16_t id) {
+  return PropertyID(system_property, kernel::xam::X_USER_DATA_TYPE::CONTEXT,
+                    id);
+}
+
+enum PropertyID : uint32_t {
+  XPROPERTY_ATTACHMENT_SIZE =
+      PropertyID(true, kernel::xam::X_USER_DATA_TYPE::INT32, 0x011), // 0x10008011
+  XPROPERTY_PLAYER_PARTIAL_PLAY_PERCENTAGE =
+      PropertyID(true, kernel::xam::X_USER_DATA_TYPE::INT32, 0x00C), // 0x1000800C
+  XPROPERTY_PLAYER_SKILL_UPDATE_WEIGHTING_FACTOR =
+      PropertyID(true, kernel::xam::X_USER_DATA_TYPE::INT32, 0x00D), // 0x1000800D
+  XPROPERTY_SESSION_SKILL_BETA =
+      PropertyID(true, kernel::xam::X_USER_DATA_TYPE::DOUBLE, 0x00E), // 0x3000800E
+  XPROPERTY_SESSION_SKILL_TAU =
+      PropertyID(true, kernel::xam::X_USER_DATA_TYPE::DOUBLE, 0x00F), // 0x3000800F
+  XPROPERTY_SESSION_SKILL_DRAW_PROBABILITY =
+      PropertyID(true, kernel::xam::X_USER_DATA_TYPE::INT32, 0x010), // 0x10008010
+  XPROPERTY_RELATIVE_SCORE =
+      PropertyID(true, kernel::xam::X_USER_DATA_TYPE::INT32, 0x00A), // 0x1000800A
+  XPROPERTY_SESSION_TEAM =
+      PropertyID(true, kernel::xam::X_USER_DATA_TYPE::INT32, 0x00B), // 0x1000800B
+  XPROPERTY_RANK =
+      PropertyID(true, kernel::xam::X_USER_DATA_TYPE::INT32, 0x001), // 0x10008001
+  XPROPERTY_GAMERNAME =
+      PropertyID(true, kernel::xam::X_USER_DATA_TYPE::WSTRING, 0x002), // 0x40008002
+  XPROPERTY_SESSION_ID =
+      PropertyID(true, kernel::xam::X_USER_DATA_TYPE::INT64, 0x003), // 0x20008003
+  XPROPERTY_GAMER_ZONE =
+      PropertyID(true, kernel::xam::X_USER_DATA_TYPE::INT32, 0x101), // 0x10008101
+  XPROPERTY_GAMER_COUNTRY =
+      PropertyID(true, kernel::xam::X_USER_DATA_TYPE::INT32, 0x102), // 0x10008102
+  XPROPERTY_GAMER_LANGUAGE =
+      PropertyID(true, kernel::xam::X_USER_DATA_TYPE::INT32, 0x103), // 0x10008103
+  XPROPERTY_GAMER_RATING =
+      PropertyID(true, kernel::xam::X_USER_DATA_TYPE::FLOAT, 0x104), // 0x50008104
+  XPROPERTY_GAMER_MU =
+      PropertyID(true, kernel::xam::X_USER_DATA_TYPE::DOUBLE, 0x105), // 0x30008105
+  XPROPERTY_GAMER_SIGMA =
+      PropertyID(true, kernel::xam::X_USER_DATA_TYPE::DOUBLE, 0x106), // 0x30008106
+  XPROPERTY_GAMER_PUID =
+      PropertyID(true, kernel::xam::X_USER_DATA_TYPE::INT64, 0x107), // 0x20008107
+  XPROPERTY_AFFILIATE_VALUE =
+      PropertyID(true, kernel::xam::X_USER_DATA_TYPE::INT64, 0x108), // 0x20008108
+  XPROPERTY_GAMER_HOSTNAME =
+      PropertyID(true, kernel::xam::X_USER_DATA_TYPE::WSTRING, 0x109), // 0x40008109
+  XPROPERTY_PLATFORM_TYPE =
+      PropertyID(true, kernel::xam::X_USER_DATA_TYPE::INT32, 0x201), // 0x10008201
+  XPROPERTY_PLATFORM_LOCK =
+      PropertyID(true, kernel::xam::X_USER_DATA_TYPE::INT32, 0x202), // 0x10008202
+};
+
+enum ContextID : uint32_t {
+  XCONTEXT_PRESENCE = ContextID(true, 0x001), // 0x00008001
+  XCONTEXT_GAME_TYPE = ContextID(true, 0x00A), // 0x0000800A
+  XCONTEXT_GAME_MODE = ContextID(true, 0x00B), // 0x0000800B
+  XCONTEXT_SESSION_JOINABLE = ContextID(true, 0x00C), // 0x0000800C
+};
 
 enum XNADDR_STATUS : uint32_t {
   XNADDR_PENDING = 0x00000000,              // Address acquisition is not yet complete

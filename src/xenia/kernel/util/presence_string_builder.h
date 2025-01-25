@@ -19,6 +19,7 @@
 #include <string_view>
 
 #include "xenia/kernel/util/xlast.h"
+#include "xenia/kernel/xam/user_property.h"
 
 namespace xe {
 namespace kernel {
@@ -28,40 +29,42 @@ class AttributeStringFormatter {
  public:
   ~AttributeStringFormatter();
 
-  AttributeStringFormatter(std::string_view attribute_string,
-                           XLast* title_xlast,
-                           std::map<uint32_t, uint32_t> contexts);
+  AttributeStringFormatter(std::u16string_view attribute_string,
+                           XLast* title_xlast, uint64_t xuid);
 
   bool IsValid() const { return true; }
-  std::string GetPresenceString() const { return presence_string_; }
+  bool IsComplete() const { return is_complete_; }
+  std::u16string GetPresenceString() const { return presence_string_; }
 
  private:
   enum class AttributeType { Context = 0, Property = 1, Unknown = 255 };
 
   const std::regex presence_id_extract_from_specifier =
-      std::regex("\\{c(\\d+)\\}");
-  const std::regex format_specifier_replace_fragment_regex_ =
-      std::regex(R"(\{c\d+\}|\{p0x\d+\})");
+      std::regex(R"((\{c(\d+)\})|(\{p(0x\d+)\}))");
+  const std::wregex format_specifier_replace_fragment_regex_ =
+      std::wregex(LR"(\{c\d+\}|\{p0x\d+\})");
 
   bool ParseAttributeString();
   void BuildPresenceString();
 
-  std::string GetStringFromSpecifier(std::string_view specifier) const;
+  std::u16string GetStringFromSpecifier(std::string_view specifier);
   std::queue<std::string> GetPresenceFormatSpecifiers() const;
 
   AttributeType GetAttributeTypeFromSpecifier(std::string_view specifier) const;
-  std::optional<uint32_t> GetAttributeIdFromSpecifier(
+  std::optional<xam::AttributeKey> GetAttributeIdFromSpecifier(
       const std::string& specifier,
       const AttributeStringFormatter::AttributeType specifier_type) const;
 
-  const std::string attribute_string_;
-  std::map<std::string, std::string> attribute_to_string_mapping_;
+  std::u16string attribute_string_;
+  std::map<std::string, std::u16string> attribute_to_string_mapping_;
 
-  std::string presence_string_;
+  std::u16string presence_string_;
 
-  std::map<uint32_t, uint32_t> contexts_;
+  uint64_t offline_xuid;
 
   XLast* title_xlast_;
+
+  bool is_complete_;
 
   // Tests
   //

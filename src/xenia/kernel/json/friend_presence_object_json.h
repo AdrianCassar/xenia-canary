@@ -63,33 +63,28 @@ class FriendPresenceObjectJSON : public BaseObjectJSON {
     return rich_state_presence_size_;
   }
   void RichStatePresenceSize(const xe::be<uint32_t>& richStatePresenceSize) {
-    if (richStatePresenceSize > X_MAX_RICHPRESENCE_SIZE) {
-      rich_state_presence_size_ = X_MAX_RICHPRESENCE_SIZE;
-      return;
-    }
-
-    rich_state_presence_size_ = richStatePresenceSize;
+    rich_state_presence_size_ = std::min<uint32_t>(
+        richStatePresenceSize, X_MAX_RICHPRESENCE_SIZE_EXTRA);
   }
 
   const std::u16string& RichPresence() const { return rich_presence_; }
   void RichPresence(const std::u16string& richPresence) {
-    const xe::be<uint32_t> presence_size =
-        static_cast<uint32_t>(richPresence.size()) * sizeof(char16_t);
+    const size_t presence_size =
+        xe::string_util::size_in_bytes(richPresence, false);
 
-    std::u16string rich_presence = richPresence;
+    rich_presence_ = richPresence;
+    rich_state_presence_size_ = static_cast<uint32_t>(presence_size);
+  }
 
-    if (presence_size > X_MAX_RICHPRESENCE_SIZE) {
-      assert_always();
+  const uint32_t RichStatePresenceMaxTruncatedSize() const {
+    const size_t presence_size =
+        xe::string_util::size_in_bytes(rich_presence_, false);
 
-      rich_state_presence_size_ = X_MAX_RICHPRESENCE_SIZE;
-
-      rich_presence =
-          richPresence.substr(0, X_MAX_RICHPRESENCE_SIZE / sizeof(char16_t));
-    }
-
-    rich_state_presence_size_ = presence_size;
-
-    rich_presence_ = rich_presence;
+    return std::min<uint32_t>(static_cast<uint32_t>(presence_size),
+                              X_MAX_RICHPRESENCE_SIZE);
+  }
+  const std::u16string RichPresenceMaxTruncated() const {
+    return rich_presence_.substr(0, X_MAX_RICHPRESENCE_SIZE / sizeof(char16_t));
   }
 
   X_ONLINE_PRESENCE ToOnlineRichPresence() const;

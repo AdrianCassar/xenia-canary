@@ -11,6 +11,7 @@
 #include <ranges>
 
 #include "xenia/base/logging.h"
+#include "xenia/emulator.h"
 #include "xenia/kernel/XLiveAPI.h"
 #include "xenia/kernel/xsession.h"
 
@@ -77,21 +78,6 @@ X_RESULT XSession::CreateSession(uint8_t user_index, uint8_t public_slots,
   // - Explicitly create a presence session (Frogger without HOST bit)
   // Based on Presence flag set?
 
-  // Write user contexts. After session creation these are read only!
-  const auto context_ids =
-      kernel_state_->xam_state()->user_tracker()->GetUserContextIds(
-          user_profile->xuid());
-
-  for (const auto& id : context_ids) {
-    const auto context =
-        kernel_state_->xam_state()->user_tracker()->GetUserContext(
-            user_profile->xuid(), id.value);
-
-    if (context.has_value()) {
-      contexts_[id.value] = context.value();
-    }
-  }
-
   if (IsSystemlinkFlags(flags)) {
     is_systemlink_ = true;
   }
@@ -107,8 +93,8 @@ X_RESULT XSession::CreateSession(uint8_t user_index, uint8_t public_slots,
     JoinExistingSession(SessionInfo_ptr);
   }
 
-  local_details_.GameType = GetGameTypeContext();
-  local_details_.GameMode = GetGameModeContext();
+  local_details_.GameType = GetGameTypeValue(user_profile->xuid());
+  local_details_.GameMode = GetGameModeValue(user_profile->xuid());
   local_details_.Flags = flags;
   local_details_.MaxPublicSlots = public_slots;
   local_details_.MaxPrivateSlots = private_slots;
@@ -165,8 +151,11 @@ X_RESULT XSession::CreateHostSession(XSESSION_INFO* session_info,
     XELOGI("Creating xbox live session");
     session_id_ = GenerateSessionId(XNKID_ONLINE);
 
+    // 58410821 adds properties after session creation
+    // Properties are ad-hoc therefore should be updated on backend, only
+    // update if value changed to reduce POST requests.
     XLiveAPI::XSessionCreate(session_id_, &session_data);
-    XLiveAPI::SessionContextSet(session_id_, contexts_);
+    XLiveAPI::SessionPropertiesSet(session_id_, session_data.user_index);
   }
 
   XELOGI("Created session {:016X}", session_id_);
@@ -574,7 +563,18 @@ X_RESULT XSession::MigrateHost(XGI_SESSION_MIGRATE* data) {
 
   if (!result->SessionID_UInt()) {
     XELOGI("Session Migration Failed");
+
+    // Returning X_E_FAIL will cause 5454082B to restart
     return X_E_FAIL;
+  }
+
+  if (data->user_index == XUserIndexNone) {
+    XELOGI("Session migration we're not host!");
+  }
+
+  if (kernel_state()->xam_state()->IsUserSignedIn(data->user_index)) {
+    // Update properties, what if they're changed after migration?
+    XLiveAPI::SessionPropertiesSet(result->SessionID_UInt(), data->user_index);
   }
 
   memset(SessionInfo_ptr, 0, sizeof(XSESSION_INFO));
@@ -605,10 +605,12 @@ X_RESULT XSession::RegisterArbitration(XGI_SESSION_ARBITRATION* data) {
 
   const auto result = XLiveAPI::XSessionArbitration(session_id_);
 
-  const uint32_t registrants_ptr = kernel_state_->memory()->SystemHeapAlloc(
-      uint32_t(sizeof(XSESSION_REGISTRANT) * result->Machines().size()));
+  const uint32_t registrants_ptr =
+      kernel_state_->memory()->SystemHeapAlloc(static_cast<uint32_t>(
+          sizeof(XSESSION_REGISTRANT) * result->Machines().size()));
 
-  results_ptr->registrants_count = uint32_t(result->Machines().size());
+  results_ptr->registrants_count =
+      static_cast<uint32_t>(result->Machines().size());
   results_ptr->registrants_ptr = registrants_ptr;
 
   XSESSION_REGISTRANT* registrants =
@@ -692,7 +694,8 @@ X_RESULT XSession::EndSession(XGI_SESSION_STATE* state) {
   return X_ERROR_SUCCESS;
 }
 
-X_RESULT XSession::GetSessions(Memory* memory, XGI_SESSION_SEARCH* search_data,
+X_RESULT XSession::GetSessions(KernelState* kernel_state,
+                               XGI_SESSION_SEARCH* search_data,
                                uint32_t num_users) {
   if (!search_data->results_buffer_size) {
     search_data->results_buffer_size =
@@ -706,9 +709,10 @@ X_RESULT XSession::GetSessions(Memory* memory, XGI_SESSION_SEARCH* search_data,
       search_data->num_results, static_cast<uint32_t>(sessions.size()));
 
   const uint32_t session_ids =
-      memory->SystemHeapAlloc(session_count * sizeof(XNKID));
+      kernel_state->memory()->SystemHeapAlloc(session_count * sizeof(XNKID));
 
-  XNKID* session_ids_ptr = memory->TranslateVirtual<XNKID*>(session_ids);
+  XNKID* session_ids_ptr =
+      kernel_state->memory()->TranslateVirtual<XNKID*>(session_ids);
 
   for (uint32_t i = 0; i < session_count; i++) {
     XNKID id = {};
@@ -717,20 +721,87 @@ X_RESULT XSession::GetSessions(Memory* memory, XGI_SESSION_SEARCH* search_data,
     session_ids_ptr[i] = id;
   }
 
-  GetSessionByIDs(memory, session_ids_ptr, session_count,
+  GetSessionByIDs(kernel_state->memory(), session_ids_ptr, session_count,
                   search_data->search_results_ptr,
                   search_data->results_buffer_size);
 
   SEARCH_RESULTS* search_results_ptr =
-      memory->TranslateVirtual<SEARCH_RESULTS*>(
+      kernel_state->memory()->TranslateVirtual<SEARCH_RESULTS*>(
           search_data->search_results_ptr);
 
-  for (uint32_t i = 0; i < session_count; i++) {
-    const auto context =
-        XLiveAPI::SessionContextGet(sessions.at(i)->SessionID_UInt());
+  xam::XUSER_CONTEXT* search_contexts_ptr =
+      kernel_state->memory()->TranslateVirtual<xam::XUSER_CONTEXT*>(
+          search_data->ctx_ptr);
 
-    FillSessionContext(memory, context, &search_results_ptr->results_ptr[i]);
-    FillSessionProperties(search_data->num_props, search_data->props_ptr,
+  xam::XUSER_PROPERTY* search_properties_ptr =
+      kernel_state->memory()->TranslateVirtual<xam::XUSER_PROPERTY*>(
+          search_data->props_ptr);
+
+  util::XLastMatchmakingQuery* matchmaking_query = nullptr;
+
+  if (kernel_state->emulator()->game_info_database()->HasXLast()) {
+    matchmaking_query = kernel_state->emulator()
+                            ->game_info_database()
+                            ->GetXLast()
+                            ->GetMatchmakingQuery();
+
+    const auto paramaters =
+        matchmaking_query->GetParameters(search_data->proc_index);
+    const auto filters_left =
+        matchmaking_query->GetFiltersLeft(search_data->proc_index);
+    const auto filters_right =
+        matchmaking_query->GetFiltersRight(search_data->proc_index);
+    const auto returns = matchmaking_query->GetReturns(search_data->proc_index);
+
+    XELOGI("Matchmaking Query Name: {}",
+           matchmaking_query->GetName(search_data->proc_index));
+
+    for (uint32_t i = 0; i < search_data->num_ctx; i++) {
+      xam::XUSER_CONTEXT& context = search_contexts_ptr[i];
+
+      auto user =
+          kernel_state->xam_state()->GetUserProfile(search_data->user_index);
+
+      std::u16string context_desc =
+          kernel_state->xam_state()->user_tracker()->GetContextDescription(
+              user->xuid(), context.context_id);
+
+      XELOGD(xe::to_utf8(context_desc));
+    }
+
+    for (uint32_t i = 0; i < search_data->num_props; i++) {
+      xam::XUSER_PROPERTY& property = search_properties_ptr[i];
+
+      std::u16string property_desc =
+          kernel_state->xam_state()->user_tracker()->GetPropertyDescription(
+              property.property_id);
+
+      XELOGD(xe::to_utf8(property_desc));
+    }
+  }
+
+  for (uint32_t i = 0; i < session_count; i++) {
+    std::vector<xam::Property> contexts = {};
+    std::vector<xam::Property> properties = {};
+
+    const auto all_properties =
+        XLiveAPI::SessionPropertiesGet(sessions.at(i)->SessionID_UInt());
+
+    for (const auto& property : all_properties) {
+      if (property.IsContext()) {
+        contexts.push_back(property);
+      } else {
+        properties.push_back(property);
+      }
+    }
+
+    FillSessionContext(kernel_state->memory(), search_data->proc_index,
+                       matchmaking_query, contexts, search_data->num_ctx,
+                       search_contexts_ptr,
+                       &search_results_ptr->results_ptr[i]);
+    FillSessionProperties(kernel_state->memory(), search_data->proc_index,
+                          matchmaking_query, properties, search_data->num_props,
+                          search_properties_ptr,
                           &search_results_ptr->results_ptr[i]);
   }
 
@@ -738,8 +809,8 @@ X_RESULT XSession::GetSessions(Memory* memory, XGI_SESSION_SEARCH* search_data,
 }
 
 X_RESULT XSession::GetWeightedSessions(
-    Memory* memory, XGI_SESSION_SEARCH_WEIGHTED* weighted_search_data,
-    uint32_t num_users) {
+    KernelState* kernel_state,
+    XGI_SESSION_SEARCH_WEIGHTED* weighted_search_data, uint32_t num_users) {
   XGI_SESSION_SEARCH search_data = {};
 
   search_data.proc_index = weighted_search_data->proc_index;
@@ -753,7 +824,13 @@ X_RESULT XSession::GetWeightedSessions(
   search_data.results_buffer_size = weighted_search_data->results_buffer_size;
   search_data.search_results_ptr = weighted_search_data->search_results_ptr;
 
-  return GetSessions(memory, &search_data, num_users);
+  // TODO:
+  // weighted_search_data->weighted_search_contexts_ptr;
+  // weighted_search_data->weighted_search_properties_ptr;
+  // weighted_search_data->num_weighted_properties;
+  // weighted_search_data->num_weighted_contexts;
+
+  return GetSessions(kernel_state, &search_data, num_users);
 }
 
 X_RESULT XSession::GetSessionByID(Memory* memory,
@@ -832,9 +909,10 @@ X_RESULT XSession::GetSessionByIDs(Memory* memory, XNKID* session_ids_ptr,
 
     if (!session->HostAddress().empty()) {
       // HUH? How it should be filled in this case?
-      FillSessionContext(memory, {},
+      FillSessionContext(memory, 0, nullptr, {}, 0, nullptr,
                          &search_results->results_ptr[result_index]);
-      FillSessionProperties(0, 0, &search_results->results_ptr[result_index]);
+      FillSessionProperties(memory, 0, nullptr, {}, 0, nullptr,
+                            &search_results->results_ptr[result_index]);
       FillSessionSearchResult(session,
                               &search_results->results_ptr[result_index]);
 
@@ -883,31 +961,79 @@ void XSession::FillSessionSearchResult(
   GenerateIdentityExchangeKey(&result->info.keyExchangeKey);
 }
 
-void XSession::FillSessionContext(Memory* memory,
-                                  std::map<uint32_t, uint32_t> contexts,
-                                  XSESSION_SEARCHRESULT* result) {
-  result->contexts_count = (uint32_t)contexts.size();
+void XSession::FillSessionContext(
+    Memory* memory, uint32_t matchmaking_index,
+    util::XLastMatchmakingQuery* matchmaking_query,
+    std::vector<xam::Property> contexts, uint32_t filter_contexts_count,
+    xam::XUSER_CONTEXT* filter_contexts_ptr, XSESSION_SEARCHRESULT* result) {
+  if (matchmaking_query) {
+    const auto paramaters = matchmaking_query->GetParameters(matchmaking_index);
+    const auto filters_left =
+        matchmaking_query->GetFiltersLeft(matchmaking_index);
+    const auto filters_right =
+        matchmaking_query->GetFiltersRight(matchmaking_index);
+    const auto returns = matchmaking_query->GetReturns(matchmaking_index);
+  }
 
-  const uint32_t context_ptr = memory->SystemHeapAlloc(
-      uint32_t(sizeof(xam::XUSER_CONTEXT) * contexts.size()));
+  result->contexts_count = static_cast<uint32_t>(contexts.size());
+
+  const uint32_t context_ptr = memory->SystemHeapAlloc(static_cast<uint32_t>(
+      sizeof(xam::XUSER_CONTEXT) * result->contexts_count));
 
   xam::XUSER_CONTEXT* contexts_to_get =
       memory->TranslateVirtual<xam::XUSER_CONTEXT*>(context_ptr);
 
+  for (uint32_t i = 0; i < filter_contexts_count; i++) {
+    xam::XUSER_CONTEXT& filter_context = filter_contexts_ptr[i];
+  }
+
   uint32_t i = 0;
-  for (const auto context : contexts) {
-    contexts_to_get[i].context_id = context.first;
-    contexts_to_get[i].value = context.second;
+  for (const auto& context : contexts) {
+    contexts_to_get[i].context_id = context.GetPropertyId().value;
+    contexts_to_get[i].value = context.get_data()->data.u32;
     i++;
   }
 
   result->contexts_ptr = context_ptr;
 }
 
-void XSession::FillSessionProperties(uint32_t properties_count,
-                                     uint32_t properties_ptr,
-                                     XSESSION_SEARCHRESULT* result) {
-  result->properties_count = properties_count;
+void XSession::FillSessionProperties(
+    Memory* memory, uint32_t matchmaking_index,
+    util::XLastMatchmakingQuery* matchmaking_query,
+    std::vector<xam::Property> properties, uint32_t filter_properties_count,
+    xam::XUSER_PROPERTY* filter_properties_ptr, XSESSION_SEARCHRESULT* result) {
+  if (matchmaking_query) {
+    const auto paramaters = matchmaking_query->GetParameters(matchmaking_index);
+    const auto filters_left =
+        matchmaking_query->GetFiltersLeft(matchmaking_index);
+    const auto filters_right =
+        matchmaking_query->GetFiltersRight(matchmaking_index);
+    const auto returns = matchmaking_query->GetReturns(matchmaking_index);
+  }
+
+  result->properties_count = static_cast<uint32_t>(properties.size());
+
+  const uint32_t properties_ptr = memory->SystemHeapAlloc(static_cast<uint32_t>(
+      sizeof(xam::XUSER_PROPERTY) * result->properties_count));
+
+  xam::XUSER_PROPERTY* properties_to_set =
+      memory->TranslateVirtual<xam::XUSER_PROPERTY*>(properties_ptr);
+
+  for (uint32_t i = 0; i < filter_properties_count; i++) {
+    xam::XUSER_PROPERTY& filter_property = filter_properties_ptr[i];
+  }
+
+  uint32_t i = 0;
+  for (const auto& property : properties) {
+    if (property.requires_additional_data()) {
+      properties_to_set[i].data.data.unicode.ptr = memory->SystemHeapAlloc(
+          static_cast<uint32_t>(property.get_data()->data.unicode.size));
+    }
+
+    property.WriteToGuest(&properties_to_set[i]);
+    i++;
+  }
+
   result->properties_ptr = properties_ptr;
 }
 
