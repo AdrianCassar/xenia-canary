@@ -166,16 +166,16 @@ GameInfoDatabase::Query GameInfoDatabase::GetQueryData(
     return query;
   }
 
-  const auto xlast_query = xlast_gamedata_->GetMatchmakingQuery(id);
+  const auto xlast_query = xlast_gamedata_->GetMatchmakingQuery();
   if (!xlast_query) {
     return query;
   }
 
   query.id = id;
-  query.name = xlast_query->GetName();
-  query.input_parameters = xlast_query->GetParameters();
-  query.filters = xlast_query->GetFilters();
-  query.expected_return = xlast_query->GetReturns();
+  query.name = xlast_query->GetName(id);
+  query.input_parameters = xlast_query->GetParameters(id);
+  query.filters = xlast_query->GetFiltersLeft(id);
+  query.expected_return = xlast_query->GetReturns(id);
   return query;
 }
 

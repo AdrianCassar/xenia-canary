@@ -965,7 +965,8 @@ bool xeDrawFriendContent(xe::ui::ImGuiDrawer* imgui_drawer,
     ImGui::SetCursorPosY(current_drawing_position.y +
                          index * ImGui::GetTextLineHeight());
 
-    std::string presense_string = xe::to_utf8(presence.RichPresence());
+    std::string presense_string =
+        xe::string_util::trim(xe::to_utf8(presence.RichPresence()));
 
     presense_string =
         std::regex_replace(presense_string, std::regex("\\n"), ", ");
