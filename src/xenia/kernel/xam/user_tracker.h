@@ -63,6 +63,10 @@ class UserTracker {
   void UpdateContext(uint64_t xuid, uint32_t id, uint32_t value);
   std::optional<uint32_t> GetUserContext(uint64_t xuid, uint32_t id) const;
   std::vector<AttributeKey> GetUserContextIds(uint64_t xuid) const;
+  std::u16string GetContextLocalizedString(uint64_t xuid, uint32_t id) const;
+  std::u16string GetContextGameModeLocalizedString(uint64_t xuid) const;
+  std::u16string GetContextDescription(uint64_t xuid, uint32_t id) const;
+  void AddDefaultContexts();
 
   // Property
   void AddProperty(const uint64_t xuid, const Property* property);
@@ -70,6 +74,8 @@ class UserTracker {
                        XUSER_PROPERTY* property);
   const Property* GetProperty(const uint64_t xuid, const uint32_t id) const;
   std::vector<AttributeKey> GetUserPropertyIds(uint64_t xuid) const;
+  std::u16string GetPropertyDescription(uint32_t id) const;
+  void AddDefaultProperties();
 
   // Settings
   void UpsertSetting(uint64_t xuid, uint32_t title_id,
@@ -109,6 +115,8 @@ class UserTracker {
                                            uint32_t setting_id) const;
 
   void AddTitleToPlayedList(uint64_t xuid);
+  void AddDefaultProperties(uint64_t xuid);
+  void AddDefaultContexts(uint64_t xuid);
   void UpdateTitleGpdFile();
   void UpdateProfileGpd();
   void UpdateMissingAchievemntsIcons();
@@ -118,6 +126,16 @@ class UserTracker {
   SpaInfo* spa_data_ = nullptr;
 
   std::set<uint64_t> tracked_xuids_;
+
+  struct CompareEqualString {
+    bool operator()(std::u16string a, std::u16string b) const {
+      std::replace(a.begin(), a.end(), '_', ' ');
+      std::replace(b.begin(), b.end(), '_', ' ');
+
+      return utf8::lower_ascii(xe::to_utf8(a)) !=
+             utf8::lower_ascii(xe::to_utf8(b));
+    }
+  };
 };
 
 }  // namespace xam

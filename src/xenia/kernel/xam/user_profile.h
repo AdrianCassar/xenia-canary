@@ -201,7 +201,9 @@ class UserProfile {
 
   const std::vector<uint64_t> GetSubscribedXUIDs() const;
 
-  std::string GetPresenceString();
+  std::u16string GetPresenceString() const;
+  bool UpdatePresence();
+  bool BuildPresenceString();
 
  private:
   uint64_t xuid_;
@@ -215,6 +217,7 @@ class UserProfile {
   std::map<uint64_t, X_ONLINE_PRESENCE> subscriptions_;
 
   std::map<XTileType, std::vector<uint8_t>> profile_images_;
+  std::u16string online_presence_desc_ = u"";
 
   GpdInfo* GetGpd(const uint32_t title_id);
   const GpdInfo* GetGpd(const uint32_t title_id) const;

@@ -11,21 +11,16 @@
 
 #include <ranges>
 
-#include <xenia/kernel/util/game_info_database.h>
-#include <xenia/kernel/util/presence_string_builder.h>
 #include "third_party/fmt/include/fmt/format.h"
-#include "xenia/base/clock.h"
-#include "xenia/base/cvar.h"
-#include "xenia/base/filesystem.h"
-#include "xenia/base/logging.h"
-#include "xenia/base/mapped_memory.h"
 #include "xenia/emulator.h"
-#include "xenia/kernel/kernel_state.h"
+#include "xenia/kernel/util/presence_string_builder.h"
 #include "xenia/kernel/util/shim_utils.h"
 #include "xenia/kernel/util/xlast.h"
 #include "xenia/kernel/xam/xdbf/gpd_info.h"
 
 #include "xenia/kernel/XLiveAPI.h"
+
+DECLARE_int32(discord_presence_user_index);
 
 namespace xe {
 namespace kernel {
@@ -486,49 +481,74 @@ const std::vector<uint64_t> UserProfile::GetSubscribedXUIDs() const {
   return subscribed_xuids;
 }
 
-std::string UserProfile::GetPresenceString() {
-  const auto presence_context =
-      kernel_state()->xam_state()->user_tracker()->GetUserContext(
-          xuid(), X_CONTEXT_PRESENCE);
+std::u16string UserProfile::GetPresenceString() const {
+  return online_presence_desc_;
+}
 
-  if (!presence_context.has_value()) {
-    return "";
+bool UserProfile::UpdatePresence() {
+  const auto current_presence = GetPresenceString();
+
+  bool updated = false;
+
+  if (BuildPresenceString()) {
+    const auto updated_presence = GetPresenceString();
+
+    updated = current_presence != updated_presence;
+
+    if (!updated) {
+      return false;
+    }
+
+    XELOGI("{}: {} - {}", __func__, name(), xe::to_utf8(updated_presence));
+
+    const uint32_t user_index =
+        kernel_state()->xam_state()->GetUserIndexAssignedToProfileFromXUID(
+            xuid_);
+
+    if (cvars::discord_presence_user_index == user_index) {
+      kernel_state()->emulator()->on_presence_change(
+          kernel_state()->emulator()->title_name(), updated_presence);
+    }
+  }
+
+  return updated;
+}
+
+bool UserProfile::BuildPresenceString() {
+  bool completed = false;
+
+  const xam::Property* presence_prop =
+      kernel_state()->xam_state()->user_tracker()->GetProperty(
+          xuid_, XCONTEXT_PRESENCE);
+
+  if (!presence_prop) {
+    return completed;
   }
 
   const auto gdb = kernel_state()->emulator()->game_info_database();
 
   if (!gdb->HasXLast()) {
-    return "";
+    return completed;
   }
 
   const auto xlast = gdb->GetXLast();
 
-  const std::u16string raw_presence = xlast->GetPresenceRawString(
-      presence_context.value(), XLanguage::kEnglish);
-
-  std::map<uint32_t, uint32_t> contexts = {};
-
-  const auto context_ids =
-      kernel_state()->xam_state()->user_tracker()->GetUserContextIds(xuid());
-
-  for (const auto& id : context_ids) {
-    contexts[id.value] = kernel_state()
-                             ->xam_state()
-                             ->user_tracker()
-                             ->GetUserContext(xuid(), id.value)
-                             .value();
-  }
+  const std::u16string raw_presence =
+      xlast->GetPresenceRawString(presence_prop);
 
   const auto presence_string_formatter =
-      util::AttributeStringFormatter::AttributeStringFormatter(
-          xe::to_utf8(raw_presence), xlast, contexts);
+      util::AttributeStringFormatter::AttributeStringFormatter(raw_presence,
+                                                               xlast, xuid_);
 
-  auto presence_parsed = presence_string_formatter.GetPresenceString();
+  const auto presence_parsed = presence_string_formatter.GetPresenceString();
 
-  XELOGI("Raw Presence: {}", xe::to_utf8(raw_presence.c_str()));
-  XELOGI("Parsed Presence: {}", presence_parsed);
+  if (online_presence_desc_ != presence_parsed) {
+    online_presence_desc_ = presence_parsed;
+  }
 
-  return presence_parsed;
+  completed = presence_string_formatter.IsComplete();
+
+  return completed;
 }
 
 }  // namespace xam

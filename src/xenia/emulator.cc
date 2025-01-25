@@ -113,6 +113,7 @@ Emulator::Emulator(const std::filesystem::path& command_line,
     : on_launch(),
       on_terminate(),
       on_exit(),
+      on_presence_change(),
       command_line_(command_line),
       storage_root_(storage_root),
       content_root_(content_root),
@@ -1534,6 +1535,8 @@ X_STATUS Emulator::CompleteLaunch(const std::filesystem::path& path,
     kernel_state_->xam_state()->LoadSpaInfo(db.get());
 
     kernel_state_->xam_state()->user_tracker()->AddTitleToPlayedList();
+    kernel_state_->xam_state()->user_tracker()->AddDefaultProperties();
+    kernel_state_->xam_state()->user_tracker()->AddDefaultContexts();
 
     if (game_info_database_->IsValid()) {
       title_name_ = game_info_database_->GetTitleName(

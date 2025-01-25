@@ -75,6 +75,7 @@ using UserDataTypes = std::variant<uint32_t, int32_t, float, int64_t, double,
                                    std::u16string, std::vector<uint8_t>>;
 
 constexpr uint32_t kMaxUserDataSize = 0x03E8;
+constexpr uint32_t kPropertyScopeMask = 0x00008000;
 
 class UserData {
  public:
@@ -121,6 +122,11 @@ class UserData {
   static X_USER_DATA_TYPE get_type(uint32_t id) {
     return static_cast<X_USER_DATA_TYPE>(id >> 28);
   }
+
+  static bool is_system_property(uint32_t id) {
+    return (id & kPropertyScopeMask);
+  }
+
   static uint16_t get_max_size(uint32_t id) {
     return static_cast<uint16_t>(id >> 16) & kMaxUserDataSize;
   }
