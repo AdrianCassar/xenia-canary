@@ -308,6 +308,8 @@ class Emulator {
   xe::Delegate<> on_patch_apply;
   xe::Delegate<> on_terminate;
   xe::Delegate<> on_exit;
+  xe::Delegate<const std::string_view, const std::u16string_view>
+      on_presence_change;
 
  private:
   enum : uint64_t { EmulatorFlagDisclaimerAcknowledged = 1ULL << 0 };

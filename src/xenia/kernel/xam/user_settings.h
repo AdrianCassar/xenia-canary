@@ -445,6 +445,14 @@ enum ACCELERATOR_CONTROL_OPTIONS : uint8_t {
   ACCELERATOR_CONTROL_BUTTON
 };
 
+enum GAMERCARD_ZONE_OPTIONS : uint32_t {
+  GAMERCARD_ZONE_XBOX_1,
+  GAMERCARD_ZONE_RR,
+  GAMERCARD_ZONE_PRO,
+  GAMERCARD_ZONE_FAMILY,
+  GAMERCARD_ZONE_UNDERGROUND
+};
+
 class UserSetting : public UserData {
  public:
   UserSetting(const UserSetting& setting);
