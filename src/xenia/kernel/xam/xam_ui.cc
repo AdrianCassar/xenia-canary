@@ -1821,7 +1821,8 @@ bool xeDrawFriendContent(ui::ImGuiDrawer* imgui_drawer, UserProfile* profile,
     ImGui::SetCursorPosY(current_drawing_position.y +
                          index * ImGui::GetTextLineHeight());
 
-    std::string presense_string = xe::to_utf8(presence.RichPresence());
+    std::string presense_string =
+        xe::string_util::trim(xe::to_utf8(presence.RichPresence()));
 
     presense_string =
         std::regex_replace(presense_string, std::regex("\\n"), ", ");
@@ -3002,8 +3003,7 @@ class ShowGamerCardDialog : public XamDialog {
       if (is_self) {
         presence_.Gamertag(profile_->name());
 
-        presence_.RichPresence(
-            xe::to_utf16(xe::string_util::trim(profile_->GetPresenceString())));
+        presence_.RichPresence(profile_->GetPresenceString());
 
         presence_.XUID(profile_->GetOnlineXUID());
 
@@ -3029,8 +3029,7 @@ class ShowGamerCardDialog : public XamDialog {
         presence_ = presences->PlayersPresence().front();
 
         if (is_self) {
-          presence_.RichPresence(xe::to_utf16(
-              xe::string_util::trim(profile_->GetPresenceString())));
+          presence_.RichPresence(profile_->GetPresenceString());
         }
       }
     }

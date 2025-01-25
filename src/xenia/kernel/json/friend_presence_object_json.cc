@@ -65,10 +65,7 @@ bool FriendPresenceObjectJSON::Deserialize(const rapidjson::Value& obj) {
   }
 
   if (obj.HasMember("richPresence")) {
-    const std::u16string richPresence =
-        xe::to_utf16(obj["richPresence"].GetString());
-
-    RichPresence(richPresence);
+    RichPresence(xe::to_utf16(obj["richPresence"].GetString()));
   }
 
   return true;
@@ -148,9 +145,9 @@ X_ONLINE_FRIEND FriendPresenceObjectJSON::GetFriendPresence() const {
   }
 
   peer.ftUserTime = static_cast<X_FILETIME>(StateChangeTime());
-  peer.cchRichPresence = RichStatePresenceSize();
+  peer.cchRichPresence = RichStatePresenceMaxTruncatedSize();
 
-  const std::u16string presence_string = RichPresence();
+  const std::u16string presence_string = RichPresenceMaxTruncated();
 
   char16_t* rich_presence_ptr =
       reinterpret_cast<char16_t*>(peer.wszRichPresence);
