@@ -19,6 +19,8 @@ using namespace xe::string_util;
 
 DECLARE_bool(logging);
 
+DECLARE_int32(discord_presence_user_index);
+
 namespace xe {
 namespace kernel {
 namespace xam {
@@ -105,13 +107,19 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
                                      ->profile_manager()
                                      ->SignedInProfilesCount();
 
-      return XSession::GetSessions(memory_, data, num_users);
+      const auto xlast =
+          kernel_state_->emulator()->game_info_database()->GetXLast();
+
+      return XSession::GetSessions(memory_, xlast, data, num_users);
     }
     case 0x000B001C: {
       XELOGI("XSessionSearchEx");
       XSessionSearchEx* data = reinterpret_cast<XSessionSearchEx*>(buffer);
 
-      return XSession::GetSessions(memory_, &data->session_search,
+      const auto xlast =
+          kernel_state_->emulator()->game_info_database()->GetXLast();
+
+      return XSession::GetSessions(memory_, xlast, &data->session_search,
                                    data->num_users);
     }
     case 0x000B001D: {
@@ -426,7 +434,17 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
           user_profile->contexts_[context_id] = context_value;
 
           if (context_id == X_CONTEXT_PRESENCE) {
-            auto presence = user_profile->GetPresenceString();
+            if (user_profile->UpdatePresenceString()) {
+              const auto presence_string = user_profile->GetPresenceString();
+
+              XELOGI("{} presence: {}", user_profile->name(),
+                     xe::to_utf8(presence_string));
+
+              if (cvars::discord_presence_user_index == user_index) {
+                kernel_state()->emulator()->on_presence_change(
+                    kernel_state()->emulator()->title_name(), presence_string);
+              }
+            }
           }
         }
       }

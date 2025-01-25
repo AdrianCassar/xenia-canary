@@ -645,6 +645,17 @@ void EmulatorApp::EmulatorThread() {
     emulator_thread_event_->Set();
   });
 
+  emulator_->on_presence_change.AddListener(
+      [&](const auto& game_title, const auto& presence_string) {
+        if (cvars::discord) {
+          std::string title =
+              game_title.empty() ? "Unknown Title" : std::string(game_title);
+
+          discord::DiscordPresence::PlayingTitle(
+              fmt::format("{}\n{}", title, xe::to_utf8(presence_string)));
+        }
+      });
+
   emulator_->on_shader_storage_initialization.AddListener(
       [this](bool initializing) {
         app_context().CallInUIThread([this, initializing]() {

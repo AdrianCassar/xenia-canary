@@ -69,10 +69,8 @@ void Property::Write(Memory* memory, XUSER_PROPERTY* property) const {
   property->data.type = data_type_;
 
   switch (data_type_) {
-    case X_USER_DATA_TYPE::WSTRING:
-      property->data.binary.size = value_size_;
-      break;
     case X_USER_DATA_TYPE::CONTENT:
+    case X_USER_DATA_TYPE::WSTRING:
     case X_USER_DATA_TYPE::BINARY:
       property->data.binary.size = value_size_;
       // Property pointer must be valid at this point!
@@ -104,7 +102,30 @@ void Property::Write(Memory* memory, XUSER_PROPERTY* property) const {
   }
 }
 
-userDataVariant Property::GetValue() const {
+userDataVariant Property::GetValueGuest() const {
+  switch (data_type_) {
+    case X_USER_DATA_TYPE::BINARY:
+      return value_;
+    case X_USER_DATA_TYPE::CONTENT:
+    case X_USER_DATA_TYPE::INT32:
+      return xe::load_and_swap<uint32_t>(value_.data());
+    case X_USER_DATA_TYPE::INT64:
+    case X_USER_DATA_TYPE::DATETIME:
+      return xe::load_and_swap<uint64_t>(value_.data());
+    case X_USER_DATA_TYPE::DOUBLE:
+      return xe::load_and_swap<double>(value_.data());
+    case X_USER_DATA_TYPE::WSTRING:;
+      return xe::load_and_swap<std::u16string>(
+          reinterpret_cast<const char16_t*>(value_.data()));
+    case X_USER_DATA_TYPE::FLOAT:
+      return xe::load_and_swap<float>(value_.data());
+    default:
+      break;
+  }
+  return value_;
+}
+
+userDataVariant Property::GetValueHost() const {
   switch (data_type_) {
     case X_USER_DATA_TYPE::CONTENT:
     case X_USER_DATA_TYPE::BINARY:
