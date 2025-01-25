@@ -56,10 +56,31 @@ class XLastMatchmakingQuery {
   XLastMatchmakingQuery();
   XLastMatchmakingQuery(const pugi::xpath_node query_node);
 
-  std::string GetName() const;
-  std::vector<uint32_t> GetReturns() const;
-  std::vector<uint32_t> GetParameters() const;
-  std::vector<uint32_t> GetFilters() const;
+  pugi::xml_node GetQuery(uint32_t query_id) const;
+
+  std::vector<uint32_t> GetSchema() const;
+  std::vector<uint32_t> GetConstants() const;
+  std::string GetName(uint32_t query_id) const;
+  std::vector<uint32_t> GetReturns(uint32_t query_id) const;
+  std::vector<uint32_t> GetParameters(uint32_t query_id) const;
+  std::vector<uint32_t> GetFiltersLeft(uint32_t query_id) const;
+  std::vector<uint32_t> GetFiltersRight(uint32_t query_id) const;
+
+ private:
+  pugi::xpath_node node_;
+};
+
+class XLastPropertiesQuery {
+ public:
+  XLastPropertiesQuery();
+  XLastPropertiesQuery(const pugi::xpath_node query_node);
+
+  std::vector<uint32_t> GetPropertyIDs() const;
+  pugi::xml_node GetPropertyNode(uint32_t property_id) const;
+  std::string GetPropertyName(uint32_t property_id) const;
+  uint32_t GetPropertySize(uint32_t property_id) const;
+  uint32_t GetPropertyStringID(uint32_t property_id) const;
+  pugi::xml_node GetPropertyFormat(uint32_t property_id) const;
 
  private:
   pugi::xpath_node node_;
@@ -77,6 +98,8 @@ class XLast {
       const;
 
   std::vector<XLanguage> GetSupportedLanguages() const;
+  std::optional<std::uint32_t> GetGameModeStringId(
+      uint32_t game_mode_value) const;
   std::u16string GetLocalizedString(uint32_t string_id,
                                     XLanguage language) const;
   const std::optional<uint32_t> GetPresenceStringId(const uint32_t context_id);
@@ -85,7 +108,8 @@ class XLast {
                                             const XLanguage language);
   const std::optional<uint32_t> GetContextStringId(
       const uint32_t context_id, const uint32_t context_value);
-  XLastMatchmakingQuery* GetMatchmakingQuery(uint32_t query_id) const;
+  XLastPropertiesQuery* GetPropertiesQuery() const;
+  XLastMatchmakingQuery* GetMatchmakingQuery() const;
   static std::vector<uint32_t> GetAllValuesFromNode(
       const pugi::xpath_node node, const std::string child_name,
       const std::string attribute_name);

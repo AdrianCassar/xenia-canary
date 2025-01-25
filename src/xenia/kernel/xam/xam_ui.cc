@@ -2626,8 +2626,7 @@ class ShowGamerCardDialog : public XamDialog {
       if (is_self) {
         presence_.Gamertag(profile_->name());
 
-        presence_.RichPresence(
-            xe::to_utf16(xe::string_util::trim(profile_->GetPresenceString())));
+        presence_.RichPresence(profile_->GetPresenceString());
 
         presence_.TitleID(fmt::format("{:08X}", kernel_state()->title_id()));
       } else if (!is_self) {
@@ -2651,8 +2650,7 @@ class ShowGamerCardDialog : public XamDialog {
         presence_ = presences->PlayersPresence().front();
 
         if (is_self) {
-          presence_.RichPresence(xe::to_utf16(
-              xe::string_util::trim(profile_->GetPresenceString())));
+          presence_.RichPresence(profile_->GetPresenceString());
         }
       }
     }

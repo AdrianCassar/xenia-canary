@@ -25,6 +25,10 @@
 
 #include "xenia/kernel/XLiveAPI.h"
 
+DECLARE_int32(user_language);
+
+DECLARE_int32(user_country);
+
 namespace xe {
 namespace kernel {
 namespace xam {
@@ -111,6 +115,65 @@ UserProfile::UserProfile(uint64_t xuid, X_XAMACCOUNTINFO* account_info)
   AddSetting(std::make_unique<UserSetting>(0x63E83FFE, std::vector<uint8_t>()));
   // XPROFILE_TITLE_SPECIFIC3
   AddSetting(std::make_unique<UserSetting>(0x63E83FFD, std::vector<uint8_t>()));
+
+  Property PUID =
+      Property(X_PROPERTY_GAMER_PUID, sizeof(uint64_t),
+               reinterpret_cast<uint8_t*>(&account_info->xuid_online));
+
+  std::u16string gamertag = account_info->gamertag;
+  const uint32_t gamertag_size =
+      static_cast<uint32_t>(gamertag.size() * sizeof(char16_t));
+
+  xe::string_util::copy_and_swap_truncating(
+      gamertag.data(), account_info->gamertag, gamertag_size);
+
+  Property GAMER_HOST_NAME =
+      Property(X_PROPERTY_GAMER_HOSTNAME, gamertag_size,
+               reinterpret_cast<uint8_t*>(gamertag.data()));
+
+  Property GAMER_NAME = Property(X_PROPERTY_GAMERNAME, gamertag_size,
+                                 reinterpret_cast<uint8_t*>(gamertag.data()));
+
+  uint32_t gamer_zone = 2;  // Pro
+
+  Property GAMER_ZONE = Property(X_PROPERTY_GAMER_ZONE, sizeof(uint32_t),
+                                 reinterpret_cast<uint8_t*>(&gamer_zone));
+
+  uint32_t gamer_county = cvars::user_country;
+
+  Property GAMER_COUNTRY = Property(X_PROPERTY_GAMER_COUNTRY, sizeof(uint32_t),
+                                    reinterpret_cast<uint8_t*>(&gamer_county));
+
+  uint32_t gamer_lanuage = cvars::user_language;
+
+  Property GAMER_LANGUAGE =
+      Property(X_PROPERTY_GAMER_LANGUAGE, sizeof(uint32_t),
+               reinterpret_cast<uint8_t*>(&gamer_lanuage));
+
+  uint32_t platform_type = PLATFORM_TYPE::Xbox360;
+
+  Property PLATFORM_TYPE = Property(X_PROPERTY_PLATFORM_TYPE, sizeof(uint32_t),
+                                    reinterpret_cast<uint8_t*>(&gamer_lanuage));
+
+  uint64_t gamer_mu = 0;
+
+  Property GAMER_MU = Property(X_PROPERTY_GAMER_MU, sizeof(uint64_t),
+                               reinterpret_cast<uint8_t*>(&gamer_mu));
+
+  uint64_t gamer_sigma = 0;
+
+  Property GAMER_SIGMA = Property(X_PROPERTY_GAMER_SIGMA, sizeof(uint64_t),
+                                  reinterpret_cast<uint8_t*>(&gamer_sigma));
+
+  AddProperty(&PUID);             // Required
+  AddProperty(&GAMER_HOST_NAME);  // Required
+  AddProperty(&GAMER_NAME);
+  AddProperty(&GAMER_ZONE);
+  AddProperty(&GAMER_COUNTRY);
+  AddProperty(&GAMER_LANGUAGE);
+  AddProperty(&PLATFORM_TYPE);
+  AddProperty(&GAMER_MU);
+  AddProperty(&GAMER_SIGMA);
 }
 
 X_ONLINE_FRIEND UserProfile::GenerateDummyFriend() {
@@ -397,32 +460,45 @@ const std::vector<uint64_t> UserProfile::GetSubscribedXUIDs() const {
   return subscribed_xuids;
 }
 
-std::string UserProfile::GetPresenceString() {
+std::u16string UserProfile::GetPresenceString() {
+  return online_presence_desc_;
+}
+
+bool UserProfile::UpdatePresenceString() {
+  bool updated = false;
+
   if (contexts_.find(X_CONTEXT_PRESENCE) == contexts_.end()) {
-    return "";
+    return updated;
   }
 
   const auto gdb = kernel_state()->emulator()->game_info_database();
 
   if (!gdb->HasXLast()) {
-    return "";
+    return updated;
   }
 
   const auto xlast = gdb->GetXLast();
 
-  const std::u16string raw_presence = xlast->GetPresenceRawString(
-      contexts_[X_CONTEXT_PRESENCE], XLanguage::kEnglish);
+  const std::u16string raw_presence =
+      xlast->GetPresenceRawString(contexts_[X_CONTEXT_PRESENCE],
+                                  static_cast<XLanguage>(cvars::user_language));
+
+  const auto user_index =
+      kernel_state()->xam_state()->GetUserIndexAssignedToProfileFromXUID(xuid_);
 
   const auto presence_string_formatter =
       util::AttributeStringFormatter::AttributeStringFormatter(
-          xe::to_utf8(raw_presence), xlast, contexts_);
+          raw_presence, xlast, user_index);
 
-  auto presence_parsed = presence_string_formatter.GetPresenceString();
+  const auto presence_parsed = presence_string_formatter.GetPresenceString();
 
-  XELOGI("Raw Presence: {}", xe::to_utf8(raw_presence.c_str()));
-  XELOGI("Parsed Presence: {}", presence_parsed);
+  if (online_presence_desc_ != presence_parsed) {
+    online_presence_desc_ = presence_parsed;
 
-  return presence_parsed;
+    updated = true;
+  }
+
+  return updated;
 }
 
 void UserProfile::AddSetting(std::unique_ptr<UserSetting> setting) {

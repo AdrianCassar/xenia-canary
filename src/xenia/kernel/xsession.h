@@ -13,6 +13,7 @@
 #include "xenia/base/byte_order.h"
 #include "xenia/kernel/json/session_object_json.h"
 #include "xenia/kernel/kernel_state.h"
+#include "xenia/kernel/util/xlast.h"
 #include "xenia/kernel/xnet.h"
 #include "xenia/kernel/xobject.h"
 
@@ -346,8 +347,8 @@ class XSession : public XObject {
   X_RESULT StartSession(uint32_t flags);
   X_RESULT EndSession();
 
-  static X_RESULT GetSessions(Memory* memory, XSessionSearch* search_data,
-                              uint32_t num_users);
+  static X_RESULT GetSessions(Memory* memory, util::XLast* xlast,
+                              XSessionSearch* search_data, uint32_t num_users);
   static X_RESULT GetWeightedSessions(Memory* memory,
                                       XSessionSearchWeighted* search_data,
                                       uint32_t num_users);
@@ -401,12 +402,6 @@ class XSession : public XObject {
                : X_CONTEXT_GAME_TYPE_STANDARD;
   }
 
-  const uint32_t GetPresenceContext() {
-    return contexts_.find(X_CONTEXT_PRESENCE) != contexts_.end()
-               ? contexts_[X_CONTEXT_PRESENCE]
-               : 0;
-  }
-
   const bool IsCreated() const {
     return (state_ & STATE_FLAGS_CREATED) == STATE_FLAGS_CREATED;
   }
@@ -457,13 +452,18 @@ class XSession : public XObject {
       const std::unique_ptr<SessionObjectJSON>& session_info,
       XSESSION_SEARCHRESULT* result);
 
-  static void FillSessionContext(Memory* memory,
+  static void FillSessionContext(Memory* memory, uint32_t matchmaking_index,
+                                 util::XLastMatchmakingQuery* matchmaking_query,
                                  std::map<uint32_t, uint32_t> contexts,
+                                 uint32_t filter_contexts_count,
+                                 XUSER_CONTEXT* filter_contexts_ptr,
                                  XSESSION_SEARCHRESULT* result);
 
-  static void FillSessionProperties(uint32_t properties_count,
-                                    uint32_t properties_ptr,
-                                    XSESSION_SEARCHRESULT* result);
+  static void FillSessionProperties(
+      Memory* memory, uint32_t matchmaking_index,
+      util::XLastMatchmakingQuery* matchmaking_query,
+      std::vector<Property> properties, uint32_t filter_properties_count,
+      XUSER_PROPERTY* filter_properties_ptr, XSESSION_SEARCHRESULT* result);
 
   // uint64_t migrated_session_id_;
   uint64_t session_id_ = 0;
@@ -479,8 +479,9 @@ class XSession : public XObject {
   // These are all contexts that host provided during creation of a session.
   // These are constant for single session.
   std::map<uint32_t, uint32_t> contexts_;
+  std::vector<Property> properties_;
+
   // TODO!
-  std::vector<uint8_t> properties_;
   std::vector<uint8_t> stats_;
 };
 }  // namespace kernel
