@@ -13,6 +13,8 @@
 #include "xenia/base/byte_order.h"
 #include "xenia/kernel/json/session_object_json.h"
 #include "xenia/kernel/kernel_state.h"
+#include "xenia/kernel/util/xlast.h"
+#include "xenia/kernel/xam/user_property.h"
 #include "xenia/kernel/xnet.h"
 #include "xenia/kernel/xobject.h"
 
@@ -268,9 +270,10 @@ class XSession : public XObject {
   X_RESULT StartSession(XGI_SESSION_STATE* state);
   X_RESULT EndSession(XGI_SESSION_STATE* state);
 
-  static X_RESULT GetSessions(Memory* memory, XGI_SESSION_SEARCH* search_data,
+  static X_RESULT GetSessions(KernelState* kernel_state,
+                              XGI_SESSION_SEARCH* search_data,
                               uint32_t num_users);
-  static X_RESULT GetWeightedSessions(Memory* memory,
+  static X_RESULT GetWeightedSessions(KernelState* kernel_state,
                                       XGI_SESSION_SEARCH_WEIGHTED* search_data,
                                       uint32_t num_users);
   static X_RESULT GetSessionByID(Memory* memory,
@@ -311,22 +314,28 @@ class XSession : public XObject {
     return members_size;
   }
 
-  const uint32_t GetGameModeContext() {
-    return contexts_.find(X_CONTEXT_GAME_MODE) != contexts_.end()
-               ? contexts_[X_CONTEXT_GAME_MODE]
-               : 0;
+  const xe::be<uint32_t> GetGameModeValue(uint64_t xuid) {
+    const xam::Property* gamemode =
+        kernel_state()->xam_state()->user_tracker()->GetProperty(
+            xuid, XCONTEXT_GAME_MODE);
+
+    if (gamemode) {
+      return gamemode->get_data()->data.u32;
+    }
+
+    return 0;
   }
 
-  const uint32_t GetGameTypeContext() {
-    return contexts_.find(X_CONTEXT_GAME_TYPE) != contexts_.end()
-               ? contexts_[X_CONTEXT_GAME_TYPE]
-               : X_CONTEXT_GAME_TYPE_STANDARD;
-  }
+  const xe::be<uint32_t> GetGameTypeValue(uint64_t xuid) {
+    const xam::Property* game_type =
+        kernel_state()->xam_state()->user_tracker()->GetProperty(
+            xuid, XCONTEXT_GAME_TYPE);
 
-  const uint32_t GetPresenceContext() {
-    return contexts_.find(X_CONTEXT_PRESENCE) != contexts_.end()
-               ? contexts_[X_CONTEXT_PRESENCE]
-               : 0;
+    if (game_type) {
+      return game_type->get_data()->data.u32;
+    }
+
+    return 0;
   }
 
   const bool IsCreated() const {
@@ -379,13 +388,19 @@ class XSession : public XObject {
       const std::unique_ptr<SessionObjectJSON>& session_info,
       XSESSION_SEARCHRESULT* result);
 
-  static void FillSessionContext(Memory* memory,
-                                 std::map<uint32_t, uint32_t> contexts,
+  static void FillSessionContext(Memory* memory, uint32_t matchmaking_index,
+                                 util::XLastMatchmakingQuery* matchmaking_query,
+                                 std::vector<xam::Property> contexts,
+                                 uint32_t filter_contexts_count,
+                                 xam::XUSER_CONTEXT* filter_contexts_ptr,
                                  XSESSION_SEARCHRESULT* result);
 
-  static void FillSessionProperties(uint32_t properties_count,
-                                    uint32_t properties_ptr,
-                                    XSESSION_SEARCHRESULT* result);
+  static void FillSessionProperties(
+      Memory* memory, uint32_t matchmaking_index,
+      util::XLastMatchmakingQuery* matchmaking_query,
+      std::vector<xam::Property> properties, uint32_t filter_properties_count,
+      xam::XUSER_PROPERTY* filter_properties_ptr,
+      XSESSION_SEARCHRESULT* result);
 
   // uint64_t migrated_session_id_;
   uint64_t session_id_ = 0;
@@ -398,11 +413,7 @@ class XSession : public XObject {
   std::map<uint64_t, XSESSION_MEMBER> local_members_{};
   std::map<uint64_t, XSESSION_MEMBER> remote_members_{};
 
-  // These are all contexts that host provided during creation of a session.
-  // These are constant for single session.
-  std::map<uint32_t, uint32_t> contexts_;
   // TODO!
-  std::vector<uint8_t> properties_;
   std::vector<uint8_t> stats_;
 };
 }  // namespace kernel

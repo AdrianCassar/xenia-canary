@@ -394,6 +394,14 @@ enum PREFERRED_COLOR_OPTIONS : uint32_t {
   PREFERRED_COLOR_SILVER
 };
 
+enum GAMERCARD_ZONE_OPTIONS : uint32_t {
+  GAMERCARD_ZONE_XBOX_1,
+  GAMERCARD_ZONE_RR,
+  GAMERCARD_ZONE_PRO,
+  GAMERCARD_ZONE_FAMILY,
+  GAMERCARD_ZONE_UNDERGROUND
+};
+
 class UserSetting : public UserData {
  public:
   UserSetting(UserSetting& setting);

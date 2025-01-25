@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "third_party/pugixml/src/pugixml.hpp"
+#include "xenia/kernel/xam/user_property.h"
 #include "xenia/xbox.h"
 
 namespace xe {
@@ -56,10 +57,65 @@ class XLastMatchmakingQuery {
   XLastMatchmakingQuery();
   XLastMatchmakingQuery(const pugi::xpath_node query_node);
 
-  std::string GetName() const;
-  std::vector<uint32_t> GetReturns() const;
-  std::vector<uint32_t> GetParameters() const;
-  std::vector<uint32_t> GetFilters() const;
+  pugi::xml_node GetQuery(uint32_t query_id) const;
+
+  std::vector<uint32_t> GetSchema() const;
+  std::vector<uint32_t> GetConstants() const;
+  std::string GetName(uint32_t query_id) const;
+  std::vector<uint32_t> GetReturns(uint32_t query_id) const;
+  std::vector<uint32_t> GetParameters(uint32_t query_id) const;
+  std::vector<uint32_t> GetFiltersLeft(uint32_t query_id) const;
+  std::vector<uint32_t> GetFiltersRight(uint32_t query_id) const;
+
+ private:
+  pugi::xpath_node node_;
+};
+
+class XLastPropertiesQuery {
+ public:
+  XLastPropertiesQuery();
+  XLastPropertiesQuery(const pugi::xpath_node query_node);
+
+  std::vector<uint32_t> GetPropertyIDs() const;
+  pugi::xml_node GetPropertyNode(uint32_t property_id) const;
+  std::optional<std::string> GetPropertyFriendlyName(
+      uint32_t property_id) const;
+  std::optional<uint32_t> GetPropertySize(uint32_t property_id) const;
+  std::optional<uint32_t> GetPropertyStringID(uint32_t property_id) const;
+  pugi::xml_node GetPropertyFormat(uint32_t property_id) const;
+
+ private:
+  pugi::xpath_node node_;
+};
+
+class XLastContextsQuery {
+ public:
+  XLastContextsQuery();
+  XLastContextsQuery(const pugi::xpath_node query_node);
+
+  std::vector<uint32_t> GetContextsIDs() const;
+  pugi::xml_node GetContextNode(uint32_t property_id) const;
+  std::optional<std::string> GetContextFriendlyName(uint32_t property_id) const;
+  std::optional<uint32_t> GetContextDefaultValue(uint32_t property_id) const;
+  pugi::xml_node GetContextValueNode(uint32_t property_id,
+                                     uint32_t value) const;
+  std::optional<uint32_t> GetContextValueStringID(uint32_t property_id,
+                                                  uint32_t value) const;
+
+ private:
+  pugi::xpath_node node_;
+};
+
+class XLastGameModeQuery {
+ public:
+  XLastGameModeQuery();
+  XLastGameModeQuery(const pugi::xpath_node query_node);
+
+  std::vector<uint32_t> GetGameModeValues() const;
+  pugi::xml_node GetGameModeNode(uint32_t value) const;
+  std::optional<std::string> GetGameModeFriendlyName(uint32_t value) const;
+  std::optional<uint32_t> GetGameModeDefaultValue() const;
+  std::optional<uint32_t> GetGameModeStringID(uint32_t value) const;
 
  private:
   pugi::xpath_node node_;
@@ -77,15 +133,18 @@ class XLast {
       const;
 
   std::vector<XLanguage> GetSupportedLanguages() const;
+  std::optional<std::uint32_t> GetGameModeStringId(
+      uint32_t game_mode_value) const;
   std::u16string GetLocalizedString(uint32_t string_id,
                                     XLanguage language) const;
   const std::optional<uint32_t> GetPresenceStringId(const uint32_t context_id);
   const std::optional<uint32_t> GetPropertyStringId(const uint32_t property_id);
-  const std::u16string GetPresenceRawString(const uint32_t presence_value,
-                                            const XLanguage language);
-  const std::optional<uint32_t> GetContextStringId(
-      const uint32_t context_id, const uint32_t context_value);
-  XLastMatchmakingQuery* GetMatchmakingQuery(uint32_t query_id) const;
+  const std::u16string GetPresenceRawString(
+      const xam::Property* presence_property);
+  XLastGameModeQuery* GetGameModeQuery() const;
+  XLastContextsQuery* GetContextsQuery() const;
+  XLastPropertiesQuery* GetPropertiesQuery() const;
+  XLastMatchmakingQuery* GetMatchmakingQuery() const;
   static std::vector<uint32_t> GetAllValuesFromNode(
       const pugi::xpath_node node, const std::string child_name,
       const std::string attribute_name);
