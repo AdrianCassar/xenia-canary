@@ -234,12 +234,28 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
       return X_E_SUCCESS;
     }
     case 0x0005800C: {
-      XELOGD("XUserMuteListSetState({:08X}, {:08X}) unimplemented", buffer_ptr,
+      // 464F0800
+      XELOGD("XUserMuteListSetState({:08X}, {:08X})", buffer_ptr,
              buffer_length);
-      X_MUTE_LIST_SET_STATE* mute_list_ptr =
-          memory_->TranslateVirtual<X_MUTE_LIST_SET_STATE*>(buffer_ptr);
+      X_MUTE_SET_STATE* remote_player_ptr =
+          memory_->TranslateVirtual<X_MUTE_SET_STATE*>(buffer_ptr);
 
-      mute_list_ptr->set_muted = !mute_list_ptr->set_muted;
+      if (!IsOnlineXUID(remote_player_ptr->remote_xuid)) {
+        return X_E_INVALIDARG;
+      }
+
+      return X_E_SUCCESS;
+    }
+    case 0x0005800D: {
+      // 464F0800
+      XELOGD("XUserMuteListSetState({:08X}, {:08X})", buffer_ptr,
+             buffer_length);
+      X_MUTE_SET_STATE* remote_player_ptr =
+          memory_->TranslateVirtual<X_MUTE_SET_STATE*>(buffer_ptr);
+
+      if (!IsOnlineXUID(remote_player_ptr->remote_xuid)) {
+        return X_E_INVALIDARG;
+      }
 
       return X_E_SUCCESS;
     }
