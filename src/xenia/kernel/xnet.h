@@ -126,6 +126,8 @@ enum X_STATS_ENUMERATOR_TYPE : uint32_t {
   BY_RATING
 };
 
+enum PLATFORM_TYPE : uint32_t { Xbox1, Xbox360, PC };
+
 struct XNKID {
   uint8_t ab[8];
   uint64_t as_uint64() { return *reinterpret_cast<uint64_t*>(&ab); }
