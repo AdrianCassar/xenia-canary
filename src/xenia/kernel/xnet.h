@@ -231,10 +231,10 @@ struct X_STORAGE_BUILD_SERVER_PATH {
 };
 static_assert_size(X_STORAGE_BUILD_SERVER_PATH, 0x28);
 
-struct X_MUTE_LIST_SET_STATE {
+struct X_MUTE_SET_STATE {
   xe::be<uint32_t> user_index;
   xe::be<uint64_t> remote_xuid;
-  bool set_muted;
+  xe::be<uint32_t> set_muted;
 };
 
 struct X_PRESENCE_SUBSCRIBE {
