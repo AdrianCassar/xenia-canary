@@ -743,8 +743,7 @@ X_RESULT XSession::GetWeightedSessions(
   search_data.num_ctx = weighted_search_data->num_ctx;
   search_data.props_ptr =
       weighted_search_data->non_weighted_search_properties_ptr;
-  search_data.ctx_ptr =
-      weighted_search_data->non_weighted_search_properties_ptr;
+  search_data.ctx_ptr = weighted_search_data->non_weighted_search_contexts_ptr;
   search_data.results_buffer_size = weighted_search_data->results_buffer_size;
   search_data.search_results_ptr = weighted_search_data->search_results_ptr;
 
