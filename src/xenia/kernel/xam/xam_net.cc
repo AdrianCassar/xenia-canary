@@ -648,6 +648,15 @@ dword_result_t NetDll_XNetGetDebugXnAddr_entry(dword_t caller,
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetGetDebugXnAddr, kNetworking, kStub);
 
+dword_result_t NetDll_XNetGetXnAddrPlatform_entry(dword_t caller,
+                                                  pointer_t<XNADDR> addr_ptr,
+                                                  lpdword_t platform_type) {
+  *platform_type = PLATFORM_TYPE::Xbox360;
+
+  return 0;
+}
+DECLARE_XAM_EXPORT1(NetDll_XNetGetXnAddrPlatform, kNetworking, kStub);
+
 dword_result_t NetDll_XNetXnAddrToMachineId_entry(dword_t caller,
                                                   pointer_t<XNADDR> addr_ptr,
                                                   lpqword_t id_ptr) {
