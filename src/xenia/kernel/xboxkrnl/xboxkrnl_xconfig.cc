@@ -142,7 +142,7 @@ X_STATUS xeExGetXConfigSetting(uint16_t category, uint16_t setting,
           break;
         case 0x000F:  // XCONFIG_USER_PC_FLAGS (Parental Control Flags)
           setting_size = 1;
-          xe::store_and_swap<uint8_t>(value, 0);
+          value[0] = static_cast<uint8_t>(0);
           break;
         case 0x001B:  // XCONFIG_USER_PC_HINT
           setting_size = 1;
