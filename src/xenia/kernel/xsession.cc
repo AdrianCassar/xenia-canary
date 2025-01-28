@@ -279,7 +279,8 @@ X_RESULT XSession::JoinSession(XSessionJoin* data) {
 
       assert_true(IsValidXUID(xuid_online));
 
-      if (local_members_.count(xuid_online)) {
+      if (local_members_.count(xuid_online) ||
+          remote_members_.count(xuid_online)) {
         return X_ERROR_SUCCESS;
       }
 
@@ -300,7 +301,8 @@ X_RESULT XSession::JoinSession(XSessionJoin* data) {
 
       assert_true(IsValidXUID(xuid_online));
 
-      if (remote_members_.count(xuid_online)) {
+      if (remote_members_.count(xuid_online) ||
+          local_members_.count(xuid_online)) {
         return X_ERROR_SUCCESS;
       }
 
