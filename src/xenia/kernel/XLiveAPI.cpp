@@ -9,7 +9,7 @@
 
 #include <random>
 
-#include <third_party/rapidcsv/src/rapidcsv.h>
+#include "third_party/rapidcsv/src/rapidcsv.h"
 
 #include "xenia/base/cvar.h"
 #include "xenia/base/logging.h"
@@ -1131,71 +1131,8 @@ void XLiveAPI::XSessionCreate(uint64_t sessionId, XSessionData* data) {
   XELOGI("XSessionCreate POST Success");
 }
 
-// A context is a type of property therefore replace with properties endpoint
-void XLiveAPI::SessionContextSet(uint64_t session_id,
-                                 std::map<uint32_t, uint32_t> contexts) {
-  std::string endpoint = fmt::format("title/{:08X}/sessions/{:016x}/context",
-                                     kernel_state()->title_id(), session_id);
-
-  Document doc;
-  doc.SetObject();
-
-  Value contextsJson(kArrayType);
-
-  for (const auto& entry : contexts) {
-    Value contextJson(kObjectType);
-    contextJson.AddMember("contextId", entry.first, doc.GetAllocator());
-    contextJson.AddMember("value", entry.second, doc.GetAllocator());
-    contextsJson.PushBack(contextJson.Move(), doc.GetAllocator());
-  }
-
-  doc.AddMember("contexts", contextsJson, doc.GetAllocator());
-
-  rapidjson::StringBuffer buffer;
-  PrettyWriter<rapidjson::StringBuffer> writer(buffer);
-  doc.Accept(writer);
-
-  std::unique_ptr<HTTPResponseObjectJSON> response =
-      Post(endpoint, (uint8_t*)buffer.GetString());
-
-  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_CREATED) {
-    XELOGE("SessionContextSet error message: {}", response->Message());
-    assert_always();
-  }
-}
-
-const std::map<uint32_t, uint32_t> XLiveAPI::SessionContextGet(
-    uint64_t session_id) {
-  std::string endpoint = fmt::format("title/{:08X}/sessions/{:016x}/context",
-                                     kernel_state()->title_id(), session_id);
-
-  std::map<uint32_t, uint32_t> result = {};
-
-  std::unique_ptr<HTTPResponseObjectJSON> response = Get(endpoint);
-
-  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_OK) {
-    XELOGE("SessionContextGet error message: {}", response->Message());
-    assert_always();
-
-    return result;
-  }
-
-  Document doc;
-  doc.Parse(response->RawResponse().response);
-
-  const Value& contexts = doc["context"];
-
-  for (auto itr = contexts.MemberBegin(); itr != contexts.MemberEnd(); itr++) {
-    const uint32_t context_id =
-        xe::string_util::from_string<uint32_t>(itr->name.GetString(), true);
-    result.insert({context_id, itr->value.GetUint()});
-  }
-
-  return result;
-}
-
 void XLiveAPI::SessionPropertiesAdd(uint64_t session_id,
-                                    std::vector<Property> properties) {
+                                    std::vector<Property>& properties) {
   std::string endpoint = fmt::format("title/{:08X}/sessions/{:016x}/properties",
                                      kernel_state()->title_id(), session_id);
 

@@ -639,7 +639,8 @@ void EmulatorApp::EmulatorThread() {
   emulator_->on_launch.AddListener([&](auto title_id, const auto& game_title) {
     if (cvars::discord) {
       discord::DiscordPresence::PlayingTitle(
-          game_title.empty() ? "Unknown Title" : std::string(game_title));
+          game_title.empty() ? "Unknown Title" : std::string(game_title),
+          "In Game");
     }
     app_context().CallInUIThread([this]() { emulator_window_->UpdateTitle(); });
     emulator_thread_event_->Set();
@@ -648,11 +649,11 @@ void EmulatorApp::EmulatorThread() {
   emulator_->on_presence_change.AddListener(
       [&](const auto& game_title, const auto& presence_string) {
         if (cvars::discord) {
-          std::string title =
+          const std::string title =
               game_title.empty() ? "Unknown Title" : std::string(game_title);
 
-          discord::DiscordPresence::PlayingTitle(
-              fmt::format("{}\n{}", title, xe::to_utf8(presence_string)));
+          discord::DiscordPresence::PlayingTitle(title,
+                                                 xe::to_utf8(presence_string));
         }
       });
 
