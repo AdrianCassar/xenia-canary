@@ -390,16 +390,12 @@ class XSession : public XObject {
     return members_size;
   }
 
-  const uint32_t GetGameModeContext() {
-    return contexts_.find(X_CONTEXT_GAME_MODE) != contexts_.end()
-               ? contexts_[X_CONTEXT_GAME_MODE]
-               : 0;
+  const Property* GetGameModeContext() {
+    return GetProperty(static_cast<AttributeKey>(X_CONTEXT_GAME_MODE));
   }
 
-  const uint32_t GetGameTypeContext() {
-    return contexts_.find(X_CONTEXT_GAME_TYPE) != contexts_.end()
-               ? contexts_[X_CONTEXT_GAME_TYPE]
-               : X_CONTEXT_GAME_TYPE_STANDARD;
+  const Property* GetGameTypeContext() {
+    return GetProperty(static_cast<AttributeKey>(X_CONTEXT_GAME_TYPE));
   }
 
   const bool IsCreated() const {
@@ -454,7 +450,7 @@ class XSession : public XObject {
 
   static void FillSessionContext(Memory* memory, uint32_t matchmaking_index,
                                  util::XLastMatchmakingQuery* matchmaking_query,
-                                 std::map<uint32_t, uint32_t> contexts,
+                                 std::vector<Property> contexts,
                                  uint32_t filter_contexts_count,
                                  XUSER_CONTEXT* filter_contexts_ptr,
                                  XSESSION_SEARCHRESULT* result);
@@ -464,6 +460,8 @@ class XSession : public XObject {
       util::XLastMatchmakingQuery* matchmaking_query,
       std::vector<Property> properties, uint32_t filter_properties_count,
       XUSER_PROPERTY* filter_properties_ptr, XSESSION_SEARCHRESULT* result);
+
+  Property* GetProperty(const AttributeKey id);
 
   // uint64_t migrated_session_id_;
   uint64_t session_id_ = 0;
@@ -476,9 +474,8 @@ class XSession : public XObject {
   std::map<uint64_t, XSESSION_MEMBER> local_members_{};
   std::map<uint64_t, XSESSION_MEMBER> remote_members_{};
 
-  // These are all contexts that host provided during creation of a session.
-  // These are constant for single session.
-  std::map<uint32_t, uint32_t> contexts_;
+  // These are all contexts and properties that host provided during creation of
+  // a session. Contexts are constant for single session.
   std::vector<Property> properties_;
 
   // TODO!

@@ -24,7 +24,6 @@ AttributeStringFormatter::AttributeStringFormatter(
     : attribute_string_(attribute_string), attribute_to_string_mapping_() {
   auto const profile = kernel_state()->xam_state()->GetUserProfile(user_index);
 
-  contexts_ = profile->contexts_;
   properties_ = profile->properties_;
 
   title_xlast_ = title_xlast;
@@ -36,6 +35,12 @@ AttributeStringFormatter::AttributeStringFormatter(
   }
 
   BuildPresenceString();
+
+  // Check if precebse string is completed
+  attribute_string_ = presence_string_;
+
+  const auto specifiers = GetPresenceFormatSpecifiers();
+  is_complete_ = specifiers.empty();
 }
 
 bool AttributeStringFormatter::ParseAttributeString() {
@@ -80,7 +85,8 @@ AttributeStringFormatter::GetAttributeTypeFromSpecifier(
   return AttributeStringFormatter::AttributeType::Unknown;
 }
 
-std::optional<uint32_t> AttributeStringFormatter::GetAttributeIdFromSpecifier(
+std::optional<AttributeKey>
+AttributeStringFormatter::GetAttributeIdFromSpecifier(
     const std::string& specifier,
     const AttributeStringFormatter::AttributeType specifier_type) const {
   std::smatch string_match;
@@ -96,14 +102,14 @@ std::optional<uint32_t> AttributeStringFormatter::GetAttributeIdFromSpecifier(
       id = string_util::from_string<uint32_t>(string_match[4].str(), true);
     }
 
-    return std::make_optional<uint32_t>(id);
+    return std::make_optional<AttributeKey>(id);
   }
 
   return std::nullopt;
 }
 
 std::u16string AttributeStringFormatter::GetStringFromSpecifier(
-    std::string_view specifier) const {
+    std::string_view specifier) {
   const AttributeStringFormatter::AttributeType attribute_type =
       GetAttributeTypeFromSpecifier(specifier);
 
@@ -114,29 +120,30 @@ std::u16string AttributeStringFormatter::GetStringFromSpecifier(
   const auto attribute_id =
       GetAttributeIdFromSpecifier(std::string(specifier), attribute_type);
 
-  if (!attribute_id) {
+  if (!attribute_id.has_value()) {
     return u"";
   }
 
-  if (attribute_type == AttributeStringFormatter::AttributeType::Context) {
-    const auto itr = contexts_.find(attribute_id.value());
+  const auto property = GetProperty(attribute_id.value());
 
-    if (itr == contexts_.cend()) {
+  if (attribute_type == AttributeStringFormatter::AttributeType::Context) {
+    if (property == nullptr) {
       const auto attribute_placeholder =
-          xe::to_utf16(fmt::format("{{c{}}}", attribute_id.value()));
+          xe::to_utf16(fmt::format("{{c{}}}", attribute_id.value().value));
 
       return attribute_placeholder;
     }
 
     std::optional<uint32_t> attribute_string_id = std::nullopt;
 
-    if (attribute_id == X_CONTEXT_GAME_MODE &&
-        contexts_.contains(X_CONTEXT_GAME_MODE)) {
-      attribute_string_id =
-          title_xlast_->GetGameModeStringId(contexts_.at(X_CONTEXT_GAME_MODE));
+    const uint32_t value = std::get<uint32_t>(property->GetValueGuest());
+
+    if (attribute_id.value().value == X_CONTEXT_GAME_MODE) {
+      attribute_string_id = title_xlast_->GetGameModeStringId(value);
     } else {
       attribute_string_id =
-          title_xlast_->GetContextStringId(attribute_id.value(), itr->second);
+          title_xlast_->GetContextsQuery()->GetContextValueStringID(
+              attribute_id.value().value, value);
     }
 
     if (!attribute_string_id.has_value()) {
@@ -151,24 +158,27 @@ std::u16string AttributeStringFormatter::GetStringFromSpecifier(
   }
 
   if (attribute_type == AttributeStringFormatter::AttributeType::Property) {
-    auto itr = std::find_if(
-        properties_.begin(), properties_.end(), [attribute_id](Property prop) {
-          if (prop.GetPropertyId().value == attribute_id.value()) {
-            return true;
-          }
-
-          return false;
-        });
-
-    if (itr == properties_.end()) {
-      const auto attribute_placeholder =
-          xe::to_utf16(fmt::format("{{p0x{:08X}}}", attribute_id.value()));
+    if (property == nullptr) {
+      const auto attribute_placeholder = xe::to_utf16(
+          fmt::format("{{p0x{:08X}}}", attribute_id.value().value));
 
       return attribute_placeholder;
     }
 
-    // Support properties: INT32, INT64, float, double
-    const uint64_t value = std::get<uint64_t>(itr->GetValueGuest());
+    uint64_t value = 0;
+
+    switch (property->GetType()) {
+      case X_USER_DATA_TYPE::INT32:
+        value = std::get<uint32_t>(property->GetValueGuest());
+        break;
+      case X_USER_DATA_TYPE::INT64:
+      case X_USER_DATA_TYPE::DATETIME:
+        value = std::get<uint64_t>(property->GetValueGuest());
+        break;
+      default:
+        XELOGI("Unsupported property type {}", property->GetPropertyId().type);
+        break;
+    }
 
     return xe::to_utf16(fmt::format("{}", value));
   }
@@ -199,6 +209,19 @@ std::queue<std::string> AttributeStringFormatter::GetPresenceFormatSpecifiers()
 
   return format_specifiers;
 }
+
+Property* AttributeStringFormatter::GetProperty(const AttributeKey id) {
+  for (auto& entry : properties_) {
+    if (entry.GetPropertyId().value != id.value) {
+      continue;
+    }
+
+    return &entry;
+  }
+
+  return nullptr;
+}
+
 }  // namespace util
 }  // namespace kernel
 }  // namespace xe

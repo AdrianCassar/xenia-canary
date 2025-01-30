@@ -134,33 +134,33 @@ UserProfile::UserProfile(uint64_t xuid, X_XAMACCOUNTINFO* account_info)
   Property GAMER_NAME = Property(X_PROPERTY_GAMERNAME, gamertag_size,
                                  reinterpret_cast<uint8_t*>(gamertag.data()));
 
-  uint32_t gamer_zone = 2;  // Pro
+  xe::be<uint32_t> gamer_zone = 2;  // Pro
 
   Property GAMER_ZONE = Property(X_PROPERTY_GAMER_ZONE, sizeof(uint32_t),
                                  reinterpret_cast<uint8_t*>(&gamer_zone));
 
-  uint32_t gamer_county = cvars::user_country;
+  xe::be<uint32_t> gamer_county = cvars::user_country;
 
   Property GAMER_COUNTRY = Property(X_PROPERTY_GAMER_COUNTRY, sizeof(uint32_t),
                                     reinterpret_cast<uint8_t*>(&gamer_county));
 
-  uint32_t gamer_lanuage = cvars::user_language;
+  xe::be<uint32_t> gamer_lanuage = cvars::user_language;
 
   Property GAMER_LANGUAGE =
       Property(X_PROPERTY_GAMER_LANGUAGE, sizeof(uint32_t),
                reinterpret_cast<uint8_t*>(&gamer_lanuage));
 
-  uint32_t platform_type = PLATFORM_TYPE::Xbox360;
+  xe::be<uint32_t> platform_type = PLATFORM_TYPE::Xbox360;
 
   Property PLATFORM_TYPE = Property(X_PROPERTY_PLATFORM_TYPE, sizeof(uint32_t),
                                     reinterpret_cast<uint8_t*>(&gamer_lanuage));
 
-  uint64_t gamer_mu = 0;
+  xe::be<uint64_t> gamer_mu = 0;
 
   Property GAMER_MU = Property(X_PROPERTY_GAMER_MU, sizeof(uint64_t),
                                reinterpret_cast<uint8_t*>(&gamer_mu));
 
-  uint64_t gamer_sigma = 0;
+  xe::be<uint64_t> gamer_sigma = 0;
 
   Property GAMER_SIGMA = Property(X_PROPERTY_GAMER_SIGMA, sizeof(uint64_t),
                                   reinterpret_cast<uint8_t*>(&gamer_sigma));
@@ -174,6 +174,59 @@ UserProfile::UserProfile(uint64_t xuid, X_XAMACCOUNTINFO* account_info)
   AddProperty(&PLATFORM_TYPE);
   AddProperty(&GAMER_MU);
   AddProperty(&GAMER_SIGMA);
+}
+
+void UserProfile::InitializeSystemContexts() {
+  const auto gdb = kernel_state()->emulator()->game_info_database();
+
+  xe::be<uint32_t> game_mode = 0;
+  xe::be<uint32_t> game_type = 0;
+
+  Property GAME_MODE = Property(X_CONTEXT_GAME_MODE, sizeof(uint32_t),
+                                reinterpret_cast<uint8_t*>(&game_mode));
+  Property GAME_TYPE = Property(X_CONTEXT_GAME_TYPE, sizeof(uint32_t),
+                                reinterpret_cast<uint8_t*>(&game_type));
+
+  if (gdb->HasXLast()) {
+    const auto xlast = gdb->GetXLast();
+
+    const bool initialize_all_contexts = false;
+
+    // Initialize all contexts to default values
+    if (initialize_all_contexts) {
+      const auto context_ids = xlast->GetContextsQuery()->GetContextsIDs();
+
+      for (const auto context_id : context_ids) {
+        const auto default_value =
+            xlast->GetContextsQuery()->GetContextDefaultValue(context_id);
+
+        if (default_value.has_value()) {
+          xe::be<uint32_t> value = default_value.value();
+
+          auto prop = Property(context_id, sizeof(uint32_t),
+                               reinterpret_cast<uint8_t*>(&value));
+
+          AddProperty(&prop);
+        }
+      }
+    }
+
+    // Initialize default system context values
+    game_mode = xlast->GameModeQuery()->GetGameModeDefaultValue().value();
+
+    GAME_MODE = Property(X_CONTEXT_GAME_MODE, sizeof(uint32_t),
+                         reinterpret_cast<uint8_t*>(&game_mode));
+
+    game_type = xlast->GetContextsQuery()
+                    ->GetContextDefaultValue(X_CONTEXT_GAME_TYPE)
+                    .value();
+
+    GAME_TYPE = Property(X_CONTEXT_GAME_TYPE, sizeof(uint32_t),
+                         reinterpret_cast<uint8_t*>(&game_type));
+  }
+
+  AddProperty(&GAME_MODE);
+  AddProperty(&GAME_TYPE);
 }
 
 X_ONLINE_FRIEND UserProfile::GenerateDummyFriend() {
@@ -460,28 +513,55 @@ const std::vector<uint64_t> UserProfile::GetSubscribedXUIDs() const {
   return subscribed_xuids;
 }
 
-std::u16string UserProfile::GetPresenceString() {
+std::u16string UserProfile::GetPresenceString() const {
   return online_presence_desc_;
 }
 
-bool UserProfile::UpdatePresenceString() {
+bool UserProfile::UpdatePresence(bool update_discord) {
+  const auto current_presence = GetPresenceString();
+
   bool updated = false;
 
-  if (contexts_.find(X_CONTEXT_PRESENCE) == contexts_.end()) {
-    return updated;
+  if (BuildPresenceString()) {
+    const auto updated_presence = GetPresenceString();
+
+    updated = current_presence != updated_presence;
+
+    if (!updated) {
+      return false;
+    }
+
+    XELOGI("{}: {} - {}", __func__, name(), xe::to_utf8(updated_presence));
+
+    if (update_discord) {
+      kernel_state()->emulator()->on_presence_change(
+          kernel_state()->emulator()->title_name(), updated_presence);
+    }
+  }
+
+  return updated;
+}
+
+bool UserProfile::BuildPresenceString() {
+  bool completed = false;
+
+  const auto context_property =
+      GetProperty(static_cast<AttributeKey>(X_CONTEXT_PRESENCE));
+
+  if (!context_property) {
+    return completed;
   }
 
   const auto gdb = kernel_state()->emulator()->game_info_database();
 
   if (!gdb->HasXLast()) {
-    return updated;
+    return completed;
   }
 
   const auto xlast = gdb->GetXLast();
 
-  const std::u16string raw_presence =
-      xlast->GetPresenceRawString(contexts_[X_CONTEXT_PRESENCE],
-                                  static_cast<XLanguage>(cvars::user_language));
+  const std::u16string raw_presence = xlast->GetPresenceRawString(
+      context_property, static_cast<XLanguage>(cvars::user_language));
 
   const auto user_index =
       kernel_state()->xam_state()->GetUserIndexAssignedToProfileFromXUID(xuid_);
@@ -494,11 +574,11 @@ bool UserProfile::UpdatePresenceString() {
 
   if (online_presence_desc_ != presence_parsed) {
     online_presence_desc_ = presence_parsed;
-
-    updated = true;
   }
 
-  return updated;
+  completed = presence_string_formatter.IsComplete();
+
+  return completed;
 }
 
 void UserProfile::AddSetting(std::unique_ptr<UserSetting> setting) {

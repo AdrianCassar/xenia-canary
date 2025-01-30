@@ -1519,6 +1519,15 @@ X_STATUS Emulator::CompleteLaunch(const std::filesystem::path& path,
         }
       }
     }
+
+    for (uint32_t i = 0; i < XUserMaxUserCount; i++) {
+      if (kernel_state()->xam_state()->IsUserSignedIn(i)) {
+        kernel_state()
+            ->xam_state()
+            ->GetUserProfile(i)
+            ->InitializeSystemContexts();
+      }
+    }
   }
 
   // Initializing the shader storage in a blocking way so the user doesn't

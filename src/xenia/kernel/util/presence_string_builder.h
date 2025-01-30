@@ -33,6 +33,7 @@ class AttributeStringFormatter {
                            XLast* title_xlast, uint32_t user_index);
 
   bool IsValid() const { return true; }
+  bool IsComplete() const { return is_complete_; }
   std::u16string GetPresenceString() const { return presence_string_; }
 
  private:
@@ -46,23 +47,26 @@ class AttributeStringFormatter {
   bool ParseAttributeString();
   void BuildPresenceString();
 
-  std::u16string GetStringFromSpecifier(std::string_view specifier) const;
+  std::u16string GetStringFromSpecifier(std::string_view specifier);
   std::queue<std::string> GetPresenceFormatSpecifiers() const;
 
+  Property* GetProperty(const AttributeKey id);
+
   AttributeType GetAttributeTypeFromSpecifier(std::string_view specifier) const;
-  std::optional<uint32_t> GetAttributeIdFromSpecifier(
+  std::optional<AttributeKey> GetAttributeIdFromSpecifier(
       const std::string& specifier,
       const AttributeStringFormatter::AttributeType specifier_type) const;
 
-  const std::u16string attribute_string_;
+  std::u16string attribute_string_;
   std::map<std::string, std::u16string> attribute_to_string_mapping_;
 
   std::u16string presence_string_;
 
-  std::map<uint32_t, uint32_t> contexts_;
   std::vector<Property> properties_;
 
   XLast* title_xlast_;
+
+  bool is_complete_;
 
   // Tests
   //
