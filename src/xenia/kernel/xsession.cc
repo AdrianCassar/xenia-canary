@@ -76,10 +76,8 @@ X_RESULT XSession::CreateSession(uint8_t user_index, uint8_t public_slots,
   // - Explicitly create a presence session (Frogger without HOST bit)
   // Based on Presence flag set?
 
-  // Write user contexts. After session creation these are read only!
-  contexts_.insert(user_profile->contexts_.cbegin(),
-                   user_profile->contexts_.cend());
-
+  // Write user contexts and properties. After session creation these are read
+  // only!
   properties_ = user_profile->properties_;
 
   if (IsSystemlinkFlags(flags)) {
@@ -97,8 +95,10 @@ X_RESULT XSession::CreateSession(uint8_t user_index, uint8_t public_slots,
     JoinExistingSession(SessionInfo_ptr);
   }
 
-  local_details_.GameType = GetGameTypeContext();
-  local_details_.GameMode = GetGameModeContext();
+  local_details_.GameType =
+      std::get<uint32_t>(GetGameTypeContext()->GetValueGuest());
+  local_details_.GameMode =
+      std::get<uint32_t>(GetGameModeContext()->GetValueGuest());
   local_details_.Flags = flags;
   local_details_.MaxPublicSlots = public_slots;
   local_details_.MaxPrivateSlots = private_slots;
@@ -156,7 +156,6 @@ X_RESULT XSession::CreateHostSession(XSESSION_INFO* session_info,
     session_id_ = GenerateSessionId(XNKID_ONLINE);
 
     XLiveAPI::XSessionCreate(session_id_, session_data);
-    XLiveAPI::SessionContextSet(session_id_, contexts_);
     XLiveAPI::SessionPropertiesAdd(session_id_, properties_);
   }
 
@@ -555,7 +554,23 @@ X_RESULT XSession::MigrateHost(XSessionMigate* data) {
 
   if (!result->SessionID_UInt()) {
     XELOGI("Session Migration Failed");
+
+    // Returning X_E_FAIL will cause 5454082B to restart
     return X_E_FAIL;
+  }
+
+  if (data->user_index == XUserIndexNone) {
+    XELOGI("Session migration we're not host!");
+  }
+
+  if (kernel_state()->xam_state()->IsUserSignedIn(data->user_index)) {
+    properties_ = kernel_state()
+                      ->xam_state()
+                      ->GetUserProfile(data->user_index)
+                      ->properties_;
+
+    // Update properties, what if they're changed after migration?
+    XLiveAPI::SessionPropertiesAdd(result->SessionID_UInt(), properties_);
   }
 
   memset(SessionInfo_ptr, 0, sizeof(XSESSION_INFO));
@@ -724,11 +739,11 @@ X_RESULT XSession::GetSessions(Memory* memory, util::XLast* xlast,
     matchmaking_query = xlast->GetMatchmakingQuery();
     xlast_properties = xlast->GetPropertiesQuery();
 
-    auto const paramaters =
+    const auto paramaters =
         matchmaking_query->GetParameters(search_data->proc_index);
-    auto const filters =
+    const auto filters =
         matchmaking_query->GetFiltersLeft(search_data->proc_index);
-    auto const returns = matchmaking_query->GetReturns(search_data->proc_index);
+    const auto returns = matchmaking_query->GetReturns(search_data->proc_index);
 
     XELOGI("MatchmakingQuery: {}",
            matchmaking_query->GetName(search_data->proc_index));
@@ -737,7 +752,8 @@ X_RESULT XSession::GetSessions(Memory* memory, util::XLast* xlast,
       XUSER_CONTEXT& context = search_contexts_ptr[i];
 
       const auto context_string_id =
-          xlast->GetContextStringId(context.context_id, context.value);
+          xlast->GetContextsQuery()->GetContextValueStringID(context.context_id,
+                                                             context.value);
 
       if (context_string_id.has_value()) {
         const auto context_string = xlast->GetLocalizedString(
@@ -750,10 +766,11 @@ X_RESULT XSession::GetSessions(Memory* memory, util::XLast* xlast,
     for (uint32_t i = 0; i < search_data->num_props; i++) {
       XUSER_PROPERTY& property = search_properties_ptr[i];
 
-      const auto name = xlast_properties->GetPropertyName(property.property_id);
+      const auto name =
+          xlast_properties->GetPropertyFriendlyName(property.property_id);
 
       const auto property_string_id =
-          xlast->GetPropertyStringId(property.property_id);
+          xlast_properties->GetPropertyStringID(property.property_id);
 
       if (property_string_id.has_value()) {
         const auto property_string = xlast->GetLocalizedString(
@@ -765,14 +782,25 @@ X_RESULT XSession::GetSessions(Memory* memory, util::XLast* xlast,
   }
 
   for (uint32_t i = 0; i < session_count; i++) {
-    const auto context =
-        XLiveAPI::SessionContextGet(sessions.at(i)->SessionID_UInt());
+    std::vector<Property> contexts = {};
+    std::vector<Property> properties = {};
 
-    const auto properties =
+    const auto all_properties =
         XLiveAPI::SessionPropertiesGet(sessions.at(i)->SessionID_UInt());
 
+    for (const auto& property : all_properties) {
+      const X_USER_DATA_TYPE type =
+          static_cast<X_USER_DATA_TYPE>(property.GetPropertyId().type);
+
+      if (type == X_USER_DATA_TYPE::CONTEXT) {
+        contexts.push_back(property);
+      } else {
+        properties.push_back(property);
+      }
+    }
+
     FillSessionContext(memory, search_data->proc_index, matchmaking_query,
-                       context, search_data->num_props, search_contexts_ptr,
+                       contexts, search_data->num_ctx, search_contexts_ptr,
                        &search_results_ptr->results_ptr[i]);
     FillSessionProperties(memory, search_data->proc_index, matchmaking_query,
                           properties, search_data->num_props,
@@ -940,13 +968,13 @@ void XSession::FillSessionSearchResult(
 void XSession::FillSessionContext(
     Memory* memory, uint32_t matchmaking_index,
     util::XLastMatchmakingQuery* matchmaking_query,
-    std::map<uint32_t, uint32_t> contexts, uint32_t filter_contexts_count,
+    std::vector<Property> contexts, uint32_t filter_contexts_count,
     XUSER_CONTEXT* filter_contexts_ptr, XSESSION_SEARCHRESULT* result) {
   if (matchmaking_query) {
-    auto const filters = matchmaking_query->GetParameters(matchmaking_index);
-    auto const paramaters =
+    const auto filters = matchmaking_query->GetParameters(matchmaking_index);
+    const auto paramaters =
         matchmaking_query->GetFiltersLeft(matchmaking_index);
-    auto const returns = matchmaking_query->GetReturns(matchmaking_index);
+    const auto returns = matchmaking_query->GetReturns(matchmaking_index);
   }
 
   result->contexts_count = static_cast<uint32_t>(contexts.size());
@@ -963,8 +991,8 @@ void XSession::FillSessionContext(
 
   uint32_t i = 0;
   for (const auto& context : contexts) {
-    contexts_to_get[i].context_id = context.first;
-    contexts_to_get[i].value = context.second;
+    contexts_to_get[i].context_id = context.GetPropertyId().value;
+    contexts_to_get[i].value = std::get<uint32_t>(context.GetValueGuest());
     i++;
   }
 
@@ -977,9 +1005,9 @@ void XSession::FillSessionProperties(
     std::vector<Property> properties, uint32_t filter_properties_count,
     XUSER_PROPERTY* filter_properties_ptr, XSESSION_SEARCHRESULT* result) {
   if (matchmaking_query) {
-    auto const paramaters = matchmaking_query->GetParameters(matchmaking_index);
-    auto const filters = matchmaking_query->GetFiltersLeft(matchmaking_index);
-    auto const returns = matchmaking_query->GetReturns(matchmaking_index);
+    const auto paramaters = matchmaking_query->GetParameters(matchmaking_index);
+    const auto filters = matchmaking_query->GetFiltersLeft(matchmaking_index);
+    const auto returns = matchmaking_query->GetReturns(matchmaking_index);
   }
 
   result->properties_count = static_cast<uint32_t>(properties.size());
@@ -1006,6 +1034,18 @@ void XSession::FillSessionProperties(
   }
 
   result->properties_ptr = properties_ptr;
+}
+
+Property* XSession::GetProperty(const AttributeKey id) {
+  for (auto& entry : properties_) {
+    if (entry.GetPropertyId().value != id.value) {
+      continue;
+    }
+
+    return &entry;
+  }
+
+  return nullptr;
 }
 
 void XSession::PrintSessionDetails() {

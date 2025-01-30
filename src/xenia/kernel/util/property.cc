@@ -69,7 +69,6 @@ void Property::Write(Memory* memory, XUSER_PROPERTY* property) const {
   property->data.type = data_type_;
 
   switch (data_type_) {
-    case X_USER_DATA_TYPE::CONTENT:
     case X_USER_DATA_TYPE::WSTRING:
     case X_USER_DATA_TYPE::BINARY:
       property->data.binary.size = value_size_;
@@ -77,6 +76,7 @@ void Property::Write(Memory* memory, XUSER_PROPERTY* property) const {
       memcpy(memory->TranslateVirtual(property->data.binary.ptr), value_.data(),
              value_size_);
       break;
+    case X_USER_DATA_TYPE::CONTEXT:
     case X_USER_DATA_TYPE::INT32:
       memcpy(reinterpret_cast<uint8_t*>(&property->data.s32), value_.data(),
              value_size_);
@@ -106,7 +106,7 @@ userDataVariant Property::GetValueGuest() const {
   switch (data_type_) {
     case X_USER_DATA_TYPE::BINARY:
       return value_;
-    case X_USER_DATA_TYPE::CONTENT:
+    case X_USER_DATA_TYPE::CONTEXT:
     case X_USER_DATA_TYPE::INT32:
       return xe::load_and_swap<uint32_t>(value_.data());
     case X_USER_DATA_TYPE::INT64:
@@ -127,9 +127,9 @@ userDataVariant Property::GetValueGuest() const {
 
 userDataVariant Property::GetValueHost() const {
   switch (data_type_) {
-    case X_USER_DATA_TYPE::CONTENT:
     case X_USER_DATA_TYPE::BINARY:
       return value_;
+    case X_USER_DATA_TYPE::CONTEXT:
     case X_USER_DATA_TYPE::INT32:
       return *reinterpret_cast<const uint32_t*>(value_.data());
     case X_USER_DATA_TYPE::INT64:

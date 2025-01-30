@@ -336,6 +336,8 @@ void ProfileManager::Login(const uint64_t xuid, const uint8_t user_index,
       kernel_state_->xam_state()->achievement_manager()->LoadTitleAchievements(
           xuid, db);
     }
+
+    logged_profiles_[assigned_user_slot]->InitializeSystemContexts();
   }
 
   if (notify) {

@@ -16,7 +16,7 @@
 namespace xe {
 
 enum class X_USER_DATA_TYPE : uint8_t {
-  CONTENT = 0,
+  CONTEXT = 0,
   INT32 = 1,
   INT64 = 2,
   DOUBLE = 3,

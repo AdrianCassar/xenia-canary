@@ -79,7 +79,7 @@ namespace xe {
 #define X_PROPERTY_ID_MASK                                  0x00007FFF
 
 #define X_PROPERTYID(scope, type, id)                       ((scope ? X_PROPERTY_SCOPE_MASK : 0) | ((static_cast<uint8_t>(type) << 28) & X_PROPERTY_TYPE_MASK) | (id & X_PROPERTY_ID_MASK))
-#define X_CONTEXTID(scope, id)                              X_PROPERTYID(scope, static_cast<uint8_t>(X_USER_DATA_TYPE::CONTENT), id)
+#define X_CONTEXTID(scope, id)                              X_PROPERTYID(scope, static_cast<uint8_t>(X_USER_DATA_TYPE::CONTEXT), id)
 #define X_PROPERTYTYPEFROMID(id)                            ((id >> 28) & 0xF)
 #define X_ISSYSTEMPROPERTY(id)                              (id & X_PROPERTY_SCOPE_MASK)
 

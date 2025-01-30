@@ -111,7 +111,7 @@ class XLiveAPI {
       uint64_t session_id);
 
   static void SessionPropertiesAdd(uint64_t session_id,
-                                   std::vector<Property> properties);
+                                   std::vector<Property>& properties);
 
   static const std::vector<Property> SessionPropertiesGet(uint64_t session_id);
 
