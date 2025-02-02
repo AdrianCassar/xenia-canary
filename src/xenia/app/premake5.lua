@@ -21,13 +21,13 @@ project("xenia-app")
     "xenia-ui",
     "xenia-ui-vulkan",
     "xenia-vfs",
+    "xenia-app-discord-game-sdk",
   })
   links({
     "aes_128",
     "capstone",
     "fmt",
     "dxbc",
-    "discord-rpc",
     "glslang-spirv",
     "imgui",
     "libavcodec",

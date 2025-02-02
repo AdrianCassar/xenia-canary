@@ -7,12 +7,11 @@ project("xenia-app-discord")
   kind("StaticLib")
   language("C++")
   links({
-    "discord-rpc"
+    "xenia-app-discord-game-sdk",
   })
   defines({
   })
   includedirs({
-    project_root.."/third_party/discord-rpc/src"
   })
   files({
     "discord_presence.cc",

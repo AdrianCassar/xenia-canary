@@ -15,8 +15,10 @@
 #include <thread>
 #include <vector>
 
-#include "xenia/app/discord/discord_presence.h"
 #include "xenia/app/emulator_window.h"
+// clang-format off
+#include "xenia/app/discord/discord_presence.h"
+// clang-format on
 #include "xenia/base/assert.h"
 #include "xenia/base/cvar.h"
 #include "xenia/base/debugging.h"
@@ -465,8 +467,8 @@ bool EmulatorApp::OnInitialize() {
   XELOGI("Host cache root: {}", cache_root);
 
   if (cvars::discord) {
-    discord::DiscordPresence::Initialize();
-    discord::DiscordPresence::NotPlaying();
+    discord_presence::DiscordPresence::Initialize();
+    discord_presence::DiscordPresence::NotPlaying();
   }
 
   // Create the emulator but don't initialize so we can setup the window.
@@ -497,7 +499,7 @@ void EmulatorApp::OnDestroy() {
   ShutdownEmulatorThreadFromUIThread();
 
   if (cvars::discord) {
-    discord::DiscordPresence::Shutdown();
+    discord_presence::DiscordPresence::Shutdown();
   }
 
   Profiler::Dump();
@@ -610,7 +612,7 @@ void EmulatorApp::EmulatorThread() {
 
   emulator_->on_launch.AddListener([&](auto title_id, const auto& game_title) {
     if (cvars::discord) {
-      discord::DiscordPresence::PlayingTitle(
+      discord_presence::DiscordPresence::PlayingTitle(
           game_title.empty() ? "Unknown Title" : std::string(game_title));
     }
     app_context().CallInUIThread([this]() { emulator_window_->UpdateTitle(); });
@@ -630,7 +632,7 @@ void EmulatorApp::EmulatorThread() {
 
   emulator_->on_terminate.AddListener([]() {
     if (cvars::discord) {
-      discord::DiscordPresence::NotPlaying();
+      discord_presence::DiscordPresence::NotPlaying();
     }
   });
 

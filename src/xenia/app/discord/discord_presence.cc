@@ -2,63 +2,64 @@
 ******************************************************************************
 * Xenia : Xbox 360 Emulator Research Project                                 *
 ******************************************************************************
-* Copyright 2020 Ben Vanik. All rights reserved.                             *
+* Copyright 2025 Xenia Emulator. All rights reserved.                        *
 * Released under the BSD license - see LICENSE in the root for more details. *
 ******************************************************************************
 */
 
-#include "discord_presence.h"
 #include <ctime>
-#include "third_party/discord-rpc/include/discord_rpc.h"
-#include "xenia/base/string.h"
 
-// TODO: This library has been deprecated in favor of Discord's GameSDK.
+#include "xenia/app/discord/discord_presence.h"
+
 namespace xe {
-namespace discord {
+namespace discord_presence {
 
-void HandleDiscordReady(const DiscordUser* request) {}
-void HandleDiscordError(int errorCode, const char* message) {}
-void HandleDiscordJoinGame(const char* joinSecret) {}
-void HandleDiscordJoinRequest(const DiscordUser* request) {}
-void HandleDiscordSpectateGame(const char* spectateSecret) {}
+discord::Core* core = {};
 
 void DiscordPresence::Initialize() {
-  DiscordEventHandlers handlers = {};
-  handlers.ready = &HandleDiscordReady;
-  handlers.errored = &HandleDiscordError;
-  handlers.joinGame = &HandleDiscordJoinGame;
-  handlers.joinRequest = &HandleDiscordJoinRequest;
-  handlers.spectateGame = &HandleDiscordSpectateGame;
-  Discord_Initialize("1193272084797849762", &handlers, 0, "");
+  auto result = discord::Core::Create(1193272084797849762,
+                                      DiscordCreateFlags_Default, &core);
 }
 
 void DiscordPresence::NotPlaying() {
-  DiscordRichPresence discordPresence = {};
-  discordPresence.state = "Idle";
-  discordPresence.details = "Standby";
-  discordPresence.largeImageKey = "app";
-  discordPresence.largeImageText = "Xenia Canary - Experimental Testing branch";
-  discordPresence.startTimestamp = time(0);
-  discordPresence.instance = 1;
-  Discord_UpdatePresence(&discordPresence);
+  discord::Activity activity = {};
+
+  activity.SetState("Idle");
+  activity.SetDetails("Standby");
+  activity.GetAssets().SetLargeImage("app");
+  activity.GetAssets().SetLargeText("Xenia Canary");
+  activity.GetTimestamps().SetStart(time(nullptr));
+
+  UpdateActivity(activity);
+
+  // core->ActivityManager().UpdateActivity(activity,
+  //                                        [](discord::Result result) {});
 }
 
 void DiscordPresence::PlayingTitle(const std::string_view game_title) {
-  auto details = std::string(game_title);
-  DiscordRichPresence discordPresence = {};
-  discordPresence.state = "In Game";
-  discordPresence.details = details.c_str();
-  // TODO(gibbed): we don't have state icons yet.
-  // discordPresence.smallImageKey = "app";
-  // discordPresence.largeImageKey = "state_ingame";
-  discordPresence.largeImageKey = "app";
-  discordPresence.largeImageText = "Xenia Canary - Experimental Testing branch";
-  discordPresence.startTimestamp = time(0);
-  discordPresence.instance = 1;
-  Discord_UpdatePresence(&discordPresence);
+  discord::Activity activity = {};
+
+  activity.SetState("In Game");
+  activity.SetDetails(game_title.data());
+
+  UpdateActivity(activity);
+
+  // core->ActivityManager().UpdateActivity(activity,
+  //                                        [](discord::Result result) {});
 }
 
-void DiscordPresence::Shutdown() { Discord_Shutdown(); }
+void DiscordPresence::Shutdown() { delete core; }
 
-}  // namespace discord
+discord::Result DiscordPresence::UpdateActivity(
+    discord::Activity const& activity) {
+  discord::Result update_result = discord::Result::Ok;
+
+  core->ActivityManager().UpdateActivity(
+      activity,
+      [&update_result](discord::Result result) { update_result = result; });
+
+  return update_result;
+}
+
+}  // namespace discord_presence
 }  // namespace xe
