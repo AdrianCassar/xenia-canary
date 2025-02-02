@@ -429,6 +429,16 @@ class XSession : public XObject {
     return (state_ & STATE_FLAGS_DELETED) == STATE_FLAGS_DELETED;
   }
 
+  const bool IsValidModifyFlags(uint32_t flags) const {
+    const uint32_t allowed_modify_flags =
+        JOIN_IN_PROGRESS_DISABLED | JOIN_VIA_PRESENCE_FRIENDS_ONLY |
+        JOIN_VIA_PRESENCE_DISABLED | INVITES_DISABLED | ARBITRATION;
+
+    const uint32_t changed_flags = local_details_.Flags ^ flags;
+
+    return (changed_flags & ~allowed_modify_flags) == 0;
+  }
+
  private:
   void PrintSessionDetails();
   void PrintSessionType(SessionFlags flags);
