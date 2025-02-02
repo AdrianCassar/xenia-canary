@@ -486,9 +486,17 @@ X_RESULT XSession::LeaveSession(XSessionLeave* data) {
 
 X_RESULT XSession::ModifySession(XSessionModify* data) {
   XELOGI("Modifying session {:016X}", session_id_);
-  PrintSessionType(static_cast<SessionFlags>((uint32_t)data->flags));
 
-  local_details_.Flags = data->flags;
+  XSessionModify modify = *data;
+
+  if (IsValidModifyFlags(data->flags)) {
+    PrintSessionType(static_cast<SessionFlags>((uint32_t)data->flags));
+
+    local_details_.Flags = data->flags;
+  } else {
+    modify.flags = local_details_.Flags;
+    XELOGI("{}: Invalid Flags!", __func__);
+  }
 
   const uint32_t num_private_slots = std::max<int32_t>(
       0, local_details_.MaxPrivateSlots - local_details_.AvailablePrivateSlots);
@@ -510,7 +518,7 @@ X_RESULT XSession::ModifySession(XSessionModify* data) {
   PrintSessionDetails();
 
   if (IsHost() && IsXboxLive()) {
-    XLiveAPI::SessionModify(session_id_, data);
+    XLiveAPI::SessionModify(session_id_, &modify);
   }
 
   return X_ERROR_SUCCESS;
