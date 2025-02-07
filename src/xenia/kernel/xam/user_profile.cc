@@ -165,7 +165,7 @@ UserProfile::UserProfile(uint64_t xuid, X_XAMACCOUNTINFO* account_info)
   Property GAMER_SIGMA = Property(X_PROPERTY_GAMER_SIGMA, sizeof(uint64_t),
                                   reinterpret_cast<uint8_t*>(&gamer_sigma));
 
-  AddProperty(&PUID);             // Required
+  AddProperty(&PUID);             // Required - 58410AC2 sets this manually
   AddProperty(&GAMER_HOST_NAME);  // Required
   AddProperty(&GAMER_NAME);
   AddProperty(&GAMER_ZONE);

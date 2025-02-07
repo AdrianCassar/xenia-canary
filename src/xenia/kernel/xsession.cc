@@ -155,6 +155,9 @@ X_RESULT XSession::CreateHostSession(XSESSION_INFO* session_info,
     XELOGI("Creating xbox live session");
     session_id_ = GenerateSessionId(XNKID_ONLINE);
 
+    // 58410821 adds properties after session creation
+    // Properties are ad-hoc therefore should be updated on backend, only
+    // update if value changed to reduce POST requests.
     XLiveAPI::XSessionCreate(session_id_, session_data);
     XLiveAPI::SessionPropertiesAdd(session_id_, properties_);
   }
