@@ -493,10 +493,46 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
         const std::string desc = title_xdbf.GetStringTableEntry(
             title_language, property_xdbf.string_id);
 
-        Property property = Property(XGISetPropertyBuffer->property_id,
-                                     XGISetPropertyBuffer->data_size,
-                                     memory_->TranslateVirtual<uint8_t*>(
-                                         XGISetPropertyBuffer->data_address));
+        // 58410821 & 58410AC2 use input size smaller than expected
+        if (XGISetPropertyBuffer->data_size != property_xdbf.data_size) {
+          XELOGD("Property 0x{:08X} Input Size: {} Expected Size {}!",
+                 XGISetPropertyBuffer->property_id.get(),
+                 XGISetPropertyBuffer->data_size.get(),
+                 property_xdbf.data_size.get());
+        }
+
+        const AttributeKey attribute =
+            static_cast<AttributeKey>(XGISetPropertyBuffer->property_id);
+
+        const X_USER_DATA_TYPE property_type =
+            static_cast<X_USER_DATA_TYPE>(attribute.type);
+
+        uint32_t property_size = property_xdbf.data_size;
+
+        switch (property_type) {
+          case xe::X_USER_DATA_TYPE::CONTEXT:
+          case xe::X_USER_DATA_TYPE::INT32:
+          case xe::X_USER_DATA_TYPE::FLOAT:
+            property_size = sizeof(uint32_t);
+            break;
+          case xe::X_USER_DATA_TYPE::INT64:
+          case xe::X_USER_DATA_TYPE::DOUBLE:
+          case xe::X_USER_DATA_TYPE::DATETIME:
+            property_size = sizeof(uint64_t);
+            break;
+          case xe::X_USER_DATA_TYPE::WSTRING:
+          case xe::X_USER_DATA_TYPE::BINARY:
+            property_size = XGISetPropertyBuffer->data_size;
+            break;
+        }
+
+        // 58410821
+        // Properties are ad-hoc therefore should be updated on backend, only
+        // update if value changed to reduce POST requests.
+        Property property =
+            Property(XGISetPropertyBuffer->property_id, property_size,
+                     memory_->TranslateVirtual<uint8_t*>(
+                         XGISetPropertyBuffer->data_address));
 
         auto user_profile = kernel_state_->xam_state()->GetUserProfile(
             XGISetPropertyBuffer->user_index);
