@@ -1932,7 +1932,7 @@ dword_result_t NetDll_XNetCreateKey_entry(dword_t caller,
   const xe::be<uint64_t> xnkid = GenerateSessionId(XNKID_SYSTEM_LINK);
   memcpy(session_key->ab, &xnkid, sizeof(XNKID));
 
-  XSession::GenerateIdentityExchangeKey(exchange_key);
+  GenerateIdentityExchangeKey(exchange_key);
   // memcpy(exchange_key, kernel_state()->title_lan_key(), sizeof(XNKEY));
 
   return 0;

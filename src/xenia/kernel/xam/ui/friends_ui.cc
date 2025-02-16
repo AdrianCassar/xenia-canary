@@ -7,37 +7,38 @@
  ******************************************************************************
  */
 
-#ifndef XENIA_KERNEL_XAM_UI_GAMERCARD_FROM_XUID_UI_H_
-#define XENIA_KERNEL_XAM_UI_GAMERCARD_FROM_XUID_UI_H_
-
-#include "xenia/kernel/json/friend_presence_object_json.h"
-#include "xenia/kernel/xam/xam_ui.h"
+#include "xenia/kernel/xam/ui/friends_ui.h"
+#include "xenia/kernel/XLiveAPI.h"
 
 namespace xe {
 namespace kernel {
 namespace xam {
 namespace ui {
 
-class GamercardFromXUIDUI : public XamDialog {
- public:
-  GamercardFromXUIDUI(xe::ui::ImGuiDrawer* imgui_drawer, const uint64_t xuid,
-                      UserProfile* profile);
+FriendsUI::FriendsUI(xe::ui::ImGuiDrawer* imgui_drawer, UserProfile* profile)
+    : XamDialog(imgui_drawer), profile_(profile) {}
 
- private:
-  void OnDraw(ImGuiIO& io) override;
+void FriendsUI::OnDraw(ImGuiIO& io) {
+  if (!args.friends_open) {
+    args.first_draw = true;
+    args.refersh_presence_sync = true;
+    args.friends_open = true;
 
-  bool card_opened = false;
-  bool is_self = false;
-  bool are_friends = false;
-  std::string title_;
-  const uint64_t xuid_;
-  UserProfile* profile_;
-  FriendPresenceObjectJSON presence_;
-};
+    ImGui::OpenPopup("Friends");
+
+    if (XLiveAPI::IsConnectedToServer()) {
+      args.filter_offline = true;
+    }
+  }
+
+  xeDrawFriendsContent(imgui_drawer(), profile_, args, &presences);
+
+  if (!args.friends_open) {
+    Close();
+  }
+}
 
 }  // namespace ui
 }  // namespace xam
 }  // namespace kernel
 }  // namespace xe
-
-#endif

@@ -44,6 +44,7 @@ UserProfile::UserProfile(const uint64_t xuid,
 
   friends_ = std::vector<X_ONLINE_FRIEND>();
   subscriptions_ = std::map<uint64_t, X_ONLINE_PRESENCE>();
+  self_invite = {};
 
   for (const auto& friend_xuid : XLiveAPI::ParseFriendsXUIDs()) {
     AddFriendFromXUID(friend_xuid);
@@ -313,6 +314,10 @@ bool UserProfile::AddFriend(X_ONLINE_FRIEND* peer) {
     return false;
   }
 
+  if (GetOnlineXUID() == peer->xuid) {
+    return false;
+  }
+
   if (peer == nullptr) {
     return false;
   }
@@ -351,6 +356,13 @@ bool UserProfile::RemoveFriend(const uint64_t xuid) {
   }
 
   return removed;
+}
+
+void UserProfile::RemoveAllFriends() {
+  for (const auto& friend_ : GetFriends()) {
+    RemoveFriend(friend_.xuid);
+    kernel::XLiveAPI::RemoveFriend(friend_.xuid);
+  }
 }
 
 bool UserProfile::GetFriendFromIndex(const uint32_t index,
@@ -458,6 +470,10 @@ bool UserProfile::UnsubscribeFromXUID(const uint64_t xuid) {
 
 bool UserProfile::IsSubscribed(const uint64_t xuid) {
   return subscriptions_.count(xuid) != 0;
+}
+
+void UserProfile::SetSelfInvite(X_INVITE_INFO* invite_info) {
+  memcpy(&self_invite, invite_info, sizeof(X_INVITE_INFO));
 }
 
 const std::vector<uint64_t> UserProfile::GetSubscribedXUIDs() const {

@@ -364,12 +364,18 @@ void ProfileConfigDialog::OnDraw(ImGuiIO& io) {
     return;
   }
 }
-void FriendsManagerDialog::OnDraw(ImGuiIO& io) {
-  if (!has_opened_) {
-    ImGui::OpenPopup("Friends Manager");
-    has_opened_ = true;
+
+void ManagerDialog::OnDraw(ImGuiIO& io) {
+  if (!manager_opened_) {
+    manager_opened_ = true;
+    ImGui::OpenPopup("Manager");
+
+    if (kernel::XLiveAPI::IsConnectedToServer()) {
+      args.filter_offline = true;
+    }
   }
 
+  // Add profile dropdown selector?
   const uint32_t user_index = 0;
 
   auto profile =
@@ -378,151 +384,29 @@ void FriendsManagerDialog::OnDraw(ImGuiIO& io) {
 
   const bool is_profile_signed_in = profile == nullptr;
 
-  ImVec2 btn_size = ImVec2(ImGui::GetWindowSize().x * 0.4f, 0);
-  ImVec2 btn2_size = ImVec2(ImGui::GetWindowSize().x * 0.2f, 0);
-  ImVec2 btn3_size = ImVec2(ImGui::GetWindowSize().x * 0.215f, 0);
+  ImGuiViewport* viewport = ImGui::GetMainViewport();
+  ImVec2 center = viewport->GetCenter();
 
-  if (ImGui::BeginPopupModal("Friends Manager", nullptr,
+  ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+  if (ImGui::BeginPopupModal("Manager", &manager_opened_,
                              ImGuiWindowFlags_AlwaysAutoResize)) {
+    ImVec2 btn_size = ImVec2(200, 40);
+
     if (is_profile_signed_in) {
       ImGui::Text("You're not logged into a profile!");
       ImGui::Separator();
     }
 
+    ImGui::SetWindowFontScale(1.2f);
+
     ImGui::BeginDisabled(is_profile_signed_in);
-    if (ImGui::Button("Add Friend", btn_size)) {
-      ImGui::OpenPopup("Add Friend");
+    if (ImGui::Button("Friends", btn_size)) {
+      args.friends_open = true;
+      ImGui::OpenPopup("Friends");
     }
     ImGui::EndDisabled();
 
     ImGui::SameLine();
-
-    ImGui::BeginDisabled(is_profile_signed_in);
-    if (ImGui::Button("Remove All Friends", btn_size)) {
-      ImGui::OpenPopup("Remove All Friends");
-    }
-    ImGui::EndDisabled();
-
-    if (ImGui::BeginPopupModal("Add Friend", nullptr,
-                               ImGuiWindowFlags_AlwaysAutoResize)) {
-      const uint32_t user_index = 0;
-
-      if (are_friends) {
-        ImGui::Text("Friend Added!");
-        ImGui::Separator();
-      }
-
-      const std::string xuid_string = std::string(add_xuid_);
-
-      uint64_t xuid = 0;
-
-      if (xuid_string.length() == 16) {
-        if (xuid_string.substr(0, 4) == "0009") {
-          xuid = string_util::from_string<uint64_t>(xuid_string, true);
-
-          valid_xuid = IsOnlineXUID(xuid);
-          are_friends = profile->IsFriend(xuid);
-        }
-
-        if (!valid_xuid) {
-          ImGui::Text("Invalid XUID!");
-          ImGui::Separator();
-        }
-      } else {
-        valid_xuid = false;
-        are_friends = false;
-      }
-
-      ImGui::Text("Friend's Online XUID:");
-
-      ImGui::SameLine();
-
-      const std::string friends_count =
-          fmt::format("\t\t\t\t\t\t\t\t{}/100", profile->GetFriendsCount());
-
-      ImGui::Text(friends_count.c_str());
-
-      ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
-
-      ImGui::InputTextWithHint("##AddFriend", "0009XXXXXXXXXXXX", add_xuid_,
-                               sizeof(add_xuid_),
-                               ImGuiInputTextFlags_CharsHexadecimal |
-                                   ImGuiInputTextFlags_CharsUppercase);
-
-      if (ImGui::Button("Paste Clipboard", btn3_size)) {
-        const char* clipboard = ImGui::GetClipboardText();
-
-        if (clipboard) {
-          std::string clipboard_str = std::string(clipboard);
-
-          if (!clipboard_str.empty()) {
-            strcpy(add_xuid_, clipboard_str.substr(0, 16).c_str());
-          }
-        }
-      }
-
-      ImGui::SameLine();
-
-      ImGui::BeginDisabled(!valid_xuid || are_friends);
-      if (ImGui::Button("Add", btn3_size)) {
-        profile->AddFriendFromXUID(xuid);
-        xe::kernel::XLiveAPI::AddFriend(xuid);
-
-        emulator_window_->emulator()->kernel_state()->BroadcastNotification(
-            kXNotificationFriendsFriendAdded, user_index);
-
-        emulator_window_->emulator()
-            ->display_window()
-            ->app_context()
-            .CallInUIThread([&]() {
-              new xe::ui::HostNotificationWindow(imgui_drawer(), "Added Friend",
-                                                 xuid_string, 0);
-            });
-      }
-      ImGui::EndDisabled();
-
-      ImGui::SameLine();
-
-      if (ImGui::Button("Close", btn3_size)) {
-        ImGui::CloseCurrentPopup();
-      }
-
-      ImGui::EndPopup();
-    }
-
-    if (ImGui::BeginPopupModal("Remove All Friends", nullptr,
-                               ImGuiWindowFlags_AlwaysAutoResize)) {
-      ImGui::Text("Are you sure?");
-      ImGui::Separator();
-
-      if (ImGui::Button("Yes", btn2_size)) {
-        for (const auto& friend_ : profile->GetFriends()) {
-          profile->RemoveFriend(friend_.xuid);
-          xe::kernel::XLiveAPI::RemoveFriend(friend_.xuid);
-        }
-
-        emulator_window_->emulator()->kernel_state()->BroadcastNotification(
-            kXNotificationFriendsFriendRemoved, user_index);
-
-        emulator_window_->emulator()
-            ->display_window()
-            ->app_context()
-            .CallInUIThread([&]() {
-              new xe::ui::HostNotificationWindow(
-                  imgui_drawer(), "Removed All Friends", "Success", 0);
-            });
-
-        ImGui::CloseCurrentPopup();
-      }
-
-      ImGui::SameLine();
-
-      if (ImGui::Button("Cancel", btn2_size)) {
-        ImGui::CloseCurrentPopup();
-      }
-
-      ImGui::EndPopup();
-    }
 
     if (ImGui::Button("Refresh Presence", btn_size)) {
       emulator_window_->emulator()->kernel_state()->BroadcastNotification(
@@ -537,13 +421,22 @@ void FriendsManagerDialog::OnDraw(ImGuiIO& io) {
           });
     }
 
-    ImGui::SameLine();
+    ImGui::SetWindowFontScale(1.0f);
 
-    if (ImGui::Button("Exit", btn_size)) {
-      ImGui::CloseCurrentPopup();
-      emulator_window_->ToggleFriendsDialog();
+    if (!args.friends_open) {
+      args.first_draw = false;
+      args.refersh_presence_sync = true;
+      presences = {};
     }
+
+    xeDrawFriendsContent(imgui_drawer(), profile, args, &presences);
+
     ImGui::EndPopup();
+  }
+
+  if (!manager_opened_) {
+    ImGui::CloseCurrentPopup();
+    emulator_window_->ToggleFriendsDialog();
   }
 }
 

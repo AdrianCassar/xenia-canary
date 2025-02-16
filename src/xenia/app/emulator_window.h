@@ -300,7 +300,7 @@ class EmulatorWindow {
   // messages back to guest.
   std::unique_ptr<ProfileConfigDialog> profile_config_dialog_;
 
-  std::unique_ptr<FriendsManagerDialog> friends_manager_dialog_;
+  std::unique_ptr<ManagerDialog> friends_manager_dialog_;
 
   std::vector<RecentTitleEntry> recently_launched_titles_;
 };

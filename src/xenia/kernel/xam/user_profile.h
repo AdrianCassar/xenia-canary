@@ -179,6 +179,7 @@ class UserProfile {
   bool AddFriend(X_ONLINE_FRIEND* add_friend);
   bool RemoveFriend(const X_ONLINE_FRIEND& peer);
   bool RemoveFriend(const uint64_t xuid);
+  void RemoveAllFriends();
 
   bool GetFriendFromIndex(const uint32_t index, X_ONLINE_FRIEND* peer);
   bool GetFriendFromXUID(const uint64_t xuid, X_ONLINE_FRIEND* peer);
@@ -195,6 +196,9 @@ class UserProfile {
   bool UnsubscribeFromXUID(const uint64_t xuid);
   bool IsSubscribed(const uint64_t xuid);
 
+  void SetSelfInvite(X_INVITE_INFO* invite_info);
+  X_INVITE_INFO* GetSelfInvite() { return &self_invite; };
+
   const std::vector<uint64_t> GetSubscribedXUIDs() const;
 
   std::string GetPresenceString();
@@ -202,6 +206,7 @@ class UserProfile {
  private:
   uint64_t xuid_;
   X_XAMACCOUNTINFO account_info_;
+  X_INVITE_INFO self_invite;
 
   GpdInfoProfile dashboard_gpd_;
   std::map<uint32_t, GpdInfoTitle> games_gpd_;

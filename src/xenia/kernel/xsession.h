@@ -360,12 +360,6 @@ class XSession : public XObject {
                                   uint32_t search_results_ptr,
                                   uint32_t results_buffer_size);
 
-  static void GenerateIdentityExchangeKey(XNKEY* key) {
-    for (uint8_t i = 0; i < sizeof(XNKEY); i++) {
-      key->ab[i] = i;
-    }
-  }
-
   const bool IsXboxLive() { return !is_systemlink_; }
 
   const bool IsSystemlink() { return is_systemlink_; }

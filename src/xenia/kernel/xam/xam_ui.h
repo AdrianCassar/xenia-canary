@@ -10,7 +10,9 @@
 #ifndef XENIA_KERNEL_XAM_XAM_UI_H_
 #define XENIA_KERNEL_XAM_XAM_UI_H_
 
+#include "xenia/kernel/json/friend_presence_object_json.h"
 #include "xenia/kernel/util/shim_utils.h"
+#include "xenia/kernel/xam/ui/netplay_manager_util.h"
 #include "xenia/ui/imgui_dialog.h"
 #include "xenia/ui/imgui_drawer.h"
 
@@ -118,6 +120,18 @@ bool xeDrawProfileContent(xe::ui::ImGuiDrawer* imgui_drawer,
                           std::function<bool()> context_menu,
                           std::function<void()> on_profile_change,
                           uint64_t* selected_xuid);
+
+bool xeDrawFriendsContent(xe::ui::ImGuiDrawer* imgui_drawer,
+                          UserProfile* profile, ui::FriendsContentArgs& args,
+                          std::vector<FriendPresenceObjectJSON>* presences);
+
+bool xeDrawFriendContent(xe::ui::ImGuiDrawer* imgui_drawer,
+                         UserProfile* profile,
+                         FriendPresenceObjectJSON& presence,
+                         uint64_t* selected_xuid_, uint64_t* removed_xuid_);
+
+bool xeDrawAddFriend(xe::ui::ImGuiDrawer* imgui_drawer, UserProfile* profile,
+                     ui::AddFriendArgs& args);
 
 }  // namespace xam
 }  // namespace kernel

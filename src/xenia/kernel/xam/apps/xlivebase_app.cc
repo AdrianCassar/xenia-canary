@@ -296,11 +296,12 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
       return CreateFriendsEnumerator(buffer_length);
     }
     case 0x00058023: {
+      // 584107D7
+      // 5841091C expects xuid_invitee
       XELOGD(
-          "CXLiveMessaging::XMessageGameInviteGetAcceptedInfo({:08X}, {:08X}) "
-          "unimplemented",
+          "CXLiveMessaging::XMessageGameInviteGetAcceptedInfo({:08X}, {:08X})",
           buffer_ptr, buffer_length);
-      return X_E_SUCCESS;
+      return XInviteGetAcceptedInfo(buffer_length);
     }
     case 0x00058032: {
       XELOGD("XGetTaskProgress({:08X}, {:08X}) unimplemented", buffer_ptr,
@@ -756,6 +757,69 @@ void XLiveBaseApp::UpdatePresenceXUIDs(const std::vector<uint64_t>& xuids,
       profile->SetSubscriptionFromXUID(xuid, &presence);
     }
   }
+}
+
+X_HRESULT XLiveBaseApp::XInviteGetAcceptedInfo(uint32_t buffer_length) {
+  X_INVITE_GET_ACCEPTED_INFO* AcceptedInfo =
+      memory_->TranslateVirtual<X_INVITE_GET_ACCEPTED_INFO*>(buffer_length);
+
+  const uint32_t user_index = xe::load_and_swap<uint32_t>(
+      memory_->TranslateVirtual(AcceptedInfo->user_index.object_ptr));
+
+  X_INVITE_INFO* invite_info = reinterpret_cast<X_INVITE_INFO*>(
+      memory_->TranslateVirtual(AcceptedInfo->invite_info.object_ptr));
+
+  if (!kernel_state()->xam_state()->IsUserSignedIn(user_index)) {
+    return X_E_FAIL;
+  }
+
+  const auto user_profile =
+      kernel_state()->xam_state()->GetUserProfile(user_index);
+
+  memcpy(invite_info, user_profile->GetSelfInvite(), sizeof(X_INVITE_INFO));
+  memset(user_profile->GetSelfInvite(), 0, sizeof(X_INVITE_INFO));
+
+  const std::vector<uint64_t> xuids = {invite_info->xuid_inviter};
+
+  const auto presence = XLiveAPI::GetFriendsPresence(xuids);
+
+  uint64_t session_id = 0;
+
+  if (!presence->PlayersPresence().empty()) {
+    session_id = presence->PlayersPresence().front().SessionID();
+  }
+
+  if (!session_id) {
+    return X_E_FAIL;
+  }
+
+  const auto session = XLiveAPI::XSessionGet(session_id);
+
+  if (!session->SessionID_UInt()) {
+    return X_E_FAIL;
+  }
+
+  // Use GetXnAddrFromSessionObject
+  Uint64toXNKID(session->SessionID_UInt(), &invite_info->host_info.sessionID);
+  GenerateIdentityExchangeKey(&invite_info->host_info.keyExchangeKey);
+
+  memset(&invite_info->host_info.hostAddress, 0, sizeof(XNADDR));
+
+  invite_info->host_info.hostAddress.inaOnline =
+      ip_to_in_addr(session->HostAddress());
+  invite_info->host_info.hostAddress.ina =
+      ip_to_in_addr(session->HostAddress());
+
+  const MacAddress mac = MacAddress(session->MacAddress());
+
+  memcpy(&invite_info->host_info.hostAddress.abEnet, mac.raw(),
+         sizeof(MacAddress));
+  memcpy(&invite_info->host_info.hostAddress.abOnline, mac.raw(),
+         sizeof(MacAddress));
+
+  invite_info->host_info.hostAddress.wPortOnline = session->Port();
+
+  return X_E_SUCCESS;
 }
 
 X_HRESULT XLiveBaseApp::XStringVerify(uint32_t buffer_ptr,
