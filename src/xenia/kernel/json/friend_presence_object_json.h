@@ -12,6 +12,7 @@
 
 #include <vector>
 
+#include "xenia/base/string_util.h"
 #include "xenia/kernel/json/base_object_json.h"
 #include "xenia/kernel/xnet.h"
 
@@ -43,6 +44,13 @@ class FriendPresenceObjectJSON : public BaseObjectJSON {
   const xe::be<uint64_t>& SessionID() const { return sessionId_; }
   void SessionID(const xe::be<uint64_t>& sessionId) { sessionId_ = sessionId; }
 
+  const uint32_t TitleIDValue() const {
+    if (TitleID().empty()) {
+      return 0;
+    } else {
+      return xe::string_util::from_string<uint32_t>(TitleID(), true);
+    }
+  }
   const std::string& TitleID() const { return title_id_; }
   void TitleID(const std::string& titleID) { title_id_ = titleID; }
 
