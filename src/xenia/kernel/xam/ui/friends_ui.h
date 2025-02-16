@@ -7,10 +7,9 @@
  ******************************************************************************
  */
 
-#ifndef XENIA_KERNEL_XAM_UI_GAMERCARD_FROM_XUID_UI_H_
-#define XENIA_KERNEL_XAM_UI_GAMERCARD_FROM_XUID_UI_H_
+#ifndef XENIA_KERNEL_XAM_UI_FRIENDS_UI_H_
+#define XENIA_KERNEL_XAM_UI_FRIENDS_UI_H_
 
-#include "xenia/kernel/json/friend_presence_object_json.h"
 #include "xenia/kernel/xam/xam_ui.h"
 
 namespace xe {
@@ -18,21 +17,16 @@ namespace kernel {
 namespace xam {
 namespace ui {
 
-class GamercardFromXUIDUI : public XamDialog {
+class FriendsUI : public XamDialog {
  public:
-  GamercardFromXUIDUI(xe::ui::ImGuiDrawer* imgui_drawer, const uint64_t xuid,
-                      UserProfile* profile);
+  FriendsUI(xe::ui::ImGuiDrawer* imgui_drawer, UserProfile* profile);
 
  private:
   void OnDraw(ImGuiIO& io) override;
 
-  bool card_opened = false;
-  bool is_self = false;
-  bool are_friends = false;
-  std::string title_;
-  const uint64_t xuid_;
   UserProfile* profile_;
-  FriendPresenceObjectJSON presence_;
+  ui::FriendsContentArgs args = {};
+  std::vector<FriendPresenceObjectJSON> presences;
 };
 
 }  // namespace ui
