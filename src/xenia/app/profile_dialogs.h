@@ -10,6 +10,8 @@
 #ifndef XENIA_APP_PROFILE_DIALOGS_H_
 #define XENIA_APP_PROFILE_DIALOGS_H_
 
+#include "xenia/kernel/json/friend_presence_object_json.h"
+#include "xenia/kernel/xam/ui/netplay_manager_util.h"
 #include "xenia/ui/imgui_dialog.h"
 #include "xenia/ui/imgui_drawer.h"
 #include "xenia/xbox.h"
@@ -52,20 +54,20 @@ class ProfileConfigDialog final : public ui::ImGuiDialog {
   EmulatorWindow* emulator_window_;
 };
 
-class FriendsManagerDialog final : public ui::ImGuiDialog {
+class ManagerDialog final : public ui::ImGuiDialog {
  public:
-  FriendsManagerDialog(ui::ImGuiDrawer* imgui_drawer,
-                       EmulatorWindow* emulator_window)
+  ManagerDialog(ui::ImGuiDrawer* imgui_drawer, EmulatorWindow* emulator_window)
       : ui::ImGuiDialog(imgui_drawer), emulator_window_(emulator_window) {}
 
  protected:
   void OnDraw(ImGuiIO& io) override;
 
  private:
-  bool has_opened_ = false;
-  bool are_friends = false;
-  bool valid_xuid = false;
-  char add_xuid_[17] = "";
+  bool manager_opened_ = false;
+  uint64_t selected_xuid_ = 0;
+  uint64_t removed_xuid_ = 0;
+  xe::kernel::xam::ui::FriendsContentArgs args = {};
+  std::vector<xe::kernel::FriendPresenceObjectJSON> presences;
   EmulatorWindow* emulator_window_;
 };
 
