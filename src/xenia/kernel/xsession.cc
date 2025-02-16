@@ -18,17 +18,6 @@ DECLARE_bool(upnp);
 namespace xe {
 namespace kernel {
 
-void Uint64toXNKID(uint64_t sessionID, XNKID* xnkid) {
-  uint64_t session_id = xe::byte_swap(sessionID);
-  memcpy(xnkid->ab, &session_id, sizeof(XNKID));
-}
-
-uint64_t XNKIDtoUint64(XNKID* sessionID) {
-  uint64_t session_id = 0;
-  memcpy(&session_id, sessionID->ab, sizeof(XNKID));
-  return xe::byte_swap(session_id);
-}
-
 XSession::XSession(KernelState* kernel_state)
     : XObject(kernel_state, Type::Session) {
   session_id_ = -1;
