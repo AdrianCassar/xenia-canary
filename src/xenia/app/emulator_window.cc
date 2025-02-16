@@ -978,7 +978,7 @@ bool EmulatorWindow::Initialize() {
     Netplay_menu->AddChild(std::move(Network_mode_menu));
 
     Netplay_menu->AddChild(MenuItem::Create(
-        MenuItem::Type::kString, "&Friends Manager", "",
+        MenuItem::Type::kString, "&Manager", "",
         std::bind(&EmulatorWindow::ToggleFriendsDialog, this)));
 
     Netplay_menu->AddChild(MenuItem::Create(MenuItem::Type::kSeparator));
@@ -1931,7 +1931,7 @@ void EmulatorWindow::ToggleFriendsDialog() {
     emulator_->kernel_state()->xam_state()->is_xam_dialog_present_.store(true);
 
     friends_manager_dialog_ =
-        std::make_unique<FriendsManagerDialog>(imgui_drawer_.get(), this);
+        std::make_unique<ManagerDialog>(imgui_drawer_.get(), this);
   } else {
     disable_hotkeys_ = false;
     emulator_->kernel_state()->BroadcastNotification(kXNotificationSystemUI,
