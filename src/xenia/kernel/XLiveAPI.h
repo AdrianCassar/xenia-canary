@@ -151,6 +151,15 @@ class XLiveAPI {
   static std::unique_ptr<HTTPResponseObjectJSON> PraseResponse(
       response_data response);
 
+  static std::vector<FriendPresenceObjectJSON> GetAllFriendsPresence(
+      const uint32_t user_index);
+
+  static std::map<uint64_t, FriendPresenceObjectJSON> GetOfflineFriendsPresence(
+      const uint32_t user_index);
+
+  static std::map<uint64_t, FriendPresenceObjectJSON> GetOnlineFriendsPresence(
+      const uint32_t user_index);
+
   static const uint8_t* GenerateMacAddress();
 
   static const uint8_t* GetMACaddress();

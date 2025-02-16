@@ -68,14 +68,16 @@ GamercardFromXUIDUI::GamercardFromXUIDUI(xe::ui::ImGuiDrawer* imgui_drawer,
 }
 
 void GamercardFromXUIDUI::OnDraw(ImGuiIO& io) {
-  bool first_draw = false;
-  if (!has_opened_) {
+  if (!card_opened) {
+    card_opened = true;
     ImGui::OpenPopup(title_.c_str());
-    has_opened_ = true;
-    first_draw = true;
   }
 
-  if (ImGui::BeginPopupModal(title_.c_str(), nullptr,
+  ImGuiViewport* viewport = ImGui::GetMainViewport();
+  ImVec2 center = viewport->GetCenter();
+
+  ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+  if (ImGui::BeginPopupModal(title_.c_str(), &card_opened,
                              ImGuiWindowFlags_AlwaysAutoResize)) {
     if (is_self) {
       const uint8_t user_index =
@@ -85,104 +87,29 @@ void GamercardFromXUIDUI::OnDraw(ImGuiIO& io) {
           kernel_state()->xam_state()->profile_manager()->GetAccount(
               profile_->xuid());
 
-      xeDrawProfileContent(imgui_drawer(), profile_->xuid(), user_index,
-                           account, nullptr, nullptr, nullptr, nullptr);
-      ImGui::NewLine();
-    } else if (!presence_.Gamertag().empty()) {
-      ImGui::TextUnformatted(presence_.Gamertag().c_str());
-      ImGui::NewLine();
+      const auto gamer_icon = kernel_state()
+                                  ->xam_state()
+                                  ->GetUserProfile(profile_->xuid())
+                                  ->GetProfileIcon(XTileType::kGamerTile);
+
+      xe::ui::ImmediateTexture* icon_texture =
+          imgui_drawer()->LoadImGuiIcon(gamer_icon).release();
+
+      kernel::xam::xeDrawProfileContent(imgui_drawer(), profile_->xuid(),
+                                        user_index, account, icon_texture,
+                                        nullptr, {}, nullptr);
+      ImGui::Separator();
+      ImGui::Spacing();
     }
 
-    if (!presence_.TitleID().empty()) {
-      const uint32_t title_id =
-          string_util::from_string<uint32_t>(presence_.TitleID(), true);
+    xeDrawFriendContent(imgui_drawer(), profile_, presence_, nullptr, nullptr);
 
-      if (title_id) {
-        if (title_id == kernel_state()->title_id()) {
-          ImGui::TextUnformatted(
-              fmt::format("Game: {}", kernel_state()->emulator()->title_name())
-                  .c_str());
-        } else {
-          ImGui::TextUnformatted(
-              fmt::format("Title ID: {}", presence_.TitleID()).c_str());
-        }
-      }
-    }
-
-    if (!presence_.RichPresence().empty()) {
-      ImGui::TextUnformatted(
-          fmt::format("Status: {}", xe::to_utf8(presence_.RichPresence()))
-              .c_str());
-    }
-
-    if (presence_.SessionID()) {
-      ImGui::TextUnformatted(
-          fmt::format("Session ID: {:016X}", presence_.SessionID().get())
-              .c_str());
-    }
-
-    ImGui::TextUnformatted(fmt::format("Online XUID: {:016X}", xuid_).c_str());
-
-    if (!is_self) {
-      are_friends = profile_->IsFriend(xuid_);
-
-      const uint32_t user_index = 0;
-
-      ImGui::BeginDisabled(are_friends);
-      if (ImGui::Button("Add Friend")) {
-        if (profile_->AddFriendFromXUID(xuid_)) {
-          XLiveAPI::AddFriend(xuid_);
-          kernel_state()->BroadcastNotification(
-              kXNotificationFriendsFriendAdded, user_index);
-        }
-
-        std::string description =
-            !presence_.Gamertag().empty() ? presence_.Gamertag() : "Success";
-
-        kernel_state()
-            ->emulator()
-            ->display_window()
-            ->app_context()
-            .CallInUIThread([&]() {
-              new xe::ui::HostNotificationWindow(imgui_drawer(), "Added Friend",
-                                                 description, 0);
-            });
-      }
-
-      ImGui::EndDisabled();
-      ImGui::SameLine();
-
-      ImGui::BeginDisabled(!are_friends);
-      if (ImGui::Button("Remove Friend")) {
-        if (profile_->RemoveFriend(xuid_)) {
-          XLiveAPI::RemoveFriend(xuid_);
-          kernel_state()->BroadcastNotification(
-              kXNotificationFriendsFriendRemoved, user_index);
-
-          std::string description =
-              !presence_.Gamertag().empty() ? presence_.Gamertag() : "Success";
-
-          kernel_state()
-              ->emulator()
-              ->display_window()
-              ->app_context()
-              .CallInUIThread([&]() {
-                new xe::ui::HostNotificationWindow(
-                    imgui_drawer(), "Removed Friend", description, 0);
-              });
-        }
-      }
-
-      ImGui::EndDisabled();
-      ImGui::SameLine();
-    }
-
-    if (ImGui::Button("Exit")) {
-      ImGui::CloseCurrentPopup();
-      Close();
-    }
+    ImGui::EndPopup();
   }
-  ImGui::EndPopup();
+
+  if (!card_opened) {
+    Close();
+  }
 }
 
 }  // namespace ui
