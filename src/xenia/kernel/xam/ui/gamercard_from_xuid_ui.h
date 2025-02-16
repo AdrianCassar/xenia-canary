@@ -26,7 +26,7 @@ class GamercardFromXUIDUI : public XamDialog {
  private:
   void OnDraw(ImGuiIO& io) override;
 
-  bool has_opened_ = false;
+  bool card_opened = false;
   bool is_self = false;
   bool are_friends = false;
   std::string title_;
