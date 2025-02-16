@@ -10,11 +10,36 @@
 #ifndef XENIA_APP_PROFILE_DIALOGS_H_
 #define XENIA_APP_PROFILE_DIALOGS_H_
 
+#include "xenia/kernel/json/friend_presence_object_json.h"
 #include "xenia/ui/imgui_dialog.h"
 #include "xenia/ui/imgui_drawer.h"
 #include "xenia/xbox.h"
 
 namespace xe {
+namespace kernel {
+namespace xam {
+struct AddFriendArgs {
+  bool add_friend_open;
+  bool add_friend_first_draw;
+  bool added_friend;
+  bool are_friends;
+  bool valid_xuid;
+  char add_xuid_[17];
+};
+
+struct FriendsContentArgs {
+  bool first_draw;
+  bool friends_open;
+  bool filter_joinable;
+  bool filter_title;
+  bool filter_offline;
+  bool refersh_presence;
+  bool refersh_presence_sync;
+  AddFriendArgs add_friend_args = {};
+  ImGuiTextFilter filter = {};
+};
+}  // namespace xam
+}  // namespace kernel
 namespace app {
 
 class EmulatorWindow;
@@ -66,20 +91,20 @@ class ProfileConfigDialog final : public ui::ImGuiDialog {
   EmulatorWindow* emulator_window_;
 };
 
-class FriendsManagerDialog final : public ui::ImGuiDialog {
+class ManagerDialog final : public ui::ImGuiDialog {
  public:
-  FriendsManagerDialog(ui::ImGuiDrawer* imgui_drawer,
-                       EmulatorWindow* emulator_window)
+  ManagerDialog(ui::ImGuiDrawer* imgui_drawer, EmulatorWindow* emulator_window)
       : ui::ImGuiDialog(imgui_drawer), emulator_window_(emulator_window) {}
 
  protected:
   void OnDraw(ImGuiIO& io) override;
 
  private:
-  bool has_opened_ = false;
-  bool are_friends = false;
-  bool valid_xuid = false;
-  char add_xuid_[17] = "";
+  bool manager_opened_ = false;
+  uint64_t selected_xuid_ = 0;
+  uint64_t removed_xuid_ = 0;
+  xe::kernel::xam::FriendsContentArgs args = {};
+  std::vector<xe::kernel::FriendPresenceObjectJSON> presences;
   EmulatorWindow* emulator_window_;
 };
 
