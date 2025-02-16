@@ -259,6 +259,11 @@ struct X_PRESENCE_CREATE {
   X_ARGUEMENT_ENTRY enumerator_handle_ptr;  // output
 };
 
+struct X_INVITE_GET_ACCEPTED_INFO {
+  X_ARGUEMENT_ENTRY user_index;
+  X_ARGUEMENT_ENTRY invite_info;
+};
+
 // struct FILETIME {
 //   xe::be<uint32_t> dwHighDateTime;
 //   xe::be<uint32_t> dwLowDateTime;
@@ -290,6 +295,14 @@ struct X_ONLINE_FRIEND {
   xe::be<char16_t> wszRichPresence[X_MAX_RICHPRESENCE_SIZE];
 };
 static_assert_size(X_ONLINE_FRIEND, 0xC4);
+
+struct X_INVITE_INFO {
+  xe::be<uint64_t> xuid_invitee;
+  xe::be<uint64_t> xuid_inviter;
+  xe::be<uint32_t> title_id;
+  XSESSION_INFO host_info;
+  xe::be<uint32_t> from_game_invite;
+};
 
 #pragma pack(pop)
 
@@ -336,6 +349,23 @@ inline uint64_t GenerateSessionId(uint8_t mask) {
   std::uniform_int_distribution<uint64_t> dist(0, -1);
 
   return (static_cast<uint64_t>(mask) << 56) | (dist(rnd) & 0x0000FFFFFFFFFFFF);
+}
+
+inline void Uint64toXNKID(uint64_t sessionID, XNKID* xnkid) {
+  uint64_t session_id = xe::byte_swap(sessionID);
+  memcpy(xnkid->ab, &session_id, sizeof(XNKID));
+}
+
+inline uint64_t XNKIDtoUint64(XNKID* sessionID) {
+  uint64_t session_id = 0;
+  memcpy(&session_id, sessionID->ab, sizeof(XNKID));
+  return xe::byte_swap(session_id);
+}
+
+inline void GenerateIdentityExchangeKey(XNKEY* key) {
+  for (uint8_t i = 0; i < sizeof(XNKEY); i++) {
+    key->ab[i] = i;
+  }
 }
 
 }  // namespace kernel
