@@ -182,6 +182,8 @@ class UserProfile {
  public:
   UserProfile(uint64_t xuid, X_XAMACCOUNTINFO* account_info);
 
+  void InitializeSystemContexts();
+
   uint64_t xuid() const { return xuid_; }
   uint64_t GetOnlineXUID() const {
     return IsLiveEnabled() ? static_cast<uint64_t>(account_info_.xuid_online)
@@ -240,7 +242,9 @@ class UserProfile {
 
   const std::vector<uint64_t> GetSubscribedXUIDs() const;
 
-  std::string GetPresenceString();
+  std::u16string GetPresenceString() const;
+  bool UpdatePresence(bool update_discord);
+  bool BuildPresenceString();
 
   void AddSetting(std::unique_ptr<UserSetting> setting);
   UserSetting* GetSetting(uint32_t setting_id);
@@ -248,7 +252,7 @@ class UserProfile {
   bool AddProperty(const Property* property);
   Property* GetProperty(const AttributeKey id);
 
-  std::map<uint32_t, uint32_t> contexts_;
+  std::vector<Property> properties_;
 
   friend class GpdAchievementBackend;
 
@@ -268,7 +272,7 @@ class UserProfile {
   std::vector<X_ONLINE_FRIEND> friends_;
   std::map<uint64_t, X_ONLINE_PRESENCE> subscriptions_;
 
-  std::vector<Property> properties_;
+  std::u16string online_presence_desc_ = u"";
 
   void LoadSetting(UserSetting*);
   void SaveSetting(UserSetting*);

@@ -10,6 +10,8 @@
 #include "xenia/kernel/util/presence_string_builder.h"
 #include "xenia/kernel/util/shim_utils.h"
 
+DECLARE_int32(user_language);
+
 namespace xe {
 namespace kernel {
 namespace util {
@@ -17,19 +19,28 @@ namespace util {
 AttributeStringFormatter::~AttributeStringFormatter() {}
 
 AttributeStringFormatter::AttributeStringFormatter(
-    std::string_view attribute_string, XLast* title_xlast,
-    std::map<uint32_t, uint32_t> contexts)
+    std::u16string_view attribute_string, XLast* title_xlast,
+    uint32_t user_index)
     : attribute_string_(attribute_string), attribute_to_string_mapping_() {
-  contexts_ = contexts;
+  auto const profile = kernel_state()->xam_state()->GetUserProfile(user_index);
+
+  properties_ = profile->properties_;
+
   title_xlast_ = title_xlast;
 
-  presence_string_ = "";
+  presence_string_ = u"";
 
   if (!ParseAttributeString()) {
     return;
   }
 
   BuildPresenceString();
+
+  // Check if precebse string is completed
+  attribute_string_ = presence_string_;
+
+  const auto specifiers = GetPresenceFormatSpecifiers();
+  is_complete_ = specifiers.empty();
 }
 
 bool AttributeStringFormatter::ParseAttributeString() {
@@ -52,7 +63,7 @@ void AttributeStringFormatter::BuildPresenceString() {
   presence_string_ = attribute_string_;
 
   for (const auto& entry : attribute_to_string_mapping_) {
-    presence_string_.replace(presence_string_.find(entry.first),
+    presence_string_.replace(presence_string_.find(xe::to_utf16(entry.first)),
                              entry.first.length(), entry.second);
   }
 }
@@ -74,80 +85,143 @@ AttributeStringFormatter::GetAttributeTypeFromSpecifier(
   return AttributeStringFormatter::AttributeType::Unknown;
 }
 
-std::optional<uint32_t> AttributeStringFormatter::GetAttributeIdFromSpecifier(
+std::optional<AttributeKey>
+AttributeStringFormatter::GetAttributeIdFromSpecifier(
     const std::string& specifier,
     const AttributeStringFormatter::AttributeType specifier_type) const {
   std::smatch string_match;
   if (std::regex_search(specifier, string_match,
                         presence_id_extract_from_specifier)) {
-    return std::make_optional<uint32_t>(stoi(string_match[1].str()));
+    uint32_t id = 0;
+
+    if (specifier_type == AttributeStringFormatter::AttributeType::Context) {
+      id = string_util::from_string<uint32_t>(string_match[2].str());
+    }
+
+    if (specifier_type == AttributeStringFormatter::AttributeType::Property) {
+      id = string_util::from_string<uint32_t>(string_match[4].str(), true);
+    }
+
+    return std::make_optional<AttributeKey>(id);
   }
 
   return std::nullopt;
 }
 
-std::string AttributeStringFormatter::GetStringFromSpecifier(
-    std::string_view specifier) const {
+std::u16string AttributeStringFormatter::GetStringFromSpecifier(
+    std::string_view specifier) {
   const AttributeStringFormatter::AttributeType attribute_type =
       GetAttributeTypeFromSpecifier(specifier);
 
   if (attribute_type == AttributeStringFormatter::AttributeType::Unknown) {
-    return "";
+    return u"";
   }
 
   const auto attribute_id =
       GetAttributeIdFromSpecifier(std::string(specifier), attribute_type);
-  if (!attribute_id) {
-    return "";
+
+  if (!attribute_id.has_value()) {
+    return u"";
   }
 
-  if (attribute_type == AttributeStringFormatter::AttributeType::Context) {
-    // TODO: Different handling for contexts and properties
-    const auto itr = contexts_.find(attribute_id.value());
+  const auto property = GetProperty(attribute_id.value());
 
-    if (itr == contexts_.cend()) {
-      auto attribute_placeholder = fmt::format("{{c{}}}", attribute_id.value());
+  if (attribute_type == AttributeStringFormatter::AttributeType::Context) {
+    if (property == nullptr) {
+      const auto attribute_placeholder =
+          xe::to_utf16(fmt::format("{{c{}}}", attribute_id.value().value));
 
       return attribute_placeholder;
     }
 
-    const auto attribute_string_id =
-        title_xlast_->GetContextStringId(attribute_id.value(), itr->second);
+    std::optional<uint32_t> attribute_string_id = std::nullopt;
+
+    const uint32_t value = std::get<uint32_t>(property->GetValueGuest());
+
+    if (attribute_id.value().value == X_CONTEXT_GAME_MODE) {
+      attribute_string_id = title_xlast_->GetGameModeStringId(value);
+    } else {
+      attribute_string_id =
+          title_xlast_->GetContextsQuery()->GetContextValueStringID(
+              attribute_id.value().value, value);
+    }
 
     if (!attribute_string_id.has_value()) {
-      return "";
+      return u"";
     }
 
     const auto attribute_string = title_xlast_->GetLocalizedString(
-        attribute_string_id.value(), XLanguage::kEnglish);
+        attribute_string_id.value(),
+        static_cast<XLanguage>(cvars::user_language));
 
-    return xe::to_utf8(attribute_string);
+    return attribute_string;
   }
 
   if (attribute_type == AttributeStringFormatter::AttributeType::Property) {
-    return "";
+    if (property == nullptr) {
+      const auto attribute_placeholder = xe::to_utf16(
+          fmt::format("{{p0x{:08X}}}", attribute_id.value().value));
+
+      return attribute_placeholder;
+    }
+
+    uint64_t value = 0;
+
+    switch (property->GetType()) {
+      case X_USER_DATA_TYPE::INT32:
+        value = std::get<uint32_t>(property->GetValueGuest());
+        break;
+      case X_USER_DATA_TYPE::INT64:
+      case X_USER_DATA_TYPE::DATETIME:
+        value = std::get<uint64_t>(property->GetValueGuest());
+        break;
+      default:
+        XELOGI("Unsupported property type {}", property->GetPropertyId().type);
+        break;
+    }
+
+    return xe::to_utf16(fmt::format("{}", value));
   }
 
-  return "";
+  return u"";
 }
 
 std::queue<std::string> AttributeStringFormatter::GetPresenceFormatSpecifiers()
     const {
   std::queue<std::string> format_specifiers;
 
-  std::smatch match;
+  std::wsmatch match;
 
-  std::string attribute_string = attribute_string_;
+  std::wstring attribute_string =
+      std::wstring(attribute_string_.begin(), attribute_string_.end());
 
   while (std::regex_search(attribute_string, match,
                            format_specifier_replace_fragment_regex_)) {
     for (const auto& presence : match) {
-      format_specifiers.emplace(presence);
+      const std::wstring u16presence = presence.str();
+
+      format_specifiers.emplace(
+          xe::to_utf8(std::u16string(u16presence.begin(), u16presence.end())));
     }
+
     attribute_string = match.suffix().str();
   }
+
   return format_specifiers;
 }
+
+Property* AttributeStringFormatter::GetProperty(const AttributeKey id) {
+  for (auto& entry : properties_) {
+    if (entry.GetPropertyId().value != id.value) {
+      continue;
+    }
+
+    return &entry;
+  }
+
+  return nullptr;
+}
+
 }  // namespace util
 }  // namespace kernel
 }  // namespace xe

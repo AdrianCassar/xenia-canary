@@ -14,6 +14,19 @@
 #include "xenia/xbox.h"
 
 namespace xe {
+
+enum class X_USER_DATA_TYPE : uint8_t {
+  CONTEXT = 0,
+  INT32 = 1,
+  INT64 = 2,
+  DOUBLE = 3,
+  WSTRING = 4,
+  FLOAT = 5,
+  BINARY = 6,
+  DATETIME = 7,
+  UNSET = 0xFF,
+};
+
 namespace kernel {
 
 union AttributeKey {
@@ -24,18 +37,6 @@ union AttributeKey {
     uint32_t size : 12;
     uint32_t type : 4;
   };
-};
-
-enum class X_USER_DATA_TYPE : uint8_t {
-  CONTENT = 0,
-  INT32 = 1,
-  INT64 = 2,
-  DOUBLE = 3,
-  WSTRING = 4,
-  FLOAT = 5,
-  BINARY = 6,
-  DATETIME = 7,
-  UNSET = 0xFF,
 };
 
 struct X_USER_DATA {

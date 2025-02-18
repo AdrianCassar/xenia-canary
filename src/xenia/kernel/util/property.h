@@ -49,19 +49,22 @@ class Property {
 
   // Writer back to guest structure
   void Write(Memory* memory, XUSER_PROPERTY* property) const;
+
   uint32_t GetSize() const { return value_size_; }
+  X_USER_DATA_TYPE GetType() const { return data_type_; }
 
   bool RequiresPointer() const {
     return static_cast<X_USER_DATA_TYPE>(property_id_.type) ==
-               X_USER_DATA_TYPE::CONTENT ||
-           static_cast<X_USER_DATA_TYPE>(property_id_.type) ==
                X_USER_DATA_TYPE::WSTRING ||
            static_cast<X_USER_DATA_TYPE>(property_id_.type) ==
                X_USER_DATA_TYPE::BINARY;
   }
 
+  // Returns variant for specific value in BE (guest) notation.
+  userDataVariant GetValueGuest() const;
+
   // Returns variant for specific value in LE (host) notation.
-  userDataVariant GetValue() const;
+  userDataVariant GetValueHost() const;
 
  private:
   AttributeKey property_id_ = {};
