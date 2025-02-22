@@ -222,6 +222,7 @@ class UserProfile {
   bool AddFriend(X_ONLINE_FRIEND* add_friend);
   bool RemoveFriend(const X_ONLINE_FRIEND& peer);
   bool RemoveFriend(const uint64_t xuid);
+  void RemoveAllFriends();
 
   bool GetFriendFromIndex(const uint32_t index, X_ONLINE_FRIEND* peer);
   bool GetFriendFromXUID(const uint64_t xuid, X_ONLINE_FRIEND* peer);
@@ -237,6 +238,9 @@ class UserProfile {
   bool SubscribeFromXUID(const uint64_t xuid);
   bool UnsubscribeFromXUID(const uint64_t xuid);
   bool IsSubscribed(const uint64_t xuid);
+
+  void SetSelfInvite(X_INVITE_INFO* invite_info);
+  X_INVITE_INFO* GetSelfInvite() { return &self_invite; };
 
   const std::vector<uint64_t> GetSubscribedXUIDs() const;
 
@@ -261,6 +265,7 @@ class UserProfile {
  private:
   uint64_t xuid_;
   X_XAMACCOUNTINFO account_info_;
+  X_INVITE_INFO self_invite;
 
   std::vector<std::unique_ptr<UserSetting>> setting_list_;
   std::unordered_map<uint32_t, UserSetting*> settings_;
