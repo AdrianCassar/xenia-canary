@@ -272,15 +272,19 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
     }
     case 0x00058019: {
       // 54510846
-      XELOGD("XPresenceCreateEnumerator({:08X}, {:08X}) unimplemented",
-             buffer_ptr, buffer_length);
+      XELOGD("XPresenceCreateEnumerator({:08X}, {:08X})", buffer_ptr,
+             buffer_length);
       return XPresenceCreateEnumerator(buffer_length);
     }
     case 0x0005801E: {
       // 54510846
-      XELOGD("XPresenceSubscribe({:08X}, {:08X}) unimplemented", buffer_ptr,
-             buffer_length);
+      XELOGD("XPresenceSubscribe({:08X}, {:08X})", buffer_ptr, buffer_length);
       return XPresenceSubscribe(buffer_length);
+    }
+    case 0x0005801F: {
+      // 545107D1
+      XELOGD("XPresenceUnsubscribe({:08X}, {:08X})", buffer_ptr, buffer_length);
+      return XPresenceUnsubscribe(buffer_length);
     }
     case 0x00058020: {
       // 0x00058004 is called right before this.
@@ -312,21 +316,19 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
     }
     case 0x00058037: {
       // Used in older games such as Crackdown, FM2, Saints Row 1
-      XELOGD("XPresenceInitializeLegacy({:08X}, {:08X}) unimplemented",
-             buffer_ptr, buffer_length);
+      XELOGD("XPresenceInitializeLegacy({:08X}, {:08X})", buffer_ptr,
+             buffer_length);
       return XPresenceInitialize(buffer_length);
     }
     case 0x00058044: {
-      XELOGD("XPresenceUnsubscribe({:08X}, {:08X}) unimplemented", buffer_ptr,
-             buffer_length);
+      XELOGD("XPresenceUnsubscribe({:08X}, {:08X})", buffer_ptr, buffer_length);
       return XPresenceUnsubscribe(buffer_length);
     }
     case 0x00058046: {
       // Used in newer games such as Forza 4, MW3, FH2
       //
       // Required to be successful for 4D530910 to detect signed-in profile
-      XELOGD("XPresenceInitialize({:08X}, {:08X}) unimplemented", buffer_ptr,
-             buffer_length);
+      XELOGD("XPresenceInitialize({:08X}, {:08X})", buffer_ptr, buffer_length);
       return XPresenceInitialize(buffer_length);
     }
   }
