@@ -218,9 +218,16 @@ struct X_ARGUMENT_LIST {
 };
 static_assert_size(X_ARGUMENT_LIST, 0x204);
 
+enum X_STORAGE_FACILITY : uint32_t {
+  FACILITY_GAME_CLIP = 1,
+  FACILITY_PER_TITLE = 2,
+  FACILITY_PER_USER_TITLE = 3
+};
+
 struct X_STORAGE_BUILD_SERVER_PATH {
   xe::be<uint32_t> user_index;
-  char unk[12];
+  uint8_t unkn[4];
+  xe::be<uint64_t> xuid;
   xe::be<uint32_t> storage_location;  // 2 means title specific storage,
                                       // something like developers storage.
   xe::be<uint32_t> storage_location_info_ptr;
