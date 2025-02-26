@@ -872,34 +872,110 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
       kernel_state_->memory()->TranslateVirtual<X_STORAGE_BUILD_SERVER_PATH*>(
           buffer_ptr);
 
+  if (!args->file_name_ptr) {
+    return X_E_INVALIDARG;
+  }
+
+  if (!args->server_path_length_ptr) {
+    return X_E_INVALIDARG;
+  }
+
+  uint64_t xuid = 0;
+
+  if (args->user_index == XUserIndexNone) {
+    xuid = args->xuid;
+  }
+
+  bool is_per_user_title =
+      args->storage_location == X_STORAGE_FACILITY::FACILITY_PER_USER_TITLE;
+
+  if (!xuid && is_per_user_title) {
+    xuid = kernel_state()
+               ->xam_state()
+               ->GetUserProfile(args->user_index.get())
+               ->GetOnlineXUID();
+  }
+
   uint8_t* filename_ptr =
       kernel_state_->memory()->TranslateVirtual<uint8_t*>(args->file_name_ptr);
-  const std::string filename =
-      xe::to_utf8(load_and_swap<std::u16string>(filename_ptr));
 
-  XELOGI("XStorageBuildServerPath: Requesting file: {} From storage type: {}",
-         filename, args->storage_location.get());
+  const std::u16string filename =
+      xe::load_and_swap<std::u16string>(filename_ptr);
+
+  std::string server_path_str;
+
+  std::string storage_type;
+
+  switch (args->storage_location.get()) {
+    case X_STORAGE_FACILITY::FACILITY_GAME_CLIP: {
+      server_path_str = fmt::format(
+          "{}title/{:08X}/storage/clips/{}", XLiveAPI::GetApiAddress(),
+          kernel_state()->title_id(), xe::to_utf8(filename));
+
+      xe::be<uint32_t> leaderboard_id = 0;
+
+      if (args->storage_location_info_ptr) {
+        uint32_t* leaderboard_id_ptr =
+            kernel_state_->memory()->TranslateVirtual<uint32_t*>(
+                args->storage_location_info_ptr);
+
+        leaderboard_id = *leaderboard_id_ptr;
+
+        XELOGI("{}: Leaderboard ID: {}", __func__, leaderboard_id.get());
+      }
+
+      storage_type = "Game Clip";
+    } break;
+    case X_STORAGE_FACILITY::FACILITY_PER_TITLE: {
+      server_path_str =
+          fmt::format("{}title/{:08X}/storage/{}", XLiveAPI::GetApiAddress(),
+                      kernel_state()->title_id(), xe::to_utf8(filename));
+
+      storage_type = "Per Title";
+    } break;
+    case X_STORAGE_FACILITY::FACILITY_PER_USER_TITLE: {
+      server_path_str = fmt::format(
+          "{}user/{:016X}/title/{:08X}/storage/{}", XLiveAPI::GetApiAddress(),
+          xuid, kernel_state()->title_id(), xe::to_utf8(filename));
+
+      storage_type = "Per User Title";
+    } break;
+  }
+
+  const std::u16string server_path = xe::to_utf16(server_path_str);
+
+  size_t server_path_length = server_path.size();
+
+  std::vector<char16_t> server_path_buf =
+      std::vector<char16_t>(server_path_length);
+
+  size_t size_bytes = server_path_length * sizeof(char16_t);
+
+  memcpy(server_path_buf.data(), server_path.c_str(), size_bytes);
+
+  // Null-terminator
+  server_path_buf.push_back(u'\0');
 
   if (args->server_path_ptr) {
-    const std::string server_path = fmt::format(
-        "title/{:08X}/storage/{}", kernel_state()->title_id(), filename);
-
-    const std::string endpoint_API =
-        fmt::format("{}{}", XLiveAPI::GetApiAddress(), server_path);
-
-    uint8_t* server_path_ptr =
-        kernel_state_->memory()->TranslateVirtual<uint8_t*>(
+    char16_t* server_path_ptr =
+        kernel_state_->memory()->TranslateVirtual<char16_t*>(
             args->server_path_ptr);
 
-    std::memcpy(server_path_ptr, endpoint_API.c_str(), endpoint_API.size());
+    size_bytes = server_path_buf.size() * sizeof(char16_t);
 
-    uint32_t* server_path_length =
-        kernel_state_->memory()->TranslateVirtual<uint32_t*>(
-            args->server_path_length_ptr);
-
-    *server_path_length =
-        xe::byte_swap<uint32_t>(uint32_t(endpoint_API.size()));
+    xe::string_util::copy_and_swap_truncating(
+        server_path_ptr, server_path_buf.data(), size_bytes);
   }
+
+  uint32_t* server_path_length_ptr =
+      kernel_state_->memory()->TranslateVirtual<uint32_t*>(
+          args->server_path_length_ptr);
+
+  *server_path_length_ptr =
+      xe::byte_swap(static_cast<uint32_t>(server_path_buf.size()));
+
+  XELOGI("{}: Requesting file: {} from storage type: {}", __func__,
+         xe::to_utf8(filename), storage_type);
 
   return X_E_SUCCESS;
 }
