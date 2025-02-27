@@ -27,6 +27,11 @@ extern bool xeDrawFriendsContent(
     ui::ImGuiDrawer* imgui_drawer, UserProfile* profile,
     FriendsContentArgs& args, std::vector<FriendPresenceObjectJSON>* presences);
 
+extern bool xeDrawSessionsContent(
+    ui::ImGuiDrawer* imgui_drawer, UserProfile* profile,
+    SessionsContentArgs& sessions_args,
+    std::vector<std::unique_ptr<SessionObjectJSON>>* sessions);
+
 }  // namespace xam
 }  // namespace kernel
 namespace app {
@@ -239,6 +244,8 @@ void ManagerDialog::OnDraw(ImGuiIO& io) {
     if (kernel::XLiveAPI::IsConnectedToServer()) {
       args.filter_offline = true;
     }
+
+    sessions_args.filter_own = true;
   }
 
   // Add profile dropdown selector?
@@ -274,6 +281,14 @@ void ManagerDialog::OnDraw(ImGuiIO& io) {
 
     ImGui::SameLine();
 
+    ImGui::BeginDisabled(is_profile_signed_in ||
+                         !kernel::XLiveAPI::IsConnectedToServer());
+    if (ImGui::Button("Sessions", btn_size)) {
+      sessions_args.sessions_open = true;
+      ImGui::OpenPopup("Sessions");
+    }
+    ImGui::EndDisabled();
+
     if (ImGui::Button("Refresh Presence", btn_size)) {
       emulator_window_->emulator()->kernel_state()->BroadcastNotification(
           kXNotificationFriendsPresenceChanged, user_index);
@@ -295,7 +310,15 @@ void ManagerDialog::OnDraw(ImGuiIO& io) {
       presences = {};
     }
 
+    if (!sessions_args.sessions_open) {
+      sessions_args.first_draw = false;
+      sessions_args.refersh_sessions_sync = true;
+      sessions.clear();
+    }
+
     xeDrawFriendsContent(imgui_drawer(), profile, args, &presences);
+
+    xeDrawSessionsContent(imgui_drawer(), profile, sessions_args, &sessions);
 
     ImGui::EndPopup();
   }
