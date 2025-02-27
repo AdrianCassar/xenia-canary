@@ -112,6 +112,7 @@ Emulator::Emulator(const std::filesystem::path& command_line,
     : on_launch(),
       on_terminate(),
       on_exit(),
+      on_presence_change(),
       command_line_(command_line),
       storage_root_(storage_root),
       content_root_(content_root),
@@ -1516,6 +1517,15 @@ X_STATUS Emulator::CompleteLaunch(const std::filesystem::path& path,
               ->achievement_manager()
               ->LoadTitleAchievements(user->xuid(), db);
         }
+      }
+    }
+
+    for (uint32_t i = 0; i < XUserMaxUserCount; i++) {
+      if (kernel_state()->xam_state()->IsUserSignedIn(i)) {
+        kernel_state()
+            ->xam_state()
+            ->GetUserProfile(i)
+            ->InitializeSystemContexts();
       }
     }
   }

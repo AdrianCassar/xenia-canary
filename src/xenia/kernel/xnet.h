@@ -54,31 +54,68 @@ namespace xe {
 #define X_ONLINE_E_SESSION_FULL                             X_HRESULT_FROM_WIN32(X_ERROR_SESSION_FULL)
 #define X_PARTY_E_NOT_IN_PARTY                              static_cast<X_HRESULT>(0x807D0003L)
 
-#define X_ONLINE_FRIENDSTATE_FLAG_NONE              0x00000000
-#define X_ONLINE_FRIENDSTATE_FLAG_ONLINE            0x00000001
-#define X_ONLINE_FRIENDSTATE_FLAG_PLAYING           0x00000002
-#define X_ONLINE_FRIENDSTATE_FLAG_JOINABLE          0x00000010
+#define X_ONLINE_FRIENDSTATE_FLAG_NONE                      0x00000000
+#define X_ONLINE_FRIENDSTATE_FLAG_ONLINE                    0x00000001
+#define X_ONLINE_FRIENDSTATE_FLAG_PLAYING                   0x00000002
+#define X_ONLINE_FRIENDSTATE_FLAG_JOINABLE                  0x00000010
 
-#define X_ONLINE_FRIENDSTATE_FLAG_INVITEACCEPTED    0x10000000
-#define X_ONLINE_FRIENDSTATE_FLAG_SENTINVITE        0x04000000
+#define X_ONLINE_FRIENDSTATE_FLAG_INVITEACCEPTED            0x10000000
+#define X_ONLINE_FRIENDSTATE_FLAG_SENTINVITE                0x04000000
 
-#define X_ONLINE_FRIENDSTATE_ENUM_ONLINE            0x00000000
-#define X_ONLINE_FRIENDSTATE_ENUM_AWAY              0x00010000
-#define X_ONLINE_FRIENDSTATE_ENUM_BUSY              0x00020000
-#define X_ONLINE_FRIENDSTATE_MASK_USER_STATE        0x000F0000
+#define X_ONLINE_FRIENDSTATE_ENUM_ONLINE                    0x00000000
+#define X_ONLINE_FRIENDSTATE_ENUM_AWAY                      0x00010000
+#define X_ONLINE_FRIENDSTATE_ENUM_BUSY                      0x00020000
+#define X_ONLINE_FRIENDSTATE_MASK_USER_STATE                0x000F0000
 
-#define X_ONLINE_MAX_FRIENDS                        100
-#define X_ONLINE_PEER_SUBSCRIPTIONS                 400
-#define X_MAX_RICHPRESENCE_SIZE                     64
+#define X_ONLINE_MAX_FRIENDS                                100
+#define X_ONLINE_PEER_SUBSCRIPTIONS                         400
+#define X_MAX_RICHPRESENCE_SIZE                             64
+#define X_MAX_RICHPRESENCE_SIZE_EXTRA                       100 // 4D5308AB uses rich presence string > 64
 
-#define X_CONTEXT_PRESENCE                          0x00008001
-#define X_CONTEXT_GAME_TYPE                         0x0000800A
-#define X_CONTEXT_GAME_MODE                         0x0000800B
+#define X_PARTY_MAX_USERS                                   32
 
-#define X_CONTEXT_GAME_TYPE_RANKED                  0x0
-#define X_CONTEXT_GAME_TYPE_STANDARD                0x1
+#define X_PROPERTY_TYPE_MASK                                0xF0000000
+#define X_PROPERTY_SCOPE_MASK                               0x00008000
+#define X_PROPERTY_ID_MASK                                  0x00007FFF
 
-#define X_PARTY_MAX_USERS                           32
+#define X_PROPERTYID(scope, type, id)                       ((scope ? X_PROPERTY_SCOPE_MASK : 0) | ((static_cast<uint8_t>(type) << 28) & X_PROPERTY_TYPE_MASK) | (id & X_PROPERTY_ID_MASK))
+#define X_CONTEXTID(scope, id)                              X_PROPERTYID(scope, static_cast<uint8_t>(X_USER_DATA_TYPE::CONTEXT), id)
+#define X_PROPERTYTYPEFROMID(id)                            ((id >> 28) & 0xF)
+#define X_ISSYSTEMPROPERTY(id)                              (id & X_PROPERTY_SCOPE_MASK)
+
+#define X_PROPERTY_ATTACHMENT_SIZE                          X_PROPERTYID(1, X_USER_DATA_TYPE::INT32,   0x011)
+
+#define X_PROPERTY_PLAYER_PARTIAL_PLAY_PERCENTAGE           X_PROPERTYID(1, X_USER_DATA_TYPE::INT32,   0x00C)
+#define X_PROPERTY_PLAYER_SKILL_UPDATE_WEIGHTING_FACTOR     X_PROPERTYID(1, X_USER_DATA_TYPE::INT32,   0x00D)
+#define X_PROPERTY_SESSION_SKILL_BETA                       X_PROPERTYID(1, X_USER_DATA_TYPE::DOUBLE,  0x00E)
+#define X_PROPERTY_SESSION_SKILL_TAU                        X_PROPERTYID(1, X_USER_DATA_TYPE::DOUBLE,  0x00F)
+#define X_PROPERTY_SESSION_SKILL_DRAW_PROBABILITY           X_PROPERTYID(1, X_USER_DATA_TYPE::INT32,   0x010)
+
+#define X_PROPERTY_RELATIVE_SCORE                           X_PROPERTYID(1, X_USER_DATA_TYPE::INT32,   0x00A)
+#define X_PROPERTY_SESSION_TEAM                             X_PROPERTYID(1, X_USER_DATA_TYPE::INT32,   0x00B)
+
+#define X_PROPERTY_RANK                                     X_PROPERTYID(1, X_USER_DATA_TYPE::INT32,   0x001)
+#define X_PROPERTY_GAMERNAME                                X_PROPERTYID(1, X_USER_DATA_TYPE::WSTRING, 0x002)
+#define X_PROPERTY_SESSION_ID                               X_PROPERTYID(1, X_USER_DATA_TYPE::INT64,   0x003)
+#define X_PROPERTY_GAMER_ZONE                               X_PROPERTYID(1, X_USER_DATA_TYPE::INT32,   0x101)
+#define X_PROPERTY_GAMER_COUNTRY                            X_PROPERTYID(1, X_USER_DATA_TYPE::INT32,   0x102)
+#define X_PROPERTY_GAMER_LANGUAGE                           X_PROPERTYID(1, X_USER_DATA_TYPE::INT32,   0x103)
+#define X_PROPERTY_GAMER_RATING                             X_PROPERTYID(1, X_USER_DATA_TYPE::FLOAT,   0x104)
+#define X_PROPERTY_GAMER_MU                                 X_PROPERTYID(1, X_USER_DATA_TYPE::DOUBLE,  0x105) // Stat Statstics Mu = U+00B5
+#define X_PROPERTY_GAMER_SIGMA                              X_PROPERTYID(1, X_USER_DATA_TYPE::DOUBLE,  0x106) // Stat Statstics
+#define X_PROPERTY_GAMER_PUID                               X_PROPERTYID(1, X_USER_DATA_TYPE::INT64,   0x107)
+#define X_PROPERTY_AFFILIATE_VALUE                          X_PROPERTYID(1, X_USER_DATA_TYPE::INT64,   0x108)
+#define X_PROPERTY_GAMER_HOSTNAME                           X_PROPERTYID(1, X_USER_DATA_TYPE::WSTRING, 0x109)
+#define X_PROPERTY_PLATFORM_TYPE                            X_PROPERTYID(1, X_USER_DATA_TYPE::INT32,   0x201)
+#define X_PROPERTY_PLATFORM_LOCK                            X_PROPERTYID(1, X_USER_DATA_TYPE::INT32,   0x202)
+
+#define X_CONTEXT_PRESENCE                                  X_CONTEXTID(1, 0x001)
+#define X_CONTEXT_GAME_TYPE                                 X_CONTEXTID(1, 0x00A)
+#define X_CONTEXT_GAME_MODE                                 X_CONTEXTID(1, 0x00B)
+#define X_CONTEXT_SESSION_JOINABLE                          X_CONTEXTID(1, 0x00C)
+
+#define X_CONTEXT_GAME_TYPE_RANKED                          0x0
+#define X_CONTEXT_GAME_TYPE_STANDARD                        0x1
 
 enum XNADDR_STATUS : uint32_t {
   XNADDR_PENDING = 0x00000000,              // Address acquisition is not yet complete
@@ -284,8 +321,8 @@ struct X_ONLINE_PRESENCE {
   XNKID session_id;
   xe::be<uint32_t> title_id;
   xe::be<uint64_t> state_change_time;  // filetime
-  xe::be<uint32_t> cchRichPresence;
-  xe::be<char16_t> wszRichPresence[64];
+  xe::be<uint32_t> cchRichPresence;    // number of characters or size in bytes?
+  xe::be<char16_t> wszRichPresence[X_MAX_RICHPRESENCE_SIZE];
 };
 static_assert_size(X_ONLINE_PRESENCE, 0xA4);
 

@@ -475,7 +475,7 @@ dword_result_t XamUserWriteProfileSettings_entry(
         static_cast<uint32_t>(setting.data.type));
 
     switch (setting_type) {
-      case X_USER_DATA_TYPE::CONTENT:
+      case X_USER_DATA_TYPE::CONTEXT:
       case X_USER_DATA_TYPE::BINARY: {
         uint8_t* binary_ptr =
             kernel_state()->memory()->TranslateVirtual(setting.data.binary.ptr);

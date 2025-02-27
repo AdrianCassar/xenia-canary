@@ -19,6 +19,8 @@ using namespace xe::string_util;
 
 DECLARE_bool(logging);
 
+DECLARE_int32(discord_presence_user_index);
+
 namespace xe {
 namespace kernel {
 namespace xam {
@@ -69,6 +71,32 @@ struct XUSER_ANID {
   xe::be<uint32_t> value_const;  // 1
 };
 
+struct XGISetContext {
+  xe::be<uint32_t> user_index;
+  xe::be<uint32_t> unkn_ptr;
+  xe::be<uint64_t> unkn_2;
+  XUSER_CONTEXT context;
+};
+
+// 00000000 2789fecc 00000000 00000000 200491e0 00000000 200491f0 20049340
+struct XGIGetContext {
+  xe::be<uint32_t> user_index;
+  xe::be<uint32_t> unkn_1;
+  xe::be<uint64_t> unkn_2;
+  xe::be<uint32_t> unkn_3;
+  xe::be<uint32_t> context_address;
+  xe::be<uint32_t> unkn_4;
+};
+
+struct XGISetProperty {
+  xe::be<uint32_t> user_index;
+  xe::be<uint32_t> unkn_1;
+  xe::be<uint64_t> unkn_2;
+  xe::be<uint32_t> property_id;
+  xe::be<uint32_t> data_size;
+  xe::be<uint32_t> data_address;
+};
+
 XgiApp::XgiApp(KernelState* kernel_state) : App(kernel_state, 0xFB) {}
 
 // http://mb.mirage.org/bugzilla/xliveless/main.c
@@ -105,13 +133,19 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
                                      ->profile_manager()
                                      ->SignedInProfilesCount();
 
-      return XSession::GetSessions(memory_, data, num_users);
+      const auto xlast =
+          kernel_state_->emulator()->game_info_database()->GetXLast();
+
+      return XSession::GetSessions(memory_, xlast, data, num_users);
     }
     case 0x000B001C: {
       XELOGI("XSessionSearchEx");
       XSessionSearchEx* data = reinterpret_cast<XSessionSearchEx*>(buffer);
 
-      return XSession::GetSessions(memory_, &data->session_search,
+      const auto xlast =
+          kernel_state_->emulator()->game_info_database()->GetXLast();
+
+      return XSession::GetSessions(memory_, xlast, &data->session_search,
                                    data->num_users);
     }
     case 0x000B001D: {
@@ -311,8 +345,8 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
             X_USER_DATA_TYPE stat_type = stat[statIndex].Value.type;
 
             switch (stat_type) {
-              case X_USER_DATA_TYPE::CONTENT: {
-                XELOGW("Statistic type: CONTENT");
+              case X_USER_DATA_TYPE::CONTEXT: {
+                XELOGW("Statistic type: CONTEXT");
               } break;
               case X_USER_DATA_TYPE::INT32: {
                 XELOGW("Statistic type: INT32");
@@ -397,64 +431,118 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
       return session->RegisterArbitration(data);
     }
     case 0x000B0006: {
-      assert_true(!buffer_length || buffer_length == 24);
+      assert_true(!buffer_length || buffer_length == sizeof(XGISetContext));
 
-      // dword r3 user index
-      // dword (unwritten?)
-      // qword 0
-      // dword r4 context enum
-      // dword r5 value
-      uint32_t user_index = xe::load_and_swap<uint32_t>(buffer + 0);
-      uint32_t context_id = xe::load_and_swap<uint32_t>(buffer + 16);
-      uint32_t context_value = xe::load_and_swap<uint32_t>(buffer + 20);
-      XELOGD("XGIUserSetContextEx({:08X}, {:08X}, {:08X})", user_index,
-             context_id, context_value);
+      XGISetContext* XGISetContextBuffer =
+          reinterpret_cast<XGISetContext*>(buffer);
+
+      XELOGD("XGIUserSetContextEx({:08X}, {:08X}, {:08X})",
+             XGISetContextBuffer->user_index.get(),
+             XGISetContextBuffer->context.context_id.get(),
+             XGISetContextBuffer->context.value.get());
 
       const util::XdbfGameData title_xdbf = kernel_state_->title_xdbf();
       if (title_xdbf.is_valid()) {
-        const auto context = title_xdbf.GetContext(context_id);
+        const auto context =
+            title_xdbf.GetContext(XGISetContextBuffer->context.context_id);
         const XLanguage title_language = title_xdbf.GetExistingLanguage(
             static_cast<XLanguage>(XLanguage::kEnglish));
         const std::string desc =
             title_xdbf.GetStringTableEntry(title_language, context.string_id);
         XELOGD("XGIUserSetContextEx: {} - Set to value: {}", desc,
-               context_value);
+               XGISetContextBuffer->context.value.get());
 
-        UserProfile* user_profile =
-            kernel_state_->xam_state()->GetUserProfile(user_index);
+        UserProfile* user_profile = kernel_state_->xam_state()->GetUserProfile(
+            XGISetContextBuffer->user_index);
+
         if (user_profile) {
-          user_profile->contexts_[context_id] = context_value;
+          Property context_property = Property(
+              XGISetContextBuffer->context.context_id, sizeof(uint32_t),
+              reinterpret_cast<uint8_t*>(&XGISetContextBuffer->context.value));
 
-          if (context_id == X_CONTEXT_PRESENCE) {
-            auto presence = user_profile->GetPresenceString();
-          }
+          user_profile->AddProperty(&context_property);
+
+          const bool update_discord = cvars::discord_presence_user_index ==
+                                      XGISetContextBuffer->user_index;
+
+          user_profile->UpdatePresence(update_discord);
         }
       }
       return X_E_SUCCESS;
     }
     case 0x000B0007: {
-      uint32_t user_index = xe::load_and_swap<uint32_t>(buffer + 0);
-      uint32_t property_id = xe::load_and_swap<uint32_t>(buffer + 16);
-      uint32_t value_size = xe::load_and_swap<uint32_t>(buffer + 20);
-      uint32_t value_ptr = xe::load_and_swap<uint32_t>(buffer + 24);
-      XELOGD("XGIUserSetPropertyEx({:08X}, {:08X}, {}, {:08X})", user_index,
-             property_id, value_size, value_ptr);
+      XGISetProperty* XGISetPropertyBuffer =
+          reinterpret_cast<XGISetProperty*>(buffer);
+
+      if (!XGISetPropertyBuffer->data_address) {
+        return X_E_SUCCESS;
+      }
+
+      XELOGD("XGIUserSetPropertyEx({:08X}, {:08X}, {}, {:08X})",
+             XGISetPropertyBuffer->user_index.get(),
+             XGISetPropertyBuffer->property_id.get(),
+             XGISetPropertyBuffer->data_size.get(),
+             XGISetPropertyBuffer->data_address.get());
 
       const util::XdbfGameData title_xdbf = kernel_state_->title_xdbf();
       if (title_xdbf.is_valid()) {
-        const auto property_xdbf = title_xdbf.GetProperty(property_id);
+        const auto property_xdbf =
+            title_xdbf.GetProperty(XGISetPropertyBuffer->property_id);
         const XLanguage title_language = title_xdbf.GetExistingLanguage(
             static_cast<XLanguage>(XLanguage::kEnglish));
         const std::string desc = title_xdbf.GetStringTableEntry(
             title_language, property_xdbf.string_id);
 
-        Property property =
-            Property(property_id, value_size,
-                     memory_->TranslateVirtual<uint8_t*>(value_ptr));
+        // 58410821 & 58410AC2 use input size smaller than expected
+        if (XGISetPropertyBuffer->data_size != property_xdbf.data_size) {
+          XELOGD("Property 0x{:08X} Input Size: {} Expected Size {}!",
+                 XGISetPropertyBuffer->property_id.get(),
+                 XGISetPropertyBuffer->data_size.get(),
+                 property_xdbf.data_size.get());
+        }
 
-        auto user = kernel_state_->xam_state()->GetUserProfile(user_index);
-        if (user) {
-          user->AddProperty(&property);
+        const AttributeKey attribute =
+            static_cast<AttributeKey>(XGISetPropertyBuffer->property_id);
+
+        const X_USER_DATA_TYPE property_type =
+            static_cast<X_USER_DATA_TYPE>(attribute.type);
+
+        uint32_t property_size = property_xdbf.data_size;
+
+        switch (property_type) {
+          case xe::X_USER_DATA_TYPE::CONTEXT:
+          case xe::X_USER_DATA_TYPE::INT32:
+          case xe::X_USER_DATA_TYPE::FLOAT:
+            property_size = sizeof(uint32_t);
+            break;
+          case xe::X_USER_DATA_TYPE::INT64:
+          case xe::X_USER_DATA_TYPE::DOUBLE:
+          case xe::X_USER_DATA_TYPE::DATETIME:
+            property_size = sizeof(uint64_t);
+            break;
+          case xe::X_USER_DATA_TYPE::WSTRING:
+          case xe::X_USER_DATA_TYPE::BINARY:
+            property_size = XGISetPropertyBuffer->data_size;
+            break;
+        }
+
+        // 58410821
+        // Properties are ad-hoc therefore should be updated on backend, only
+        // update if value changed to reduce POST requests.
+        Property property =
+            Property(XGISetPropertyBuffer->property_id, property_size,
+                     memory_->TranslateVirtual<uint8_t*>(
+                         XGISetPropertyBuffer->data_address));
+
+        auto user_profile = kernel_state_->xam_state()->GetUserProfile(
+            XGISetPropertyBuffer->user_index);
+        if (user_profile) {
+          user_profile->AddProperty(&property);
+
+          const bool update_discord = cvars::discord_presence_user_index ==
+                                      XGISetPropertyBuffer->user_index;
+
+          user_profile->UpdatePresence(update_discord);
         }
         XELOGD("XGIUserSetPropertyEx: Setting property: {}", desc);
       }
@@ -685,28 +773,53 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
       return X_E_FAIL;
     }
     case 0x000B0041: {
-      assert_true(!buffer_length || buffer_length == 32);
-      // 00000000 2789fecc 00000000 00000000 200491e0 00000000 200491f0 20049340
-      uint32_t user_index = xe::load_and_swap<uint32_t>(buffer + 0);
-      uint32_t context_ptr = xe::load_and_swap<uint32_t>(buffer + 16);
-      auto context =
-          context_ptr ? memory_->TranslateVirtual(context_ptr) : nullptr;
-      uint32_t context_id =
-          context ? xe::load_and_swap<uint32_t>(context + 0) : 0;
-      XELOGD("XGIUserGetContext({:08X}, {:08X}{:08X}))", user_index,
-             context_ptr, context_id);
+      assert_true(!buffer_length || buffer_length == sizeof(XGIGetContext));
+
+      XGIGetContext* XGIGetContextBuffer =
+          reinterpret_cast<XGIGetContext*>(buffer);
+
+      XUSER_CONTEXT* context_ptr =
+          XGIGetContextBuffer->context_address
+              ? memory_->TranslateVirtual<XUSER_CONTEXT*>(
+                    XGIGetContextBuffer->context_address)
+              : nullptr;
+
+      XELOGD("XGIUserGetContext({:08X}, {:08X}))",
+             XGIGetContextBuffer->user_index.get(),
+             XGIGetContextBuffer->context_address.get());
+
+      if (!context_ptr) {
+        return X_E_SUCCESS;
+      }
+
       uint32_t value = 0;
-      if (context) {
-        UserProfile* user_profile =
-            kernel_state_->xam_state()->GetUserProfile(user_index);
-        if (user_profile) {
-          if (user_profile->contexts_.find(context_id) !=
-              user_profile->contexts_.cend()) {
-            value = user_profile->contexts_[context_id];
+
+      UserProfile* user_profile = kernel_state_->xam_state()->GetUserProfile(
+          XGIGetContextBuffer->user_index);
+
+      if (user_profile) {
+        const auto property = user_profile->GetProperty(
+            static_cast<AttributeKey>(context_ptr->context_id));
+
+        if (property) {
+          value = std::get<uint32_t>(property->GetValueGuest());
+        } else {
+          const auto xlast =
+              kernel_state_->emulator()->game_info_database()->GetXLast();
+
+          if (xlast) {
+            const auto default_value =
+                xlast->GetContextsQuery()->GetContextDefaultValue(
+                    context_ptr->context_id);
+
+            if (default_value.has_value()) {
+              value = default_value.value();
+            }
           }
         }
-        xe::store_and_swap<uint32_t>(context + 4, value);
       }
+
+      context_ptr->value = value;
       return X_E_SUCCESS;
     }
     case 0x000B0071: {

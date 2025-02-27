@@ -24,6 +24,7 @@
 #include "xenia/kernel/json/http_response_object_json.h"
 #include "xenia/kernel/json/leaderboard_object_json.h"
 #include "xenia/kernel/json/player_object_json.h"
+#include "xenia/kernel/json/properties_object_json.h"
 #include "xenia/kernel/json/service_info_json.h"
 #include "xenia/kernel/json/session_object_json.h"
 #include "xenia/kernel/xsession.h"
@@ -108,6 +109,11 @@ class XLiveAPI {
 
   static const std::map<uint32_t, uint32_t> SessionContextGet(
       uint64_t session_id);
+
+  static void SessionPropertiesAdd(uint64_t session_id,
+                                   std::vector<Property>& properties);
+
+  static const std::vector<Property> SessionPropertiesGet(uint64_t session_id);
 
   static const std::unique_ptr<SessionObjectJSON> SessionDetails(
       uint64_t sessionId);
