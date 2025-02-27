@@ -41,6 +41,14 @@ class SessionObjectJSON : public BaseObjectJSON {
     return string_util::from_string<uint64_t>(sessionid_, true);
   }
 
+  const uint64_t XUID_UInt() const {
+    if (xuid_.empty()) {
+      return 0;
+    }
+
+    return string_util::from_string<uint64_t>(xuid_, true);
+  }
+
   const std::string& XUID() const { return xuid_; }
   void XUID(const std::string& xuid) { xuid_ = xuid; }
 
