@@ -460,12 +460,12 @@ dword_result_t NetDll_WSASendTo_entry(
     dword_t num_buffers, lpdword_t num_bytes_sent, dword_t flags,
     pointer_t<XSOCKADDR_IN> to_ptr, dword_t to_len,
     pointer_t<XWSAOVERLAPPED> overlapped, lpvoid_t completion_routine) {
-  assert(!overlapped);
+  // assert(!overlapped);
   assert(!completion_routine);
 
-  if (overlapped) {
-    XELOGW("NetDll_WSASendTo: overlapped!");
-  }
+  // if (overlapped) {
+  //   XELOGW("NetDll_WSASendTo: overlapped!");
+  // }
 
   auto socket =
       kernel_state()->object_table()->LookupObject<XSocket>(socket_handle);
@@ -490,6 +490,38 @@ dword_result_t NetDll_WSASendTo_entry(
     combined_buffer_offset += buffers[i].len;
   }
 
+  if (overlapped) {
+    // little hacky, create a thread so it can instanly complete while is still
+    // sending data
+    std::thread([socket, combined_buffer = std::move(combined_buffer_mem),
+                 combined_buffer_size, flags, to_ptr, to_len, overlapped,
+                 num_bytes_sent]() mutable {
+      const int result = socket->SendTo(
+          combined_buffer.data(), combined_buffer_size, flags, to_ptr, to_len);
+
+      if (result == -1) {
+        XThread::SetLastError(socket->GetLastWSAError());
+        overlapped->internal = SOCKET_ERROR;
+      } else {
+        overlapped->internal = result;
+
+        if (num_bytes_sent) {
+          *num_bytes_sent = result;
+        }
+
+        if (overlapped->event_handle) {
+          xboxkrnl::xeNtSetEvent(overlapped->event_handle, nullptr);
+        }
+      }
+
+      return result;
+    }).detach();
+
+    // Instantly complete overlapped
+    return 0;
+  }
+
+  // NON-Overlapped mode
   const int result = socket->SendTo(
       combined_buffer_mem.data(), combined_buffer_size, flags, to_ptr, to_len);
 
@@ -504,10 +536,9 @@ dword_result_t NetDll_WSASendTo_entry(
            to_ptr->address_ip.S_un.S_un_b.s_b4);
   }
 
-  if (num_bytes_sent && !overlapped) {
+  if (num_bytes_sent) {
     *num_bytes_sent = result;
   }
-  // TODO: Instantly complete overlapped
 
   return 0;
 }

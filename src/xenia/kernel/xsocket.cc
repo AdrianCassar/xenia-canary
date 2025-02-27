@@ -475,7 +475,7 @@ bool XSocket::WSAGetOverlappedResult(XWSAOVERLAPPED* overlapped_ptr,
   }
 
   std::unique_lock lock(receive_mutex_);
-  if (!(overlapped_ptr->offset_high & 1)) {
+  if (overlapped_ptr->internal == STATUS_PENDING) {
     if (wait) {
       receive_cv_.wait(lock);
     } else {
@@ -484,11 +484,12 @@ bool XSocket::WSAGetOverlappedResult(XWSAOVERLAPPED* overlapped_ptr,
     }
   }
 
-  if (overlapped_ptr->internal_high != 0) {
+  // This causes problems somehow -AleBello7276
+  /* if (overlapped_ptr->internal_high != 0) {
     SetLastWSAError((X_WSAError)overlapped_ptr->internal_high.get());
     active_overlapped_ = nullptr;
     return false;
-  }
+  } */
 
   *bytes_transferred = overlapped_ptr->internal;
   *flags_ptr = overlapped_ptr->offset;
