@@ -41,6 +41,10 @@ namespace xe {
 #define X_ONLINE_E_SESSION_JOIN_ILLEGAL                     static_cast<X_HRESULT>(0x8015520AL)
 #define X_ONLINE_E_SESSION_NOT_FOUND                        static_cast<X_HRESULT>(0x80155200L)
 #define X_ONLINE_E_SESSION_FULL                             static_cast<X_HRESULT>(0x80155202L)
+#define X_ONLINE_STRING_TOO_LONG                            static_cast<X_HRESULT>(0x80157101L)
+#define X_ONLINE_STRING_OFFENSIVE_TEXT                      static_cast<X_HRESULT>(0x80157102L)
+#define X_ONLINE_STRING_NO_DEFAULT_STRING                   static_cast<X_HRESULT>(0x80157103L)
+#define X_ONLINE_STRING_INVALID_LANGUAGE                    static_cast<X_HRESULT>(0x80157104L)
 #define X_ONLINE_E_STORAGE_INVALID_FACILITY                 static_cast<X_HRESULT>(0x8015C009L)
 #define X_ONLINE_E_STORAGE_FILE_NOT_FOUND                   static_cast<X_HRESULT>(0x8015C004L)
 #define X_ONLINE_E_STORAGE_INVALID_STORAGE_PATH             static_cast<X_HRESULT>(0x8015C008L)
@@ -68,6 +72,8 @@ namespace xe {
 #define X_ONLINE_MAX_PATHNAME_LENGTH                255
 #define X_STORAGE_MAX_MEMORY_BUFFER_SIZE            100000000
 #define X_STORAGE_MAX_RESULTS_TO_RETURN             256
+#define X_ONLINE_MAX_XSTRING_VERIFY_LOCALE          512
+#define X_ONLINE_MAX_XSTRING_VERIFY_STRING_DATA     10
 
 #define X_CONTEXT_PRESENCE                          0x00008001
 #define X_CONTEXT_GAME_TYPE                         0x0000800A
@@ -359,6 +365,11 @@ struct X_STORAGE_ENUMERATE_RESULTS {
   xe::be<uint32_t> num_items_returned;
   xe::be<uint32_t> items_ptr;
 };
+struct STRING_VERIFY_RESPONSE {
+  xe::be<uint16_t> num_strings;
+  xe::be<uint32_t> string_result_ptr;
+};
+static_assert_size(STRING_VERIFY_RESPONSE, 0x6);
 
 #pragma pack(pop)
 
@@ -376,6 +387,18 @@ struct XStorageDelete_Marshalled_Data {
   xe::be<uint32_t> unkn1_ptr;
   uint8_t unkn2_data[24];
   xe::be<uint32_t> serialized_server_path_ptr;  // Entry 1
+};
+
+struct XStringVerify_Marshalled_Data {
+  xe::be<uint32_t> internal_data_ptr;
+  uint8_t unkn1_data[44];
+  xe::be<uint32_t> unkn1_ptr;
+  uint8_t unkn2_data[24];
+  xe::be<uint32_t> locale_size_ptr;
+  uint8_t unkn3_data[12];
+  xe::be<uint32_t> num_strings_ptr;
+  uint8_t unkn4_data[12];
+  xe::be<uint32_t> last_entry_ptr;
 };
 
 struct XStorageDownloadToMemory_Marshalled_Data {
@@ -404,6 +427,11 @@ struct XStorageEnumerate_Marshalled_Data {
   xe::be<uint32_t> unkn1_ptr;
   uint8_t unkn2_data[24];
   xe::be<uint32_t> serialized_server_path_ptr;  // Entry 1
+  xe::be<uint32_t> locale_size_ptr;
+  uint8_t unkn3_data[12];
+  xe::be<uint32_t> num_strings_ptr;
+  uint8_t unkn4_data[12];
+  xe::be<uint32_t> last_entry_ptr;
 };
 
 struct X_DATA_58024 {
