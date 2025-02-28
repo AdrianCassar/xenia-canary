@@ -67,6 +67,7 @@ namespace xe {
 #define X_MAX_RICHPRESENCE_SIZE                     64
 #define X_ONLINE_MAX_PATHNAME_LENGTH                255
 #define X_STORAGE_MAX_MEMORY_BUFFER_SIZE            100000000
+#define X_STORAGE_MAX_RESULTS_TO_RETURN             256
 
 #define X_CONTEXT_PRESENCE                          0x00008001
 #define X_CONTEXT_GAME_TYPE                         0x0000800A
@@ -335,6 +336,30 @@ struct X_STORAGE_DOWNLOAD_TO_MEMORY_RESULTS {
   xe::be<uint64_t> ft_created;
 };
 
+struct X_STORAGE_FILE_INFO {
+  xe::be<uint32_t> title_id;
+  xe::be<uint32_t> title_version;
+  xe::be<uint64_t> owner_puid;
+  xe::be<uint8_t> country_id;
+  xe::be<uint64_t> reserved;
+  xe::be<uint32_t> content_type;
+  xe::be<uint32_t> storage_size;
+  xe::be<uint32_t> installed_size;
+  xe::be<uint64_t> ft_created;
+  xe::be<uint64_t> ft_last_modified;
+  xe::be<uint16_t> attributes_size;
+  xe::be<uint16_t> path_name;
+  xe::be<uint32_t> path_name_ptr;
+  xe::be<uint32_t> attributes_ptr;  // Reserved
+};
+static_assert_size(X_STORAGE_FILE_INFO, 0x41);
+
+struct X_STORAGE_ENUMERATE_RESULTS {
+  xe::be<uint32_t> total_num_items;
+  xe::be<uint32_t> num_items_returned;
+  xe::be<uint32_t> items_ptr;
+};
+
 #pragma pack(pop)
 
 struct Internal_Marshalled_Data {
@@ -371,6 +396,14 @@ struct XStorageUploadFromMemory_Marshalled_Data {
   xe::be<uint32_t> serialized_server_path_ptr;  // Entry 1
   uint8_t unkn3_data[12];
   xe::be<uint32_t> serialized_buffer_ptr;  // Entry 2
+};
+
+struct XStorageEnumerate_Marshalled_Data {
+  xe::be<uint32_t> internal_data_ptr;
+  uint8_t unkn1_data[44];
+  xe::be<uint32_t> unkn1_ptr;
+  uint8_t unkn2_data[24];
+  xe::be<uint32_t> serialized_server_path_ptr;  // Entry 1
 };
 
 struct X_DATA_58024 {

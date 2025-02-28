@@ -1501,6 +1501,63 @@ X_STORAGE_UPLOAD_RESULT XLiveAPI::XStorageUpload(std::string server_path,
   return result;
 }
 
+std::pair<std::unique_ptr<XStorageFilesInfoObjectJSON>, bool>
+XLiveAPI::XStorageEnumerate(std::string server_path, uint32_t max_items) {
+  const size_t prefix_size =
+      GetApiAddress().size() + std::string("xstorage/").size();
+
+  std::string url_to_encode = server_path.substr(prefix_size);
+
+  CURL* curl = curl_easy_init();
+
+  char* encoded_url = curl_easy_escape(curl, url_to_encode.c_str(),
+                                       static_cast<int>(url_to_encode.size()));
+
+  curl_easy_cleanup(curl);
+
+  std::string endpoint = "xstorage/enumerate/" + std::string(encoded_url);
+
+  if (encoded_url) {
+    curl_free(encoded_url);
+  }
+
+  std::pair<std::unique_ptr<XStorageFilesInfoObjectJSON>, bool>
+      enumeration_result = {};
+
+  std::unique_ptr<XStorageFilesInfoObjectJSON> enumerate_xstorage =
+      std::make_unique<XStorageFilesInfoObjectJSON>();
+
+  enumerate_xstorage->MaxItems(max_items);
+
+  std::string enumerate_limit;
+  bool valid = enumerate_xstorage->Serialize(enumerate_limit);
+  assert_true(valid);
+
+  const uint8_t* enumerate_limit_data_ptr =
+      reinterpret_cast<const uint8_t*>(enumerate_limit.c_str());
+
+  std::unique_ptr<HTTPResponseObjectJSON> response =
+      Post(endpoint, enumerate_limit_data_ptr);
+
+  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_CREATED) {
+    XELOGE("XStorageEnumerate: {}", response->Message());
+
+    assert_always();
+
+    enumeration_result.first = std::move(enumerate_xstorage);
+    enumeration_result.second = false;
+
+    return enumeration_result;
+  }
+
+  enumerate_xstorage = response->Deserialize<XStorageFilesInfoObjectJSON>();
+
+  enumeration_result.first = std::move(enumerate_xstorage);
+  enumeration_result.second = true;
+
+  return enumeration_result;
+}
+
 std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::PraseResponse(
     response_data chunk) {
   std::unique_ptr<HTTPResponseObjectJSON> response =
