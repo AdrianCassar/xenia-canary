@@ -313,6 +313,54 @@ struct X_INVITE_INFO {
 
 #pragma pack(pop)
 
+#pragma pack(push, 1)
+
+struct X_ADDRESS_INFO {
+  xe::be<uint16_t> street_1_length;
+  xe::be<uint32_t> street_1;  // uint16_t*
+  xe::be<uint16_t> street_2_length;
+  xe::be<uint32_t> street_2;  // uint16_t*
+  xe::be<uint16_t> city_length;
+  xe::be<uint32_t> city;  // uint16_t*
+  xe::be<uint16_t> district_length;
+  xe::be<uint32_t> district;  // uint16_t*
+  xe::be<uint16_t> state_length;
+  xe::be<uint32_t> state;  // uint16_t*
+  xe::be<uint16_t> postal_code_length;
+  xe::be<uint32_t> postal_code;  // uint16_t*
+};
+
+struct X_GET_USER_INFO_RESPONSE {
+  xe::be<uint16_t> first_name_length;
+  xe::be<uint32_t> first_name;  // uint16_t*
+  xe::be<uint16_t> last_name_length;
+  xe::be<uint32_t> last_name;  // uint16_t*
+  X_ADDRESS_INFO address_info;
+  xe::be<uint16_t> email_length;
+  xe::be<uint32_t> email;  // uint16_t*
+  xe::be<uint16_t> language_id;
+  xe::be<uint8_t> country_id;
+  xe::be<uint8_t> msft_optin;
+  xe::be<uint8_t> parter_optin;
+  xe::be<uint8_t> age;
+};
+
+#pragma pack(pop)
+
+struct Internal_Marshalled_Data {
+  uint8_t unkn1_data[22];
+  xe::be<uint32_t> start_args_ptr;  // CArgumentList*
+  uint8_t unkn2_data[14];
+  xe::be<uint32_t> results_ptr;  // STRUCT*
+  xe::be<uint32_t> results_size;
+};
+
+struct XAccountGetUserInfo_Marshalled_Data {
+  xe::be<uint32_t> internal_data_ptr;
+  uint8_t unkn1_data[44];
+  xe::be<uint32_t> unkn1_ptr;
+};
+
 struct X_DATA_58024 {
   X_ARGUEMENT_ENTRY xuid;
   X_ARGUEMENT_ENTRY ukn2;  // 125

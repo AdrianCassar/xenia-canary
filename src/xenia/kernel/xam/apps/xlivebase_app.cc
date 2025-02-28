@@ -117,19 +117,16 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
       return cvars::stub_xlivebase ? X_E_SUCCESS : X_E_FAIL;
     }
     case 0x0005000F: {
-      // 41560855 included from TU 7
-      // Attempts to set a dvar for ui_email_address but fails on
-      // WideCharToMultiByte
+      // Requires XEX_SYSTEM_ACCESS_PII privilege
       //
-      // 4D530AA5 encounters "Failed to retrieve account credentials".
-      XELOGD("_XAccountGetUserInfo({:08X}, {:08X}) unimplemented", buffer_ptr,
-             buffer_length);
-      return X_ERROR_FUNCTION_FAILED;
+      // 41560855 included from TU 7 - expects an email address
+      // 4D530AA5
+      XELOGD("_XAccountGetUserInfo({:08X}, {:08X})", buffer_ptr, buffer_length);
+      return XAccountGetUserInfo(buffer_ptr);
     }
     case 0x00050010: {
-      XELOGD("XAccountGetUserInfo({:08X}, {:08X}) unimplemented", buffer_ptr,
-             buffer_length);
-      return X_ERROR_FUNCTION_FAILED;
+      XELOGD("XAccountGetUserInfo({:08X}, {:08X})", buffer_ptr, buffer_length);
+      return XAccountGetUserInfo(buffer_ptr);
     }
     case 0x0005801C: {
       // Called on blades dashboard v1888
@@ -819,6 +816,66 @@ X_HRESULT XLiveBaseApp::XInviteGetAcceptedInfo(uint32_t buffer_length) {
          sizeof(MacAddress));
 
   invite_info->host_info.hostAddress.wPortOnline = session->Port();
+
+  return X_E_SUCCESS;
+}
+
+X_HRESULT XLiveBaseApp::XAccountGetUserInfo(uint32_t buffer_ptr) {
+  if (!buffer_ptr) {
+    return X_E_INVALIDARG;
+  }
+
+  XAccountGetUserInfo_Marshalled_Data* data_ptr =
+      kernel_state()
+          ->memory()
+          ->TranslateVirtual<XAccountGetUserInfo_Marshalled_Data*>(buffer_ptr);
+
+  Internal_Marshalled_Data* internal_data_ptr =
+      kernel_state_->memory()->TranslateVirtual<Internal_Marshalled_Data*>(
+          data_ptr->internal_data_ptr);
+
+  if (!internal_data_ptr->results_ptr) {
+    return X_E_INVALIDARG;
+  }
+
+  uint8_t* args_stream_ptr =
+      kernel_state_->memory()->TranslateVirtual<uint8_t*>(
+          internal_data_ptr->start_args_ptr);
+
+  X_GET_USER_INFO_RESPONSE* user_info_response_ptr =
+      kernel_state_->memory()->TranslateVirtual<X_GET_USER_INFO_RESPONSE*>(
+          internal_data_ptr->results_ptr);
+
+  memset(user_info_response_ptr, 0, internal_data_ptr->results_size);
+
+  uint32_t offset = 0;
+
+  xe::be<uint64_t> xuid = *reinterpret_cast<uint64_t*>(args_stream_ptr);
+
+  offset += sizeof(uint64_t);
+
+  xe::be<uint64_t> machine_id =
+      *reinterpret_cast<uint64_t*>(args_stream_ptr + offset);
+
+  offset += sizeof(uint64_t);
+
+  xe::be<uint32_t> title_id =
+      *reinterpret_cast<uint32_t*>(args_stream_ptr + offset);
+
+  std::u16string email = u"example@email.com";
+  uint16_t email_size = static_cast<uint16_t>(email.size());
+
+  const uint32_t email_address =
+      kernel_state()->memory()->SystemHeapAlloc(email_size);
+
+  char16_t* email_address_ptr =
+      kernel_state_->memory()->TranslateVirtual<char16_t*>(email_address);
+
+  string_util::copy_and_swap_truncating(email_address_ptr, email.data(),
+                                        email_size);
+
+  user_info_response_ptr->email_length = email_size;
+  user_info_response_ptr->email = email_address;
 
   return X_E_SUCCESS;
 }
