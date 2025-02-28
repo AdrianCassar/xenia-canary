@@ -112,19 +112,12 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
       return XUserFindUsers(buffer_ptr);
     }
     case 0x0005000F: {
-      // 41560855 included from TU 7
-      // Attempts to set a dvar for ui_email_address but fails on
-      // WideCharToMultiByte
-      //
-      // 4D530AA5 encounters "Failed to retrieve account credentials".
-      XELOGD("_XAccountGetUserInfo({:08X}, {:08X}) unimplemented", buffer_ptr,
-             buffer_length);
-      return X_ERROR_FUNCTION_FAILED;
+      XELOGD("_XAccountGetUserInfo({:08X}, {:08X})", buffer_ptr, buffer_length);
+      return XAccountGetUserInfo(buffer_ptr);
     }
     case 0x00050010: {
-      XELOGD("XAccountGetUserInfo({:08X}, {:08X}) unimplemented", buffer_ptr,
-             buffer_length);
-      return X_ERROR_FUNCTION_FAILED;
+      XELOGD("XAccountGetUserInfo({:08X}, {:08X})", buffer_ptr, buffer_length);
+      return XAccountGetUserInfo(buffer_ptr);
     }
     case 0x0005801C: {
       // Called on blades dashboard v1888
@@ -814,6 +807,92 @@ X_HRESULT XLiveBaseApp::XInviteGetAcceptedInfo(uint32_t buffer_length) {
          sizeof(MacAddress));
 
   invite_info->host_info.hostAddress.wPortOnline = session->Port();
+
+  return X_E_SUCCESS;
+}
+
+X_HRESULT XLiveBaseApp::XAccountGetUserInfo(uint32_t buffer_ptr) {
+  // Requires XEX_SYSTEM_ACCESS_PII privilege
+  // 41560855 (TU 7+), 4D530AA5
+
+  if (!buffer_ptr) {
+    return X_E_INVALIDARG;
+  }
+
+  XAccountGetUserInfo_Marshalled_Data* data_ptr =
+      kernel_state()
+          ->memory()
+          ->TranslateVirtual<XAccountGetUserInfo_Marshalled_Data*>(buffer_ptr);
+
+  Internal_Marshalled_Data* internal_data_ptr =
+      kernel_state_->memory()->TranslateVirtual<Internal_Marshalled_Data*>(
+          data_ptr->internal_data_ptr);
+
+  uint8_t* args_stream_ptr =
+      kernel_state_->memory()->TranslateVirtual<uint8_t*>(
+          internal_data_ptr->start_args_ptr);
+
+  X_GET_USER_INFO_RESPONSE* user_info_response_ptr =
+      kernel_state_->memory()->TranslateVirtual<X_GET_USER_INFO_RESPONSE*>(
+          internal_data_ptr->results_ptr);
+
+  if (!data_ptr->internal_data_ptr) {
+    return X_E_INVALIDARG;
+  }
+
+  if (!internal_data_ptr->start_args_ptr) {
+    return X_E_INVALIDARG;
+  }
+
+  if (!internal_data_ptr->results_ptr) {
+    return X_E_INVALIDARG;
+  }
+
+  if (internal_data_ptr->results_size < XAccountGetUserInfoResponseSize()) {
+    return X_ONLINE_E_ACCOUNTS_USER_GET_ACCOUNT_INFO_ERROR;
+  }
+
+  memset(user_info_response_ptr, 0, internal_data_ptr->results_size);
+
+  uint32_t offset = 0;
+
+  xe::be<uint64_t> xuid = *reinterpret_cast<uint64_t*>(args_stream_ptr);
+
+  offset += sizeof(uint64_t);
+
+  xe::be<uint64_t> machine_id =
+      *reinterpret_cast<uint64_t*>(args_stream_ptr + offset);
+
+  offset += sizeof(uint64_t);
+
+  xe::be<uint32_t> title_id =
+      *reinterpret_cast<uint32_t*>(args_stream_ptr + offset);
+
+  // Example usage
+  std::u16string first_name = u"First Name";
+  std::u16string last_name = u"Last Name";
+
+  char16_t* first_name_ptr =
+      reinterpret_cast<char16_t*>(user_info_response_ptr + 1);
+  string_util::copy_and_swap_truncating(first_name_ptr, first_name.data(),
+                                        MAX_FIRSTNAME_SIZE);
+
+  char16_t* last_name_ptr =
+      reinterpret_cast<char16_t*>(first_name_ptr + MAX_FIRSTNAME_SIZE);
+  string_util::copy_and_swap_truncating(last_name_ptr, last_name.data(),
+                                        MAX_LASTNAME_SIZE);
+
+  user_info_response_ptr->first_name_length =
+      static_cast<uint32_t>(first_name.size());
+  user_info_response_ptr->first_name =
+      kernel_state()->memory()->HostToGuestVirtual(
+          std::to_address(first_name_ptr));
+
+  user_info_response_ptr->last_name_length =
+      static_cast<uint32_t>(last_name.size());
+  user_info_response_ptr->last_name =
+      kernel_state()->memory()->HostToGuestVirtual(
+          std::to_address(last_name_ptr));
 
   return X_E_SUCCESS;
 }
