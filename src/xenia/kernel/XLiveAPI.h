@@ -26,6 +26,7 @@
 #include "xenia/kernel/json/player_object_json.h"
 #include "xenia/kernel/json/service_info_json.h"
 #include "xenia/kernel/json/session_object_json.h"
+#include "xenia/kernel/json/xstorage_file_info_object_json.h"
 #include "xenia/kernel/xsession.h"
 
 #ifdef XE_PLATFORM_WIN32
@@ -150,6 +151,9 @@ class XLiveAPI {
 
   static X_STORAGE_BUILD_SERVER_PATH_RESULT XStorageBuildServerPath(
       std::string server_path);
+
+  static std::pair<std::unique_ptr<XStorageFilesInfoObjectJSON>, bool>
+  XStorageEnumerate(std::string server_path, uint32_t max_items);
 
   static std::unique_ptr<HTTPResponseObjectJSON> PraseResponse(
       response_data response);
