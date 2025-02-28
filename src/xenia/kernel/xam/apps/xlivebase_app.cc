@@ -84,12 +84,9 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
       return XStorageDownloadToMemory(buffer_ptr);
     }
     case 0x0005000A: {
-      // 4D5307D3 needs X_E_SUCCESS
-      // 415607F7 needs X_E_FAIL to prevent crash.
-      // 584108F0
-      XELOGD("XStorageEnumerate({:08X}, {:08X}) unimplemented", buffer_ptr,
-             buffer_length);
-      return cvars::stub_xlivebase ? X_E_SUCCESS : X_E_FAIL;
+      // 4D5307D3, 415607F7, 584108F0
+      XELOGD("XStorageEnumerate({:08X}, {:08X})", buffer_ptr, buffer_length);
+      return XStorageEnumerate(buffer_ptr);
     }
     case 0x0005000B: {
       // Fixes Xbox Live error for 43430821
@@ -823,6 +820,180 @@ X_HRESULT XLiveBaseApp::XInviteGetAcceptedInfo(uint32_t buffer_length) {
   return X_E_SUCCESS;
 }
 
+X_HRESULT XLiveBaseApp::XStorageEnumerate(uint32_t buffer_ptr) {
+  if (!buffer_ptr) {
+    return X_E_INVALIDARG;
+  }
+
+  XStorageEnumerate_Marshalled_Data* data_ptr =
+      kernel_state()
+          ->memory()
+          ->TranslateVirtual<XStorageEnumerate_Marshalled_Data*>(buffer_ptr);
+
+  Internal_Marshalled_Data* internal_data_ptr =
+      kernel_state_->memory()->TranslateVirtual<Internal_Marshalled_Data*>(
+          data_ptr->internal_data_ptr);
+
+  if (!internal_data_ptr->results_ptr) {
+    return X_E_INVALIDARG;
+  }
+
+  uint8_t* args_stream_ptr =
+      kernel_state_->memory()->TranslateVirtual<uint8_t*>(
+          internal_data_ptr->start_args_ptr);
+
+  X_STORAGE_ENUMERATE_RESULTS* results_ptr =
+      kernel_state_->memory()->TranslateVirtual<X_STORAGE_ENUMERATE_RESULTS*>(
+          internal_data_ptr->results_ptr);
+
+  // Fixed 415607F7 from crashing.
+  memset(results_ptr, 0, internal_data_ptr->results_size);
+
+  uint32_t offset = 0;
+
+  xe::be<uint32_t> user_index = 0;
+  memcpy(&user_index, args_stream_ptr, sizeof(uint32_t));
+
+  offset += sizeof(uint32_t);
+
+  xe::be<uint32_t> server_path_len = 0;
+  memcpy(&server_path_len, args_stream_ptr + offset, sizeof(uint32_t));
+
+  offset += sizeof(uint32_t);
+
+  char16_t* arg_server_path_ptr =
+      reinterpret_cast<char16_t*>(args_stream_ptr + offset);
+
+  uint32_t server_path_size = server_path_len * sizeof(char16_t);
+
+  offset += server_path_size;
+
+  uint8_t* arg_starting_index_ptr = args_stream_ptr + offset;
+  uint32_t* starting_index_ptr =
+      reinterpret_cast<uint32_t*>(args_stream_ptr + offset);
+
+  offset += sizeof(uint32_t);
+
+  uint32_t* arg_max_results_to_return_ptr =
+      reinterpret_cast<uint32_t*>(args_stream_ptr + offset);
+
+  // Exclude null-terminator
+  server_path_len -= 1;
+
+  std::u16string server_path;
+  server_path.resize(server_path_len);
+
+  xe::copy_and_swap(server_path.data(), arg_server_path_ptr, server_path_len);
+
+  uint32_t starting_index = xe::load_and_swap<uint32_t>(arg_starting_index_ptr);
+  uint32_t max_results_to_return =
+      xe::load_and_swap<uint32_t>(arg_max_results_to_return_ptr);
+
+  if (server_path_len >= 255) {
+    return X_E_FAIL;
+  }
+
+  auto user_profle = kernel_state()->xam_state()->GetUserProfile(user_index);
+
+  std::filesystem::path folder_to_enumerate =
+      std::filesystem::path(server_path);
+
+  std::string item_name = folder_to_enumerate.filename().string();
+  std::replace(item_name.begin(), item_name.end(), '*', '?');
+
+  std::filesystem::path item_parent = folder_to_enumerate.parent_path();
+
+  vfs::Entry* folder =
+      kernel_state()->file_system()->ResolvePath(item_parent.string());
+
+  // const std::vector<std::string> files =
+  //     XLiveAPI::XStorageEnumerate(folder_to_enumerate.string());
+
+  xe::filesystem::WildcardEngine find_engine;
+  find_engine.SetRule(item_name);
+
+  size_t itr_index = 0;
+  std::vector<vfs::Entry*> entries = {};
+
+  vfs::Entry* entry = nullptr;
+
+  if (folder) {
+    do {
+      entry = folder->IterateChildren(find_engine, &itr_index);
+
+      if (entry) {
+        if (!(entry->attributes() & FILE_ATTRIBUTE_DIRECTORY)) {
+          entries.push_back(entry);
+        }
+      }
+    } while (entry &&
+             entries.size() < max_results_to_return);  // starting_index?
+  }
+
+  // Files are returned in order from most to least recently modified.
+  std::sort(entries.begin(), entries.end(),
+            [](const vfs::Entry* entry_1, const vfs::Entry* entry_2) {
+              return entry_1->write_timestamp() > entry_2->write_timestamp();
+            });
+
+  X_STORAGE_FILE_INFO* items_array_ptr =
+      reinterpret_cast<X_STORAGE_FILE_INFO*>(results_ptr + 1);
+
+  uint32_t items_address = static_cast<uint32_t>(
+      reinterpret_cast<uintptr_t>(std::to_address(items_array_ptr)));
+
+  results_ptr->items_ptr = items_address;
+
+  char16_t* items_path_name_array_ptr =
+      reinterpret_cast<char16_t*>(items_array_ptr + max_results_to_return);
+
+  for (uint32_t item_index = 0; const auto entry : entries) {
+    std::filesystem::path item_path =
+        std::format("{}/{}", item_parent.string(), entry->name());
+
+    uint32_t item_path_size =
+        static_cast<uint32_t>(item_path.string().size() * sizeof(char16_t));
+
+    uint32_t item_path_address =
+        static_cast<uint32_t>(reinterpret_cast<uintptr_t>(
+            std::to_address(items_path_name_array_ptr + (item_index * 256))));
+
+    char16_t* item_path_ptr =
+        kernel_state_->memory()->TranslateVirtual<char16_t*>(item_path_address);
+
+    xe::string_util::copy_and_swap_truncating(
+        item_path_ptr, item_path.u16string(), item_path_size);
+
+    items_array_ptr[item_index].path_name =
+        static_cast<uint32_t>(item_path.string().size());
+    items_array_ptr[item_index].path_name_ptr = item_path_address;
+
+    const uint32_t size_bytes = static_cast<uint32_t>(entry->size());
+
+    items_array_ptr[item_index].title_id = kernel_state()->title_id();
+    items_array_ptr[item_index].owner_puid = user_profle->xuid();
+    items_array_ptr[item_index].ft_created = entry->create_timestamp();
+    items_array_ptr[item_index].ft_last_modified = entry->write_timestamp();
+    items_array_ptr[item_index].storage_size = size_bytes;
+    items_array_ptr[item_index].installed_size = size_bytes;
+
+    results_ptr->num_items_returned += 1;
+    results_ptr->total_num_items += 1;
+
+    XELOGI("{}: Added storage item {}", __func__, entry->name());
+
+    item_index++;
+  }
+
+  XELOGI(
+      "{}: Storage Items: {}, Start Index: {}, Max Results: {}, Server Path: "
+      "{}",
+      __func__, results_ptr->num_items_returned.get(), starting_index,
+      max_results_to_return, xe::to_utf8(server_path));
+
+  return X_E_SUCCESS;
+}
+
 X_HRESULT XLiveBaseApp::XStringVerify(uint32_t buffer_ptr,
                                       uint32_t buffer_length) {
   if (!buffer_ptr) {
@@ -907,11 +1078,15 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
 
   std::string storage_type;
 
+  std::string host = "XSTORAGE:";
+
+  // host = XLiveAPI::GetApiAddress();
+
   switch (args->storage_location.get()) {
     case X_STORAGE_FACILITY::FACILITY_GAME_CLIP: {
-      server_path_str = fmt::format(
-          "{}title/{:08X}/storage/clips/{}", XLiveAPI::GetApiAddress(),
-          kernel_state()->title_id(), xe::to_utf8(filename));
+      server_path_str =
+          fmt::format("{}title/{:08X}/storage/clips/{}", host,
+                      kernel_state()->title_id(), xe::to_utf8(filename));
 
       xe::be<uint32_t> leaderboard_id = 0;
 
@@ -929,15 +1104,15 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
     } break;
     case X_STORAGE_FACILITY::FACILITY_PER_TITLE: {
       server_path_str =
-          fmt::format("{}title/{:08X}/storage/{}", XLiveAPI::GetApiAddress(),
+          fmt::format("{}title/{:08X}/storage/{}", host,
                       kernel_state()->title_id(), xe::to_utf8(filename));
 
       storage_type = "Per Title";
     } break;
     case X_STORAGE_FACILITY::FACILITY_PER_USER_TITLE: {
-      server_path_str = fmt::format(
-          "{}user/{:016X}/title/{:08X}/storage/{}", XLiveAPI::GetApiAddress(),
-          xuid, kernel_state()->title_id(), xe::to_utf8(filename));
+      server_path_str =
+          fmt::format("{}user/{:016X}/title/{:08X}/storage/{}", host, xuid,
+                      kernel_state()->title_id(), xe::to_utf8(filename));
 
       storage_type = "Per User Title";
     } break;
