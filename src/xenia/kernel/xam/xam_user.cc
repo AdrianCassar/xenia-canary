@@ -481,6 +481,9 @@ dword_result_t XamUserCheckPrivilege_entry(dword_t user_index, dword_t type,
     }
   }
 
+  // XUserGetAccountInfoCheck - 41560855
+  // XPRIVILEGE_PII_ACCESS == 221
+
   // Allow all privileges including multiplayer for live enabled profiles
   *out_value = 1;
 
