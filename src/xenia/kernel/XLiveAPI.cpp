@@ -46,6 +46,11 @@ DEFINE_string(network_guid, "", "Network Interface GUID", "Live");
 DEFINE_string(friends_xuids, "", "Comma delimited list of XUIDs. (Max 100)",
               "Live");
 
+DEFINE_bool(xstorage_backend, false,
+            "Switch from local to backend XStorage if it's enabled, otherwise "
+            "fallback to local.",
+            "Live");
+
 DECLARE_string(upnp_root);
 
 DECLARE_bool(upnp);
@@ -1381,6 +1386,37 @@ std::unique_ptr<FriendsPresenceObjectJSON> XLiveAPI::GetFriendsPresence(
   friends = response->Deserialize<FriendsPresenceObjectJSON>();
 
   return friends;
+}
+
+bool XLiveAPI::XStorageUpload(std::string server_path,
+                              std::span<uint8_t> buffer) {
+  // Remove address it's added later
+  std::string endpoint = server_path.substr(GetApiAddress().size());
+
+  std::unique_ptr<HTTPResponseObjectJSON> response =
+      Post(endpoint, buffer.data(), buffer.size());
+
+  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_CREATED) {
+    XELOGE("XStorageUpload: {}", response->Message());
+    return false;
+  }
+
+  return true;
+}
+
+bool XLiveAPI::XStorageBuildServerPath(std::string server_path) {
+  // Remove address it's added later
+  std::string endpoint = server_path.substr(GetApiAddress().size());
+
+  std::unique_ptr<HTTPResponseObjectJSON> response =
+      Post(endpoint, nullptr, 0);
+
+  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_CREATED) {
+    XELOGE("XStorageBuildServerPath: {}", response->Message());
+    return false;
+  }
+
+  return true;
 }
 
 std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::PraseResponse(
