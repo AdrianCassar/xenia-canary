@@ -159,14 +159,6 @@ struct XAUTH_SETTINGS {
   xe::be<uint32_t> Flags;
 };
 
-// Security Gateway Address
-struct SGADDR {
-  in_addr ina_security_gateway;
-  xe::be<uint32_t> security_parameter_index;
-  xe::be<uint64_t> xbox_id;
-  uint8_t unkn[4];
-};
-
 typedef struct {
   uint32_t size_of_struct;
   uint32_t requests_received_count;
@@ -280,7 +272,7 @@ dword_result_t XNetLogonGetTitleID_entry(dword_t caller, lpvoid_t params) {
 DECLARE_XAM_EXPORT1(XNetLogonGetTitleID, kNetworking, kImplemented);
 
 dword_result_t NetDll_XnpLogonGetStatus_entry(
-    dword_t caller, pointer_t<SGADDR> security_gateway_ptr, lpdword_t unkn) {
+    dword_t caller, pointer_t<SGADDR> security_gateway_ptr, lpdword_t reason) {
   return X_STATUS_SUCCESS;
 }
 DECLARE_XAM_EXPORT1(NetDll_XnpLogonGetStatus, kNetworking, kStub);

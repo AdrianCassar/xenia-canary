@@ -108,13 +108,8 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
       return XStringVerify(buffer_ptr, buffer_length);
     }
     case 0x0005000E: {
-      // Before every call there is a call to XUserFindUsers
-      // Success stub:
-      // 584113E8 successfully creates session.
-      // 58410B5D craches.
-      XELOGD("XUserFindUsersResponseSize({:08X}, {:08X}) unimplemented",
-             buffer_ptr, buffer_length);
-      return cvars::stub_xlivebase ? X_E_SUCCESS : X_E_FAIL;
+      XELOGD("XUserFindUsers({:08X}, {:08X})", buffer_ptr, buffer_length);
+      return XUserFindUsers(buffer_ptr);
     }
     case 0x0005000F: {
       // 41560855 included from TU 7
@@ -267,9 +262,9 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
       return X_E_SUCCESS;
     }
     case 0x00058017: {
-      XELOGD("XUserFindUsers({:08X}, {:08X}) unimplemented", buffer_ptr,
+      XELOGD("XUserFindUsersUnkn58017({:08X}, {:08X})", buffer_ptr,
              buffer_length);
-      return X_E_SUCCESS;
+      return XUserFindUsersUnkn58017(buffer_ptr);
     }
     case 0x00058019: {
       // 54510846
@@ -1941,6 +1936,138 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
          storage_type);
 
   return result;
+}
+
+X_HRESULT XLiveBaseApp::XUserFindUsersUnkn58017(uint32_t buffer_ptr) {
+  if (!buffer_ptr) {
+    return X_E_INVALIDARG;
+  }
+
+  uint8_t* data_ptr =
+      kernel_state_->memory()->TranslateVirtual<uint8_t*>(buffer_ptr);
+
+  std::fill_n(data_ptr, sizeof(uint64_t), 0);
+
+  return X_E_SUCCESS;
+}
+
+X_HRESULT XLiveBaseApp::XUserFindUsers(uint32_t buffer_ptr) {
+  // 584113E8, 58410B5D
+
+  if (!buffer_ptr) {
+    return X_E_INVALIDARG;
+  }
+
+  XUserFindUsers_Marshalled_Data* data_ptr =
+      kernel_state_->memory()
+          ->TranslateVirtual<XUserFindUsers_Marshalled_Data*>(buffer_ptr);
+
+  Internal_Marshalled_Data* internal_data_ptr =
+      kernel_state_->memory()->TranslateVirtual<Internal_Marshalled_Data*>(
+          data_ptr->internal_data_ptr);
+
+  FIND_USERS_RESPONSE* results_ptr =
+      kernel_state_->memory()->TranslateVirtual<FIND_USERS_RESPONSE*>(
+          internal_data_ptr->results_ptr);
+
+  if (!data_ptr->internal_data_ptr) {
+    return X_E_INVALIDARG;
+  }
+
+  if (!internal_data_ptr->start_args_ptr) {
+    return X_E_INVALIDARG;
+  }
+
+  if (!internal_data_ptr->results_ptr) {
+    return X_E_INVALIDARG;
+  }
+
+  uint8_t* args_stream_ptr =
+      kernel_state_->memory()->TranslateVirtual<uint8_t*>(
+          internal_data_ptr->start_args_ptr);
+
+  // Fixed 58410B5D
+  memset(results_ptr, 0, internal_data_ptr->results_size);
+
+  uint32_t offset = 0;
+
+  // 1065
+  uint32_t value_const = *reinterpret_cast<uint32_t*>(args_stream_ptr);
+
+  offset += sizeof(uint32_t);
+
+  // Data from 58017
+  uint64_t unkn_value = *reinterpret_cast<uint64_t*>(args_stream_ptr + offset);
+
+  offset += sizeof(uint64_t);
+
+  // XnpLogonGetStatus
+  SGADDR* security_gateway =
+      reinterpret_cast<SGADDR*>(args_stream_ptr + offset);
+
+  offset += sizeof(SGADDR);
+
+  uint64_t xuid_issuer = *reinterpret_cast<uint64_t*>(args_stream_ptr + offset);
+
+  offset += sizeof(uint64_t);
+
+  uint32_t num_users = *reinterpret_cast<uint32_t*>(args_stream_ptr + offset);
+
+  offset += sizeof(uint32_t);
+
+  FIND_USER_INFO* users_ptr =
+      reinterpret_cast<FIND_USER_INFO*>(args_stream_ptr + offset);
+
+  std::vector<FIND_USER_INFO> find_users = {};
+  std::vector<FIND_USER_INFO> resolved_users = {};
+
+  for (uint32_t i = 0; i < num_users; i++) {
+    FIND_USER_INFO user = users_ptr[i];
+
+    const uint64_t xuid = xe::byte_swap(users_ptr[i].xuid);
+
+    const auto user_profile =
+        kernel_state()->xam_state()->GetUserProfileLive(xuid);
+
+    // Only lookup non-local users
+    if (user_profile) {
+      FIND_USER_INFO local_user = users_ptr[i];
+
+      local_user.xuid = xuid;
+      strcpy(local_user.gamertag, user_profile->name().c_str());
+
+      resolved_users.push_back(local_user);
+    } else {
+      find_users.push_back(user);
+    }
+  }
+
+  if (!find_users.empty()) {
+    auto resolved = XLiveAPI::GetFindUsers(find_users)->GetResolvedUsers();
+
+    resolved_users.insert(resolved_users.end(), resolved.begin(),
+                          resolved.end());
+  }
+
+  uint32_t results_size =
+      sizeof(FIND_USERS_RESPONSE) + (num_users * sizeof(FIND_USER_INFO));
+
+  uint32_t users_address = kernel_state()->memory()->HostToGuestVirtual(
+      std::to_address(results_ptr + 1));
+
+  FIND_USER_INFO* user_results_ptr =
+      kernel_state()->memory()->TranslateVirtual<FIND_USER_INFO*>(
+          users_address);
+
+  for (uint32_t i = 0; const auto& user : resolved_users) {
+    memcpy(&user_results_ptr[i], &user, sizeof(FIND_USER_INFO));
+    i++;
+  }
+
+  results_ptr->results_size = results_size;
+  results_ptr->users_address = users_address;
+
+  return X_E_SUCCESS;
 }
 
 std::string XLiveBaseApp::ConvertServerPathToXStorageSymlink(
