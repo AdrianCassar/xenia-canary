@@ -22,10 +22,10 @@ namespace filesystem {
 
 class WildcardFlags {
  public:
-  bool FromStart : 1, ToEnd : 1, ExactLength : 1;
+  bool FromStart : 1, ToEnd : 1, AnyLength : 1;
 
   WildcardFlags();
-  WildcardFlags(bool start, bool end, bool exact_length);
+  WildcardFlags(bool start, bool end, bool any_length);
 
   static WildcardFlags FIRST;
   static WildcardFlags LAST;
