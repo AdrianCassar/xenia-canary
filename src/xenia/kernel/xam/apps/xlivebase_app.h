@@ -37,6 +37,7 @@ class XLiveBaseApp : public App {
   void UpdatePresenceXUIDs(const std::vector<uint64_t>& xuids,
                            const uint32_t user_index);
   X_HRESULT XInviteGetAcceptedInfo(uint32_t buffer_length);
+  X_HRESULT XStorageEnumerate(uint32_t buffer_ptr);
   X_HRESULT XStringVerify(uint32_t buffer_ptr, uint32_t buffer_length);
   X_HRESULT XStorageDelete(uint32_t buffer_ptr);
   X_HRESULT XStorageDownloadToMemory(uint32_t buffer_ptr);
@@ -45,6 +46,8 @@ class XLiveBaseApp : public App {
 
   std::string ConvertServerPathToXStorageSymlink(
       std::string server_path_string);
+  std::string ConvertXStorageSymlinkToServerPath(
+      std::string symlink_path_string);
   X_STORAGE_FACILITY GetStorageFacilityTypeFromServerPath(
       std::string server_path);
 
