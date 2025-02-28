@@ -299,6 +299,14 @@ struct X_INVITE_GET_ACCEPTED_INFO {
 
 #pragma pack(push, 4)
 
+// Security Gateway Address
+struct SGADDR {
+  in_addr ina_security_gateway;
+  xe::be<uint32_t> security_parameter_index;
+  xe::be<uint64_t> xbox_id;
+  uint8_t reserved[4];
+};
+
 struct X_ONLINE_PRESENCE {
   xe::be<uint64_t> xuid;
   xe::be<uint32_t> state;
@@ -371,6 +379,16 @@ struct STRING_VERIFY_RESPONSE {
 };
 static_assert_size(STRING_VERIFY_RESPONSE, 0x6);
 
+struct FIND_USER_INFO {
+  xe::be<uint64_t> xuid;
+  char gamertag[16];
+};
+
+struct FIND_USERS_RESPONSE {
+  xe::be<uint32_t> results_size;
+  xe::be<uint32_t> users_address;
+};
+
 #pragma pack(pop)
 
 struct Internal_Marshalled_Data {
@@ -432,6 +450,16 @@ struct XStorageEnumerate_Marshalled_Data {
   xe::be<uint32_t> num_strings_ptr;
   uint8_t unkn4_data[12];
   xe::be<uint32_t> last_entry_ptr;
+};
+
+struct XUserFindUsers_Marshalled_Data {
+  xe::be<uint32_t> internal_data_ptr;
+  uint8_t unkn1_data[44];
+  xe::be<uint32_t> unkn1_ptr;
+  uint8_t unkn2_data[24];
+  xe::be<uint32_t> empty;  // Entry 1
+  uint8_t unkn3_data[12];
+  xe::be<uint32_t> serialized_users_info_ptr;  // Entry 2
 };
 
 struct X_DATA_58024 {
