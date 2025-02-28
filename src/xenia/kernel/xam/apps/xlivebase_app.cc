@@ -1175,12 +1175,106 @@ X_HRESULT XLiveBaseApp::XStringVerify(uint32_t buffer_ptr,
     return X_E_INVALIDARG;
   }
 
-  uint32_t* data_ptr =
-      kernel_state_->memory()->TranslateVirtual<uint32_t*>(buffer_ptr);
+  XStringVerify_Marshalled_Data* data_ptr =
+      kernel_state_->memory()->TranslateVirtual<XStringVerify_Marshalled_Data*>(
+          buffer_ptr);
 
-  // TODO(Gliniak): Figure out structure after marshaling.
-  // Based on what game does there must be some structure that
-  // checks if string is proper.
+  Internal_Marshalled_Data* internal_data_ptr =
+      kernel_state_->memory()->TranslateVirtual<Internal_Marshalled_Data*>(
+          data_ptr->internal_data_ptr);
+
+  uint8_t* args_stream_ptr =
+      kernel_state_->memory()->TranslateVirtual<uint8_t*>(
+          internal_data_ptr->start_args_ptr);
+
+  STRING_VERIFY_RESPONSE* responses_ptr =
+      kernel_state_->memory()->TranslateVirtual<STRING_VERIFY_RESPONSE*>(
+          internal_data_ptr->results_ptr);
+
+  if (!data_ptr->internal_data_ptr) {
+    return X_E_INVALIDARG;
+  }
+
+  if (!internal_data_ptr->start_args_ptr) {
+    return X_E_INVALIDARG;
+  }
+
+  if (!internal_data_ptr->results_ptr) {
+    return X_E_INVALIDARG;
+  }
+
+  memset(responses_ptr, 0, internal_data_ptr->results_size);
+
+  uint16_t* locale_size_ptr =
+      kernel_state_->memory()->TranslateVirtual<uint16_t*>(
+          data_ptr->locale_size_ptr);
+  uint16_t* num_strings_ptr =
+      kernel_state_->memory()->TranslateVirtual<uint16_t*>(
+          data_ptr->num_strings_ptr);
+  uint16_t* last_entry_ptr =
+      kernel_state_->memory()->TranslateVirtual<uint16_t*>(
+          data_ptr->last_entry_ptr);
+
+  uint16_t locale_size = *locale_size_ptr;
+  uint16_t num_strings = *num_strings_ptr;
+
+  if (locale_size > X_ONLINE_MAX_XSTRING_VERIFY_LOCALE) {
+    return X_E_INVALIDARG;
+  }
+
+  if (num_strings > X_ONLINE_MAX_XSTRING_VERIFY_STRING_DATA) {
+    return X_E_INVALIDARG;
+  }
+
+  xe::be<uint32_t> title_id = *reinterpret_cast<uint32_t*>(args_stream_ptr);
+
+  xe::be<uint32_t> flags =
+      *reinterpret_cast<uint32_t*>(args_stream_ptr + sizeof(uint32_t));
+
+  char* locale_string_ptr = kernel_state_->memory()->TranslateVirtual<char*>(
+      data_ptr->num_strings_ptr + sizeof(uint16_t));
+
+  std::string locale = std::string(locale_string_ptr, locale_size);
+
+  char* string_data = locale_string_ptr + locale_size;
+
+  std::vector<std::string> strings_to_verify;
+
+  uint32_t string_data_offset = 0;
+
+  for (uint32_t i = 0; i < num_strings; i++) {
+    uint16_t size = 0;
+    memcpy(&size, string_data + string_data_offset, sizeof(uint16_t));
+
+    string_data_offset += sizeof(uint16_t);
+
+    // Unicode is represented as UTF-8 array
+    char* string_data_ptr = string_data + string_data_offset;
+
+    std::string input_string = std::string(string_data_ptr, size);
+
+    string_data_offset += size;
+
+    strings_to_verify.push_back(input_string);
+
+    XELOGI("{}: {}", __func__, input_string);
+  }
+
+  uint32_t response_result_address =
+      kernel_state_->memory()->HostToGuestVirtual(
+          std::to_address(responses_ptr + 1));
+
+  HRESULT* response_results_ptr =
+      kernel_state_->memory()->TranslateVirtual<HRESULT*>(
+          response_result_address);
+
+  for (uint32_t i = 0; i < num_strings; i++) {
+    response_results_ptr[i] = X_E_SUCCESS;
+  }
+
+  responses_ptr->num_strings = num_strings;
+  responses_ptr->string_result_ptr = response_result_address;
+
   return X_E_SUCCESS;
 }
 
