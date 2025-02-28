@@ -1558,6 +1558,37 @@ XLiveAPI::XStorageEnumerate(std::string server_path, uint32_t max_items) {
   return enumeration_result;
 }
 
+std::unique_ptr<FindUsersObjectJSON> XLiveAPI::GetFindUsers(
+    const std::vector<FIND_USER_INFO>& find_users_info) {
+  const std::string endpoint = "players/findusers";
+
+  std::unique_ptr<FindUsersObjectJSON> find_users =
+      std::make_unique<FindUsersObjectJSON>();
+
+  find_users->SetFindUsers(find_users_info);
+
+  std::string find_users_serialized;
+  bool valid = find_users->Serialize(find_users_serialized);
+  assert_true(valid);
+
+  const uint8_t* find_users_data =
+      reinterpret_cast<const uint8_t*>(find_users_serialized.c_str());
+
+  std::unique_ptr<HTTPResponseObjectJSON> response =
+      Post(endpoint, find_users_data);
+
+  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_CREATED) {
+    XELOGE("GetFindUsers error message: {}", response->Message());
+    assert_always();
+
+    return find_users;
+  }
+
+  find_users = response->Deserialize<FindUsersObjectJSON>();
+
+  return find_users;
+}
+
 std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::PraseResponse(
     response_data chunk) {
   std::unique_ptr<HTTPResponseObjectJSON> response =

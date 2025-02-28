@@ -21,6 +21,7 @@
 #include "xenia/kernel/xnet.h"
 
 #include "xenia/kernel/json/arbitration_object_json.h"
+#include "xenia/kernel/json/find_users_object_json.h"
 #include "xenia/kernel/json/friend_presence_object_json.h"
 #include "xenia/kernel/json/http_response_object_json.h"
 #include "xenia/kernel/json/leaderboard_object_json.h"
@@ -162,6 +163,9 @@ class XLiveAPI {
 
   static std::pair<std::unique_ptr<XStorageFilesInfoObjectJSON>, bool>
   XStorageEnumerate(std::string server_path, uint32_t max_items);
+
+  static std::unique_ptr<FindUsersObjectJSON> GetFindUsers(
+      const std::vector<FIND_USER_INFO>& find_users_info);
 
   static std::unique_ptr<HTTPResponseObjectJSON> PraseResponse(
       response_data response);
