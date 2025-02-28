@@ -37,6 +37,7 @@ class XLiveBaseApp : public App {
   void UpdatePresenceXUIDs(const std::vector<uint64_t>& xuids,
                            const uint32_t user_index);
   X_HRESULT XInviteGetAcceptedInfo(uint32_t buffer_length);
+  X_HRESULT XAccountGetUserInfo(uint32_t buffer_ptr);
   X_HRESULT XStorageEnumerate(uint32_t buffer_ptr);
   X_HRESULT XStringVerify(uint32_t buffer_ptr, uint32_t buffer_length);
   X_HRESULT XStorageDelete(uint32_t buffer_ptr);

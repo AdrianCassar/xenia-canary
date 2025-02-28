@@ -50,6 +50,9 @@ namespace xe {
 #define X_ONLINE_E_STORAGE_INVALID_STORAGE_PATH             static_cast<X_HRESULT>(0x8015C008L)
 #define X_ONLINE_S_STORAGE_FILE_NOT_MODIFIED                static_cast<X_HRESULT>(0x0015C013L)
 #define X_ONLINE_E_STORAGE_FILE_IS_TOO_BIG                  static_cast<X_HRESULT>(0x8015C003L)
+#define X_ONLINE_E_ACCESS_DENIED                            static_cast<X_HRESULT>(0x80150016L)
+#define X_ONLINE_E_ACCOUNTS_USER_OPTED_OUT                  static_cast<X_HRESULT>(0x80154099L)
+#define X_ONLINE_E_ACCOUNTS_USER_GET_ACCOUNT_INFO_ERROR     static_cast<X_HRESULT>(0x80154098L)
 
 #define X_PARTY_E_NOT_IN_PARTY                              static_cast<X_HRESULT>(0x807D0003L)
 
@@ -84,6 +87,15 @@ namespace xe {
 
 #define X_PARTY_MAX_USERS                           32
 
+#define MAX_FIRSTNAME_SIZE                          64
+#define MAX_LASTNAME_SIZE                           64
+#define MAX_EMAIL_SIZE                              129
+#define MAX_STREET_SIZE                             128
+#define MAX_CITY_SIZE                               64
+#define MAX_DISTRICT_SIZE                           64
+#define MAX_STATE_SIZE                              64
+#define MAX_POSTALCODE_SIZE                         16
+
 enum XNADDR_STATUS : uint32_t {
   XNADDR_PENDING = 0x00000000,              // Address acquisition is not yet complete
   XNADDR_NONE = 0x00000001,                 // XNet is uninitialized or no debugger found
@@ -113,6 +125,7 @@ namespace kernel {
 
 constexpr uint16_t XNET_SYSTEMLINK_PORT = 3074;
 
+constexpr uint32_t XEX_PRIVILEGE_PII_ACCESS = 13;
 constexpr uint32_t XEX_PRIVILEGE_CROSSPLATFORM_SYSTEM_LINK = 14;
 
 constexpr uint8_t kXUserMaxStatsRows = 100;
@@ -389,6 +402,36 @@ struct FIND_USERS_RESPONSE {
   xe::be<uint32_t> users_address;
 };
 
+struct X_ADDRESS_INFO {
+  xe::be<uint16_t> street_1_length;
+  xe::be<uint32_t> street_1;  // uint16_t*
+  xe::be<uint16_t> street_2_length;
+  xe::be<uint32_t> street_2;  // uint16_t*
+  xe::be<uint16_t> city_length;
+  xe::be<uint32_t> city;  // uint16_t*
+  xe::be<uint16_t> district_length;
+  xe::be<uint32_t> district;  // uint16_t*
+  xe::be<uint16_t> state_length;
+  xe::be<uint32_t> state;  // uint16_t*
+  xe::be<uint16_t> postal_code_length;
+  xe::be<uint32_t> postal_code;  // uint16_t*
+};
+
+struct X_GET_USER_INFO_RESPONSE {
+  xe::be<uint16_t> first_name_length;
+  xe::be<uint32_t> first_name;  // uint16_t*
+  xe::be<uint16_t> last_name_length;
+  xe::be<uint32_t> last_name;  // uint16_t*
+  X_ADDRESS_INFO address_info;
+  xe::be<uint16_t> email_length;
+  xe::be<uint32_t> email;  // uint16_t*
+  xe::be<uint16_t> language_id;
+  xe::be<uint8_t> country_id;
+  xe::be<uint8_t> msft_optin;
+  xe::be<uint8_t> parter_optin;
+  xe::be<uint8_t> age;
+};
+
 #pragma pack(pop)
 
 struct Internal_Marshalled_Data {
@@ -462,6 +505,12 @@ struct XUserFindUsers_Marshalled_Data {
   xe::be<uint32_t> serialized_users_info_ptr;  // Entry 2
 };
 
+struct XAccountGetUserInfo_Marshalled_Data {
+  xe::be<uint32_t> internal_data_ptr;
+  uint8_t unkn1_data[44];
+  xe::be<uint32_t> unkn1_ptr;
+};
+
 struct X_DATA_58024 {
   X_ARGUEMENT_ENTRY xuid;
   X_ARGUEMENT_ENTRY ukn2;  // 125
@@ -475,6 +524,19 @@ struct X_DATA_5801C {
   X_ARGUEMENT_ENTRY ukn3;
 };
 static_assert_size(X_DATA_5801C, 0x30);
+
+inline uint32_t XAccountGetUserInfoResponseSize() {
+  return sizeof(X_GET_USER_INFO_RESPONSE) +
+         (MAX_FIRSTNAME_SIZE * sizeof(char16_t)) +
+         (MAX_LASTNAME_SIZE * sizeof(char16_t)) +
+         (MAX_EMAIL_SIZE * sizeof(char16_t)) +
+         (MAX_STREET_SIZE * sizeof(char16_t)) +
+         (MAX_STREET_SIZE * sizeof(char16_t)) +
+         (MAX_CITY_SIZE * sizeof(char16_t)) +
+         (MAX_DISTRICT_SIZE * sizeof(char16_t)) +
+         (MAX_STATE_SIZE * sizeof(char16_t)) +
+         (MAX_POSTALCODE_SIZE * sizeof(char16_t));
+}
 
 #pragma endregion
 
