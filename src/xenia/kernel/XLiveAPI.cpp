@@ -1477,6 +1477,20 @@ X_STORAGE_UPLOAD_RESULT XLiveAPI::XStorageUpload(std::string server_path,
   return result;
 }
 
+bool XLiveAPI::XStorageDelete(std::string server_path) {
+  // Remove address it's added later
+  std::string endpoint = server_path.substr(GetApiAddress().size());
+
+  std::unique_ptr<HTTPResponseObjectJSON> response = Delete(endpoint);
+
+  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_OK) {
+    XELOGE("XStorageDelete: {}", response->Message());
+    return false;
+  }
+
+  return true;
+}
+
 std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::PraseResponse(
     response_data chunk) {
   std::unique_ptr<HTTPResponseObjectJSON> response =
