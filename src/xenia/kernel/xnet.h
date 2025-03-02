@@ -317,6 +317,16 @@ struct X_INVITE_INFO {
 
 #pragma pack(pop)
 
+#pragma pack(push, 1)
+
+struct X_STORAGE_DOWNLOAD_TO_MEMORY_RESULTS {
+  xe::be<uint32_t> bytes_total;
+  xe::be<uint64_t> xuid_owner;
+  xe::be<uint64_t> ft_created;
+};
+
+#pragma pack(pop)
+
 struct Internal_Marshalled_Data {
   uint8_t unkn1_data[22];
   xe::be<uint32_t> start_args_ptr;  // CArgumentList*
@@ -331,6 +341,16 @@ struct XStorageDelete_Marshalled_Data {
   xe::be<uint32_t> unkn1_ptr;
   uint8_t unkn2_data[24];
   xe::be<uint32_t> serialized_server_path_ptr;  // Entry 1
+};
+
+struct XStorageDownloadToMemory_Marshalled_Data {
+  xe::be<uint32_t> internal_data_ptr;
+  uint8_t unkn1_data[44];
+  xe::be<uint32_t> unkn1_ptr;
+  uint8_t unkn2_data[24];
+  xe::be<uint32_t> serialized_server_path_ptr;  // Entry 1
+  uint8_t unkn3_data[12];
+  xe::be<uint32_t> serialized_buffer_ptr;  // Entry 2
 };
 
 struct X_DATA_58024 {
