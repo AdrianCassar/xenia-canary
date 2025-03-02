@@ -134,6 +134,7 @@ typedef uint32_t X_HRESULT;
 #define X_E_NOTFOUND                            X_HRESULT_FROM_WIN32(X_ERROR_NOT_FOUND)
 #define X_E_NO_SUCH_USER                        X_HRESULT_FROM_WIN32(X_ERROR_NO_SUCH_USER)
 #define X_E_FUNCTION_FAILED                     X_HRESULT_FROM_WIN32(X_ERROR_FUNCTION_FAILED)
+#define X_E_INSUFFICIENT_BUFFER                 X_HRESULT_FROM_WIN32(X_ERROR_INSUFFICIENT_BUFFER)
 
 // Sockets/networking.
 #define X_INVALID_SOCKET (uint32_t)(~0)
