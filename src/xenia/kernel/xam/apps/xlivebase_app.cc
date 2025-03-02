@@ -70,12 +70,8 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
     }
     case 0x00050008: {
       // Required to be successful for 534507D4
-      // Guess:
-      // XStorageDownloadToMemory -> XStorageDownloadToMemoryGetProgress
-      XELOGD(
-          "XStorageDownloadToMemoryGetProgress({:08x}, {:08x}) unimplemented",
-          buffer_ptr, buffer_length);
-      return X_E_SUCCESS;
+      XELOGD("XStorageDelete({:08x}, {:08x})", buffer_ptr, buffer_length);
+      return XStorageDelete(buffer_ptr);
     }
     case 0x00050009: {
       // Fixes Xbox Live error for 513107D9
@@ -838,6 +834,70 @@ X_HRESULT XLiveBaseApp::XStringVerify(uint32_t buffer_ptr,
   return X_E_SUCCESS;
 }
 
+X_HRESULT XLiveBaseApp::XStorageDelete(uint32_t buffer_ptr) {
+  if (!buffer_ptr) {
+    return X_E_INVALIDARG;
+  }
+
+  XStorageDelete_Marshalled_Data* data_ptr =
+      kernel_state_->memory()
+          ->TranslateVirtual<XStorageDelete_Marshalled_Data*>(buffer_ptr);
+
+  Internal_Marshalled_Data* internal_data_ptr =
+      kernel_state_->memory()->TranslateVirtual<Internal_Marshalled_Data*>(
+          data_ptr->internal_data_ptr);
+
+  uint8_t* args_stream_ptr =
+      kernel_state_->memory()->TranslateVirtual<uint8_t*>(
+          internal_data_ptr->start_args_ptr);
+
+  uint32_t offset = 0;
+
+  xe::be<uint32_t> user_index = 0;
+  memcpy(&user_index, args_stream_ptr, sizeof(uint32_t));
+
+  offset += sizeof(uint32_t);
+
+  xe::be<uint32_t> server_path_len = 0;
+  memcpy(&server_path_len, args_stream_ptr + offset, sizeof(uint32_t));
+
+  offset += sizeof(uint32_t);
+
+  char16_t* arg_server_path_ptr =
+      reinterpret_cast<char16_t*>(args_stream_ptr + offset);
+
+  uint32_t server_path_size = server_path_len * sizeof(char16_t);
+
+  offset += server_path_size;
+
+  auto profile = kernel_state()->xam_state()->GetUserProfile(user_index);
+
+  // Exclude null-terminator
+  server_path_len -= 1;
+
+  std::u16string server_path;
+  server_path.resize(server_path_len, 0);
+
+  xe::copy_and_swap(server_path.data(), arg_server_path_ptr,
+                    static_cast<uint32_t>(server_path_len));
+
+  std::filesystem::path storage_item_path =
+      std::filesystem::path(server_path).make_preferred();
+
+  vfs::Entry* storage_item =
+      kernel_state()->file_system()->ResolvePath(storage_item_path.string());
+
+  X_STATUS result = X_E_FAIL;
+
+  if (storage_item) {
+    if (storage_item->Delete()) {
+      result = X_E_SUCCESS;
+    }
+  }
+
+  return result;
+}
+
 X_HRESULT XLiveBaseApp::XStorageDownloadToMemory(uint32_t buffer_ptr) {
   // 41560817, 513107D5, 513107D9 has issues with X_E_FAIL.
   // 513107D5, 513107D9 prefer X_ERROR_FUNCTION_FAILED.
@@ -907,11 +967,15 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
 
   std::string storage_type;
 
+  std::string host = "XSTORAGE:";
+
+  // host = XLiveAPI::GetApiAddress();
+
   switch (args->storage_location.get()) {
     case X_STORAGE_FACILITY::FACILITY_GAME_CLIP: {
-      server_path_str = fmt::format(
-          "{}title/{:08X}/storage/clips/{}", XLiveAPI::GetApiAddress(),
-          kernel_state()->title_id(), xe::to_utf8(filename));
+      server_path_str =
+          fmt::format("{}title/{:08X}/storage/clips/{}", host,
+                      kernel_state()->title_id(), xe::to_utf8(filename));
 
       xe::be<uint32_t> leaderboard_id = 0;
 
@@ -929,15 +993,15 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
     } break;
     case X_STORAGE_FACILITY::FACILITY_PER_TITLE: {
       server_path_str =
-          fmt::format("{}title/{:08X}/storage/{}", XLiveAPI::GetApiAddress(),
+          fmt::format("{}title/{:08X}/storage/{}", host,
                       kernel_state()->title_id(), xe::to_utf8(filename));
 
       storage_type = "Per Title";
     } break;
     case X_STORAGE_FACILITY::FACILITY_PER_USER_TITLE: {
-      server_path_str = fmt::format(
-          "{}user/{:016X}/title/{:08X}/storage/{}", XLiveAPI::GetApiAddress(),
-          xuid, kernel_state()->title_id(), xe::to_utf8(filename));
+      server_path_str =
+          fmt::format("{}user/{:016X}/title/{:08X}/storage/{}", host, xuid,
+                      kernel_state()->title_id(), xe::to_utf8(filename));
 
       storage_type = "Per User Title";
     } break;
