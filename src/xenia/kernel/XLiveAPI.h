@@ -157,6 +157,8 @@ class XLiveAPI {
   static bool XStorageUpload(std::string server_path,
                              std::span<uint8_t> buffer);
 
+  static std::span<uint8_t> XStorageDownload(std::string server_path);
+
   static std::unique_ptr<HTTPResponseObjectJSON> PraseResponse(
       response_data response);
 
