@@ -73,12 +73,8 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
     }
     case 0x00050008: {
       // Required to be successful for 534507D4
-      // Guess:
-      // XStorageDownloadToMemory -> XStorageDownloadToMemoryGetProgress
-      XELOGD(
-          "XStorageDownloadToMemoryGetProgress({:08x}, {:08x}) unimplemented",
-          buffer_ptr, buffer_length);
-      return X_E_SUCCESS;
+      XELOGD("XStorageDelete({:08x}, {:08x})", buffer_ptr, buffer_length);
+      return XStorageDelete(buffer_ptr);
     }
     case 0x00050009: {
       // Fixes Xbox Live error for 513107D9
@@ -839,6 +835,108 @@ X_HRESULT XLiveBaseApp::XStringVerify(uint32_t buffer_ptr,
   // Based on what game does there must be some structure that
   // checks if string is proper.
   return X_E_SUCCESS;
+}
+
+X_HRESULT XLiveBaseApp::XStorageDelete(uint32_t buffer_ptr) {
+  if (!buffer_ptr) {
+    return X_E_INVALIDARG;
+  }
+
+  XStorageDelete_Marshalled_Data* data_ptr =
+      kernel_state_->memory()
+          ->TranslateVirtual<XStorageDelete_Marshalled_Data*>(buffer_ptr);
+
+  Internal_Marshalled_Data* internal_data_ptr =
+      kernel_state_->memory()->TranslateVirtual<Internal_Marshalled_Data*>(
+          data_ptr->internal_data_ptr);
+
+  uint8_t* args_stream_ptr =
+      kernel_state_->memory()->TranslateVirtual<uint8_t*>(
+          internal_data_ptr->start_args_ptr);
+
+  if (!data_ptr->internal_data_ptr) {
+    return X_E_INVALIDARG;
+  }
+
+  if (!internal_data_ptr->start_args_ptr) {
+    return X_E_INVALIDARG;
+  }
+
+  uint32_t offset = 0;
+
+  xe::be<uint32_t> user_index = 0;
+  memcpy(&user_index, args_stream_ptr, sizeof(uint32_t));
+
+  offset += sizeof(uint32_t);
+
+  xe::be<uint32_t> server_path_len = 0;
+  memcpy(&server_path_len, args_stream_ptr + offset, sizeof(uint32_t));
+
+  offset += sizeof(uint32_t);
+
+  char16_t* arg_server_path_ptr =
+      reinterpret_cast<char16_t*>(args_stream_ptr + offset);
+
+  uint32_t server_path_size = server_path_len * sizeof(char16_t);
+
+  offset += server_path_size;
+
+  const auto user_profile =
+      kernel_state()->xam_state()->GetUserProfile(user_index);
+
+  // Exclude null-terminator
+  server_path_len -= 1;
+
+  std::u16string server_path;
+  server_path.resize(server_path_len, 0);
+
+  xe::copy_and_swap(server_path.data(), arg_server_path_ptr,
+                    static_cast<uint32_t>(server_path_len));
+
+  std::string item_path = xe::to_utf8(server_path);
+
+  X_STATUS result = X_E_FAIL;
+
+  if (item_path.empty()) {
+    XELOGI("{}: Empty Server Path", __func__);
+    return X_ONLINE_E_STORAGE_INVALID_STORAGE_PATH;
+  }
+
+  X_STORAGE_FACILITY facility_type =
+      GetStorageFacilityTypeFromServerPath(item_path);
+
+  if (facility_type != X_STORAGE_FACILITY::FACILITY_PER_USER_TITLE) {
+    XELOGI("{}: Unsupported Storage Facility: {}", __func__,
+           static_cast<uint32_t>(facility_type));
+    return X_ONLINE_E_STORAGE_INVALID_FACILITY;
+  }
+
+  bool route_backend =
+      cvars::xstorage_backend &&
+      (cvars::xstorage_user_data_backend ||
+       facility_type != X_STORAGE_FACILITY::FACILITY_PER_USER_TITLE);
+
+  if (route_backend) {
+    bool deleted = XLiveAPI::XStorageDelete(item_path);
+    result = deleted ? X_E_SUCCESS : X_E_FAIL;
+  }
+
+  if (!route_backend || result) {
+    item_path = ConvertServerPathToXStorageSymlink(item_path);
+
+    vfs::Entry* storage_item =
+        kernel_state()->file_system()->ResolvePath(item_path);
+
+    if (storage_item) {
+      result = storage_item->Delete() ? X_E_SUCCESS : X_E_FAIL;
+    } else {
+      result = X_ONLINE_E_STORAGE_FILE_NOT_FOUND;
+    }
+  }
+
+  XELOGI("{}: {}", __func__, item_path);
+
+  return result;
 }
 
 X_HRESULT XLiveBaseApp::XStorageDownloadToMemory(uint32_t buffer_ptr) {
