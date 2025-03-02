@@ -47,6 +47,7 @@ namespace xe {
 #define X_ONLINE_STRING_INVALID_LANGUAGE                    static_cast<X_HRESULT>(0x80157104L)
 #define X_ONLINE_E_STORAGE_INVALID_FACILITY                 static_cast<X_HRESULT>(0x8015C009L)
 #define X_ONLINE_E_STORAGE_FILE_NOT_FOUND                   static_cast<X_HRESULT>(0x8015C004L)
+#define X_ONLINE_E_STORAGE_INVALID_STORAGE_PATH             static_cast<X_HRESULT>(0x8015C008L)
 
 #define X_PARTY_E_NOT_IN_PARTY                              static_cast<X_HRESULT>(0x807D0003L)
 
@@ -326,6 +327,12 @@ struct STRING_VERIFY_RESPONSE {
 };
 static_assert_size(STRING_VERIFY_RESPONSE, 0x6);
 
+struct X_STORAGE_DOWNLOAD_TO_MEMORY_RESULTS {
+  xe::be<uint32_t> bytes_total;
+  xe::be<uint64_t> xuid_owner;
+  xe::be<uint64_t> ft_created;
+};
+
 #pragma pack(pop)
 
 struct Internal_Marshalled_Data {
@@ -346,6 +353,16 @@ struct XStringVerify_Marshalled_Data {
   xe::be<uint32_t> num_strings_ptr;
   uint8_t unkn4_data[12];
   xe::be<uint32_t> last_entry_ptr;
+};
+
+struct XStorageDownloadToMemory_Marshalled_Data {
+  xe::be<uint32_t> internal_data_ptr;
+  uint8_t unkn1_data[44];
+  xe::be<uint32_t> unkn1_ptr;
+  uint8_t unkn2_data[24];
+  xe::be<uint32_t> serialized_server_path_ptr;  // Entry 1
+  uint8_t unkn3_data[12];
+  xe::be<uint32_t> serialized_buffer_ptr;  // Entry 2
 };
 
 struct X_DATA_58024 {
