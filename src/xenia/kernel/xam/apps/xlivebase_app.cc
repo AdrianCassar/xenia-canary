@@ -7,6 +7,8 @@
  ******************************************************************************
  */
 
+#include <span>
+
 #include "xenia/kernel/xam/apps/xlivebase_app.h"
 #include "xenia/kernel/xenumerator.h"
 
@@ -79,8 +81,8 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
     }
     case 0x00050009: {
       // Fixes Xbox Live error for 513107D9
-      XELOGD("XStorageDownloadToMemory({:08X}, {:08X}) unimplemented",
-             buffer_ptr, buffer_length);
+      XELOGD("XStorageDownloadToMemory({:08X}, {:08X})", buffer_ptr,
+             buffer_length);
       return XStorageDownloadToMemory(buffer_ptr);
     }
     case 0x0005000A: {
@@ -839,19 +841,140 @@ X_HRESULT XLiveBaseApp::XStringVerify(uint32_t buffer_ptr,
 }
 
 X_HRESULT XLiveBaseApp::XStorageDownloadToMemory(uint32_t buffer_ptr) {
-  // 41560817, 513107D5, 513107D9 has issues with X_E_FAIL.
-  // 513107D5, 513107D9 prefer X_ERROR_FUNCTION_FAILED.
+  // 41560817, 513107D5, 513107D9, 415607DD, 415607DD
 
   if (!buffer_ptr) {
     return X_E_INVALIDARG;
   }
 
-  // 415607DD has issues with X_E_SUCCESS and X_ERROR_FUNCTION_FAILED.
-  // 41560834 fails on memcpy due to dwBytesTotal corruption.
-  // if (kernel_state()->title_id() == 0x415607DD ||
-  //    kernel_state()->title_id() == 0x41560834) {
-  //  return X_E_FAIL;
-  // }
+  XStorageDownloadToMemory_Marshalled_Data* data_ptr =
+      kernel_state_->memory()
+          ->TranslateVirtual<XStorageDownloadToMemory_Marshalled_Data*>(
+              buffer_ptr);
+
+  Internal_Marshalled_Data* internal_data_ptr =
+      kernel_state_->memory()->TranslateVirtual<Internal_Marshalled_Data*>(
+          data_ptr->internal_data_ptr);
+
+  uint8_t* args_stream_ptr =
+      kernel_state_->memory()->TranslateVirtual<uint8_t*>(
+          internal_data_ptr->start_args_ptr);
+
+  X_STORAGE_DOWNLOAD_TO_MEMORY_RESULTS* download_results_ptr =
+      kernel_state_->memory()
+          ->TranslateVirtual<X_STORAGE_DOWNLOAD_TO_MEMORY_RESULTS*>(
+              internal_data_ptr->results_ptr);
+
+  // Fixed 415607DD & 41560834
+  memset(download_results_ptr, 0, internal_data_ptr->results_size);
+
+  uint32_t offset = 0;
+
+  xe::be<uint32_t> user_index = 0;
+  memcpy(&user_index, args_stream_ptr, sizeof(uint32_t));
+
+  offset += sizeof(uint32_t);
+
+  xe::be<uint32_t> server_path_len = 0;
+  memcpy(&server_path_len, args_stream_ptr + offset, sizeof(uint32_t));
+
+  offset += sizeof(uint32_t);
+
+  char16_t* arg_server_path_ptr =
+      reinterpret_cast<char16_t*>(args_stream_ptr + offset);
+
+  uint32_t server_path_size = server_path_len * sizeof(char16_t);
+
+  offset += server_path_size;
+
+  xe::be<uint32_t> buffer_size = 0;
+  memcpy(&buffer_size, args_stream_ptr + offset, sizeof(uint32_t));
+
+  offset += sizeof(uint32_t);
+
+  xe::be<uint32_t> download_buffer_address = 0;
+  memcpy(&download_buffer_address, args_stream_ptr + offset, sizeof(uint32_t));
+
+  if (!download_buffer_address) {
+    return X_E_INVALIDARG;
+  }
+
+  uint8_t* download_buffer_ptr =
+      kernel_state()->memory()->TranslateVirtual<uint8_t*>(
+          download_buffer_address);
+
+  std::fill_n(download_buffer_ptr, buffer_size, 0);
+
+  std::span<uint8_t> download_buffer =
+      std::span<uint8_t>(download_buffer_ptr, buffer_size);
+
+  auto profile = kernel_state()->xam_state()->GetUserProfile(user_index);
+
+  // Exclude null-terminator
+  server_path_len -= 1;
+
+  std::u16string server_path;
+  server_path.resize(server_path_len, 0);
+
+  xe::copy_and_swap(server_path.data(), arg_server_path_ptr,
+                    static_cast<uint32_t>(server_path_len));
+
+  bool local_xstorage = true;
+
+  if (local_xstorage) {
+    std::replace(server_path.begin(), server_path.end(), '/', '\\');
+  }
+
+  std::filesystem::path item = std::filesystem::path(server_path);
+
+  auto local_file = kernel_state()->file_system()->ResolvePath(item.string());
+
+  xe::vfs::File* output_file;
+  xe::vfs::FileAction action = {};
+
+  X_STATUS result = kernel_state_->file_system()->OpenFile(
+      nullptr, item.string(), xe::vfs::FileDisposition::kOpenIf,
+      xe::vfs::FileAccess::kFileReadData, false, true, &output_file, &action);
+
+  if (!result) {
+    std::vector<uint8_t> file_data =
+        std::vector<uint8_t>(output_file->entry()->size());
+
+    size_t bytes_read = 0;
+    result = output_file->ReadSync(
+        file_data.data(), output_file->entry()->size(), 0, &bytes_read);
+
+    output_file->Destroy();
+
+    if (!result) {
+      if (bytes_read > buffer_size) {
+        XELOGI("{}: Provided file size {}b is larger than expected {}b",
+               __func__, bytes_read, buffer_size.get());
+
+        return X_ERROR_INSUFFICIENT_BUFFER;
+      }
+
+      memcpy(download_buffer.data(), file_data.data(), bytes_read);
+
+      download_results_ptr->xuid_owner = profile->GetOnlineXUID();
+      download_results_ptr->bytes_total = static_cast<uint32_t>(bytes_read);
+      download_results_ptr->ft_created =
+          output_file->entry()->create_timestamp();
+
+      XELOGI("{}: Downloaded: {}", __func__, item.filename());
+    } else {
+      XELOGI("{}: Failed to download: {}", __func__, item.filename());
+    }
+  } else {
+    // If file doesn't exists locally request from server?
+
+    XELOGI("{}: {} doesn't exists!", __func__, item.filename());
+
+    return X_ONLINE_E_STORAGE_FILE_NOT_FOUND;
+  }
+
+  XELOGI("{}: Buffer Size: {}, Server Path: {}", __func__, buffer_size.get(),
+         item.string());
 
   return X_E_SUCCESS;
 }
@@ -907,11 +1030,15 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
 
   std::string storage_type;
 
+  std::string host = "XSTORAGE:";
+
+  // host = XLiveAPI::GetApiAddress();
+
   switch (args->storage_location.get()) {
     case X_STORAGE_FACILITY::FACILITY_GAME_CLIP: {
-      server_path_str = fmt::format(
-          "{}title/{:08X}/storage/clips/{}", XLiveAPI::GetApiAddress(),
-          kernel_state()->title_id(), xe::to_utf8(filename));
+      server_path_str =
+          fmt::format("{}title/{:08X}/storage/clips/{}", host,
+                      kernel_state()->title_id(), xe::to_utf8(filename));
 
       xe::be<uint32_t> leaderboard_id = 0;
 
@@ -929,15 +1056,15 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
     } break;
     case X_STORAGE_FACILITY::FACILITY_PER_TITLE: {
       server_path_str =
-          fmt::format("{}title/{:08X}/storage/{}", XLiveAPI::GetApiAddress(),
+          fmt::format("{}title/{:08X}/storage/{}", host,
                       kernel_state()->title_id(), xe::to_utf8(filename));
 
       storage_type = "Per Title";
     } break;
     case X_STORAGE_FACILITY::FACILITY_PER_USER_TITLE: {
-      server_path_str = fmt::format(
-          "{}user/{:016X}/title/{:08X}/storage/{}", XLiveAPI::GetApiAddress(),
-          xuid, kernel_state()->title_id(), xe::to_utf8(filename));
+      server_path_str =
+          fmt::format("{}user/{:016X}/title/{:08X}/storage/{}", host, xuid,
+                      kernel_state()->title_id(), xe::to_utf8(filename));
 
       storage_type = "Per User Title";
     } break;
