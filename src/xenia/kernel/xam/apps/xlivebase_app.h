@@ -38,6 +38,7 @@ class XLiveBaseApp : public App {
                            const uint32_t user_index);
   X_HRESULT XInviteGetAcceptedInfo(uint32_t buffer_length);
   X_HRESULT XStringVerify(uint32_t buffer_ptr, uint32_t buffer_length);
+  X_HRESULT XStorageDelete(uint32_t buffer_ptr);
   X_HRESULT XStorageDownloadToMemory(uint32_t buffer_ptr);
   X_HRESULT XStorageUploadFromMemory(uint32_t buffer_ptr);
   X_HRESULT XStorageBuildServerPath(uint32_t buffer_ptr);
