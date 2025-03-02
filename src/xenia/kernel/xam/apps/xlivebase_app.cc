@@ -7,6 +7,8 @@
  ******************************************************************************
  */
 
+#include <span>
+
 #include "xenia/kernel/xam/apps/xlivebase_app.h"
 #include "xenia/kernel/xenumerator.h"
 
@@ -78,8 +80,8 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
     }
     case 0x00050009: {
       // Fixes Xbox Live error for 513107D9
-      XELOGD("XStorageDownloadToMemory({:08X}, {:08X}) unimplemented",
-             buffer_ptr, buffer_length);
+      XELOGD("XStorageDownloadToMemory({:08X}, {:08X})", buffer_ptr,
+             buffer_length);
       return XStorageDownloadToMemory(buffer_ptr);
     }
     case 0x0005000A: {
@@ -940,21 +942,195 @@ X_HRESULT XLiveBaseApp::XStorageDelete(uint32_t buffer_ptr) {
 }
 
 X_HRESULT XLiveBaseApp::XStorageDownloadToMemory(uint32_t buffer_ptr) {
-  // 41560817, 513107D5, 513107D9 has issues with X_E_FAIL.
-  // 513107D5, 513107D9 prefer X_ERROR_FUNCTION_FAILED.
+  // 41560817, 513107D5, 513107D9, 415607DD, 415607DD
 
   if (!buffer_ptr) {
     return X_E_INVALIDARG;
   }
 
-  // 415607DD has issues with X_E_SUCCESS and X_ERROR_FUNCTION_FAILED.
-  // 41560834 fails on memcpy due to dwBytesTotal corruption.
-  // if (kernel_state()->title_id() == 0x415607DD ||
-  //    kernel_state()->title_id() == 0x41560834) {
-  //  return X_E_FAIL;
-  // }
+  XStorageDownloadToMemory_Marshalled_Data* data_ptr =
+      kernel_state_->memory()
+          ->TranslateVirtual<XStorageDownloadToMemory_Marshalled_Data*>(
+              buffer_ptr);
 
-  return X_E_SUCCESS;
+  Internal_Marshalled_Data* internal_data_ptr =
+      kernel_state_->memory()->TranslateVirtual<Internal_Marshalled_Data*>(
+          data_ptr->internal_data_ptr);
+
+  uint8_t* args_stream_ptr =
+      kernel_state_->memory()->TranslateVirtual<uint8_t*>(
+          internal_data_ptr->start_args_ptr);
+
+  X_STORAGE_DOWNLOAD_TO_MEMORY_RESULTS* download_results_ptr =
+      kernel_state_->memory()
+          ->TranslateVirtual<X_STORAGE_DOWNLOAD_TO_MEMORY_RESULTS*>(
+              internal_data_ptr->results_ptr);
+
+  if (!data_ptr->internal_data_ptr) {
+    return X_E_INVALIDARG;
+  }
+
+  if (!internal_data_ptr->start_args_ptr) {
+    return X_E_INVALIDARG;
+  }
+
+  if (!internal_data_ptr->results_ptr) {
+    return X_E_INVALIDARG;
+  }
+
+  // Fixed 415607DD & 41560834
+  memset(download_results_ptr, 0, internal_data_ptr->results_size);
+
+  uint32_t offset = 0;
+
+  xe::be<uint32_t> user_index = 0;
+  memcpy(&user_index, args_stream_ptr, sizeof(uint32_t));
+
+  offset += sizeof(uint32_t);
+
+  xe::be<uint32_t> server_path_len = 0;
+  memcpy(&server_path_len, args_stream_ptr + offset, sizeof(uint32_t));
+
+  offset += sizeof(uint32_t);
+
+  char16_t* arg_server_path_ptr =
+      reinterpret_cast<char16_t*>(args_stream_ptr + offset);
+
+  uint32_t server_path_size = server_path_len * sizeof(char16_t);
+
+  offset += server_path_size;
+
+  xe::be<uint32_t> buffer_size = 0;
+  memcpy(&buffer_size, args_stream_ptr + offset, sizeof(uint32_t));
+
+  offset += sizeof(uint32_t);
+
+  xe::be<uint32_t> download_buffer_address = 0;
+  memcpy(&download_buffer_address, args_stream_ptr + offset, sizeof(uint32_t));
+
+  if (!download_buffer_address) {
+    return X_E_INVALIDARG;
+  }
+
+  uint8_t* download_buffer_ptr =
+      kernel_state()->memory()->TranslateVirtual<uint8_t*>(
+          download_buffer_address);
+
+  std::fill_n(download_buffer_ptr, buffer_size, 0);
+
+  std::span<uint8_t> download_buffer =
+      std::span<uint8_t>(download_buffer_ptr, buffer_size);
+
+  const auto user_profile =
+      kernel_state()->xam_state()->GetUserProfile(user_index);
+
+  uint64_t xuid_owner = 0;
+
+  if (user_profile) {
+    xuid_owner = user_profile->GetOnlineXUID();
+  }
+
+  // Exclude null-terminator
+  server_path_len -= 1;
+
+  std::u16string server_path;
+  server_path.resize(server_path_len, 0);
+
+  xe::copy_and_swap(server_path.data(), arg_server_path_ptr,
+                    static_cast<uint32_t>(server_path_len));
+
+  std::string item_to_download = xe::to_utf8(server_path);
+
+  X_STATUS result = X_ONLINE_E_STORAGE_FILE_NOT_FOUND;
+
+  if (server_path.empty()) {
+    return X_ONLINE_E_STORAGE_INVALID_STORAGE_PATH;
+  }
+
+  X_STORAGE_FACILITY facility_type =
+      GetStorageFacilityTypeFromServerPath(item_to_download);
+
+  bool route_backend =
+      cvars::xstorage_backend &&
+      (cvars::xstorage_user_data_backend ||
+       facility_type != X_STORAGE_FACILITY::FACILITY_PER_USER_TITLE);
+
+  if (route_backend) {
+    std::span<uint8_t> buffer = XLiveAPI::XStorageDownload(item_to_download);
+
+    if (!buffer.empty()) {
+      if (buffer.size_bytes() > download_buffer.size_bytes()) {
+        XELOGI("{}: Provided file size {}b is larger than expected {}b",
+               __func__, buffer.size_bytes(), download_buffer.size_bytes());
+        return X_E_INSUFFICIENT_BUFFER;
+      }
+
+      memcpy(download_buffer.data(), buffer.data(), buffer.size_bytes());
+
+      // Possible solution: Use custom header or encode binary in base64 with
+      // metadata
+      download_results_ptr->xuid_owner = xuid_owner;
+      download_results_ptr->bytes_total =
+          static_cast<uint32_t>(buffer.size_bytes());
+      download_results_ptr->ft_created = time(0);
+
+      result = X_E_SUCCESS;
+    } else {
+      result = X_ONLINE_E_STORAGE_FILE_NOT_FOUND;
+    }
+  }
+
+  if (!route_backend || result) {
+    std::string filename = utf8::find_name_from_path(item_to_download, '/');
+    item_to_download = ConvertServerPathToXStorageSymlink(item_to_download);
+
+    xe::vfs::File* output_file;
+    xe::vfs::FileAction action = {};
+
+    X_STATUS open_result = kernel_state_->file_system()->OpenFile(
+        nullptr, item_to_download, xe::vfs::FileDisposition::kOpen,
+        xe::vfs::FileAccess::kFileReadData, false, true, &output_file, &action);
+
+    if (!open_result) {
+      std::vector<uint8_t> file_data =
+          std::vector<uint8_t>(output_file->entry()->size());
+
+      size_t bytes_read = 0;
+      open_result = output_file->ReadSync(
+          {file_data.data(), output_file->entry()->size()}, 0, &bytes_read);
+
+      output_file->Destroy();
+
+      if (!open_result) {
+        if (bytes_read > buffer_size) {
+          XELOGI("{}: Provided file size {}b is larger than expected {}b",
+                 __func__, bytes_read, buffer_size.get());
+          return X_E_INSUFFICIENT_BUFFER;
+        }
+
+        memcpy(download_buffer.data(), file_data.data(), bytes_read);
+
+        download_results_ptr->xuid_owner = xuid_owner;
+        download_results_ptr->bytes_total = static_cast<uint32_t>(bytes_read);
+        download_results_ptr->ft_created =
+            output_file->entry()->create_timestamp();
+
+        result = X_E_SUCCESS;
+      } else {
+        XELOGI("{}: Failed to download: {}", __func__, filename);
+        result = X_E_FAIL;
+      }
+    } else {
+      XELOGI("{}: {} doesn't exist!", __func__, filename);
+      result = X_ONLINE_E_STORAGE_FILE_NOT_FOUND;
+    }
+  }
+
+  XELOGI("{}: Downloaded Bytes: {}b, Buffer Size: {}b, Server Path: {}",
+         __func__, download_results_ptr->bytes_total.get(), buffer_size.get(),
+         item_to_download);
+
+  return result;
 }
 
 X_HRESULT XLiveBaseApp::XStorageUploadFromMemory(uint32_t buffer_ptr) {

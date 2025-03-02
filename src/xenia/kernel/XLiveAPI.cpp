@@ -1446,6 +1446,31 @@ bool XLiveAPI::XStorageDelete(std::string server_path) {
   return true;
 }
 
+std::span<uint8_t> XLiveAPI::XStorageDownload(std::string server_path) {
+  // Remove address it's added later
+  std::string endpoint = server_path.substr(GetApiAddress().size());
+
+  std::unique_ptr<HTTPResponseObjectJSON> response = Get(endpoint);
+
+  std::span<uint8_t> buffer = {};
+
+  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_OK &&
+      response->StatusCode() != HTTP_STATUS_CODE::HTTP_NO_CONTENT) {
+    XELOGE("XStorageDownload: {}", response->Message());
+    assert_always();
+
+    return buffer;
+  }
+
+  if (response->RawResponse().response) {
+    buffer = std::span<uint8_t>(
+        reinterpret_cast<uint8_t*>(response->RawResponse().response),
+        response->RawResponse().size);
+  }
+
+  return buffer;
+}
+
 std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::PraseResponse(
     response_data chunk) {
   std::unique_ptr<HTTPResponseObjectJSON> response =
