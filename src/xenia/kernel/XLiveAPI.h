@@ -20,6 +20,7 @@
 #include "xenia/kernel/xnet.h"
 
 #include "xenia/kernel/json/arbitration_object_json.h"
+#include "xenia/kernel/json/find_users_object_json.h"
 #include "xenia/kernel/json/friend_presence_object_json.h"
 #include "xenia/kernel/json/http_response_object_json.h"
 #include "xenia/kernel/json/leaderboard_object_json.h"
@@ -147,6 +148,9 @@ class XLiveAPI {
 
   static std::unique_ptr<FriendsPresenceObjectJSON> GetFriendsPresence(
       const std::vector<uint64_t>& xuids);
+
+  static std::unique_ptr<FindUsersObjectJSON> GetFindUsers(
+      const std::vector<FIND_USER_INFO>& find_users_info);
 
   static std::unique_ptr<HTTPResponseObjectJSON> PraseResponse(
       response_data response);
