@@ -39,6 +39,7 @@ namespace xe {
 #define X_ERROR_SESSION_JOIN_ILLEGAL                        X_RESULT_FROM_WIN32(0x0015520AL)
 #define X_ERROR_SESSION_NOT_FOUND                           X_RESULT_FROM_WIN32(0x00155200L)
 #define X_ERROR_SESSION_FULL                                X_RESULT_FROM_WIN32(0x00155202L)
+#define X_ERROR_STORAGE_INVALID_FACILITY                    X_RESULT_FROM_WIN32(0x0015C009L)
 
 #define X_ONLINE_E_LOGON_NOT_LOGGED_ON                      X_HRESULT_FROM_WIN32(X_ERROR_LOGON_NOT_LOGGED_ON)
 #define X_ONLINE_E_LOGON_SERVICE_TEMPORARILY_UNAVAILABLE    X_HRESULT_FROM_WIN32(X_ERROR_LOGON_SERVICE_TEMPORARILY_UNAVAILABLE)
@@ -52,6 +53,7 @@ namespace xe {
 #define X_ONLINE_E_SESSION_JOIN_ILLEGAL                     X_HRESULT_FROM_WIN32(X_ERROR_SESSION_JOIN_ILLEGAL)
 #define X_ONLINE_E_SESSION_NOT_FOUND                        X_HRESULT_FROM_WIN32(X_ERROR_SESSION_NOT_FOUND)
 #define X_ONLINE_E_SESSION_FULL                             X_HRESULT_FROM_WIN32(X_ERROR_SESSION_FULL)
+#define X_ONLINE_E_STORAGE_INVALID_FACILITY                 static_cast<X_HRESULT>(X_ERROR_STORAGE_INVALID_FACILITY)
 #define X_PARTY_E_NOT_IN_PARTY                              static_cast<X_HRESULT>(0x807D0003L)
 
 #define X_ONLINE_FRIENDSTATE_FLAG_NONE              0x00000000
@@ -219,17 +221,16 @@ struct X_ARGUMENT_LIST {
 static_assert_size(X_ARGUMENT_LIST, 0x204);
 
 enum X_STORAGE_FACILITY : uint32_t {
-  FACILITY_GAME_CLIP = 1,
-  FACILITY_PER_TITLE = 2,
-  FACILITY_PER_USER_TITLE = 3
+  FACILITY_GAME_CLIP = 1,      // Read, Write
+  FACILITY_PER_TITLE = 2,      // Read, Enumerate
+  FACILITY_PER_USER_TITLE = 3  // Read, Write, Delete
 };
 
 struct X_STORAGE_BUILD_SERVER_PATH {
   xe::be<uint32_t> user_index;
   uint8_t unkn[4];
   xe::be<uint64_t> xuid;
-  xe::be<uint32_t> storage_location;  // 2 means title specific storage,
-                                      // something like developers storage.
+  xe::be<X_STORAGE_FACILITY> storage_location;
   xe::be<uint32_t> storage_location_info_ptr;
   xe::be<uint32_t> storage_location_info_size;
   xe::be<uint32_t> file_name_ptr;
@@ -312,6 +313,24 @@ struct X_INVITE_INFO {
 };
 
 #pragma pack(pop)
+
+struct Internal_Marshalled_Data {
+  uint8_t unkn1_data[22];
+  xe::be<uint32_t> start_args_ptr;  // CArgumentList*
+  uint8_t unkn2_data[14];
+  xe::be<uint32_t> results_ptr;  // STRUCT*
+  xe::be<uint32_t> results_size;
+};
+
+struct XStorageUploadFromMemory_Marshalled_Data {
+  xe::be<uint32_t> internal_data_ptr;
+  uint8_t unkn1_data[44];
+  xe::be<uint32_t> unkn1_ptr;
+  uint8_t unkn2_data[24];
+  xe::be<uint32_t> serialized_server_path_ptr;  // Entry 1
+  uint8_t unkn3_data[12];
+  xe::be<uint32_t> serialized_buffer_ptr;  // Entry 2
+};
 
 struct X_DATA_58024 {
   X_ARGUEMENT_ENTRY xuid;

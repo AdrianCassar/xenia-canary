@@ -10,6 +10,7 @@
 #ifndef XENIA_KERNEL_XLIVEAPI_H_
 #define XENIA_KERNEL_XLIVEAPI_H_
 
+#include <span>
 #include <unordered_set>
 
 #include <third_party/libcurl/include/curl/curl.h>
@@ -147,6 +148,11 @@ class XLiveAPI {
 
   static std::unique_ptr<FriendsPresenceObjectJSON> GetFriendsPresence(
       const std::vector<uint64_t>& xuids);
+
+  static bool XStorageUpload(std::string server_path,
+                             std::span<uint8_t> buffer);
+
+  static bool XStorageBuildServerPath(std::string server_path);
 
   static std::unique_ptr<HTTPResponseObjectJSON> PraseResponse(
       response_data response);
