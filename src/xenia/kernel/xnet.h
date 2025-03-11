@@ -489,6 +489,93 @@ struct QUERY_SEARCH_RESULT {
   xe::be<uint32_t> attributes_ptr;  // X_ONLINE_QUERY_ATTRIBUTE
 };
 
+struct X_GET_POINTS_BALANCE_RESPONSE {
+  xe::be<uint32_t> balance;
+  xe::be<uint16_t> unkn;
+};
+
+struct X_GET_FEATURED_DOWNLOADS_RESPONSE {
+  uint8_t data[12];
+  xe::be<uint16_t> entries;
+  xe::be<uint32_t> flags;  // 0xFFFFFFFF = Free
+};
+
+struct X_DATA_ARGS_5008C {
+  uint64_t xuid;
+  uint32_t unkn;
+  uint8_t value_const_1;   // 1
+  uint32_t value_const_2;  // 0
+  uint32_t value_const_3;  // 256
+};
+
+struct X_DATA_ARGS_50077 {
+  uint64_t xuid;
+  uint64_t machine_id;  // XNetLogonGetMachineID
+};
+
+struct X_DATA_ARGS_5008B {
+  uint64_t xuid;
+  uint32_t language;    // XLanguage
+  uint8_t value_const;  // 2
+  uint32_t unkn1;
+  uint32_t unkn2;
+};
+
+struct X_DATA_ARGS_50090 {
+  uint8_t user_country;  // XamUserGetOnlineCountryFromXUID
+  uint16_t language;     // XLanguage
+  uint32_t unkn1;
+  uint32_t unkn2;
+  uint16_t unkn3;
+  uint8_t unkn4;
+  uint32_t unkn5;
+  uint32_t unkn6;
+  uint32_t unkn7;
+};
+
+struct X_DATA_ARGS_50091 {
+  uint64_t xuid;
+  uint8_t user_country;  // XamUserGetOnlineCountryFromXUID
+  uint16_t language;     // XLanguage
+  uint32_t unkn1;
+  uint32_t unkn2;
+  uint16_t unkn3;
+  uint8_t unkn4;
+  uint32_t unkn5;
+  uint32_t unkn6;
+  uint32_t unkn7;
+};
+
+struct X_DATA_ARGS_5008F {
+  uint64_t xuid;
+  uint8_t user_country;  // XamUserGetOnlineCountryFromXUID
+  uint16_t language;     // XLanguage
+  uint16_t unkn1;
+  uint32_t unkn2;
+  uint32_t unkn3;
+  uint8_t unkn4;
+  uint32_t unkn5;
+  uint32_t unkn6;
+  uint16_t unkn7;
+  xe::be<uint32_t> unkn8;
+};
+
+struct X_DATA_ARGS_50097 {
+  uint64_t xuid;
+  uint64_t machine_id;  // XNetLogonGetMachineID
+  uint8_t unkn1;
+  uint8_t unkn2;
+  uint16_t unkn3;
+  uint16_t unkn4;
+  uint32_t unkn5;
+  uint32_t unkn6;
+  uint32_t unkn7;
+  uint32_t unkn8;
+  uint16_t unkn9;
+  uint32_t unkn10;
+  uint32_t unkn11;
+};
+
 #pragma pack(pop)
 
 struct Internal_Marshalled_Data {
@@ -497,6 +584,18 @@ struct Internal_Marshalled_Data {
   uint8_t unkn2_data[14];
   xe::be<uint32_t> results_ptr;  // STRUCT*
   xe::be<uint32_t> results_size;
+};
+
+struct Generic_Marshalled_Data {
+  xe::be<uint32_t> internal_data_ptr;
+  uint8_t unkn1_data[44];
+  xe::be<uint32_t> unkn1_ptr;
+  uint8_t unkn2_data[24];
+  xe::be<uint32_t> unkn2_ptr;
+  uint8_t unkn3_data[12];
+  xe::be<uint32_t> unkn3_ptr;
+  uint8_t unkn4_data[12];
+  xe::be<uint32_t> unkn4_ptr;
 };
 
 struct XStorageDelete_Marshalled_Data {
@@ -588,6 +687,12 @@ struct XOnlineQuerySearch_Args {
   uint32_t attribute_specs_address;
   uint32_t num_attributes;
   uint32_t attributes_address;
+};
+
+struct X_DATA_5800A {
+  xe::be<uint32_t> unkn1;
+  xe::be<uint32_t> unkn2;
+  xe::be<uint32_t> unkn3;
 };
 
 struct X_DATA_58024 {
