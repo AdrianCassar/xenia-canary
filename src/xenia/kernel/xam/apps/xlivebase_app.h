@@ -37,6 +37,7 @@ class XLiveBaseApp : public App {
   void UpdateFriendPresence(const uint32_t user_index);
   void UpdatePresenceXUIDs(const std::vector<uint64_t>& xuids,
                            const uint32_t user_index);
+  X_HRESULT GenericMarshalled(uint32_t buffer_ptr);
   X_HRESULT XInviteGetAcceptedInfo(uint32_t buffer_length);
   X_HRESULT XAccountGetUserInfo(uint32_t buffer_ptr);
   X_HRESULT XStorageEnumerate(uint32_t buffer_ptr);
@@ -57,8 +58,18 @@ class XLiveBaseApp : public App {
   X_STORAGE_FACILITY GetStorageFacilityTypeFromServerPath(
       std::string server_path);
 
-  X_HRESULT Unk58024(uint32_t buffer_length);
-  X_HRESULT Unk5801C(uint32_t buffer_length);
+  X_HRESULT Unkn5008C(uint32_t buffer_ptr);
+  X_HRESULT XAccountGetPointsBalance(uint32_t buffer_ptr);
+  X_HRESULT Unkn5008B(uint32_t buffer_ptr);
+  X_HRESULT Unkn5008F(uint32_t buffer_ptr);
+  X_HRESULT Unkn50090(uint32_t buffer_ptr);
+  X_HRESULT Unkn50091(uint32_t buffer_ptr);
+  X_HRESULT Unkn50097(uint32_t buffer_ptr);
+
+  X_HRESULT Unkn5800A(uint32_t buffer_ptr);
+
+  X_HRESULT Unkn58024(uint32_t buffer_length);
+  X_HRESULT Unkn5801C(uint32_t buffer_length);
 
   static constexpr std::string_view xstorage_symboliclink = "XSTORAGE:";
 };
