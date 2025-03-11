@@ -313,6 +313,124 @@ struct X_INVITE_INFO {
 
 #pragma pack(pop)
 
+#pragma pack(push, 1)
+
+struct X_GET_POINTS_BALANCE_RESPONSE {
+  xe::be<uint32_t> balance;
+  xe::be<uint16_t> unkn;
+};
+
+struct X_GET_FEATURED_DOWNLOADS_RESPONSE {
+  uint8_t data[12];
+  xe::be<uint16_t> entries;
+  xe::be<uint32_t> flags;  // 0xFFFFFFFF = Free
+};
+
+struct X_DATA_ARGS_5008C {
+  uint64_t xuid = 0;
+  uint32_t unkn = 0;
+  uint8_t value_const_1 = 0;   // 1
+  uint32_t value_const_2 = 0;  // 0
+  uint32_t value_const_3 = 0;  // 256
+};
+
+struct X_DATA_ARGS_50077 {
+  uint64_t xuid = 0;
+  uint64_t machine_id = 0;  // XNetLogonGetMachineID
+};
+
+struct X_DATA_ARGS_5008B {
+  uint64_t xuid = 0;
+  uint32_t language = 0;    // XLanguage
+  uint8_t value_const = 0;  // 2
+  uint32_t unkn1 = 0;
+  uint32_t unkn2 = 0;
+};
+
+struct X_DATA_ARGS_50090 {
+  uint8_t user_country = 0;  // XamUserGetOnlineCountryFromXUID
+  uint16_t language = 0;     // XLanguage
+  uint32_t unkn1 = 0;
+  uint32_t unkn2 = 0;
+  uint16_t unkn3 = 0;
+  uint8_t unkn4 = 0;
+  uint32_t unkn5 = 0;
+  uint32_t unkn6 = 0;
+  uint32_t unkn7 = 0;
+};
+
+struct X_DATA_ARGS_50091 {
+  uint64_t xuid = 0;
+  uint8_t user_country = 0;  // XamUserGetOnlineCountryFromXUID
+  uint16_t language = 0;     // XLanguage
+  uint32_t unkn1 = 0;
+  uint32_t unkn2 = 0;
+  uint16_t unkn3 = 0;
+  uint8_t unkn4 = 0;
+  uint32_t unkn5 = 0;
+  uint32_t unkn6 = 0;
+  uint32_t unkn7 = 0;
+};
+
+struct X_DATA_ARGS_5008F {
+  uint64_t xuid = 0;
+  uint8_t user_country = 0;  // XamUserGetOnlineCountryFromXUID
+  uint16_t language = 0;     // XLanguage
+  uint16_t unkn1 = 0;
+  uint32_t unkn2 = 0;
+  uint32_t unkn3 = 0;
+  uint8_t unkn4 = 0;
+  uint32_t unkn5 = 0;
+  uint32_t unkn6 = 0;
+  uint16_t unkn7 = 0;
+  xe::be<uint32_t> unkn8 = 0;
+};
+
+struct X_DATA_ARGS_50097 {
+  uint64_t xuid = 0;
+  uint64_t machine_id = 0;  // XNetLogonGetMachineID
+  uint8_t unkn1 = 0;
+  uint8_t unkn2 = 0;
+  uint16_t unkn3 = 0;
+  uint16_t unkn4 = 0;
+  uint32_t unkn5 = 0;
+  uint32_t unkn6 = 0;
+  uint32_t unkn7 = 0;
+  uint32_t unkn8 = 0;
+  uint16_t unkn9 = 0;
+  uint32_t unkn10 = 0;
+  uint32_t unkn11 = 0;
+};
+
+#pragma pack(pop)
+
+struct Internal_Marshalled_Data {
+  uint8_t unkn1_data[22];
+  xe::be<uint32_t> start_args_ptr;  // CArgumentList*
+  uint8_t unkn2_data[14];
+  xe::be<uint32_t> results_ptr;  // STRUCT*
+  xe::be<uint32_t> results_size;
+};
+
+struct Generic_Marshalled_Data {
+  xe::be<uint32_t> internal_data_ptr;
+  uint8_t unkn1_data[44];
+  xe::be<uint32_t> unkn1_ptr;
+  uint8_t unkn2_data[24];
+  xe::be<uint32_t> unkn2_ptr;
+  uint8_t unkn3_data[12];
+  xe::be<uint32_t> unkn3_ptr;
+  uint8_t unkn4_data[12];
+  xe::be<uint32_t> unkn4_ptr;
+};
+
+struct X_DATA_5800A {
+  xe::be<uint32_t> unkn1;
+  xe::be<uint32_t> unkn2;
+  xe::be<uint32_t> unkn3;
+};
+static_assert_size(X_DATA_5800A, 0xC);
+
 struct X_DATA_58024 {
   X_ARGUEMENT_ENTRY xuid;
   X_ARGUEMENT_ENTRY ukn2;  // 125

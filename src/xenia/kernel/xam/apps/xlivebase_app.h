@@ -42,8 +42,20 @@ class XLiveBaseApp : public App {
   X_HRESULT XStorageUploadFromMemory(uint32_t buffer_ptr);
   X_HRESULT XStorageBuildServerPath(uint32_t buffer_ptr);
 
-  X_HRESULT Unk58024(uint32_t buffer_length);
-  X_HRESULT Unk5801C(uint32_t buffer_length);
+  X_HRESULT GenericMarshalled(uint32_t buffer_ptr);
+
+  X_HRESULT Unkn5008C(uint32_t buffer_ptr);
+  X_HRESULT XAccountGetPointsBalance(uint32_t buffer_ptr);
+  X_HRESULT Unkn5008B(uint32_t buffer_ptr);
+  X_HRESULT Unkn5008F(uint32_t buffer_ptr);
+  X_HRESULT Unkn50090(uint32_t buffer_ptr);
+  X_HRESULT Unkn50091(uint32_t buffer_ptr);
+  X_HRESULT Unkn50097(uint32_t buffer_ptr);
+
+  X_HRESULT Unkn5800A(uint32_t buffer_ptr);
+
+  X_HRESULT Unkn58024(uint32_t buffer_length);
+  X_HRESULT Unkn5801C(uint32_t buffer_length);
 };
 
 }  // namespace apps
