@@ -66,13 +66,14 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
       return X_ONLINE_S_LOGON_CONNECTION_ESTABLISHED;
     }
     case 0x0005008C: {
-      // Called on startup of blades dashboard v1888 to v2858
-      XELOGD("XLiveBaseUnk5008C, unimplemented");
-      return X_E_FAIL;
+      XELOGD("XLiveBaseUnk5008C({:08X}, {:08X}) Stubbed", buffer_ptr,
+             buffer_length);
+      return Unkn5008C(buffer_ptr);
     }
     case 0x00050094: {
       // Called on startup of blades dashboard v4532 to v4552
-      XELOGD("XLiveBaseUnk50094, unimplemented");
+      XELOGD("XLiveBaseUnk50094({:08x}, {:08x}) unimplemented", buffer_ptr,
+             buffer_length);
       return X_E_FAIL;
     }
     case 0x00050008: {
@@ -120,16 +121,14 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
       return XAccountGetUserInfo(buffer_ptr);
     }
     case 0x0005801C: {
-      // Called on blades dashboard v1888
-      XELOGD("XLiveBaseUnk5801C({:08X}, {:08X}) unimplemented", buffer_ptr,
+      XELOGD("XLiveBaseUnk5801C({:08X}, {:08X}) Stubbed", buffer_ptr,
              buffer_length);
-      return Unk5801C(buffer_length);
+      return Unkn5801C(buffer_length);
     }
     case 0x00058024: {
-      // Called on blades dashboard v1888
-      XELOGD("XLiveBaseUnk58024({:08X}, {:08X}) unimplemented", buffer_ptr,
+      XELOGD("XLiveBaseUnk58024({:08X}, {:08X}) Stubbed", buffer_ptr,
              buffer_length);
-      return Unk58024(buffer_length);
+      return Unkn58024(buffer_length);
     }
     case 0x00050036: {
       // 534507D4
@@ -143,13 +142,9 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
       return XOnlineQuerySearch(buffer_ptr);
     }
     case 0x00050077: {
-      // Called on blades dashboard v1888
-      // Current Balance in sub menus:
-      // All New Demos and Trailers
-      // More Videos and Downloads
-      XELOGD("XLiveBaseUnk50077({:08X}, {:08X}) unimplemented", buffer_ptr,
+      XELOGD("XAccountGetPointsBalance({:08X}, {:08X}) Stubbed", buffer_ptr,
              buffer_length);
-      return X_E_SUCCESS;
+      return XAccountGetPointsBalance(buffer_ptr);
     }
     case 0x00050079: {
       // Fixes Xbox Live error for 454107DB
@@ -158,42 +153,29 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
       return X_E_SUCCESS;
     }
     case 0x0005008B: {
-      // Called on blades dashboard v1888
-      // Fixes accessing marketplace Featured Downloads.
-      XELOGD("XLiveBaseUnk5008B({:08X}, {:08X}) unimplemented", buffer_ptr,
+      XELOGD("XLiveBaseUnk5008B({:08X}, {:08X}) Stubbed", buffer_ptr,
              buffer_length);
-      return X_E_SUCCESS;
+      return Unkn5008B(buffer_ptr);
     }
     case 0x0005008F: {
-      // Called on blades dashboard v1888
-      // Fixes accessing marketplace sub menus:
-      // All New Demos and Trailers
-      // More Videos and Downloads
-      XELOGD("XLiveBaseUnk5008F({:08X}, {:08X}) unimplemented", buffer_ptr,
+      XELOGD("XLiveBaseUnk5008F({:08X}, {:08X}) Stubbed", buffer_ptr,
              buffer_length);
-      return X_E_SUCCESS;
+      return Unkn5008F(buffer_ptr);
     }
     case 0x00050090: {
-      // Called on blades dashboard v1888
-      // Fixes accessing marketplace Game Downloads->All Games->Xbox Live Arcade
-      // sub menu.
-      XELOGD("XLiveBaseUnk50090({:08X}, {:08X}) unimplemented", buffer_ptr,
+      XELOGD("XLiveBaseUnk50090({:08X}, {:08X}) Stubbed", buffer_ptr,
              buffer_length);
-      return X_E_SUCCESS;
+      return Unkn50090(buffer_ptr);
     }
     case 0x00050091: {
-      // Called on blades dashboard v1888
-      // Fixes accessing marketplace Game Downloads.
-      XELOGD("XLiveBaseUnk50091({:08X}, {:08X}) unimplemented", buffer_ptr,
+      XELOGD("XLiveBaseUnk50091({:08X}, {:08X}) Stubbed", buffer_ptr,
              buffer_length);
-      return X_E_SUCCESS;
+      return Unkn50091(buffer_ptr);
     }
     case 0x00050097: {
-      // Called on blades dashboard v1888
-      // Fixes accessing marketplace Memberships.
-      XELOGD("XLiveBaseUnk50097({:08X}, {:08X}) unimplemented", buffer_ptr,
+      XELOGD("XLiveBaseUnk50097({:08X}, {:08X}) Stubbed", buffer_ptr,
              buffer_length);
-      return X_E_SUCCESS;
+      return Unkn50097(buffer_ptr);
     }
     case 0x00058004: {
       // Called on startup, seems to just return a bool in the buffer.
@@ -221,6 +203,12 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
       XELOGD("XContentGetMarketplaceCounts({:08X}, {:08X})", buffer_ptr,
              buffer_length);
       return XContentGetMarketplaceCounts(buffer_ptr);
+    }
+    case 0x0005800A: {
+      assert_true(!buffer_length || buffer_length == 12);
+      XELOGD("XLiveBaseUnk5800A({:08X}, {:08X}) unimplemented", buffer_ptr,
+             buffer_length);
+      return Unkn5800A(buffer_ptr);
     }
     case 0x0005800C: {
       // 464F0800
@@ -840,6 +828,40 @@ X_HRESULT XLiveBaseApp::XInviteGetAcceptedInfo(uint32_t buffer_length) {
          sizeof(MacAddress));
 
   invite_info->host_info.hostAddress.wPortOnline = session->Port();
+
+  return X_E_SUCCESS;
+}
+
+X_HRESULT XLiveBaseApp::GenericMarshalled(uint32_t buffer_ptr) {
+  Generic_Marshalled_Data* data_ptr =
+      kernel_state_->memory()->TranslateVirtual<Generic_Marshalled_Data*>(
+          buffer_ptr);
+
+  Internal_Marshalled_Data* internal_data_ptr =
+      kernel_state_->memory()->TranslateVirtual<Internal_Marshalled_Data*>(
+          data_ptr->internal_data_ptr);
+
+  uint8_t* results_ptr = nullptr;
+
+  uint8_t* args_ptr = kernel_state_->memory()->TranslateVirtual<uint8_t*>(
+      internal_data_ptr->start_args_ptr);
+
+  if (!data_ptr->internal_data_ptr) {
+    return X_E_INVALIDARG;
+  }
+
+  if (!internal_data_ptr->start_args_ptr) {
+    return X_E_INVALIDARG;
+  }
+
+  if (!internal_data_ptr->results_ptr) {
+    return X_E_INVALIDARG;
+  }
+
+  results_ptr = kernel_state_->memory()->TranslateVirtual<uint8_t*>(
+      internal_data_ptr->results_ptr);
+
+  std::fill_n(results_ptr, internal_data_ptr->results_size, 0);
 
   return X_E_SUCCESS;
 }
@@ -2322,7 +2344,220 @@ X_STORAGE_FACILITY XLiveBaseApp::GetStorageFacilityTypeFromServerPath(
   return facility_type;
 }
 
-X_HRESULT XLiveBaseApp::Unk58024(uint32_t buffer_length) {
+X_HRESULT XLiveBaseApp::Unkn5008C(uint32_t buffer_ptr) {
+  // Called on startup of blades dashboard v1888 to v2858
+  // Address: 92433DA8
+
+  Generic_Marshalled_Data* data_ptr =
+      kernel_state_->memory()->TranslateVirtual<Generic_Marshalled_Data*>(
+          buffer_ptr);
+
+  Internal_Marshalled_Data* internal_data_ptr =
+      kernel_state_->memory()->TranslateVirtual<Internal_Marshalled_Data*>(
+          data_ptr->internal_data_ptr);
+
+  uint8_t* results_ptr = kernel_state_->memory()->TranslateVirtual<uint8_t*>(
+      internal_data_ptr->results_ptr);
+
+  // 5 Arguments
+  X_DATA_ARGS_5008C* args_ptr =
+      kernel_state_->memory()->TranslateVirtual<X_DATA_ARGS_5008C*>(
+          internal_data_ptr->start_args_ptr);
+
+  // Crashes if buffer filled with 0xFF
+  memset(results_ptr, 0, internal_data_ptr->results_size);
+
+  return X_E_SUCCESS;
+}
+
+X_HRESULT XLiveBaseApp::XAccountGetPointsBalance(uint32_t buffer_ptr) {
+  // Called on blades dashboard v1888
+
+  // Current Balance in sub menus:
+  // All New Demos and Trailers
+  // More Videos and Downloads
+  // Address: 92433368
+
+  Generic_Marshalled_Data* data_ptr =
+      kernel_state_->memory()->TranslateVirtual<Generic_Marshalled_Data*>(
+          buffer_ptr);
+
+  Internal_Marshalled_Data* internal_data_ptr =
+      kernel_state_->memory()->TranslateVirtual<Internal_Marshalled_Data*>(
+          data_ptr->internal_data_ptr);
+
+  X_GET_POINTS_BALANCE_RESPONSE* results_ptr =
+      kernel_state_->memory()->TranslateVirtual<X_GET_POINTS_BALANCE_RESPONSE*>(
+          internal_data_ptr->results_ptr);
+
+  // 2 Arguments
+  X_DATA_ARGS_50077* args_ptr =
+      kernel_state_->memory()->TranslateVirtual<X_DATA_ARGS_50077*>(
+          internal_data_ptr->start_args_ptr);
+
+  memset(results_ptr, 0, internal_data_ptr->results_size);
+
+  results_ptr->balance = 1000000000;
+  results_ptr->unkn = 0;
+
+  return X_E_SUCCESS;
+}
+
+X_HRESULT XLiveBaseApp::Unkn5008B(uint32_t buffer_ptr) {
+  // Called on blades dashboard v1888
+
+  // Fixes accessing marketplace Featured Downloads.
+  // Address: 92433BB0
+
+  Generic_Marshalled_Data* data_ptr =
+      kernel_state_->memory()->TranslateVirtual<Generic_Marshalled_Data*>(
+          buffer_ptr);
+
+  Internal_Marshalled_Data* internal_data_ptr =
+      kernel_state_->memory()->TranslateVirtual<Internal_Marshalled_Data*>(
+          data_ptr->internal_data_ptr);
+
+  X_GET_FEATURED_DOWNLOADS_RESPONSE* results_ptr =
+      kernel_state_->memory()
+          ->TranslateVirtual<X_GET_FEATURED_DOWNLOADS_RESPONSE*>(
+              internal_data_ptr->results_ptr);
+
+  // 5 Arguments
+  X_DATA_ARGS_5008B* args_ptr =
+      kernel_state_->memory()->TranslateVirtual<X_DATA_ARGS_5008B*>(
+          internal_data_ptr->start_args_ptr);
+
+  memset(results_ptr, 0, internal_data_ptr->results_size);
+
+  results_ptr->entries = 5;
+  results_ptr->flags = 0xFFFFFFFF;
+
+  return X_E_SUCCESS;
+}
+
+X_HRESULT XLiveBaseApp::Unkn5008F(uint32_t buffer_ptr) {
+  // Called on blades dashboard v1888
+
+  // Fixes accessing marketplace sub menus:
+  // All New Demos and Trailers
+  // More Videos and Downloads
+  // Address: 92433FA8
+
+  Generic_Marshalled_Data* data_ptr =
+      kernel_state_->memory()->TranslateVirtual<Generic_Marshalled_Data*>(
+          buffer_ptr);
+
+  Internal_Marshalled_Data* internal_data_ptr =
+      kernel_state_->memory()->TranslateVirtual<Internal_Marshalled_Data*>(
+          data_ptr->internal_data_ptr);
+
+  uint8_t* results_ptr = kernel_state_->memory()->TranslateVirtual<uint8_t*>(
+      internal_data_ptr->results_ptr);
+
+  // 12 Arguments
+  X_DATA_ARGS_5008F* args_ptr =
+      kernel_state_->memory()->TranslateVirtual<X_DATA_ARGS_5008F*>(
+          internal_data_ptr->start_args_ptr);
+
+  memset(results_ptr, 0, internal_data_ptr->results_size);
+
+  return X_E_SUCCESS;
+}
+
+X_HRESULT XLiveBaseApp::Unkn50090(uint32_t buffer_ptr) {
+  // Called on blades dashboard v1888
+
+  // Fixes accessing marketplace Game Downloads->All Games->Xbox Live Arcade
+  // sub menu.
+  // Address: 92434218
+
+  Generic_Marshalled_Data* data_ptr =
+      kernel_state_->memory()->TranslateVirtual<Generic_Marshalled_Data*>(
+          buffer_ptr);
+
+  Internal_Marshalled_Data* internal_data_ptr =
+      kernel_state_->memory()->TranslateVirtual<Internal_Marshalled_Data*>(
+          data_ptr->internal_data_ptr);
+
+  uint8_t* results_ptr = kernel_state_->memory()->TranslateVirtual<uint8_t*>(
+      internal_data_ptr->results_ptr);
+
+  // 9 Arguments
+  X_DATA_ARGS_50090* args_ptr =
+      kernel_state_->memory()->TranslateVirtual<X_DATA_ARGS_50090*>(
+          internal_data_ptr->start_args_ptr);
+
+  memset(results_ptr, 0, internal_data_ptr->results_size);
+
+  return X_E_SUCCESS;
+}
+
+X_HRESULT XLiveBaseApp::Unkn50091(uint32_t buffer_ptr) {
+  // Called on blades dashboard v1888
+
+  // Fixes accessing marketplace Game Downloads.
+  // Address: 92434468
+
+  Generic_Marshalled_Data* data_ptr =
+      kernel_state_->memory()->TranslateVirtual<Generic_Marshalled_Data*>(
+          buffer_ptr);
+
+  Internal_Marshalled_Data* internal_data_ptr =
+      kernel_state_->memory()->TranslateVirtual<Internal_Marshalled_Data*>(
+          data_ptr->internal_data_ptr);
+
+  uint8_t* results_ptr = kernel_state_->memory()->TranslateVirtual<uint8_t*>(
+      internal_data_ptr->results_ptr);
+
+  // 10 Arguments
+  X_DATA_ARGS_50091* args_ptr =
+      kernel_state_->memory()->TranslateVirtual<X_DATA_ARGS_50091*>(
+          internal_data_ptr->start_args_ptr);
+
+  memset(results_ptr, 0, internal_data_ptr->results_size);
+
+  return X_E_SUCCESS;
+}
+
+X_HRESULT XLiveBaseApp::Unkn50097(uint32_t buffer_ptr) {
+  // Called on blades dashboard v1888
+
+  // Fixes accessing marketplace Memberships.
+  // Address: 924346C0
+
+  Generic_Marshalled_Data* data_ptr =
+      kernel_state_->memory()->TranslateVirtual<Generic_Marshalled_Data*>(
+          buffer_ptr);
+
+  Internal_Marshalled_Data* internal_data_ptr =
+      kernel_state_->memory()->TranslateVirtual<Internal_Marshalled_Data*>(
+          data_ptr->internal_data_ptr);
+
+  uint8_t* results_ptr = kernel_state_->memory()->TranslateVirtual<uint8_t*>(
+      internal_data_ptr->results_ptr);
+
+  // 13 Arguments
+  X_DATA_ARGS_50097* args_ptr =
+      kernel_state_->memory()->TranslateVirtual<X_DATA_ARGS_50097*>(
+          internal_data_ptr->start_args_ptr);
+
+  memset(results_ptr, 0, internal_data_ptr->results_size);
+
+  return X_E_SUCCESS;
+}
+
+X_HRESULT XLiveBaseApp::Unkn5800A(uint32_t buffer_ptr) {
+  // Called on blades dashboard v1888
+  // More Videos and Downloads
+
+  X_DATA_5800A* data_ptr = memory_->TranslateVirtual<X_DATA_5800A*>(buffer_ptr);
+
+  return X_E_SUCCESS;
+}
+
+X_HRESULT XLiveBaseApp::Unkn58024(uint32_t buffer_length) {
+  // Called on blades dashboard v1888
+
   if (!buffer_length) {
     return X_E_INVALIDARG;
   }
@@ -2336,12 +2571,14 @@ X_HRESULT XLiveBaseApp::Unk58024(uint32_t buffer_length) {
   uint32_t ukn2 = xe::load_and_swap<uint32_t>(
       memory->TranslateVirtual(entry->ukn2.object_ptr));
   uint32_t ukn3_ptr = xe::load_and_swap<uint32_t>(
-      memory->TranslateVirtual(entry->ukn3.object_ptr));
+      memory->TranslateVirtual(entry->ukn3.object_ptr));  // or uint64_t?
 
   return X_E_SUCCESS;
 }
 
-X_HRESULT XLiveBaseApp::Unk5801C(uint32_t buffer_length) {
+X_HRESULT XLiveBaseApp::Unkn5801C(uint32_t buffer_length) {
+  // Called on blades dashboard v1888
+
   if (!buffer_length) {
     return X_E_INVALIDARG;
   }
