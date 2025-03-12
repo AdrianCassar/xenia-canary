@@ -451,6 +451,44 @@ struct X_GET_USER_INFO_RESPONSE {
   xe::be<uint8_t> age;
 };
 
+struct X_ONLINE_QUERY_ATTRIBUTE_INTEGER {
+  xe::be<uint32_t> length;
+  xe::be<uint64_t> value;
+};
+
+struct X_ONLINE_QUERY_ATTRIBUTE_STRING {
+  xe::be<uint32_t> length;
+  xe::be<uint32_t> value_ptr;
+};
+
+struct X_ONLINE_QUERY_ATTRIBUTE_BLOB {
+  xe::be<uint32_t> length;
+  xe::be<uint32_t> value_ptr;
+};
+
+union X_ONLINE_QUERY_ATTRIBUTE_DATA {
+  X_ONLINE_QUERY_ATTRIBUTE_INTEGER integer;
+  X_ONLINE_QUERY_ATTRIBUTE_STRING string;
+  X_ONLINE_QUERY_ATTRIBUTE_BLOB blob;
+};
+
+struct X_ONLINE_QUERY_ATTRIBUTE {
+  xe::be<uint32_t> attribute_id;
+  X_ONLINE_QUERY_ATTRIBUTE_DATA info;
+};
+
+struct X_ONLINE_QUERY_ATTRIBUTE_SPEC {
+  xe::be<uint32_t> type;
+  xe::be<uint32_t> length;
+};
+
+struct QUERY_SEARCH_RESULT {
+  xe::be<uint32_t> total_results;
+  xe::be<uint32_t> returned_results;
+  xe::be<uint32_t> num_result_attributes;
+  xe::be<uint32_t> attributes_ptr;  // X_ONLINE_QUERY_ATTRIBUTE
+};
+
 #pragma pack(pop)
 
 struct Internal_Marshalled_Data {
@@ -528,6 +566,28 @@ struct XAccountGetUserInfo_Marshalled_Data {
   xe::be<uint32_t> internal_data_ptr;
   uint8_t unkn1_data[44];
   xe::be<uint32_t> unkn1_ptr;
+};
+
+struct XOnlineQuerySearch_Marshalled_Data {
+  xe::be<uint32_t> internal_data_ptr;
+  uint8_t unkn1_data[44];
+  xe::be<uint32_t> unkn1_ptr;
+  uint8_t unkn2_data[24];
+  xe::be<uint32_t> serialized_num_result_specs_ptr;  // Entry 1
+  uint8_t unkn3_data[24];
+  xe::be<uint32_t> serialized_attribute_specs_ptr;  // Entry 2
+};
+
+struct XOnlineQuerySearch_Args {
+  uint32_t title_id;
+  uint32_t dataset_id;
+  uint32_t proc_index;
+  uint32_t page;
+  uint32_t results_pre_page;
+  uint32_t num_result_specs;
+  uint32_t attribute_specs_address;
+  uint32_t num_attributes;
+  uint32_t attributes_address;
 };
 
 struct X_DATA_58024 {
