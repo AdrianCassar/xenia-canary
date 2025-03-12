@@ -144,16 +144,16 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
       return Unk58024(buffer_length);
     }
     case 0x00050036: {
-      XELOGD("XOnlineQuerySearch({:08X}, {:08X}) unimplemented", buffer_ptr,
-             buffer_length);
-      return X_E_SUCCESS;
+      // 534507D4
+      XELOGD("XOnlineQuerySearch({:08X}, {:08X})", buffer_ptr, buffer_length);
+      return XOnlineQuerySearch(buffer_ptr);
     }
     case 0x00050038: {
       // 4D5307D3
       // 4D5307D1
       XELOGD("XOnlineQuerySearch({:08X}, {:08X}) unimplemented", buffer_ptr,
              buffer_length);
-      return X_E_SUCCESS;
+      return XOnlineQuerySearch(buffer_ptr);
     }
     case 0x00050077: {
       // Called on blades dashboard v1888
@@ -596,6 +596,34 @@ X_HRESULT XLiveBaseApp::XPresenceCreateEnumerator(uint32_t buffer_length) {
   *buffer_ptr = xe::byte_swap<uint32_t>(presence_buffer_size);
 
   *handle_ptr = xe::byte_swap<uint32_t>(e->handle());
+
+  return X_E_SUCCESS;
+}
+
+X_HRESULT XLiveBaseApp::XOnlineQuerySearch(uint32_t buffer_ptr) {
+  // Usually called after success returned from GetServiceInfo.
+
+  if (!buffer_ptr) {
+    return X_E_INVALIDARG;
+  }
+
+  XOnlineQuerySearch_Marshalled_Data* data_ptr =
+      kernel_state_->memory()
+          ->TranslateVirtual<XOnlineQuerySearch_Marshalled_Data*>(buffer_ptr);
+
+  Internal_Marshalled_Data* internal_data_ptr =
+      kernel_state_->memory()->TranslateVirtual<Internal_Marshalled_Data*>(
+          data_ptr->internal_data_ptr);
+
+  XOnlineQuerySearch_ARGS* args_stream_ptr =
+      kernel_state_->memory()->TranslateVirtual<XOnlineQuerySearch_ARGS*>(
+          internal_data_ptr->start_args_ptr);
+
+  QUERY_SEARCH_RESULT* query_search_results_ptr =
+      kernel_state_->memory()->TranslateVirtual<QUERY_SEARCH_RESULT*>(
+          internal_data_ptr->results_ptr);
+
+  memset(query_search_results_ptr, 0, internal_data_ptr->results_size);
 
   return X_E_SUCCESS;
 }
