@@ -621,6 +621,20 @@ void EmulatorApp::EmulatorThread() {
         emulator_->file_system()->RegisterSymbolicLink("cache:", "\\CACHE");
       }
     }
+
+    auto xstorage_device = std::make_unique<xe::vfs::HostPathDevice>(
+        "\\XSTORAGE", "xstorage", false);
+    if (!xstorage_device->Initialize()) {
+      XELOGE("Unable to scan xstorage path");
+    } else {
+      if (!emulator_->file_system()->RegisterDevice(
+              std::move(xstorage_device))) {
+        XELOGE("Unable to register xstorage path");
+      } else {
+        emulator_->file_system()->RegisterSymbolicLink("xstorage:",
+                                                       "\\XSTORAGE");
+      }
+    }
   }
 
   // Set a debug handler.
