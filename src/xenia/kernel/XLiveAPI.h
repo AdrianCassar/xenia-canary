@@ -10,6 +10,7 @@
 #ifndef XENIA_KERNEL_XLIVEAPI_H_
 #define XENIA_KERNEL_XLIVEAPI_H_
 
+#include <span>
 #include <unordered_set>
 
 #include <third_party/libcurl/include/curl/curl.h>
@@ -150,6 +151,9 @@ class XLiveAPI {
 
   static X_STORAGE_BUILD_SERVER_PATH_RESULT XStorageBuildServerPath(
       std::string server_path);
+
+  static X_STORAGE_UPLOAD_RESULT XStorageUpload(std::string server_path,
+                                                std::span<uint8_t> buffer);
 
   static std::unique_ptr<HTTPResponseObjectJSON> PraseResponse(
       response_data response);
