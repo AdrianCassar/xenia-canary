@@ -46,6 +46,11 @@ DEFINE_string(network_guid, "", "Network Interface GUID", "Live");
 DEFINE_string(friends_xuids, "", "Comma delimited list of XUIDs. (Max 100)",
               "Live");
 
+DEFINE_bool(xstorage_backend, false,
+            "Switch from local to backend XStorage, otherwise fallback to "
+            "local if unavailable.",
+            "Live");
+
 DECLARE_string(upnp_root);
 
 DECLARE_bool(upnp);
