@@ -1138,7 +1138,159 @@ X_HRESULT XLiveBaseApp::XStorageUploadFromMemory(uint32_t buffer_ptr) {
     return X_E_INVALIDARG;
   }
 
-  return X_E_SUCCESS;
+  XStorageUploadFromMemory_Marshalled_Data* data_ptr =
+      kernel_state_->memory()
+          ->TranslateVirtual<XStorageUploadFromMemory_Marshalled_Data*>(
+              buffer_ptr);
+
+  Internal_Marshalled_Data* internal_data_ptr =
+      kernel_state_->memory()->TranslateVirtual<Internal_Marshalled_Data*>(
+          data_ptr->internal_data_ptr);
+
+  uint8_t* args_stream_ptr =
+      kernel_state_->memory()->TranslateVirtual<uint8_t*>(
+          internal_data_ptr->start_args_ptr);
+
+  if (!data_ptr->internal_data_ptr) {
+    return X_E_INVALIDARG;
+  }
+
+  if (!internal_data_ptr->start_args_ptr) {
+    return X_E_INVALIDARG;
+  }
+
+  uint32_t offset = 0;
+
+  xe::be<uint32_t> user_index = 0;
+  memcpy(&user_index, args_stream_ptr, sizeof(uint32_t));
+
+  offset += sizeof(uint32_t);
+
+  xe::be<uint32_t> server_path_len = 0;
+  memcpy(&server_path_len, args_stream_ptr + offset, sizeof(uint32_t));
+
+  offset += sizeof(uint32_t);
+
+  char16_t* arg_server_path_ptr =
+      reinterpret_cast<char16_t*>(args_stream_ptr + offset);
+
+  uint32_t server_path_size = server_path_len * sizeof(char16_t);
+
+  offset += server_path_size;
+
+  xe::be<uint32_t> buffer_size = 0;
+  memcpy(&buffer_size, args_stream_ptr + offset, sizeof(uint32_t));
+
+  offset += sizeof(uint32_t);
+
+  xe::be<uint32_t> upload_buffer_address = 0;
+  memcpy(&upload_buffer_address, args_stream_ptr + offset, sizeof(uint32_t));
+
+  if (!upload_buffer_address) {
+    return X_E_INVALIDARG;
+  }
+
+  if (buffer_size > kTMSUserMaxSize) {
+    return X_ONLINE_E_STORAGE_FILE_IS_TOO_BIG;
+  }
+
+  uint8_t* upload_buffer_ptr =
+      kernel_state()->memory()->TranslateVirtual<uint8_t*>(
+          upload_buffer_address);
+
+  std::span<uint8_t> upload_buffer =
+      std::span<uint8_t>(upload_buffer_ptr, buffer_size);
+
+  // Exclude null-terminator
+  server_path_len -= 1;
+
+  std::u16string server_path;
+  server_path.resize(server_path_len);
+
+  xe::copy_and_swap(server_path.data(), arg_server_path_ptr, server_path_len);
+
+  std::string upload_file_path = xe::to_utf8(server_path);
+  std::string filename = utf8::find_name_from_path(upload_file_path, '/');
+
+  X_STATUS result = X_E_FAIL;
+
+  X_STORAGE_FACILITY facility_type =
+      GetStorageFacilityTypeFromServerPath(upload_file_path);
+
+  bool route_backend =
+      cvars::xstorage_backend &&
+      (cvars::xstorage_user_data_backend ||
+       facility_type != X_STORAGE_FACILITY::FACILITY_PER_USER_TITLE);
+
+  if (route_backend) {
+    X_STORAGE_UPLOAD_RESULT uploaded_result =
+        XLiveAPI::XStorageUpload(upload_file_path, upload_buffer);
+
+    switch (uploaded_result) {
+      case X_STORAGE_UPLOAD_RESULT::UPLOADED:
+        result = X_E_SUCCESS;
+        break;
+      case X_STORAGE_UPLOAD_RESULT::NOT_MODIFIED:
+        result = X_ONLINE_S_STORAGE_FILE_NOT_MODIFIED;
+        break;
+      case X_STORAGE_UPLOAD_RESULT::PAYLOAD_TOO_LARGE:
+        result = X_ONLINE_E_STORAGE_FILE_IS_TOO_BIG;
+        break;
+      case X_STORAGE_UPLOAD_RESULT::UPLOAD_ERROR:
+      default:
+        result = X_E_FAIL;
+        break;
+    }
+  }
+
+  if (!route_backend || result == X_E_FAIL) {
+    upload_file_path = ConvertServerPathToXStorageSymlink(upload_file_path);
+
+    std::string upload_file_path_parent =
+        std::filesystem::path(upload_file_path).parent_path().string();
+
+    // Check if entry exists
+    vfs::Entry* entry =
+        kernel_state()->file_system()->ResolvePath(upload_file_path_parent);
+
+    if (entry) {
+      vfs::File* upload_file = nullptr;
+      vfs::FileAction action;
+
+      result = kernel_state()->file_system()->OpenFile(
+          nullptr, upload_file_path, vfs::FileDisposition::kOverwriteIf,
+          vfs::FileAccess::kGenericWrite, false, true, &upload_file, &action);
+
+      if (!result) {
+        size_t bytes_written = 0;
+        result = upload_file->WriteSync({upload_buffer.data(), buffer_size}, 0,
+                                        &bytes_written);
+
+        // Update the size of the entry for XStorageDownloadToMemory
+        upload_file->entry()->update();
+
+        upload_file->Destroy();
+      }
+    }
+  }
+
+  switch (result) {
+    case X_E_SUCCESS:
+      XELOGI("{}: Uploaded {}", __func__, filename);
+      break;
+    case X_ONLINE_S_STORAGE_FILE_NOT_MODIFIED:
+      XELOGI("{}: Uploaded {} (Not Modified)", __func__, filename);
+      break;
+    case X_E_FAIL:
+      XELOGI("{}: Uploading {} failed with error {:08X}", __func__, filename,
+             result);
+      break;
+  }
+
+  XELOGI("{}: Size: {}b, Path: {}", __func__, buffer_size.get(),
+         upload_file_path);
+
+  return result;
 }
 
 X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
