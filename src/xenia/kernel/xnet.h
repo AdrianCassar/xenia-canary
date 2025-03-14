@@ -48,6 +48,7 @@ namespace xe {
 #define X_ONLINE_E_STORAGE_INVALID_FACILITY                 static_cast<X_HRESULT>(0x8015C009L)
 #define X_ONLINE_E_STORAGE_FILE_NOT_FOUND                   static_cast<X_HRESULT>(0x8015C004L)
 #define X_ONLINE_E_STORAGE_INVALID_STORAGE_PATH             static_cast<X_HRESULT>(0x8015C008L)
+#define X_ONLINE_S_STORAGE_FILE_NOT_MODIFIED                static_cast<X_HRESULT>(0x0015C013L)
 
 #define X_PARTY_E_NOT_IN_PARTY                              static_cast<X_HRESULT>(0x807D0003L)
 
@@ -132,6 +133,12 @@ enum X_STORAGE_BUILD_SERVER_PATH_RESULT : int32_t {
   Invalid = -1,
   Created = 0,
   Found = 1,
+};
+
+enum X_STORAGE_UPLOAD_RESULT : int32_t {
+  Error = -1,
+  Uploaded = 0,
+  Not_Modified = 1,
 };
 
 struct XNKID {
@@ -356,6 +363,16 @@ struct XStringVerify_Marshalled_Data {
 };
 
 struct XStorageDownloadToMemory_Marshalled_Data {
+  xe::be<uint32_t> internal_data_ptr;
+  uint8_t unkn1_data[44];
+  xe::be<uint32_t> unkn1_ptr;
+  uint8_t unkn2_data[24];
+  xe::be<uint32_t> serialized_server_path_ptr;  // Entry 1
+  uint8_t unkn3_data[12];
+  xe::be<uint32_t> serialized_buffer_ptr;  // Entry 2
+};
+
+struct XStorageUploadFromMemory_Marshalled_Data {
   xe::be<uint32_t> internal_data_ptr;
   uint8_t unkn1_data[44];
   xe::be<uint32_t> unkn1_ptr;

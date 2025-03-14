@@ -1453,6 +1453,30 @@ std::span<uint8_t> XLiveAPI::XStorageDownload(std::string server_path) {
   return buffer;
 }
 
+X_STORAGE_UPLOAD_RESULT XLiveAPI::XStorageUpload(std::string server_path,
+                                                 std::span<uint8_t> buffer) {
+  // Remove address it's added later
+  std::string endpoint = server_path.substr(GetApiAddress().size());
+
+  X_STORAGE_UPLOAD_RESULT result = X_STORAGE_UPLOAD_RESULT::Error;
+
+  std::unique_ptr<HTTPResponseObjectJSON> response =
+      Post(endpoint, buffer.data(), buffer.size());
+
+  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_CREATED) {
+    XELOGE("XStorageUpload: {}", response->Message());
+    return result;
+  }
+
+  if (response->RawResponse().response) {
+    result = static_cast<X_STORAGE_UPLOAD_RESULT>(
+        xe::string_util::from_string<int32_t>(response->RawResponse().response,
+                                              false));
+  }
+
+  return result;
+}
+
 std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::PraseResponse(
     response_data chunk) {
   std::unique_ptr<HTTPResponseObjectJSON> response =
