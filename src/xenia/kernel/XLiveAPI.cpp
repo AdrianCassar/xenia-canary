@@ -1388,6 +1388,20 @@ std::unique_ptr<FriendsPresenceObjectJSON> XLiveAPI::GetFriendsPresence(
   return friends;
 }
 
+bool XLiveAPI::XStorageBuildServerPath(std::string server_path) {
+  // Remove address it's added later
+  std::string endpoint = server_path.substr(GetApiAddress().size());
+
+  std::unique_ptr<HTTPResponseObjectJSON> response = Post(endpoint, nullptr, 0);
+
+  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_CREATED) {
+    XELOGE("XStorageBuildServerPath: {}", response->Message());
+    return false;
+  }
+
+  return true;
+}
+
 std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::PraseResponse(
     response_data chunk) {
   std::unique_ptr<HTTPResponseObjectJSON> response =
