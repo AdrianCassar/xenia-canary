@@ -42,6 +42,9 @@ class XLiveBaseApp : public App {
   X_HRESULT XStorageUploadFromMemory(uint32_t buffer_ptr);
   X_HRESULT XStorageBuildServerPath(uint32_t buffer_ptr);
 
+  std::string ConvertServerPathToXStorageSymlink(
+      std::string server_path_string);
+
   X_HRESULT Unk58024(uint32_t buffer_length);
   X_HRESULT Unk5801C(uint32_t buffer_length);
 };
