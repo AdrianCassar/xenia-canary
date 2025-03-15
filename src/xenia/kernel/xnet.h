@@ -39,6 +39,8 @@ namespace xe {
 #define X_ERROR_SESSION_JOIN_ILLEGAL                        X_RESULT_FROM_WIN32(0x0015520AL)
 #define X_ERROR_SESSION_NOT_FOUND                           X_RESULT_FROM_WIN32(0x00155200L)
 #define X_ERROR_SESSION_FULL                                X_RESULT_FROM_WIN32(0x00155202L)
+#define X_ERROR_STORAGE_INVALID_FACILITY                    X_RESULT_FROM_WIN32(0x0015C009L)
+#define X_ERROR_STORAGE_FILE_NOT_FOUND                      X_RESULT_FROM_WIN32(0x0015C004L)
 
 #define X_ONLINE_E_LOGON_NOT_LOGGED_ON                      X_HRESULT_FROM_WIN32(X_ERROR_LOGON_NOT_LOGGED_ON)
 #define X_ONLINE_E_LOGON_SERVICE_TEMPORARILY_UNAVAILABLE    X_HRESULT_FROM_WIN32(X_ERROR_LOGON_SERVICE_TEMPORARILY_UNAVAILABLE)
@@ -52,7 +54,9 @@ namespace xe {
 #define X_ONLINE_E_SESSION_JOIN_ILLEGAL                     X_HRESULT_FROM_WIN32(X_ERROR_SESSION_JOIN_ILLEGAL)
 #define X_ONLINE_E_SESSION_NOT_FOUND                        X_HRESULT_FROM_WIN32(X_ERROR_SESSION_NOT_FOUND)
 #define X_ONLINE_E_SESSION_FULL                             X_HRESULT_FROM_WIN32(X_ERROR_SESSION_FULL)
+#define X_ONLINE_E_STORAGE_INVALID_FACILITY                 static_cast<X_HRESULT>(X_ERROR_STORAGE_INVALID_FACILITY)
 #define X_PARTY_E_NOT_IN_PARTY                              static_cast<X_HRESULT>(0x807D0003L)
+#define X_ONLINE_E_STORAGE_FILE_NOT_FOUND                   X_HRESULT_FROM_WIN32(X_ERROR_STORAGE_FILE_NOT_FOUND)
 
 #define X_ONLINE_FRIENDSTATE_FLAG_NONE              0x00000000
 #define X_ONLINE_FRIENDSTATE_FLAG_ONLINE            0x00000001
@@ -70,6 +74,7 @@ namespace xe {
 #define X_ONLINE_MAX_FRIENDS                        100
 #define X_ONLINE_PEER_SUBSCRIPTIONS                 400
 #define X_MAX_RICHPRESENCE_SIZE                     64
+#define X_ONLINE_MAX_PATHNAME_LENGTH                255
 
 #define X_CONTEXT_PRESENCE                          0x00008001
 #define X_CONTEXT_GAME_TYPE                         0x0000800A
@@ -127,6 +132,12 @@ enum X_STATS_ENUMERATOR_TYPE : uint32_t {
 };
 
 enum PLATFORM_TYPE : uint32_t { Xbox1, Xbox360, PC };
+
+enum X_STORAGE_BUILD_SERVER_PATH_RESULT : int32_t {
+  Invalid = -1,
+  Created = 0,
+  Found = 1,
+};
 
 struct XNKID {
   uint8_t ab[8];
@@ -219,17 +230,16 @@ struct X_ARGUMENT_LIST {
 static_assert_size(X_ARGUMENT_LIST, 0x204);
 
 enum X_STORAGE_FACILITY : uint32_t {
-  FACILITY_GAME_CLIP = 1,
-  FACILITY_PER_TITLE = 2,
-  FACILITY_PER_USER_TITLE = 3
+  FACILITY_GAME_CLIP = 1,      // Read, Write
+  FACILITY_PER_TITLE = 2,      // Read, Enumerate
+  FACILITY_PER_USER_TITLE = 3  // Read, Write, Delete
 };
 
 struct X_STORAGE_BUILD_SERVER_PATH {
   xe::be<uint32_t> user_index;
   uint8_t unkn[4];
   xe::be<uint64_t> xuid;
-  xe::be<uint32_t> storage_location;  // 2 means title specific storage,
-                                      // something like developers storage.
+  xe::be<X_STORAGE_FACILITY> storage_location;
   xe::be<uint32_t> storage_location_info_ptr;
   xe::be<uint32_t> storage_location_info_size;
   xe::be<uint32_t> file_name_ptr;

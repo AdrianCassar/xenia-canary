@@ -1388,6 +1388,43 @@ std::unique_ptr<FriendsPresenceObjectJSON> XLiveAPI::GetFriendsPresence(
   return friends;
 }
 
+X_STORAGE_BUILD_SERVER_PATH_RESULT XLiveAPI::XStorageBuildServerPath(
+    std::string server_path) {
+  // Remove address it's added later
+  std::string endpoint = server_path.substr(GetApiAddress().size());
+
+  X_STORAGE_BUILD_SERVER_PATH_RESULT result =
+      X_STORAGE_BUILD_SERVER_PATH_RESULT::Invalid;
+
+  std::unique_ptr<HTTPResponseObjectJSON> response = Post(endpoint, nullptr);
+
+  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_CREATED) {
+    XELOGE("{}: {}", __func__, response->Message());
+    return result;
+  }
+
+  if (response->RawResponse().response) {
+    result = static_cast<X_STORAGE_BUILD_SERVER_PATH_RESULT>(
+        xe::string_util::from_string<int32_t>(response->RawResponse().response,
+                                              false));
+  }
+
+  switch (result) {
+    case kernel::Created:
+      XELOGI("{}: Created Path: {}", __func__, server_path);
+      break;
+    case kernel::Found:
+      XELOGI("{}: Found Path: {}", __func__, server_path);
+      break;
+    case kernel::Invalid:
+    default:
+      XELOGW("{}: Failed to create path: {}", __func__, server_path);
+      break;
+  }
+
+  return result;
+}
+
 std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::PraseResponse(
     response_data chunk) {
   std::unique_ptr<HTTPResponseObjectJSON> response =
