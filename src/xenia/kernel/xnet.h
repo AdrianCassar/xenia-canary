@@ -39,6 +39,7 @@ namespace xe {
 #define X_ERROR_SESSION_JOIN_ILLEGAL                        X_RESULT_FROM_WIN32(0x0015520AL)
 #define X_ERROR_SESSION_NOT_FOUND                           X_RESULT_FROM_WIN32(0x00155200L)
 #define X_ERROR_SESSION_FULL                                X_RESULT_FROM_WIN32(0x00155202L)
+#define X_ERROR_STORAGE_FILE_NOT_FOUND                      X_RESULT_FROM_WIN32(0x0015C004L)
 
 #define X_ONLINE_E_LOGON_NOT_LOGGED_ON                      X_HRESULT_FROM_WIN32(X_ERROR_LOGON_NOT_LOGGED_ON)
 #define X_ONLINE_E_LOGON_SERVICE_TEMPORARILY_UNAVAILABLE    X_HRESULT_FROM_WIN32(X_ERROR_LOGON_SERVICE_TEMPORARILY_UNAVAILABLE)
@@ -53,6 +54,7 @@ namespace xe {
 #define X_ONLINE_E_SESSION_NOT_FOUND                        X_HRESULT_FROM_WIN32(X_ERROR_SESSION_NOT_FOUND)
 #define X_ONLINE_E_SESSION_FULL                             X_HRESULT_FROM_WIN32(X_ERROR_SESSION_FULL)
 #define X_PARTY_E_NOT_IN_PARTY                              static_cast<X_HRESULT>(0x807D0003L)
+#define X_ONLINE_E_STORAGE_FILE_NOT_FOUND                   X_HRESULT_FROM_WIN32(X_ERROR_STORAGE_FILE_NOT_FOUND)
 
 #define X_ONLINE_FRIENDSTATE_FLAG_NONE              0x00000000
 #define X_ONLINE_FRIENDSTATE_FLAG_ONLINE            0x00000001
@@ -312,6 +314,34 @@ struct X_INVITE_INFO {
 };
 
 #pragma pack(pop)
+
+#pragma pack(push, 1)
+
+struct X_STORAGE_DOWNLOAD_TO_MEMORY_RESULTS {
+  xe::be<uint32_t> bytes_total;
+  xe::be<uint64_t> xuid_owner;
+  xe::be<uint64_t> ft_created;
+};
+
+#pragma pack(pop)
+
+struct Internal_Marshalled_Data {
+  uint8_t unkn1_data[22];
+  xe::be<uint32_t> start_args_ptr;  // CArgumentList*
+  uint8_t unkn2_data[14];
+  xe::be<uint32_t> results_ptr;  // STRUCT*
+  xe::be<uint32_t> results_size;
+};
+
+struct XStorageDownloadToMemory_Marshalled_Data {
+  xe::be<uint32_t> internal_data_ptr;
+  uint8_t unkn1_data[44];
+  xe::be<uint32_t> unkn1_ptr;
+  uint8_t unkn2_data[24];
+  xe::be<uint32_t> serialized_server_path_ptr;  // Entry 1
+  uint8_t unkn3_data[12];
+  xe::be<uint32_t> serialized_buffer_ptr;  // Entry 2
+};
 
 struct X_DATA_58024 {
   X_ARGUEMENT_ENTRY xuid;
