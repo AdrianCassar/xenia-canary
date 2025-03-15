@@ -313,6 +313,78 @@ struct X_INVITE_INFO {
 
 #pragma pack(pop)
 
+#pragma pack(push, 1)
+
+struct X_ONLINE_QUERY_ATTRIBUTE_INTEGER {
+  xe::be<uint32_t> length;
+  xe::be<uint64_t> value;
+};
+
+struct X_ONLINE_QUERY_ATTRIBUTE_STRING {
+  xe::be<uint32_t> length;
+  xe::be<uint32_t> value_ptr;
+};
+
+struct X_ONLINE_QUERY_ATTRIBUTE_BLOB {
+  xe::be<uint32_t> length;
+  xe::be<uint32_t> value_ptr;
+};
+
+union X_ONLINE_QUERY_ATTRIBUTE_DATA {
+  X_ONLINE_QUERY_ATTRIBUTE_INTEGER integer;
+  X_ONLINE_QUERY_ATTRIBUTE_STRING string;
+  X_ONLINE_QUERY_ATTRIBUTE_BLOB blob;
+};
+
+struct X_ONLINE_QUERY_ATTRIBUTE {
+  xe::be<uint32_t> attribute_id;
+  X_ONLINE_QUERY_ATTRIBUTE_DATA info;
+};
+
+struct X_ONLINE_QUERY_ATTRIBUTE_SPEC {
+  xe::be<uint32_t> type;
+  xe::be<uint32_t> length;
+};
+
+struct QUERY_SEARCH_RESULT {
+  xe::be<uint32_t> total_results;
+  xe::be<uint32_t> returned_results;
+  xe::be<uint32_t> num_result_attributes;
+  xe::be<uint32_t> attributes_ptr;  // X_ONLINE_QUERY_ATTRIBUTE
+};
+
+#pragma pack(pop)
+
+struct Internal_Marshalled_Data {
+  uint8_t unkn1_data[22];
+  xe::be<uint32_t> start_args_ptr;  // CArgumentList*
+  uint8_t unkn2_data[14];
+  xe::be<uint32_t> results_ptr;  // STRUCT*
+  xe::be<uint32_t> results_size;
+};
+
+struct XOnlineQuerySearch_Marshalled_Data {
+  xe::be<uint32_t> internal_data_ptr;
+  uint8_t unkn1_data[44];
+  xe::be<uint32_t> unkn1_ptr;
+  uint8_t unkn2_data[24];
+  xe::be<uint32_t> serialized_num_result_specs_ptr;  // Entry 1
+  uint8_t unkn3_data[24];
+  xe::be<uint32_t> serialized_attribute_specs_ptr;  // Entry 2
+};
+
+struct XOnlineQuerySearch_ARGS {
+  uint32_t title_id = 0;
+  uint32_t dataset_id = 0;
+  uint32_t proc_index = 0;
+  uint32_t page = 0;
+  uint32_t results_pre_page = 0;
+  uint32_t num_result_specs = 0;
+  uint32_t attribute_specs_address = 0;
+  uint32_t num_attributes = 0;
+  uint32_t attributes_address = 0;
+};
+
 struct X_DATA_58024 {
   X_ARGUEMENT_ENTRY xuid;
   X_ARGUEMENT_ENTRY ukn2;  // 125
