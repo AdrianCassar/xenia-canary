@@ -1388,6 +1388,37 @@ std::unique_ptr<FriendsPresenceObjectJSON> XLiveAPI::GetFriendsPresence(
   return friends;
 }
 
+std::vector<std::string> XLiveAPI::XStorageEnumerate(std::string server_path) {
+  const size_t prefix_size =
+      GetApiAddress().size() + std::string("xstorage/").size();
+
+  std::string url_to_encode = server_path.substr(prefix_size);
+
+  CURL* curl = curl_easy_init();
+
+  char* encoded_url = curl_easy_escape(curl, url_to_encode.c_str(),
+                                       static_cast<int>(url_to_encode.size()));
+
+  curl_easy_cleanup(curl);
+
+  std::string endpoint = "xstorage/enumerate/" + std::string(encoded_url);
+
+  if (encoded_url) {
+    curl_free(encoded_url);
+  }
+
+  std::vector<std::string> files = {};
+
+  std::unique_ptr<HTTPResponseObjectJSON> response = Get(endpoint);
+
+  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_OK) {
+    XELOGE("XStorageEnumerate: {}", response->Message());
+    return files;
+  }
+
+  return files;
+}
+
 std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::PraseResponse(
     response_data chunk) {
   std::unique_ptr<HTTPResponseObjectJSON> response =

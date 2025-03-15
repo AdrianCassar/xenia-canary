@@ -148,6 +148,8 @@ class XLiveAPI {
   static std::unique_ptr<FriendsPresenceObjectJSON> GetFriendsPresence(
       const std::vector<uint64_t>& xuids);
 
+  static std::vector<std::string> XStorageEnumerate(std::string server_path);
+
   static std::unique_ptr<HTTPResponseObjectJSON> PraseResponse(
       response_data response);
 
