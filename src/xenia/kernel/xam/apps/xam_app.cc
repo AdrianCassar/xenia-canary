@@ -9,6 +9,7 @@
 
 #include "xenia/kernel/xam/apps/xam_app.h"
 
+#include <xenia/kernel/xam/xam_content_device.h>
 #include "xenia/base/logging.h"
 #include "xenia/base/threading.h"
 #include "xenia/kernel/kernel_state.h"
@@ -79,18 +80,31 @@ X_HRESULT XamApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
       return X_E_NO_MORE_FILES;
     }
     case 0x00020021: {
-      struct message_data {
-        char unk_00[64];
-        xe::be<uint32_t> unk_40;  // KeGetCurrentProcessType() < 1 ? 1 : 0
-        xe::be<uint32_t> unk_44;  // ? output_ptr ?
-        xe::be<uint32_t> unk_48;  // ? overlapped_ptr ?
-      }* data = reinterpret_cast<message_data*>(buffer);
-      assert_true(buffer_length == sizeof(message_data));
-      auto unk = memory_->TranslateVirtual<xe::be<uint32_t>*>(data->unk_44);
-      *unk = 0;
-      XELOGD("XamApp(0x00020021)('{}', {:08X}, {:08X}, {:08X})", data->unk_00,
-             (uint32_t)data->unk_40, (uint32_t)data->unk_44,
-             (uint32_t)data->unk_48);
+      struct XContentQueryVolumeDeviceType {
+        char root_name[64];
+        xe::be<uint32_t> is_title_process;
+        xe::be<DeviceType> device_type_ptr;
+        xe::be<uint32_t> overlapped_ptr;
+      }* data = reinterpret_cast<XContentQueryVolumeDeviceType*>(buffer);
+      assert_true(buffer_length == sizeof(XContentQueryVolumeDeviceType));
+
+      const std::string root_name = data->root_name;
+
+      xe::be<DeviceType>* device_type_ptr =
+          memory_->TranslateVirtual<xe::be<DeviceType>*>(
+              static_cast<uint32_t>(data->device_type_ptr.get()));
+
+      *device_type_ptr = static_cast<DeviceType>(0);
+
+      if (root_name == "GAME") {
+        *device_type_ptr = DeviceType::HDD;
+      }
+
+      XELOGD("XContentQueryVolumeDeviceType('{}', {:08X}, {:08X}, {:08X})",
+             root_name, static_cast<uint32_t>(data->is_title_process.get()),
+             static_cast<uint32_t>(data->device_type_ptr.get()),
+             static_cast<uint32_t>(data->overlapped_ptr.get()));
+
       return X_E_SUCCESS;
     }
     case 0x00021012: {
