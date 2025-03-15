@@ -26,6 +26,8 @@
 DEFINE_bool(stub_xlivebase, false,
             "Return success for all unimplemented XLiveBase calls.", "Live");
 
+DECLARE_bool(xstorage_backend);
+
 namespace xe {
 namespace kernel {
 namespace xam {
@@ -901,16 +903,24 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
 
   const std::u16string filename =
       xe::load_and_swap<std::u16string>(filename_ptr);
+  const std::string filename_str = xe::to_utf8(filename);
 
-  std::string server_path_str;
+  std::string backend_server_path_str;
+  std::string symlink_path;
+
+  std::string backend_domain_prefix =
+      fmt::format("{}xstorage", XLiveAPI::GetApiAddress());
 
   std::string storage_type;
 
-  switch (args->storage_location.get()) {
+  switch (args->storage_location) {
     case X_STORAGE_FACILITY::FACILITY_GAME_CLIP: {
-      server_path_str = fmt::format(
-          "{}title/{:08X}/storage/clips/{}", XLiveAPI::GetApiAddress(),
-          kernel_state()->title_id(), xe::to_utf8(filename));
+      backend_server_path_str =
+          fmt::format("{}/title/{:08X}/storage/clips/{}", backend_domain_prefix,
+                      kernel_state()->title_id(), filename_str);
+
+      symlink_path = fmt::format("XSTORAGE:title\\{:08X}\\storage\\clips\\",
+                                 kernel_state()->title_id());
 
       xe::be<uint32_t> leaderboard_id = 0;
 
@@ -927,31 +937,41 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
       storage_type = "Game Clip";
     } break;
     case X_STORAGE_FACILITY::FACILITY_PER_TITLE: {
-      server_path_str =
-          fmt::format("{}title/{:08X}/storage/{}", XLiveAPI::GetApiAddress(),
-                      kernel_state()->title_id(), xe::to_utf8(filename));
+      backend_server_path_str =
+          fmt::format("{}/title/{:08X}/storage/{}", backend_domain_prefix,
+                      kernel_state()->title_id(), filename_str);
+
+      symlink_path = fmt::format("XSTORAGE:title\\{:08X}\\storage\\",
+                                 kernel_state()->title_id());
 
       storage_type = "Per Title";
     } break;
     case X_STORAGE_FACILITY::FACILITY_PER_USER_TITLE: {
-      server_path_str = fmt::format(
-          "{}user/{:016X}/title/{:08X}/storage/{}", XLiveAPI::GetApiAddress(),
-          xuid, kernel_state()->title_id(), xe::to_utf8(filename));
+      backend_server_path_str = fmt::format(
+          "{}/user/{:016X}/title/{:08X}/storage/{}", backend_domain_prefix,
+          xuid, kernel_state()->title_id(), filename_str);
+
+      symlink_path =
+          fmt::format("XSTORAGE:user\\{:016X}\\title\\{:08X}\\storage\\", xuid,
+                      kernel_state()->title_id());
 
       storage_type = "Per User Title";
     } break;
+    default:
+      return X_ONLINE_E_STORAGE_INVALID_FACILITY;
   }
 
-  const std::u16string server_path = xe::to_utf16(server_path_str);
+  const std::u16string backend_server_path =
+      xe::to_utf16(backend_server_path_str);
 
-  size_t server_path_length = server_path.size();
+  size_t server_path_length = backend_server_path.size();
 
   std::vector<char16_t> server_path_buf =
       std::vector<char16_t>(server_path_length);
 
   size_t size_bytes = server_path_length * sizeof(char16_t);
 
-  memcpy(server_path_buf.data(), server_path.c_str(), size_bytes);
+  memcpy(server_path_buf.data(), backend_server_path.c_str(), size_bytes);
 
   // Null-terminator
   server_path_buf.push_back(u'\0');
@@ -974,10 +994,89 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
   *server_path_length_ptr =
       xe::byte_swap(static_cast<uint32_t>(server_path_buf.size()));
 
-  XELOGI("{}: Requesting file: {} from storage type: {}", __func__,
-         xe::to_utf8(filename), storage_type);
+  X_STATUS result = X_E_SUCCESS;
 
-  return X_E_SUCCESS;
+  if (cvars::xstorage_backend) {
+    const std::string create_valid_path =
+        std::filesystem::path(backend_server_path_str).parent_path().string();
+
+    X_STORAGE_BUILD_SERVER_PATH_RESULT build_result =
+        XLiveAPI::XStorageBuildServerPath(create_valid_path);
+
+    if (build_result == X_STORAGE_BUILD_SERVER_PATH_RESULT::Created ||
+        build_result == X_STORAGE_BUILD_SERVER_PATH_RESULT::Found) {
+      result = X_E_SUCCESS;
+    } else {
+      result = X_E_FAIL;
+    }
+  }
+
+  if (!cvars::xstorage_backend || result) {
+    // Check if entry exists
+    vfs::Entry* entry =
+        kernel_state()->file_system()->ResolvePath(symlink_path);
+
+    if (!entry) {
+      // Prepare path for splitting
+      std::string starting_dir = symlink_path;
+      std::replace(starting_dir.begin(), starting_dir.end(), ':', '\\');
+
+      const auto path_parts = xe::utf8::split_path(starting_dir);
+
+      if (path_parts.size() > 2) {
+        starting_dir = path_parts[1];
+      }
+
+      // XSTORAGE entry
+      vfs::Entry* xstorage_entry =
+          kernel_state()->file_system()->ResolvePath("XSTORAGE:");
+
+      // Create root entry
+      vfs::Entry* dir_entry = xstorage_entry->CreateEntry(
+          starting_dir, xe::vfs::FileAttributeFlags::kFileAttributeDirectory);
+
+      // Create child entries
+      vfs::Entry* entries = kernel_state()->file_system()->CreatePath(
+          symlink_path, xe::vfs::FileAttributeFlags::kFileAttributeDirectory);
+
+      // Update entry
+      entry = kernel_state()->file_system()->ResolvePath(symlink_path);
+
+      if (entry) {
+        result = X_E_SUCCESS;
+        XELOGI("{}: Created Path: {}", __func__, symlink_path);
+      } else {
+        result = X_E_FAIL;
+        XELOGW("{}: Failed to create path: {}", __func__, symlink_path);
+      }
+    } else {
+      result = X_E_SUCCESS;
+      XELOGI("{}: Found Path: {}", __func__, symlink_path);
+    }
+  }
+
+  XELOGI("{}: Filename: {}, Storage Type: {}", __func__, filename_str,
+         storage_type);
+
+  return result;
+}
+
+std::string XLiveBaseApp::ConvertServerPathToXStorageSymlink(
+    std::string server_path) {
+  std::filesystem::path symlink_path = server_path;
+
+  std::string backend_domain_prefix =
+      fmt::format("{}xstorage/", XLiveAPI::GetApiAddress());
+
+  std::string location =
+      symlink_path.string().substr(backend_domain_prefix.size());
+
+  symlink_path = std::format("XSTORAGE:{}", location);
+
+  // Convert to OS path
+  symlink_path = symlink_path.make_preferred();
+
+  return symlink_path.string();
 }
 
 X_HRESULT XLiveBaseApp::Unk58024(uint32_t buffer_length) {
