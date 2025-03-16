@@ -305,6 +305,18 @@ struct X_INVITE_GET_ACCEPTED_INFO {
   X_ARGUEMENT_ENTRY invite_info;
 };
 
+struct X_CONTENT_GET_MARKETPLACE_COUNTS {
+  xe::be<uint32_t> user_index;
+  xe::be<uint32_t> title_id;
+  xe::be<uint32_t> content_categories;
+  xe::be<uint32_t> results_ptr;
+};
+
+struct X_OFFERING_CONTENTAVAILABLE_RESULT {
+  xe::be<uint32_t> new_offers;
+  xe::be<uint32_t> total_offers;
+};
+
 // struct FILETIME {
 //   xe::be<uint32_t> dwHighDateTime;
 //   xe::be<uint32_t> dwLowDateTime;
