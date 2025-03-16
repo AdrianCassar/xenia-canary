@@ -218,9 +218,10 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
       return GetServiceInfo(buffer_ptr, buffer_length);
     }
     case 0x00058009: {
-      XELOGD("XContentGetMarketplaceCounts({:08X}, {:08X}) unimplemented",
-             buffer_ptr, buffer_length);
-      return X_E_SUCCESS;
+      assert_true(!buffer_length || buffer_length == 0x10);
+      XELOGD("XContentGetMarketplaceCounts({:08X}, {:08X})", buffer_ptr,
+             buffer_length);
+      return XContentGetMarketplaceCounts(buffer_ptr);
     }
     case 0x0005800C: {
       // 464F0800
@@ -2145,6 +2146,31 @@ X_HRESULT XLiveBaseApp::XUserFindUsers(uint32_t buffer_ptr) {
 
   results_ptr->results_size = results_size;
   results_ptr->users_address = users_address;
+
+  return X_E_SUCCESS;
+}
+
+X_HRESULT XLiveBaseApp::XContentGetMarketplaceCounts(uint32_t buffer_ptr) {
+  // 5454082B
+
+  X_CONTENT_GET_MARKETPLACE_COUNTS* marketplace_counts_ptr =
+      kernel_state()
+          ->memory()
+          ->TranslateVirtual<X_CONTENT_GET_MARKETPLACE_COUNTS*>(buffer_ptr);
+
+  X_OFFERING_CONTENTAVAILABLE_RESULT* results_ptr =
+      kernel_state()
+          ->memory()
+          ->TranslateVirtual<X_OFFERING_CONTENTAVAILABLE_RESULT*>(
+              marketplace_counts_ptr->results_ptr);
+
+  memset(results_ptr, 0, sizeof(X_OFFERING_CONTENTAVAILABLE_RESULT));
+
+  const auto user_profile = kernel_state()->xam_state()->GetUserProfile(
+      marketplace_counts_ptr->user_index);
+
+  XELOGI("{}: Content Categories: {:08X}", __func__,
+         marketplace_counts_ptr->content_categories.get());
 
   return X_E_SUCCESS;
 }
