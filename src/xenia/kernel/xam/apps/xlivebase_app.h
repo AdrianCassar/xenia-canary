@@ -41,6 +41,7 @@ class XLiveBaseApp : public App {
   X_HRESULT XStorageDownloadToMemory(uint32_t buffer_ptr);
   X_HRESULT XStorageUploadFromMemory(uint32_t buffer_ptr);
   X_HRESULT XStorageBuildServerPath(uint32_t buffer_ptr);
+  X_HRESULT XContentGetMarketplaceCounts(uint32_t buffer_ptr);
 
   X_HRESULT Unk58024(uint32_t buffer_length);
   X_HRESULT Unk5801C(uint32_t buffer_length);
