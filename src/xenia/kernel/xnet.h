@@ -230,6 +230,7 @@ struct X_ARGUMENT_LIST {
 static_assert_size(X_ARGUMENT_LIST, 0x204);
 
 enum X_STORAGE_FACILITY : uint32_t {
+  FACILITY_INVALID = 0,
   FACILITY_GAME_CLIP = 1,      // Read, Write
   FACILITY_PER_TITLE = 2,      // Read, Enumerate
   FACILITY_PER_USER_TITLE = 3  // Read, Write, Delete
