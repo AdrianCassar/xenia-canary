@@ -44,6 +44,8 @@ class XLiveBaseApp : public App {
 
   std::string ConvertServerPathToXStorageSymlink(
       std::string server_path_string);
+  X_STORAGE_FACILITY GetStorageFacilityTypeFromServerPath(
+      std::string server_path);
 
   X_HRESULT Unk58024(uint32_t buffer_length);
   X_HRESULT Unk5801C(uint32_t buffer_length);
