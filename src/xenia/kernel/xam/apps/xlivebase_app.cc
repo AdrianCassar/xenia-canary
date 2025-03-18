@@ -28,6 +28,8 @@ DEFINE_bool(stub_xlivebase, false,
 
 DECLARE_bool(xstorage_backend);
 
+DECLARE_bool(xstorage_user_data_backend);
+
 namespace xe {
 namespace kernel {
 namespace xam {
@@ -996,7 +998,12 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
 
   X_STATUS result = X_E_SUCCESS;
 
-  if (cvars::xstorage_backend) {
+  bool route_backend =
+      cvars::xstorage_backend &&
+      (cvars::xstorage_user_data_backend ||
+       args->storage_location != X_STORAGE_FACILITY::FACILITY_PER_USER_TITLE);
+
+  if (route_backend) {
     const std::string create_valid_path =
         std::filesystem::path(backend_server_path_str).parent_path().string();
 
@@ -1011,7 +1018,7 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
     }
   }
 
-  if (!cvars::xstorage_backend || result) {
+  if (!route_backend || result) {
     // Check if entry exists
     vfs::Entry* entry =
         kernel_state()->file_system()->ResolvePath(symlink_path);
@@ -1077,6 +1084,43 @@ std::string XLiveBaseApp::ConvertServerPathToXStorageSymlink(
   symlink_path = symlink_path.make_preferred();
 
   return symlink_path.string();
+}
+
+X_STORAGE_FACILITY XLiveBaseApp::GetStorageFacilityTypeFromServerPath(
+    std::string server_path) {
+  std::string title_facility =
+      R"(title(/|\\)[0-9a-fA-F]{8}(/|\\)storage(/|\\))";
+  std::string clips_facility = R"(clips(/|\\))";
+  std::string user_facility = R"(user(/|\\)[0-9a-fA-F]{16}(/|\\))";
+
+  std::regex title_facility_regex(title_facility);
+  std::regex clips_facility_regex(
+      fmt::format("{}{}", title_facility, clips_facility));
+  std::regex user_facility_regex(
+      fmt::format("{}{}", user_facility, title_facility));
+
+  X_STORAGE_FACILITY facility_type = X_STORAGE_FACILITY::FACILITY_INVALID;
+
+  if (facility_type == X_STORAGE_FACILITY::FACILITY_INVALID) {
+    if (std::regex_search(server_path, user_facility_regex)) {
+      facility_type = X_STORAGE_FACILITY::FACILITY_PER_USER_TITLE;
+    }
+  }
+
+  if (facility_type == X_STORAGE_FACILITY::FACILITY_INVALID) {
+    if (std::regex_search(server_path, clips_facility_regex)) {
+      facility_type = X_STORAGE_FACILITY::FACILITY_GAME_CLIP;
+    }
+  }
+
+  // Check per title last
+  if (facility_type == X_STORAGE_FACILITY::FACILITY_INVALID) {
+    if (std::regex_search(server_path, title_facility_regex)) {
+      facility_type = X_STORAGE_FACILITY::FACILITY_PER_TITLE;
+    }
+  }
+
+  return facility_type;
 }
 
 X_HRESULT XLiveBaseApp::Unk58024(uint32_t buffer_length) {
