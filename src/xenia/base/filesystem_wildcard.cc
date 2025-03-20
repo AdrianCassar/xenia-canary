@@ -22,10 +22,10 @@ WildcardFlags WildcardFlags::ANY(false, false, true);
 WildcardFlags WildcardFlags::FIRST_AND_LAST(true, true, false);
 
 WildcardFlags::WildcardFlags()
-    : FromStart(false), ToEnd(false), ExactLength(false) {}
+    : FromStart(false), ToEnd(false), AnyLength(false) {}
 
-WildcardFlags::WildcardFlags(bool start, bool end, bool exact_length)
-    : FromStart(start), ToEnd(end), ExactLength(exact_length) {}
+WildcardFlags::WildcardFlags(bool start, bool end, bool any_length)
+    : FromStart(start), ToEnd(end), AnyLength(any_length) {}
 
 WildcardRule::WildcardRule(const std::string_view match,
                            const WildcardFlags& flags)
@@ -41,7 +41,7 @@ bool WildcardRule::Check(const std::string_view lower,
     return false;
   }
 
-  if (rules_.ExactLength) {
+  if (rules_.AnyLength) {
     *offset += match_.size();
     return true;
   }
