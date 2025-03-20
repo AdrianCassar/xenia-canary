@@ -8,11 +8,14 @@
  */
 
 #include "xenia/kernel/xam/achievement_manager.h"
+#include <algorithm>
+#include <string>
 #include "xenia/emulator.h"
 #include "xenia/gpu/graphics_system.h"
 #include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/util/shim_utils.h"
 #include "xenia/kernel/xam/achievement_backends/gpd_achievement_backend.h"
+#include "xenia/kernel/xam/achievement_backends/http_achievement_backend.h"
 #include "xenia/ui/imgui_guest_notification.h"
 
 DEFINE_bool(show_achievement_notification, false,
@@ -21,7 +24,7 @@ DEFINE_bool(show_achievement_notification, false,
 DEFINE_string(
     default_achievements_backend, "GPD",
     "Defines which achievements backend should be used as an default. "
-    "Possible options: GPD.",
+    "Possible options: [GPD, HTTP]",
     "Kernel");
 
 DECLARE_int32(user_language);
@@ -31,7 +34,14 @@ namespace kernel {
 namespace xam {
 
 AchievementManager::AchievementManager() {
-  default_achievements_backend_ = std::make_unique<GpdAchievementBackend>();
+  std::string backend = cvars::default_achievements_backend;
+  std::transform(backend.begin(), backend.end(), backend.begin(), ::toupper);
+
+  if (backend == "HTTP") {
+    default_achievements_backend_ = std::make_unique<HttpAchievementBackend>();
+  } else {
+    default_achievements_backend_ = std::make_unique<GpdAchievementBackend>();
+  }
 
   // Add any optional backend here.
 };
