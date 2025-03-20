@@ -317,6 +317,13 @@ struct X_OFFERING_CONTENTAVAILABLE_RESULT {
   xe::be<uint32_t> total_offers;
 };
 
+struct X_GET_TASK_PROGRESS {
+  xe::be<uint32_t> overlapped_ptr;
+  xe::be<uint32_t> percent_complete_ptr;
+  xe::be<uint32_t> numerator_ptr;
+  xe::be<uint32_t> denominator_ptr;
+};
+
 // struct FILETIME {
 //   xe::be<uint32_t> dwHighDateTime;
 //   xe::be<uint32_t> dwLowDateTime;
