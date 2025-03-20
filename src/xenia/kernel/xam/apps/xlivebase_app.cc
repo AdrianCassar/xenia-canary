@@ -294,9 +294,9 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
       return XInviteGetAcceptedInfo(buffer_length);
     }
     case 0x00058032: {
-      XELOGD("XGetTaskProgress({:08X}, {:08X}) unimplemented", buffer_ptr,
+      XELOGD("XOnlineGetTaskProgress({:08X}, {:08X})", buffer_ptr,
              buffer_length);
-      return X_E_SUCCESS;
+      return XOnlineGetTaskProgress(buffer_ptr);
     }
     case 0x00058035: {
       // Fixes Xbox Live error for 513107D9
@@ -2016,6 +2016,54 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
          storage_type);
 
   return result;
+}
+
+X_HRESULT XLiveBaseApp::XOnlineGetTaskProgress(uint32_t buffer_ptr) {
+  if (!buffer_ptr) {
+    return X_E_INVALIDARG;
+  }
+
+  X_GET_TASK_PROGRESS* task_progress =
+      kernel_state()->memory()->TranslateVirtual<X_GET_TASK_PROGRESS*>(
+          buffer_ptr);
+
+  XAM_OVERLAPPED* overlapped_ptr =
+      kernel_state()->memory()->TranslateVirtual<XAM_OVERLAPPED*>(
+          task_progress->overlapped_ptr);
+
+  uint32_t* percent_complete_ptr = nullptr;
+  uint64_t* numerator_ptr = nullptr;
+  uint64_t* denominator_ptr = nullptr;
+
+  if (task_progress->percent_complete_ptr) {
+    percent_complete_ptr =
+        kernel_state()->memory()->TranslateVirtual<uint32_t*>(
+            task_progress->percent_complete_ptr);
+  }
+
+  if (task_progress->numerator_ptr) {
+    numerator_ptr = kernel_state()->memory()->TranslateVirtual<uint64_t*>(
+        task_progress->numerator_ptr);
+  }
+
+  if (task_progress->denominator_ptr) {
+    denominator_ptr = kernel_state()->memory()->TranslateVirtual<uint64_t*>(
+        task_progress->denominator_ptr);
+  }
+
+  if (percent_complete_ptr) {
+    *percent_complete_ptr = 100;
+  }
+
+  if (numerator_ptr) {
+    *numerator_ptr = 0;
+  }
+
+  if (denominator_ptr) {
+    *denominator_ptr = 0;
+  }
+
+  return X_E_SUCCESS;
 }
 
 X_HRESULT XLiveBaseApp::XUserFindUsersUnkn58017(uint32_t buffer_ptr) {
