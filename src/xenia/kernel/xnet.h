@@ -282,6 +282,13 @@ struct X_INVITE_GET_ACCEPTED_INFO {
   X_ARGUEMENT_ENTRY invite_info;
 };
 
+struct X_GET_TASK_PROGRESS {
+  xe::be<uint32_t> overlapped_ptr;
+  xe::be<uint32_t> percent_complete_ptr;
+  xe::be<uint32_t> numerator_ptr;
+  xe::be<uint32_t> denominator_ptr;
+};
+
 // struct FILETIME {
 //   xe::be<uint32_t> dwHighDateTime;
 //   xe::be<uint32_t> dwLowDateTime;
