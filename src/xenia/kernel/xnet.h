@@ -41,6 +41,10 @@ namespace xe {
 #define X_ERROR_SESSION_FULL                                X_RESULT_FROM_WIN32(0x00155202L)
 #define X_ERROR_STORAGE_INVALID_FACILITY                    X_RESULT_FROM_WIN32(0x0015C009L)
 #define X_ERROR_STORAGE_FILE_NOT_FOUND                      X_RESULT_FROM_WIN32(0x0015C004L)
+#define X_ERROR_STRING_TOO_LONG                             X_RESULT_FROM_WIN32(0x00155207L)
+#define X_ERROR_STRING_OFFENSIVE_TEXT                       X_RESULT_FROM_WIN32(0x0015520AL)
+#define X_ERROR_STRING_NO_DEFAULT_STRING                    X_RESULT_FROM_WIN32(0x00155200L)
+#define X_ERROR_STRING_INVALID_LANGUAGE                     X_RESULT_FROM_WIN32(0x00155202L)
 
 #define X_ONLINE_E_LOGON_NOT_LOGGED_ON                      X_HRESULT_FROM_WIN32(X_ERROR_LOGON_NOT_LOGGED_ON)
 #define X_ONLINE_E_LOGON_SERVICE_TEMPORARILY_UNAVAILABLE    X_HRESULT_FROM_WIN32(X_ERROR_LOGON_SERVICE_TEMPORARILY_UNAVAILABLE)
@@ -55,6 +59,10 @@ namespace xe {
 #define X_ONLINE_E_SESSION_NOT_FOUND                        X_HRESULT_FROM_WIN32(X_ERROR_SESSION_NOT_FOUND)
 #define X_ONLINE_E_SESSION_FULL                             X_HRESULT_FROM_WIN32(X_ERROR_SESSION_FULL)
 #define X_ONLINE_E_STORAGE_INVALID_FACILITY                 static_cast<X_HRESULT>(X_ERROR_STORAGE_INVALID_FACILITY)
+#define X_ONLINE_E_STRING_TOO_LONG                          X_HRESULT_FROM_WIN32(X_ERROR_STRING_TOO_LONG)
+#define X_ONLINE_E_STRING_OFFENSIVE_TEXT                    X_HRESULT_FROM_WIN32(X_ERROR_STRING_OFFENSIVE_TEXT)
+#define X_ONLINE_E_STRING_NO_DEFAULT_STRING                 X_HRESULT_FROM_WIN32(X_ERROR_STRING_NO_DEFAULT_STRING)
+#define X_ONLINE_E_STRING_INVALID_LANGUAGE                  X_HRESULT_FROM_WIN32(X_ERROR_STRING_INVALID_LANGUAGE)
 #define X_PARTY_E_NOT_IN_PARTY                              static_cast<X_HRESULT>(0x807D0003L)
 #define X_ONLINE_E_STORAGE_FILE_NOT_FOUND                   X_HRESULT_FROM_WIN32(X_ERROR_STORAGE_FILE_NOT_FOUND)
 
@@ -323,6 +331,36 @@ struct X_INVITE_INFO {
 };
 
 #pragma pack(pop)
+
+#pragma pack(push, 1)
+
+struct STRING_VERIFY_RESPONSE {
+  xe::be<uint16_t> num_strings;
+  xe::be<uint32_t> string_result_ptr;
+};
+static_assert_size(STRING_VERIFY_RESPONSE, 0x6);
+
+#pragma pack(pop)
+
+struct Internal_Marshalled_Data {
+  uint8_t unkn1_data[22];
+  xe::be<uint32_t> start_args_ptr;  // CArgumentList*
+  uint8_t unkn2_data[14];
+  xe::be<uint32_t> results_ptr;  // STRUCT*
+  xe::be<uint32_t> results_size;
+};
+
+struct XStringVerify_Marshalled_Data {
+  xe::be<uint32_t> internal_data_ptr;
+  uint8_t unkn1_data[44];
+  xe::be<uint32_t> unkn1_ptr;
+  uint8_t unkn2_data[24];
+  xe::be<uint32_t> locale_size_ptr;
+  uint8_t unkn3_data[12];
+  xe::be<uint32_t> num_strings_ptr;
+  uint8_t unkn4_data[12];
+  xe::be<uint32_t> last_entry_ptr;
+};
 
 struct X_DATA_58024 {
   X_ARGUEMENT_ENTRY xuid;
