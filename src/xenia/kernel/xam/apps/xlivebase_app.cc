@@ -983,10 +983,8 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
         kernel_state_->memory()->TranslateVirtual<char16_t*>(
             args->server_path_ptr);
 
-    size_bytes = server_path_buf.size() * sizeof(char16_t);
-
     xe::string_util::copy_and_swap_truncating(
-        server_path_ptr, server_path_buf.data(), size_bytes);
+        server_path_ptr, server_path_buf.data(), X_ONLINE_MAX_PATHNAME_LENGTH);
   }
 
   uint32_t* server_path_length_ptr =
