@@ -41,6 +41,10 @@ namespace xe {
 #define X_ONLINE_E_SESSION_JOIN_ILLEGAL                     static_cast<X_HRESULT>(0x8015520AL)
 #define X_ONLINE_E_SESSION_NOT_FOUND                        static_cast<X_HRESULT>(0x80155200L)
 #define X_ONLINE_E_SESSION_FULL                             static_cast<X_HRESULT>(0x80155202L)
+#define X_ONLINE_STRING_TOO_LONG                            static_cast<X_HRESULT>(0x80157101L)
+#define X_ONLINE_STRING_OFFENSIVE_TEXT                      static_cast<X_HRESULT>(0x80157102L)
+#define X_ONLINE_STRING_NO_DEFAULT_STRING                   static_cast<X_HRESULT>(0x80157103L)
+#define X_ONLINE_STRING_INVALID_LANGUAGE                    static_cast<X_HRESULT>(0x80157104L)
 #define X_ONLINE_E_STORAGE_INVALID_FACILITY                 static_cast<X_HRESULT>(0x8015C009L)
 #define X_ONLINE_E_STORAGE_FILE_NOT_FOUND                   static_cast<X_HRESULT>(0x8015C004L)
 
@@ -63,6 +67,8 @@ namespace xe {
 #define X_ONLINE_PEER_SUBSCRIPTIONS                 400
 #define X_MAX_RICHPRESENCE_SIZE                     64
 #define X_ONLINE_MAX_PATHNAME_LENGTH                255
+#define X_ONLINE_MAX_XSTRING_VERIFY_LOCALE          512
+#define X_ONLINE_MAX_XSTRING_VERIFY_STRING_DATA     10
 
 #define X_CONTEXT_PRESENCE                          0x00008001
 #define X_CONTEXT_GAME_TYPE                         0x0000800A
@@ -311,6 +317,36 @@ struct X_INVITE_INFO {
 };
 
 #pragma pack(pop)
+
+#pragma pack(push, 1)
+
+struct STRING_VERIFY_RESPONSE {
+  xe::be<uint16_t> num_strings;
+  xe::be<uint32_t> string_result_ptr;
+};
+static_assert_size(STRING_VERIFY_RESPONSE, 0x6);
+
+#pragma pack(pop)
+
+struct Internal_Marshalled_Data {
+  uint8_t unkn1_data[22];
+  xe::be<uint32_t> start_args_ptr;  // CArgumentList*
+  uint8_t unkn2_data[14];
+  xe::be<uint32_t> results_ptr;  // STRUCT*
+  xe::be<uint32_t> results_size;
+};
+
+struct XStringVerify_Marshalled_Data {
+  xe::be<uint32_t> internal_data_ptr;
+  uint8_t unkn1_data[44];
+  xe::be<uint32_t> unkn1_ptr;
+  uint8_t unkn2_data[24];
+  xe::be<uint32_t> locale_size_ptr;
+  uint8_t unkn3_data[12];
+  xe::be<uint32_t> num_strings_ptr;
+  uint8_t unkn4_data[12];
+  xe::be<uint32_t> last_entry_ptr;
+};
 
 struct X_DATA_58024 {
   X_ARGUEMENT_ENTRY xuid;
