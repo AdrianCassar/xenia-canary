@@ -30,6 +30,7 @@ class XLiveBaseApp : public App {
   X_HRESULT XPresenceSubscribe(uint32_t buffer_length);
   X_HRESULT XPresenceUnsubscribe(uint32_t buffer_length);
   X_HRESULT XPresenceCreateEnumerator(uint32_t buffer_length);
+  X_HRESULT XOnlineQuerySearch(uint32_t buffer_args);
   X_HRESULT GetServiceInfo(uint32_t service_id, uint32_t service_info);
 
   X_HRESULT CreateFriendsEnumerator(uint32_t buffer_args);
