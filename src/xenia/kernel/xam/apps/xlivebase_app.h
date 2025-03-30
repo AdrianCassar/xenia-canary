@@ -49,6 +49,8 @@ class XLiveBaseApp : public App {
 
   X_HRESULT Unk58024(uint32_t buffer_length);
   X_HRESULT Unk5801C(uint32_t buffer_length);
+
+  static constexpr std::string_view xstorage_symboliclink = "XSTORAGE:";
 };
 
 }  // namespace apps
