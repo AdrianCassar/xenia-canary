@@ -43,6 +43,7 @@ namespace xe {
 #define X_ONLINE_E_SESSION_FULL                             static_cast<X_HRESULT>(0x80155202L)
 #define X_ONLINE_E_STORAGE_INVALID_FACILITY                 static_cast<X_HRESULT>(0x8015C009L)
 #define X_ONLINE_E_STORAGE_FILE_NOT_FOUND                   static_cast<X_HRESULT>(0x8015C004L)
+#define X_ONLINE_E_STORAGE_INVALID_STORAGE_PATH             static_cast<X_HRESULT>(0x8015C008L)
 
 #define X_PARTY_E_NOT_IN_PARTY                              static_cast<X_HRESULT>(0x807D0003L)
 
@@ -107,6 +108,10 @@ constexpr uint32_t XEX_PRIVILEGE_CROSSPLATFORM_SYSTEM_LINK = 14;
 constexpr uint8_t kXUserMaxStatsRows = 100;
 
 constexpr uint8_t kXUserMaxStatsAttributes = 64;
+
+constexpr uint32_t kTMSUserMaxSize = 8192;          // 8 KB
+constexpr uint32_t kTMSTitleMaxSize = 1048576 * 5;  // 5 MB
+constexpr uint32_t kTMSClipMaxSize = 1048576 * 11;  // 11 MB
 
 enum NETWORK_MODE : uint32_t { OFFLINE, LAN, XBOXLIVE };
 
