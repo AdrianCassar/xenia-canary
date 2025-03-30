@@ -917,12 +917,15 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
 
   switch (args->storage_location) {
     case X_STORAGE_FACILITY::FACILITY_GAME_CLIP: {
-      backend_server_path_str =
-          fmt::format("{}/title/{:08X}/storage/clips/{}", backend_domain_prefix,
+      const std::string path =
+          fmt::format("title/{:08X}/storage/clips/{}",
                       kernel_state()->title_id(), filename_str);
 
-      symlink_path = fmt::format("XSTORAGE:title\\{:08X}\\storage\\clips\\",
-                                 kernel_state()->title_id());
+      backend_server_path_str =
+          fmt::format("{}/{}", backend_domain_prefix, path);
+
+      symlink_path = fmt::format("{}{}", xstorage_symboliclink, path);
+      symlink_path = utf8::fix_guest_path_separators(symlink_path);
 
       xe::be<uint32_t> leaderboard_id = 0;
 
@@ -939,23 +942,27 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
       storage_type = "Game Clip";
     } break;
     case X_STORAGE_FACILITY::FACILITY_PER_TITLE: {
-      backend_server_path_str =
-          fmt::format("{}/title/{:08X}/storage/{}", backend_domain_prefix,
-                      kernel_state()->title_id(), filename_str);
+      const std::string path = fmt::format(
+          "title/{:08X}/storage/{}", kernel_state()->title_id(), filename_str);
 
-      symlink_path = fmt::format("XSTORAGE:title\\{:08X}\\storage\\",
-                                 kernel_state()->title_id());
+      backend_server_path_str =
+          fmt::format("{}/{}", backend_domain_prefix, path);
+
+      symlink_path = fmt::format("{}{}", xstorage_symboliclink, path);
+      symlink_path = utf8::fix_guest_path_separators(symlink_path);
 
       storage_type = "Per Title";
     } break;
     case X_STORAGE_FACILITY::FACILITY_PER_USER_TITLE: {
-      backend_server_path_str = fmt::format(
-          "{}/user/{:016X}/title/{:08X}/storage/{}", backend_domain_prefix,
-          xuid, kernel_state()->title_id(), filename_str);
+      const std::string path =
+          fmt::format("user/{:016X}/title/{:08X}/storage/{}", xuid,
+                      kernel_state()->title_id(), filename_str);
 
-      symlink_path =
-          fmt::format("XSTORAGE:user\\{:016X}\\title\\{:08X}\\storage\\", xuid,
-                      kernel_state()->title_id());
+      backend_server_path_str =
+          fmt::format("{}/{}", backend_domain_prefix, path);
+
+      symlink_path = fmt::format("{}{}", xstorage_symboliclink, path);
+      symlink_path = utf8::fix_guest_path_separators(symlink_path);
 
       storage_type = "Per User Title";
     } break;
@@ -1017,6 +1024,8 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
   }
 
   if (!route_backend || result) {
+    symlink_path = std::filesystem::path(symlink_path).parent_path().string();
+
     // Check if entry exists
     vfs::Entry* entry =
         kernel_state()->file_system()->ResolvePath(symlink_path);
@@ -1024,7 +1033,8 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
     if (!entry) {
       // Prepare path for splitting
       std::string starting_dir = symlink_path;
-      std::replace(starting_dir.begin(), starting_dir.end(), ':', '\\');
+      std::replace(starting_dir.begin(), starting_dir.end(), ':',
+                   kGuestPathSeparator);
 
       const auto path_parts = xe::utf8::split_path(starting_dir);
 
@@ -1034,25 +1044,27 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
 
       // XSTORAGE entry
       vfs::Entry* xstorage_entry =
-          kernel_state()->file_system()->ResolvePath("XSTORAGE:");
+          kernel_state()->file_system()->ResolvePath(xstorage_symboliclink);
 
-      // Create root entry
-      vfs::Entry* dir_entry = xstorage_entry->CreateEntry(
-          starting_dir, xe::vfs::FileAttributeFlags::kFileAttributeDirectory);
+      if (xstorage_entry) {
+        // Create root entry
+        vfs::Entry* dir_entry = xstorage_entry->CreateEntry(
+            starting_dir, xe::vfs::FileAttributeFlags::kFileAttributeDirectory);
 
-      // Create child entries
-      vfs::Entry* entries = kernel_state()->file_system()->CreatePath(
-          symlink_path, xe::vfs::FileAttributeFlags::kFileAttributeDirectory);
+        // Create child entries
+        vfs::Entry* entries = kernel_state()->file_system()->CreatePath(
+            symlink_path, xe::vfs::FileAttributeFlags::kFileAttributeDirectory);
 
-      // Update entry
-      entry = kernel_state()->file_system()->ResolvePath(symlink_path);
+        // Update entry
+        entry = kernel_state()->file_system()->ResolvePath(symlink_path);
 
-      if (entry) {
-        result = X_E_SUCCESS;
-        XELOGI("{}: Created Path: {}", __func__, symlink_path);
-      } else {
-        result = X_E_FAIL;
-        XELOGW("{}: Failed to create path: {}", __func__, symlink_path);
+        if (entry) {
+          result = X_E_SUCCESS;
+          XELOGI("{}: Created Path: {}", __func__, symlink_path);
+        } else {
+          result = X_E_FAIL;
+          XELOGW("{}: Failed to create path: {}", __func__, symlink_path);
+        }
       }
     } else {
       result = X_E_SUCCESS;
@@ -1068,20 +1080,17 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
 
 std::string XLiveBaseApp::ConvertServerPathToXStorageSymlink(
     std::string server_path) {
-  std::filesystem::path symlink_path = server_path;
+  std::string symlink_path = server_path;
 
   std::string backend_domain_prefix =
       fmt::format("{}xstorage/", XLiveAPI::GetApiAddress());
 
-  std::string location =
-      symlink_path.string().substr(backend_domain_prefix.size());
+  std::string location = symlink_path.substr(backend_domain_prefix.size());
 
-  symlink_path = std::format("XSTORAGE:{}", location);
+  symlink_path = std::format("{}{}", xstorage_symboliclink, location);
+  symlink_path = utf8::fix_guest_path_separators(symlink_path);
 
-  // Convert to OS path
-  symlink_path = symlink_path.make_preferred();
-
-  return symlink_path.string();
+  return symlink_path;
 }
 
 X_STORAGE_FACILITY XLiveBaseApp::GetStorageFacilityTypeFromServerPath(
