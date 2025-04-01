@@ -16,6 +16,7 @@
 #include "xenia/kernel/xam/xam_content_device.h"
 #include "xenia/kernel/xam/xam_module.h"
 #include "xenia/kernel/xam/xam_private.h"
+#include "xenia/kernel/xboxkrnl/xboxkrnl_hal.h"
 #include "xenia/kernel/xboxkrnl/xboxkrnl_module.h"
 #include "xenia/kernel/xboxkrnl/xboxkrnl_threading.h"
 #include "xenia/kernel/xenumerator.h"
@@ -621,6 +622,9 @@ dword_result_t XamSwapDisc_entry(
   return X_ERROR_SUCCESS;
 }
 DECLARE_XAM_EXPORT1(XamSwapDisc, kContent, kSketchy);
+
+dword_result_t XamLoaderGetDvdTrayState_entry() { return TrayState_; }
+DECLARE_XAM_EXPORT1(XamLoaderGetDvdTrayState, kNone, kImplemented);
 
 dword_result_t XamLoaderGetMediaInfoEx_entry(dword_t unk1, dword_t unk2,
                                              lpdword_t unk3) {

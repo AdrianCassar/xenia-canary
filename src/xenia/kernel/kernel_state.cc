@@ -23,6 +23,7 @@
 #include "xenia/kernel/util/shim_utils.h"
 #include "xenia/kernel/xam/xam_module.h"
 #include "xenia/kernel/xam/xdbf/xdbf_io.h"
+#include "xenia/kernel/xboxkrnl/xboxkrnl_hal.h"
 #include "xenia/kernel/xboxkrnl/xboxkrnl_memory.h"
 #include "xenia/kernel/xboxkrnl/xboxkrnl_module.h"
 #include "xenia/kernel/xboxkrnl/xboxkrnl_ob.h"
@@ -894,6 +895,9 @@ void KernelState::RegisterNotifyListener(XNotifyListener* listener) {
     // XN_SYS_SIGNINCHANGED x2
     listener->EnqueueNotification(kXNotificationSystemSignInChanged, 1);
     listener->EnqueueNotification(kXNotificationSystemSignInChanged, 1);
+
+    listener->EnqueueNotification(kXNotificationDvdDriveTrayStateChanged,
+                                  TrayState::Play_Game);
   }
 }
 
