@@ -54,12 +54,8 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
   switch (message) {
     case 0x00050002: {
       // Current session must have PRESENCE flag.
-
       XELOGD("XInviteSend({:08X}, {:08X})", buffer_ptr, buffer_length);
-      uint32_t* marshalled_object_ptr =
-          memory_->TranslateVirtual<uint32_t*>(buffer_ptr);
-
-      return X_E_SUCCESS;
+      return GenericMarshalled(buffer_ptr);
     }
     case 0x00058003: {
       // Called on startup of dashboard (netplay build)
@@ -75,7 +71,7 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
       // Called on startup of blades dashboard v4532 to v4552
       XELOGD("XLiveBaseUnk50094({:08x}, {:08x}) unimplemented", buffer_ptr,
              buffer_length);
-      return X_E_FAIL;
+      return GenericMarshalled(buffer_ptr);
     }
     case 0x00050008: {
       // Required to be successful for 534507D4
@@ -151,7 +147,7 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
       // Fixes Xbox Live error for 454107DB
       XELOGD("XLiveBaseUnk50079({:08X}, {:08X}) unimplemented", buffer_ptr,
              buffer_length);
-      return X_E_SUCCESS;
+      return GenericMarshalled(buffer_ptr);
     }
     case 0x0005008B: {
       XELOGD("XLiveBaseUnk5008B({:08X}, {:08X}) Stubbed", buffer_ptr,
