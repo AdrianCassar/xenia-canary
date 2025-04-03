@@ -2135,6 +2135,10 @@ bool xeDrawAddFriend(ui::ImGuiDrawer* imgui_drawer, UserProfile* profile,
 bool xeDrawFriendsContent(ui::ImGuiDrawer* imgui_drawer, UserProfile* profile,
                           FriendsContentArgs& args,
                           std::vector<FriendPresenceObjectJSON>* presences) {
+  if (!profile || !presences) {
+    return false;
+  }
+
   uint32_t user_index =
       kernel_state()->xam_state()->GetUserIndexAssignedToProfileFromXUID(
           profile->GetLogonXUID());
