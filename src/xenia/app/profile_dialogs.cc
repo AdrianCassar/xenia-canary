@@ -408,6 +408,7 @@ void ManagerDialog::OnDraw(ImGuiIO& io) {
 
     ImGui::SameLine();
 
+    ImGui::BeginDisabled(is_profile_signed_in);
     if (ImGui::Button("Refresh Presence", btn_size)) {
       emulator_window_->emulator()->kernel_state()->BroadcastNotification(
           kXNotificationFriendsPresenceChanged, user_index);
@@ -420,6 +421,7 @@ void ManagerDialog::OnDraw(ImGuiIO& io) {
                 imgui_drawer(), "Refreshed Presence", "Success", 0);
           });
     }
+    ImGui::EndDisabled();
 
     ImGui::SetWindowFontScale(1.0f);
 
