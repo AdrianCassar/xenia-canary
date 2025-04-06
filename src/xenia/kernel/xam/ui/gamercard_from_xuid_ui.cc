@@ -38,6 +38,8 @@ GamercardFromXUIDUI::GamercardFromXUIDUI(xe::ui::ImGuiDrawer* imgui_drawer,
       presence_.RichPresence(
           xe::to_utf16(xe::string_util::trim(profile_->GetPresenceString())));
 
+      presence_.XUID(profile_->GetOnlineXUID());
+
       presence_.TitleID(fmt::format("{:08X}", kernel_state()->title_id()));
     } else if (!is_self) {
       // Cached friend presence
