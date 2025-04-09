@@ -831,7 +831,6 @@ dword_result_t NetDll_XNetInAddrToXnAddr_entry(dword_t caller, dword_t in_addr,
   }
 
   std::memcpy(xn_addr->abEnet, mac.raw(), sizeof(MacAddress));
-  std::memcpy(xn_addr->abOnline, mac.raw(), sizeof(MacAddress));
 
   if (xid_ptr != nullptr) {
     XNKID* sessionId_ptr = kernel_memory()->TranslateVirtual<XNKID*>(xid_ptr);

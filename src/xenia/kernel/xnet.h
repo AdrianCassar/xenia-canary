@@ -173,14 +173,31 @@ struct XNKEY {
   uint8_t ab[16];
 };
 
+#pragma pack(push, 4)
+
+// clang-format off
+
+// Security Gateway Address
+struct SGADDR {
+  in_addr ina;                                  // IP address of the SG for the client
+  xe::be<uint32_t> security_parameter_index;    // Pseudo-random identifier assigned by the SG
+  xe::be<uint64_t> xbox_id;                     // Unique identifier of client machine account - maybe XUID?
+  uint8_t reserved[4];
+};
+
+// clang-format on
+
+#pragma pack(pop)
+
 struct XNADDR {
   // FYI: IN_ADDR should be in network-byte order.
   in_addr ina;        // IP address (zero if not static/DHCP) - Local IP
   in_addr inaOnline;  // Online IP address (zero if not online) - Public IP
   xe::be<uint16_t> wPortOnline;  // Online port
   uint8_t abEnet[6];             // Ethernet MAC address
-  uint8_t abOnline[20];          // Online identification
+  SGADDR abOnline;               // Online identification
 };
+static_assert_size(XNADDR, 0x24);
 
 struct XSESSION_INFO {
   XNKID sessionID;
@@ -326,14 +343,6 @@ struct X_GET_TASK_PROGRESS {
 };
 
 #pragma pack(push, 4)
-
-// Security Gateway Address
-struct SGADDR {
-  in_addr ina_security_gateway;
-  xe::be<uint32_t> security_parameter_index;
-  xe::be<uint64_t> xbox_id;
-  uint8_t reserved[4];
-};
 
 struct X_ONLINE_PRESENCE {
   xe::be<uint64_t> xuid;
