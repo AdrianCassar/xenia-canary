@@ -820,8 +820,6 @@ X_HRESULT XLiveBaseApp::XInviteGetAcceptedInfo(uint32_t buffer_length) {
 
   memcpy(&invite_info->host_info.hostAddress.abEnet, mac.raw(),
          sizeof(MacAddress));
-  memcpy(&invite_info->host_info.hostAddress.abOnline, mac.raw(),
-         sizeof(MacAddress));
 
   invite_info->host_info.hostAddress.wPortOnline = session->Port();
 
