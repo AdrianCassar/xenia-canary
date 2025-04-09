@@ -93,7 +93,6 @@ void XLiveAPI::IpGetConsoleXnAddr(XNADDR* XnAddr_ptr) {
   }
 
   memcpy(XnAddr_ptr->abEnet, mac_address_->raw(), sizeof(MacAddress));
-  memcpy(XnAddr_ptr->abOnline, mac_address_->raw(), sizeof(MacAddress));
 }
 
 const uint64_t XLiveAPI::GetMachineId(const uint64_t mac_address) {
