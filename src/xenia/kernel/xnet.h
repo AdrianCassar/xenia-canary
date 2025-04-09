@@ -13,6 +13,7 @@
 #include <random>
 
 #include "xenia/base/byte_order.h"
+#include "xenia/kernel/util/xfiletime.h"
 
 #ifdef XE_PLATFORM_WIN32
 #define _WINSOCK_DEPRECATED_NO_WARNINGS  // inet_addr
@@ -324,11 +325,6 @@ struct X_GET_TASK_PROGRESS {
   xe::be<uint32_t> denominator_ptr;
 };
 
-// struct FILETIME {
-//   xe::be<uint32_t> dwHighDateTime;
-//   xe::be<uint32_t> dwLowDateTime;
-// };
-
 #pragma pack(push, 4)
 
 // Security Gateway Address
@@ -344,7 +340,7 @@ struct X_ONLINE_PRESENCE {
   xe::be<uint32_t> state;
   XNKID session_id;
   xe::be<uint32_t> title_id;
-  xe::be<uint64_t> state_change_time;  // filetime
+  X_FILETIME state_change_time;
   xe::be<uint32_t> cchRichPresence;
   xe::be<char16_t> wszRichPresence[64];
 };
@@ -356,9 +352,9 @@ struct X_ONLINE_FRIEND {
   xe::be<uint32_t> state;
   XNKID session_id;
   xe::be<uint32_t> title_id;
-  xe::be<uint64_t> ftUserTime;
+  X_FILETIME ftUserTime;
   XNKID xnkidInvite;
-  xe::be<uint64_t> gameinviteTime;
+  X_FILETIME gameinviteTime;
   xe::be<uint32_t> cchRichPresence;
   xe::be<char16_t> wszRichPresence[X_MAX_RICHPRESENCE_SIZE];
 };
@@ -379,7 +375,7 @@ struct X_INVITE_INFO {
 struct X_STORAGE_DOWNLOAD_TO_MEMORY_RESULTS {
   xe::be<uint32_t> bytes_total;
   xe::be<uint64_t> xuid_owner;
-  xe::be<uint64_t> ft_created;
+  X_FILETIME ft_created;
 };
 
 struct X_STORAGE_FILE_INFO {
@@ -391,8 +387,8 @@ struct X_STORAGE_FILE_INFO {
   xe::be<uint32_t> content_type;
   xe::be<uint32_t> storage_size;
   xe::be<uint32_t> installed_size;
-  xe::be<uint64_t> ft_created;
-  xe::be<uint64_t> ft_last_modified;
+  X_FILETIME ft_created;
+  X_FILETIME ft_last_modified;
   xe::be<uint16_t> attributes_size;
   xe::be<uint16_t> path_name;
   xe::be<uint32_t> path_name_ptr;
