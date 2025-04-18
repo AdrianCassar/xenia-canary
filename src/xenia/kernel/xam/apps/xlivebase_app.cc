@@ -1580,7 +1580,8 @@ X_HRESULT XLiveBaseApp::XStorageDownloadToMemory(uint32_t buffer_ptr) {
       kernel_state()->memory()->TranslateVirtual<uint8_t*>(
           download_buffer_address);
 
-  std::fill_n(download_buffer_ptr, buffer_size, 0);
+  // 41560845 - Access Violation
+  // std::fill_n(download_buffer_ptr, buffer_size, 0);
 
   std::span<uint8_t> download_buffer =
       std::span<uint8_t>(download_buffer_ptr, buffer_size);
