@@ -2215,7 +2215,7 @@ X_HRESULT XLiveBaseApp::XUserFindUsers(uint32_t buffer_ptr) {
       strcpy(local_user.gamertag, user_profile->name().c_str());
 
       resolved_users.push_back(local_user);
-    } else {
+    } else if (xuid != 0) {
       find_users.push_back(user);
     }
   }
