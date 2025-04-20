@@ -1908,9 +1908,8 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
 
   switch (args->storage_location) {
     case X_STORAGE_FACILITY::FACILITY_GAME_CLIP: {
-      const std::string path =
-          fmt::format("title/{:08X}/storage/clips/{}",
-                      kernel_state()->title_id(), filename_str);
+      const std::string path = fmt::format(
+          "title/{:08X}/clips/{}", kernel_state()->title_id(), filename_str);
 
       backend_server_path_str =
           fmt::format("{}/{}", backend_domain_prefix, path);
@@ -1934,7 +1933,7 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
     } break;
     case X_STORAGE_FACILITY::FACILITY_PER_TITLE: {
       const std::string path = fmt::format(
-          "title/{:08X}/storage/{}", kernel_state()->title_id(), filename_str);
+          "title/{:08X}/{}", kernel_state()->title_id(), filename_str);
 
       backend_server_path_str =
           fmt::format("{}/{}", backend_domain_prefix, path);
@@ -1946,7 +1945,7 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
     } break;
     case X_STORAGE_FACILITY::FACILITY_PER_USER_TITLE: {
       const std::string path =
-          fmt::format("user/{:016X}/title/{:08X}/storage/{}", xuid,
+          fmt::format("user/{:016X}/title/{:08X}/{}", xuid,
                       kernel_state()->title_id(), filename_str);
 
       backend_server_path_str =
@@ -2306,8 +2305,7 @@ std::string XLiveBaseApp::ConvertXStorageSymlinkToServerPath(
 
 X_STORAGE_FACILITY XLiveBaseApp::GetStorageFacilityTypeFromServerPath(
     std::string server_path) {
-  std::string title_facility =
-      R"(title(/|\\)[0-9a-fA-F]{8}(/|\\)storage(/|\\))";
+  std::string title_facility = R"(title(/|\\)[0-9a-fA-F]{8}(/|\\))";
   std::string clips_facility = R"(clips(/|\\))";
   std::string user_facility = R"(user(/|\\)[0-9a-fA-F]{16}(/|\\))";
 
