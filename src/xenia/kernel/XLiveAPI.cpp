@@ -47,14 +47,14 @@ DEFINE_string(friends_xuids, "", "Comma delimited list of XUIDs. (Max 100)",
               "Live");
 
 DEFINE_bool(xstorage_backend, true,
-            "Switch between local and backend XStorage usage, otherwise "
-            "fallback to local if backend unavailable.",
+            "Request XStorage content from backend and fallback locally, "
+            "otherwise only use local content.",
             "Live");
 
-DEFINE_bool(xstorage_user_data_backend, false,
-            "Route user data storage facility locally, otherwise use backend "
-            "if enabled and available.",
-            "Live");
+DEFINE_bool(
+    xstorage_user_data_backend, false,
+    "Store user data on backend (not recommended), otherwise fallback locally.",
+    "Live");
 
 DECLARE_string(upnp_root);
 
