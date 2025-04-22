@@ -353,6 +353,16 @@ void ProfileManager::Logout(const uint8_t user_index, bool notify) {
   UpdateConfig(0, user_index);
 }
 
+void ProfileManager::LogoutMultiple(
+    const std::map<uint8_t, uint64_t>& profiles) {
+  for (auto& [slot, xuid] : profiles) {
+    Logout(slot, false);
+  }
+
+  kernel_state_->BroadcastNotification(kXNotificationSystemSignInChanged,
+                                       GetUsedUserSlots().to_ulong());
+}
+
 void ProfileManager::LoginMultiple(
     const std::map<uint8_t, uint64_t>& profiles) {
   int slots_mask = 0;

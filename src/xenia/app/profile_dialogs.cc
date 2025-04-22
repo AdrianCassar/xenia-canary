@@ -371,7 +371,7 @@ void ManagerDialog::OnDraw(ImGuiIO& io) {
     ImGui::OpenPopup("Manager");
 
     if (kernel::XLiveAPI::IsConnectedToServer()) {
-      args.filter_offline = true;
+      friends_args.filter_offline = true;
     }
 
     sessions_args.filter_own = true;
@@ -403,7 +403,7 @@ void ManagerDialog::OnDraw(ImGuiIO& io) {
 
     ImGui::BeginDisabled(is_profile_signed_in);
     if (ImGui::Button("Friends", btn_size)) {
-      args.friends_open = true;
+      friends_args.friends_open = true;
       ImGui::OpenPopup("Friends");
     }
     ImGui::EndDisabled();
@@ -417,6 +417,27 @@ void ManagerDialog::OnDraw(ImGuiIO& io) {
       ImGui::OpenPopup("Sessions");
     }
     ImGui::EndDisabled();
+
+    if (kernel::XLiveAPI::xuid_mismatch) {
+      ImVec2 button_pos = ImGui::GetCursorScreenPos();
+      ImVec2 button_end =
+          ImVec2(button_pos.x + btn_size.x, button_pos.y + btn_size.y);
+
+      ImDrawList* draw_list = ImGui::GetWindowDrawList();
+
+      draw_list->AddRect(button_pos, button_end, IM_COL32(255, 0, 0, 255), 0.0f,
+                         0, 3.0f);
+    }
+
+    if (ImGui::Button("Delete Netplay Profiles", btn_size)) {
+      ImGui::OpenPopup("Delete Profiles");
+    }
+
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+      ImGui::SetTooltip("Delete profiles to fix XUID mismatch error.");
+    }
+
+    ImGui::SameLine();
 
     ImGui::BeginDisabled(is_profile_signed_in);
     if (ImGui::Button("Refresh Presence", btn_size)) {
@@ -435,9 +456,9 @@ void ManagerDialog::OnDraw(ImGuiIO& io) {
 
     ImGui::SetWindowFontScale(1.0f);
 
-    if (!args.friends_open) {
-      args.first_draw = false;
-      args.refersh_presence_sync = true;
+    if (!friends_args.friends_open) {
+      friends_args.first_draw = false;
+      friends_args.refersh_presence_sync = true;
       presences = {};
     }
 
@@ -447,9 +468,84 @@ void ManagerDialog::OnDraw(ImGuiIO& io) {
       sessions.clear();
     }
 
-    xeDrawFriendsContent(imgui_drawer(), profile, args, &presences);
+    xeDrawFriendsContent(imgui_drawer(), profile, friends_args, &presences);
 
     xeDrawSessionsContent(imgui_drawer(), profile, sessions_args, &sessions);
+
+    if (!deletion_args.deleted_profiles_open) {
+      deletion_args.first_draw = false;
+      deleted_profiles = {};
+    }
+
+    bool open_deleted_profiles = false;
+
+    float btn_height = 25;
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSizeConstraints(ImVec2(225, -1), ImVec2(225, -1));
+    if (ImGui::BeginPopupModal("Delete Profiles", nullptr,
+                               ImGuiWindowFlags_AlwaysAutoResize)) {
+      float btn_width = (ImGui::GetContentRegionAvail().x * 0.5f) -
+                        (ImGui::GetStyle().ItemSpacing.x * 0.5f);
+      ImVec2 btn_size = ImVec2(btn_width, btn_height);
+
+      const std::string desc = "Are you sure?";
+      const std::string desc2 = "You will be signed out.";
+
+      ImVec2 desc_size = ImGui::CalcTextSize(desc.c_str());
+      ImVec2 desc2_size = ImGui::CalcTextSize(desc2.c_str());
+
+      ImGui::SetCursorPosX((ImGui::GetWindowWidth() - desc_size.x) * 0.5f);
+      ImGui::Text(desc.c_str());
+
+      if (!is_profile_signed_in) {
+        ImGui::Spacing();
+
+        ImGui::SetCursorPosX((ImGui::GetWindowWidth() - desc2_size.x) * 0.5f);
+        ImGui::Text(desc2.c_str());
+      }
+
+      ImGui::Separator();
+
+      if (ImGui::Button("Yes", btn_size)) {
+        if (!is_profile_signed_in) {
+          std::map<uint8_t, uint64_t> xuids;
+
+          kernel::xam::XamState* xam_state =
+              emulator_window_->emulator()->kernel_state()->xam_state();
+
+          for (uint32_t i = 0; i < XUserMaxUserCount; i++) {
+            if (xam_state->IsUserSignedIn(i)) {
+              xuids[i] = xam_state->GetUserProfile(i)->xuid();
+            }
+          }
+
+          xam_state->profile_manager()->LogoutMultiple(xuids);
+        }
+
+        deleted_profiles = kernel::XLiveAPI::DeleteMyProfiles();
+
+        open_deleted_profiles = true;
+
+        ImGui::CloseCurrentPopup();
+      }
+
+      ImGui::SameLine();
+
+      if (ImGui::Button("Cancel", btn_size)) {
+        ImGui::CloseCurrentPopup();
+      }
+
+      ImGui::EndPopup();
+    }
+
+    if (open_deleted_profiles) {
+      kernel::XLiveAPI::xuid_mismatch = false;
+
+      deletion_args.deleted_profiles_open = true;
+      ImGui::OpenPopup("Deleted Profiles");
+    }
+
+    xe::kernel::xam::xeDrawMyDeletedProfiles(imgui_drawer(), deletion_args, &deleted_profiles);
 
     ImGui::EndPopup();
   }
