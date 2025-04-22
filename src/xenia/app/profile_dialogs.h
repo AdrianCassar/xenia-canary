@@ -46,6 +46,10 @@ struct SessionsContentArgs {
   bool refersh_sessions;
   bool refersh_sessions_sync;
 };
+struct MyDeletedProfilesArgs {
+  bool first_draw;
+  bool deleted_profiles_open;
+};
 }  // namespace xam
 }  // namespace kernel
 namespace app {
@@ -111,10 +115,12 @@ class ManagerDialog final : public ui::ImGuiDialog {
   bool manager_opened_ = false;
   uint64_t selected_xuid_ = 0;
   uint64_t removed_xuid_ = 0;
-  xe::kernel::xam::FriendsContentArgs args = {};
+  xe::kernel::xam::FriendsContentArgs friends_args = {};
   xe::kernel::xam::SessionsContentArgs sessions_args = {};
+  xe::kernel::xam::MyDeletedProfilesArgs deletion_args = {};
   std::vector<xe::kernel::FriendPresenceObjectJSON> presences;
   std::vector<std::unique_ptr<xe::kernel::SessionObjectJSON>> sessions;
+  std::map<uint64_t, std::string> deleted_profiles;
   EmulatorWindow* emulator_window_;
 };
 
