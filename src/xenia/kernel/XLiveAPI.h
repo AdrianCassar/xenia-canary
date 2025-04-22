@@ -21,6 +21,7 @@
 #include "xenia/kernel/xnet.h"
 
 #include "xenia/kernel/json/arbitration_object_json.h"
+#include "xenia/kernel/json/delete_my_profiles_json.h"
 #include "xenia/kernel/json/find_users_object_json.h"
 #include "xenia/kernel/json/friend_presence_object_json.h"
 #include "xenia/kernel/json/http_response_object_json.h"
@@ -91,6 +92,8 @@ class XLiveAPI {
   static const uint64_t GetLocalMachineId();
 
   static std::unique_ptr<HTTPResponseObjectJSON> RegisterPlayer();
+
+  static const std::map<uint64_t, std::string> DeleteMyProfiles();
 
   static std::unique_ptr<PlayerObjectJSON> FindPlayer(std::string ip);
 

@@ -731,6 +731,20 @@ std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::RegisterPlayer() {
   return response;
 }
 
+const std::map<uint64_t, std::string> XLiveAPI::DeleteMyProfiles() {
+  std::unique_ptr<HTTPResponseObjectJSON> response =
+      Get("players/deletemyprofiles");
+
+  if (!response->RawResponse().response) {
+    return {};
+  }
+
+  const auto deleted_profiles =
+      response->Deserialize<DeleteMyProfilesObjectJSON>();
+
+  return deleted_profiles->GetDeletedProfiles();
+}
+
 // Request clients player info via IP address
 // This should only be called once on startup no need to request our information
 // more than once.
@@ -1109,7 +1123,7 @@ void XLiveAPI::DeleteAllSessionsByMac() {
 }
 
 void XLiveAPI::DeleteAllSessions() {
-  const std::string endpoint = fmt::format("DeleteSessions");
+  const std::string endpoint = fmt::format("DeleteSessions", 3);
 
   std::unique_ptr<HTTPResponseObjectJSON> response = Delete(endpoint);
 

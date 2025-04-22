@@ -46,6 +46,11 @@ struct SessionsContentArgs {
   bool refersh_sessions_sync;
 };
 
+struct MyDeletedProfilesArgs {
+  bool first_draw;
+  bool deleted_profiles_open;
+};
+
 }  // namespace ui
 }  // namespace xam
 }  // namespace kernel
