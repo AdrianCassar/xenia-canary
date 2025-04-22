@@ -1740,6 +1740,54 @@ bool xeDrawSessionsContent(
   return true;
 }
 
+bool xeDrawMyDeletedProfiles(
+    xe::ui::ImGuiDrawer* imgui_drawer, ui::MyDeletedProfilesArgs& args,
+    std::map<uint64_t, std::string>* deleted_profiles) {
+  if (!deleted_profiles) {
+    return false;
+  }
+
+  ImGuiViewport* viewport = ImGui::GetMainViewport();
+  ImVec2 center = viewport->GetCenter();
+
+  float btn_height = 25;
+  ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+  ImGui::SetNextWindowSizeConstraints(ImVec2(250, 115), ImVec2(250, 415));
+  if (ImGui::BeginPopupModal("Deleted Profiles", &args.deleted_profiles_open,
+                             ImGuiWindowFlags_AlwaysAutoResize)) {
+    float btn_width = (ImGui::GetContentRegionAvail().x * 0.5f) -
+                      (ImGui::GetStyle().ItemSpacing.x * 0.5f);
+    ImVec2 btn_size = ImVec2(btn_width, btn_height);
+
+    const std::string desc =
+        fmt::format("Deleted Profiles: {}", deleted_profiles->size());
+
+    ImVec2 desc_size = ImGui::CalcTextSize(desc.c_str());
+
+    ImGui::SetCursorPosX((ImGui::GetWindowWidth() - desc_size.x) * 0.5f);
+    ImGui::Text(desc.c_str());
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    for (const auto& [xuid, gamertag] : *deleted_profiles) {
+      ImGui::Spacing();
+      ImGui::Spacing();
+
+      std::string xuid_str = fmt::format("XUID: {:016X}", xuid);
+      std::string gamertag_str = fmt::format("Gamertag: {}", gamertag);
+
+      ImGui::Text(xuid_str.c_str());
+      ImGui::Text(gamertag_str.c_str());
+
+      ImGui::Separator();
+    }
+
+    ImGui::EndPopup();
+  }
+
+  return true;
+}
+
 X_RESULT xeXamShowSigninUI(uint32_t user_index, uint32_t users_needed,
                            uint32_t flags) {
   // Mask values vary. Probably matching user types? Local/remote?

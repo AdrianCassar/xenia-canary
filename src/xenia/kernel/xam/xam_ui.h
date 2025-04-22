@@ -143,6 +143,10 @@ bool xeDrawSessionContent(xe::ui::ImGuiDrawer* imgui_drawer,
                           UserProfile* profile,
                           std::unique_ptr<SessionObjectJSON>& session);
 
+bool xeDrawMyDeletedProfiles(xe::ui::ImGuiDrawer* imgui_drawer,
+                             ui::MyDeletedProfilesArgs& args,
+                             std::map<uint64_t, std::string>* deleted_profiles);
+
 }  // namespace xam
 }  // namespace kernel
 }  // namespace xe
