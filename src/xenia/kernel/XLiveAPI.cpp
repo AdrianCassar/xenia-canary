@@ -840,6 +840,47 @@ void XLiveAPI::SessionModify(uint64_t sessionId, XSessionModify* data) {
   XELOGI("Send Modify data.");
 }
 
+std::vector<std::unique_ptr<SessionObjectJSON>> XLiveAPI::GetTitleSessions(
+    uint32_t title_id) {
+  if (!title_id) {
+    title_id = kernel_state()->title_id();
+  }
+
+  std::string endpoint = fmt::format("title/{:08X}/sessions/search", title_id);
+
+  std::unique_ptr<HTTPResponseObjectJSON> response = Get(endpoint);
+
+  std::vector<std::unique_ptr<SessionObjectJSON>> sessions;
+
+  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_OK) {
+    XELOGE("GetTitleSessions error message: {}", response->Message());
+    assert_always();
+
+    return sessions;
+  }
+
+  Document doc;
+  doc.SetObject();
+
+  doc.Swap(doc.Parse(response->RawResponse().response));
+
+  const Value& sessionsJsonArray = doc.GetArray();
+
+  for (Value::ConstValueIterator object_ptr = sessionsJsonArray.Begin();
+       object_ptr != sessionsJsonArray.End(); ++object_ptr) {
+    std::unique_ptr<SessionObjectJSON> session =
+        std::make_unique<SessionObjectJSON>();
+    bool valid = session->Deserialize(object_ptr->GetObj());
+    assert_true(valid);
+
+    sessions.push_back(std::move(session));
+  }
+
+  XELOGI("GetTitleSessions found {} sessions.", sessions.size());
+
+  return sessions;
+}
+
 const std::vector<std::unique_ptr<SessionObjectJSON>> XLiveAPI::SessionSearch(
     XSessionSearch* data, uint32_t num_users) {
   std::string endpoint =
@@ -871,8 +912,6 @@ const std::vector<std::unique_ptr<SessionObjectJSON>> XLiveAPI::SessionSearch(
   doc.Swap(doc.Parse(response->RawResponse().response));
 
   const Value& sessionsJsonArray = doc.GetArray();
-
-  unsigned int i = 0;
 
   for (Value::ConstValueIterator object_ptr = sessionsJsonArray.Begin();
        object_ptr != sessionsJsonArray.End(); ++object_ptr) {
