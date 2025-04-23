@@ -14,6 +14,7 @@
 #include "xenia/hid/input_system.h"
 #include "xenia/kernel/XLiveAPI.h"
 #include "xenia/kernel/kernel_state.h"
+#include "xenia/kernel/user_module.h"
 #include "xenia/kernel/util/shim_utils.h"
 #include "xenia/kernel/xam/xam_content_device.h"
 #include "xenia/kernel/xam/xam_private.h"
@@ -23,6 +24,7 @@
 #include "xenia/ui/imgui_guest_notification.h"
 #include "xenia/ui/imgui_host_notification.h"
 
+#include "xenia/kernel/xam/ui/community_sessions_ui.h"
 #include "xenia/kernel/xam/ui/create_profile_ui.h"
 #include "xenia/kernel/xam/ui/friends_ui.h"
 #include "xenia/kernel/xam/ui/game_achievements_ui.h"
@@ -599,11 +601,6 @@ dword_result_t XamShowPartyUI_entry(unknown_t r3, unknown_t r4) {
   return X_ERROR_FUNCTION_FAILED;
 }
 DECLARE_XAM_EXPORT1(XamShowPartyUI, kNone, kStub);
-
-dword_result_t XamShowCommunitySessionsUI_entry(unknown_t r3, unknown_t r4) {
-  return X_ERROR_FUNCTION_FAILED;
-}
-DECLARE_XAM_EXPORT1(XamShowCommunitySessionsUI, kNone, kStub);
 
 // this is supposed to do a lot more, calls another function that triggers some
 // cbs
@@ -1555,6 +1552,194 @@ bool xeDrawFriendsContent(xe::ui::ImGuiDrawer* imgui_drawer,
   return true;
 }
 
+bool xeDrawSessionContent(xe::ui::ImGuiDrawer* imgui_drawer,
+                          UserProfile* profile,
+                          std::unique_ptr<SessionObjectJSON>& session) {
+  const uint32_t user_index =
+      kernel_state()->xam_state()->GetUserIndexAssignedToProfileFromXUID(
+          profile->GetOnlineXUID());
+
+  const auto& title_version = kernel_state()->emulator()->title_version();
+
+  const auto& media_id = kernel_state()
+                             ->GetExecutableModule()
+                             ->xex_module()
+                             ->opt_execution_info()
+                             ->media_id;
+
+  const std::string mediaId_str = fmt::format("{:08X}", media_id.get());
+
+  bool version_mismatch = title_version != session->Version();
+  bool media_id_mismatch = mediaId_str != session->MediaID();
+
+  uint32_t num_players =
+      session->FilledPublicSlotsCount() + session->FilledPrivateSlotsCount();
+
+  ImGui::Text(fmt::format("Players: {}", num_players).c_str());
+
+  if (!session->Version().empty()) {
+    ImGui::Text(fmt::format("Version: {}", session->Version()).c_str());
+  }
+
+  if (!session->MediaID().empty()) {
+    ImGui::Text(fmt::format("Media ID: {}", session->MediaID()).c_str());
+  }
+
+  ImGui::Text(fmt::format("Open Private Slots: {}",
+                          session->OpenPrivateSlotsCount().get())
+                  .c_str());
+  ImGui::Text(fmt::format("Open Public Slots: {}",
+                          session->OpenPublicSlotsCount().get())
+                  .c_str());
+
+  ImGui::Spacing();
+  ImGui::Spacing();
+
+  const std::string join_label =
+      std::format("Join Session##{}", session->SessionID());
+
+  bool caller = MacAddress(session->MacAddress()).to_uint64() ==
+                XLiveAPI::mac_address_->to_uint64();
+
+  std::string version_text = "Version mismatch!";
+  std::string media_text = "Media ID mismatch!";
+
+  auto version_width_btn = (ImGui::GetContentRegionAvail().x -
+                            ImGui::CalcTextSize(version_text.c_str()).x) *
+                           0.5f;
+
+  auto media_id_width_btn = (ImGui::GetContentRegionAvail().x -
+                             ImGui::CalcTextSize(media_text.c_str()).x) *
+                            0.5f;
+
+  ImGui::SetCursorPosX(version_width_btn);
+  ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(240, 50, 50, 255));
+  if (version_mismatch && !session->Version().empty()) {
+    ImGui::Text("Version mismatch!");
+  }
+
+  ImGui::SetCursorPosX(media_id_width_btn);
+  if (media_id_mismatch && !session->MediaID().empty()) {
+    ImGui::Text("Media ID mismatch!");
+  }
+  ImGui::PopStyleColor();
+
+  ImGui::Spacing();
+  ImGui::Spacing();
+
+  ImGui::BeginDisabled(!session->SessionID_UInt() || caller);
+  if (ImGui::Button(join_label.c_str(),
+                    ImVec2(ImGui::GetContentRegionAvail().x, 25))) {
+    X_INVITE_INFO* invite = profile->GetSelfInvite();
+
+    memset(invite, 0, sizeof(X_INVITE_INFO));
+
+    invite->from_game_invite = false;
+    invite->title_id = kernel_state()->title_id();
+    invite->xuid_invitee = profile->GetOnlineXUID();
+    invite->xuid_inviter = session->XUID_UInt();
+
+    kernel_state()->BroadcastNotification(kXNotificationLiveInviteAccepted,
+                                          user_index);
+  }
+  ImGui::EndDisabled();
+
+  if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+    if (caller) {
+      ImGui::SetTooltip("Cannot join session from the same console.");
+    } else {
+      ImGui::SetTooltip("Join gaming session");
+    }
+  }
+
+  return true;
+}
+
+bool xeDrawSessionsContent(
+    xe::ui::ImGuiDrawer* imgui_drawer, UserProfile* profile,
+    ui::SessionsContentArgs& sessions_args,
+    std::vector<std::unique_ptr<SessionObjectJSON>>* sessions) {
+  ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+
+  ImGui::SetNextWindowSizeConstraints(ImVec2(300, 150), ImVec2(300, 600));
+  ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+  if (ImGui::BeginPopupModal("Sessions", &sessions_args.sessions_open,
+                             ImGuiWindowFlags_NoCollapse |
+                                 ImGuiWindowFlags_AlwaysAutoResize |
+                                 ImGuiWindowFlags_AlwaysVerticalScrollbar)) {
+    ImGui::SetWindowFontScale(1.05f);
+
+    bool in_game = kernel_state()->emulator()->title_id();
+
+    if (in_game) {
+      ImGui::Text(
+          fmt::format("{}", kernel_state()->emulator()->title_name()).c_str());
+    }
+
+    ImGui::Spacing();
+    ImGui::Spacing();
+
+    ImGui::Text(
+        fmt::format("Available Sessions: {}", sessions->size()).c_str());
+
+    ImGui::Spacing();
+    ImGui::Spacing();
+
+    ImGui::Checkbox("Hide My Sessions", &sessions_args.filter_own);
+
+    ImGui::Spacing();
+
+    if (ImGui::Button("Refresh",
+                      ImVec2(ImGui::GetContentRegionAvail().x, 25))) {
+      sessions->clear();
+      sessions_args.refersh_sessions = true;
+    }
+
+    ImGui::Separator();
+
+    ImGui::Spacing();
+    ImGui::Spacing();
+
+    if (sessions_args.refersh_sessions || sessions_args.refersh_sessions_sync) {
+      auto run = [sessions]() { *sessions = XLiveAPI::GetTitleSessions(); };
+
+      if (sessions_args.refersh_sessions_sync) {
+        run();
+
+        sessions_args.refersh_sessions_sync = false;
+      } else {
+        std::thread refersh_sessions_thread(run);
+        refersh_sessions_thread.detach();
+
+        sessions_args.refersh_sessions = false;
+      }
+    }
+
+    for (auto& session : *sessions) {
+      bool caller = MacAddress(session->MacAddress()).to_uint64() ==
+                    XLiveAPI::mac_address_->to_uint64();
+
+      if (sessions_args.filter_own && caller) {
+        continue;
+      }
+
+      // if (sessions_args.filter_own && !caller) {
+      //   continue;
+      // }
+
+      xeDrawSessionContent(imgui_drawer, profile, session);
+
+      ImGui::Separator();
+      ImGui::Spacing();
+      ImGui::Spacing();
+    }
+
+    ImGui::EndPopup();
+  }
+
+  return true;
+}
+
 X_RESULT xeXamShowSigninUI(uint32_t user_index, uint32_t users_needed,
                            uint32_t flags) {
   // Mask values vary. Probably matching user types? Local/remote?
@@ -1764,6 +1949,40 @@ dword_result_t XamShowFriendsUI_entry(dword_t user_index) {
       new ui::FriendsUI(imgui_drawer, user), close);
 }
 DECLARE_XAM_EXPORT1(XamShowFriendsUI, kUserProfiles, kImplemented);
+
+dword_result_t XamShowCommunitySessionsUI_entry(dword_t user_index,
+                                                dword_t social_sessions_flags) {
+  if (user_index >= XUserMaxUserCount && user_index != XUserIndexAny) {
+    return X_ERROR_FUNCTION_FAILED;
+  }
+
+  UserProfile* user = nullptr;
+
+  if (user_index == XUserIndexAny) {
+    if (kernel_state()
+            ->xam_state()
+            ->profile_manager()
+            ->IsAnyProfileSignedIn()) {
+      user =
+          kernel_state()->xam_state()->GetUserProfile(static_cast<uint32_t>(0));
+    }
+  } else {
+    user = kernel_state()->xam_state()->GetUserProfile(user_index);
+  }
+
+  if (!user) {
+    return X_ERROR_FUNCTION_FAILED;
+  }
+
+  const Emulator* emulator = kernel_state()->emulator();
+  xe::ui::ImGuiDrawer* imgui_drawer = emulator->imgui_drawer();
+
+  auto close = [](ui::ShowCommunitySessionsUI* dialog) -> void {};
+
+  return xeXamDispatchDialogAsync<ui::ShowCommunitySessionsUI>(
+      new ui::ShowCommunitySessionsUI(imgui_drawer, user), close);
+}
+DECLARE_XAM_EXPORT1(XamShowCommunitySessionsUI, kUserProfiles, kImplemented);
 
 }  // namespace xam
 }  // namespace kernel

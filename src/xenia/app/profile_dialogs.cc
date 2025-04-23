@@ -373,6 +373,8 @@ void ManagerDialog::OnDraw(ImGuiIO& io) {
     if (kernel::XLiveAPI::IsConnectedToServer()) {
       args.filter_offline = true;
     }
+
+    sessions_args.filter_own = true;
   }
 
   // Add profile dropdown selector?
@@ -408,6 +410,14 @@ void ManagerDialog::OnDraw(ImGuiIO& io) {
 
     ImGui::SameLine();
 
+    ImGui::BeginDisabled(is_profile_signed_in ||
+                         !kernel::XLiveAPI::IsConnectedToServer());
+    if (ImGui::Button("Sessions", btn_size)) {
+      sessions_args.sessions_open = true;
+      ImGui::OpenPopup("Sessions");
+    }
+    ImGui::EndDisabled();
+
     ImGui::BeginDisabled(is_profile_signed_in);
     if (ImGui::Button("Refresh Presence", btn_size)) {
       emulator_window_->emulator()->kernel_state()->BroadcastNotification(
@@ -431,7 +441,15 @@ void ManagerDialog::OnDraw(ImGuiIO& io) {
       presences = {};
     }
 
+    if (!sessions_args.sessions_open) {
+      sessions_args.first_draw = false;
+      sessions_args.refersh_sessions_sync = true;
+      sessions.clear();
+    }
+
     xeDrawFriendsContent(imgui_drawer(), profile, args, &presences);
+
+    xeDrawSessionsContent(imgui_drawer(), profile, sessions_args, &sessions);
 
     ImGui::EndPopup();
   }

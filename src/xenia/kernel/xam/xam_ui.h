@@ -11,6 +11,7 @@
 #define XENIA_KERNEL_XAM_XAM_UI_H_
 
 #include "xenia/kernel/json/friend_presence_object_json.h"
+#include "xenia/kernel/json/session_object_json.h"
 #include "xenia/kernel/util/shim_utils.h"
 #include "xenia/kernel/xam/ui/netplay_manager_util.h"
 #include "xenia/ui/imgui_dialog.h"
@@ -132,6 +133,15 @@ bool xeDrawFriendContent(xe::ui::ImGuiDrawer* imgui_drawer,
 
 bool xeDrawAddFriend(xe::ui::ImGuiDrawer* imgui_drawer, UserProfile* profile,
                      ui::AddFriendArgs& args);
+
+bool xeDrawSessionsContent(
+    xe::ui::ImGuiDrawer* imgui_drawer, UserProfile* profile,
+    ui::SessionsContentArgs& sessions_args,
+    std::vector<std::unique_ptr<SessionObjectJSON>>* sessions);
+
+bool xeDrawSessionContent(xe::ui::ImGuiDrawer* imgui_drawer,
+                          UserProfile* profile,
+                          std::unique_ptr<SessionObjectJSON>& session);
 
 }  // namespace xam
 }  // namespace kernel
