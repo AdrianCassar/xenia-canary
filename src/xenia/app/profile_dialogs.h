@@ -11,6 +11,7 @@
 #define XENIA_APP_PROFILE_DIALOGS_H_
 
 #include "xenia/kernel/json/friend_presence_object_json.h"
+#include "xenia/kernel/json/session_object_json.h"
 #include "xenia/kernel/xam/ui/netplay_manager_util.h"
 #include "xenia/ui/imgui_dialog.h"
 #include "xenia/ui/imgui_drawer.h"
@@ -67,7 +68,9 @@ class ManagerDialog final : public ui::ImGuiDialog {
   uint64_t selected_xuid_ = 0;
   uint64_t removed_xuid_ = 0;
   xe::kernel::xam::ui::FriendsContentArgs args = {};
+  xe::kernel::xam::ui::SessionsContentArgs sessions_args = {};
   std::vector<xe::kernel::FriendPresenceObjectJSON> presences;
+  std::vector<std::unique_ptr<xe::kernel::SessionObjectJSON>> sessions;
   EmulatorWindow* emulator_window_;
 };
 
