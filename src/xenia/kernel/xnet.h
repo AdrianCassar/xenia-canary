@@ -58,6 +58,23 @@ namespace xe {
 
 #define X_PARTY_E_NOT_IN_PARTY                              static_cast<X_HRESULT>(0x807D0003L)
 
+#define XHTTP_ERROR_BASE                                    12000
+
+#define XHTTP_ERROR_TIMEOUT                                 (XHTTP_ERROR_BASE + 2)
+#define XHTTP_ERROR_INTERNAL_ERROR                          (XHTTP_ERROR_BASE + 4)
+#define XHTTP_ERROR_UNRECOGNIZED_SCHEME                     (XHTTP_ERROR_BASE + 6)
+#define XHTTP_ERROR_NAME_NOT_RESOLVED                       (XHTTP_ERROR_BASE + 7)
+#define XHTTP_ERROR_INVALID_OPTION                          (XHTTP_ERROR_BASE + 9)
+#define XHTTP_ERROR_OPTION_NOT_SETTABLE                     (XHTTP_ERROR_BASE + 11)
+#define XHTTP_ERROR_INCORRECT_HANDLE_TYPE                   (XHTTP_ERROR_BASE + 18)
+#define XHTTP_ERROR_INCORRECT_HANDLE_STATE                  (XHTTP_ERROR_BASE + 19)
+#define XHTTP_ERROR_CONNECTION_ERROR                        (XHTTP_ERROR_BASE + 30)
+#define XHTTP_ERROR_HEADER_NOT_FOUND                        (XHTTP_ERROR_BASE + 150)
+#define XHTTP_ERROR_INVALID_SERVER_RESPONSE                 (XHTTP_ERROR_BASE + 152)
+#define XHTTP_ERROR_REDIRECT_FAILED                         (XHTTP_ERROR_BASE + 156)
+#define XHTTP_ERROR_NOT_INITIALIZED                         (XHTTP_ERROR_BASE + 172)
+#define XHTTP_ERROR_SECURE_FAILURE                          (XHTTP_ERROR_BASE + 175)
+
 #define X_ONLINE_FRIENDSTATE_FLAG_NONE              0x00000000
 #define X_ONLINE_FRIENDSTATE_FLAG_ONLINE            0x00000001
 #define X_ONLINE_FRIENDSTATE_FLAG_PLAYING           0x00000002
