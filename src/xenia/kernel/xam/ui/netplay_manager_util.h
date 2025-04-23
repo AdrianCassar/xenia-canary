@@ -38,6 +38,14 @@ struct FriendsContentArgs {
   ImGuiTextFilter filter = {};
 };
 
+struct SessionsContentArgs {
+  bool first_draw;
+  bool sessions_open;
+  bool filter_own;
+  bool refersh_sessions;
+  bool refersh_sessions_sync;
+};
+
 }  // namespace ui
 }  // namespace xam
 }  // namespace kernel
