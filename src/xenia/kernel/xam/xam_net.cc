@@ -1272,19 +1272,48 @@ dword_result_t NetDll_XNetQosGetListenStats_entry(
 DECLARE_XAM_EXPORT1(NetDll_XNetQosGetListenStats, kNetworking, kImplemented);
 
 dword_result_t XampXAuthStartup_entry(pointer_t<XAUTH_SETTINGS> setttings) {
+  if (setttings->SizeOfStruct != sizeof(XAUTH_SETTINGS)) {
+    return 0x80158401;
+  }
+
   return X_ERROR_SUCCESS;
 }
 DECLARE_XAM_EXPORT1(XampXAuthStartup, kNetworking, kStub);
 
+void XampXAuthShutdown_entry(lpdword_t unkn) {
+  *unkn = 1;
+
+  // Causes a call to XampXAuthGetTitleBuffer
+  // *unkn = 0;
+}
+DECLARE_XAM_EXPORT1(XampXAuthShutdown, kNetworking, kStub);
+
+dword_result_t XampXAuthGetTitleBuffer_entry() {
+  // pointer? - non-zero causes crash
+  return 0;
+}
+DECLARE_XAM_EXPORT1(XampXAuthGetTitleBuffer, kNetworking, kStub);
+
 dword_result_t NetDll_XHttpStartup_entry(dword_t caller, dword_t reserved,
                                          dword_t reserved_ptr) {
+  if (kernel_state()->emulator()->title_id() == kDashboardID) {
+    return 1;
+  }
+
+  // 584111F7 - Prevents Minecraft from loading
+  // We're suppose to set error code if we fail function
+  // XThread::SetLastError(XHTTP_ERROR_CONNECTION_ERROR);
   return 0;
 }
 DECLARE_XAM_EXPORT1(NetDll_XHttpStartup, kNetworking, kStub);
 
+void NetDll_XHttpShutdown_entry(dword_t caller) {}
+DECLARE_XAM_EXPORT1(NetDll_XHttpShutdown, kNetworking, kStub);
+
 dword_result_t NetDll_XHttpDoWork_entry(dword_t caller, dword_t handle,
                                         dword_t unk) {
-  XThread::SetLastError(0);
+  XThread::SetLastError(X_ERROR_SUCCESS);
+
   return 0;
 }
 DECLARE_XAM_EXPORT1(NetDll_XHttpDoWork, kNetworking, kStub);
@@ -1334,6 +1363,14 @@ dword_result_t NetDll_XHttpSendRequest_entry(dword_t caller, dword_t hrequest,
   return false;
 }
 DECLARE_XAM_EXPORT1(NetDll_XHttpSendRequest, kNetworking, kStub);
+
+dword_result_t NetDll_XHttpConnect_entry(dword_t caller, dword_t hSession,
+                                         lpstring_t host, dword_t port,
+                                         dword_t flags) {
+  // XThread::SetLastError(XHTTP_ERROR_CONNECTION_ERROR);
+  return 0;
+}
+DECLARE_XAM_EXPORT1(NetDll_XHttpConnect, kNetworking, kStub);
 
 dword_result_t NetDll_inet_addr_entry(lpstring_t addr_ptr) {
   if (!addr_ptr) {
