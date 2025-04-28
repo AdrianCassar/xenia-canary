@@ -30,18 +30,19 @@ class XLiveBaseApp : public App {
   X_HRESULT XPresenceSubscribe(uint32_t buffer_length);
   X_HRESULT XPresenceUnsubscribe(uint32_t buffer_length);
   X_HRESULT XPresenceCreateEnumerator(uint32_t buffer_length);
-  X_HRESULT XOnlineQuerySearch(uint32_t buffer_args);
-  X_HRESULT GetServiceInfo(uint32_t service_id, uint32_t service_info);
+  X_HRESULT XOnlineQuerySearch(uint32_t buffer_ptr);
+  X_HRESULT XOnlineGetServiceInfo(uint32_t service_id, uint32_t service_info);
 
-  X_HRESULT CreateFriendsEnumerator(uint32_t buffer_args);
+  X_HRESULT XFriendsCreateEnumerator(uint32_t buffer_ptr);
   void UpdateFriendPresence(const uint32_t user_index);
   void UpdatePresenceXUIDs(const std::vector<uint64_t>& xuids,
                            const uint32_t user_index);
   X_HRESULT GenericMarshalled(uint32_t buffer_ptr);
   X_HRESULT XInviteGetAcceptedInfo(uint32_t buffer_length);
+  X_HRESULT XUserMuteListSetState(uint32_t buffer_ptr);
   X_HRESULT XAccountGetUserInfo(uint32_t buffer_ptr);
   X_HRESULT XStorageEnumerate(uint32_t buffer_ptr);
-  X_HRESULT XStringVerify(uint32_t buffer_ptr, uint32_t buffer_length);
+  X_HRESULT XStringVerify(uint32_t buffer_ptr);
   X_HRESULT XStorageDelete(uint32_t buffer_ptr);
   X_HRESULT XStorageDownloadToMemory(uint32_t buffer_ptr);
   X_HRESULT XStorageUploadFromMemory(uint32_t buffer_ptr);
