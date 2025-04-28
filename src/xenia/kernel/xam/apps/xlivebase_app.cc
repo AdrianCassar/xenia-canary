@@ -90,19 +90,19 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
     }
     case 0x0005000B: {
       // Fixes Xbox Live error for 43430821
-      XELOGD("XStorageUploadFromMemory({:08X}, {:08X}) unimplemented",
-             buffer_ptr, buffer_length);
+      XELOGD("XStorageUploadFromMemory({:08X}, {:08X})", buffer_ptr,
+             buffer_length);
       return XStorageUploadFromMemory(buffer_ptr);
     }
     case 0x0005000C: {
       XELOGD("XStringVerify({:08X} {:08X})", buffer_ptr, buffer_length);
-      return XStringVerify(buffer_ptr, buffer_length);
+      return XStringVerify(buffer_ptr);
     }
     case 0x0005000D: {
       // Fixes hang when leaving session for 545107D5
       // 415607D2 says this is XStringVerify
       XELOGD("XStringVerify({:08X}, {:08X})", buffer_ptr, buffer_length);
-      return XStringVerify(buffer_ptr, buffer_length);
+      return XStringVerify(buffer_ptr);
     }
     case 0x0005000E: {
       XELOGD("XUserFindUsers({:08X}, {:08X})", buffer_ptr, buffer_length);
@@ -187,12 +187,9 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
       return X_E_SUCCESS;
     }
     case 0x00058007: {
-      // Occurs if title calls XOnlineGetServiceInfo, expects dwServiceId
-      // and pServiceInfo. pServiceInfo should contain pointer to
-      // XONLINE_SERVICE_INFO structure.
-      XELOGD("CXLiveLogon::GetServiceInfo({:08X}, {:08X})", buffer_ptr,
+      XELOGD("XOnlineGetServiceInfo({:08X}, {:08X})", buffer_ptr,
              buffer_length);
-      return GetServiceInfo(buffer_ptr, buffer_length);
+      return XOnlineGetServiceInfo(buffer_ptr, buffer_length);
     }
     case 0x00058009: {
       assert_true(!buffer_length || buffer_length == 0x10);
@@ -210,27 +207,13 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
       // 464F0800
       XELOGD("XUserMuteListSetState({:08X}, {:08X})", buffer_ptr,
              buffer_length);
-      X_MUTE_SET_STATE* remote_player_ptr =
-          memory_->TranslateVirtual<X_MUTE_SET_STATE*>(buffer_ptr);
-
-      if (!IsOnlineXUID(remote_player_ptr->remote_xuid)) {
-        return X_E_INVALIDARG;
-      }
-
-      return X_E_SUCCESS;
+      return XUserMuteListSetState(buffer_ptr);
     }
     case 0x0005800D: {
       // 464F0800
       XELOGD("XUserMuteListSetState({:08X}, {:08X})", buffer_ptr,
              buffer_length);
-      X_MUTE_SET_STATE* remote_player_ptr =
-          memory_->TranslateVirtual<X_MUTE_SET_STATE*>(buffer_ptr);
-
-      if (!IsOnlineXUID(remote_player_ptr->remote_xuid)) {
-        return X_E_INVALIDARG;
-      }
-
-      return X_E_SUCCESS;
+      return XUserMuteListSetState(buffer_ptr);
     }
     case 0x0005800E: {
       // Fixes Xbox Live error for 513107D9
@@ -261,12 +244,10 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
     }
     case 0x00058020: {
       // 0x00058004 is called right before this.
-      // We should create a XamEnumerate-able empty list here, but I'm not
-      // sure of the format.
       // buffer_length seems to be the same ptr sent to 0x00058004.
-      XELOGD("CXLiveFriends::Enumerate({:08X}, {:08X})", buffer_ptr,
+      XELOGD("XFriendsCreateEnumerator({:08X}, {:08X})", buffer_ptr,
              buffer_length);
-      return CreateFriendsEnumerator(buffer_length);
+      return XFriendsCreateEnumerator(buffer_length);
     }
     case 0x00058023: {
       // 584107D7
@@ -328,11 +309,19 @@ X_HRESULT XLiveBaseApp::XPresenceInitialize(uint32_t buffer_length) {
 
   Memory* memory = kernel_state_->memory();
 
-  const X_ARGUEMENT_ENTRY* entry =
-      memory->TranslateVirtual<X_ARGUEMENT_ENTRY*>(buffer_length);
+  const X_ARGUMENT_LIST* args_list =
+      memory->TranslateVirtual<X_ARGUMENT_LIST*>(buffer_length);
 
-  const uint32_t max_peer_subscriptions =
-      xe::load_and_swap<uint32_t>(memory->TranslateVirtual(entry->object_ptr));
+  if (args_list->argument_count != 1) {
+    assert_always(fmt::format("{} - Invalid argument count!", __func__));
+  }
+
+  const X_PRESENCE_INITIALIZE* initialize =
+      memory->TranslateVirtual<X_PRESENCE_INITIALIZE*>(buffer_length);
+
+  const uint32_t max_peer_subscriptions = xe::load_and_swap<uint32_t>(
+      memory->TranslateVirtual(static_cast<uint32_t>(
+          initialize->max_peer_subscriptions.argument_value_ptr)));
 
   if (max_peer_subscriptions > X_ONLINE_PEER_SUBSCRIPTIONS) {
     return X_E_INVALIDARG;
@@ -352,13 +341,22 @@ X_HRESULT XLiveBaseApp::XPresenceSubscribe(uint32_t buffer_length) {
 
   Memory* memory = kernel_state_->memory();
 
-  const X_PRESENCE_SUBSCRIBE* args_list =
+  const X_ARGUMENT_LIST* args_list =
+      memory->TranslateVirtual<X_ARGUMENT_LIST*>(buffer_length);
+
+  if (args_list->argument_count != 3) {
+    assert_always(fmt::format("{} - Invalid argument count!", __func__));
+  }
+
+  const X_PRESENCE_SUBSCRIBE* subscribe_args =
       memory->TranslateVirtual<X_PRESENCE_SUBSCRIBE*>(buffer_length);
 
   const uint32_t user_index = xe::load_and_swap<uint32_t>(
-      memory->TranslateVirtual(args_list->user_index.object_ptr));
-  const uint32_t num_peers = xe::load_and_swap<uint32_t>(
-      memory->TranslateVirtual(args_list->peers.object_ptr));
+      memory->TranslateVirtual(static_cast<uint32_t>(
+          subscribe_args->user_index.argument_value_ptr)));
+  const uint32_t num_peers =
+      xe::load_and_swap<uint32_t>(memory->TranslateVirtual(
+          static_cast<uint32_t>(subscribe_args->peers.argument_value_ptr)));
 
   if (!kernel_state()->xam_state()->IsUserSignedIn(user_index)) {
     return X_E_INVALIDARG;
@@ -368,7 +366,8 @@ X_HRESULT XLiveBaseApp::XPresenceSubscribe(uint32_t buffer_length) {
     return X_E_INVALIDARG;
   }
 
-  const uint32_t xuid_address = args_list->peer_xuids_ptr.object_ptr;
+  const uint32_t xuid_address =
+      static_cast<uint32_t>(subscribe_args->peer_xuids_ptr.argument_value_ptr);
 
   if (!xuid_address) {
     return X_E_INVALIDARG;
@@ -415,13 +414,22 @@ X_HRESULT XLiveBaseApp::XPresenceUnsubscribe(uint32_t buffer_length) {
 
   Memory* memory = kernel_state_->memory();
 
-  const X_PRESENCE_UNSUBSCRIBE* args_list =
+  const X_ARGUMENT_LIST* args_list =
+      memory->TranslateVirtual<X_ARGUMENT_LIST*>(buffer_length);
+
+  if (args_list->argument_count != 3) {
+    assert_always(fmt::format("{} - Invalid argument count!", __func__));
+  }
+
+  const X_PRESENCE_UNSUBSCRIBE* unsubscribe_args =
       memory->TranslateVirtual<X_PRESENCE_UNSUBSCRIBE*>(buffer_length);
 
   const uint32_t user_index = xe::load_and_swap<uint32_t>(
-      memory->TranslateVirtual(args_list->user_index.object_ptr));
-  const uint32_t num_peers = xe::load_and_swap<uint32_t>(
-      memory->TranslateVirtual(args_list->peers.object_ptr));
+      memory->TranslateVirtual(static_cast<uint32_t>(
+          unsubscribe_args->user_index.argument_value_ptr)));
+  const uint32_t num_peers =
+      xe::load_and_swap<uint32_t>(memory->TranslateVirtual(
+          static_cast<uint32_t>(unsubscribe_args->peers.argument_value_ptr)));
 
   if (!kernel_state()->xam_state()->IsUserSignedIn(user_index)) {
     return X_E_INVALIDARG;
@@ -431,7 +439,8 @@ X_HRESULT XLiveBaseApp::XPresenceUnsubscribe(uint32_t buffer_length) {
     return X_E_INVALIDARG;
   }
 
-  const uint32_t xuid_address = args_list->peer_xuids_ptr.object_ptr;
+  const uint32_t xuid_address = static_cast<uint32_t>(
+      unsubscribe_args->peer_xuids_ptr.argument_value_ptr);
 
   if (!xuid_address) {
     return X_E_INVALIDARG;
@@ -475,17 +484,28 @@ X_HRESULT XLiveBaseApp::XPresenceCreateEnumerator(uint32_t buffer_length) {
 
   Memory* memory = kernel_state_->memory();
 
-  const X_PRESENCE_CREATE* args_list = reinterpret_cast<X_PRESENCE_CREATE*>(
+  const X_ARGUMENT_LIST* args_list =
+      memory->TranslateVirtual<X_ARGUMENT_LIST*>(buffer_length);
+
+  if (args_list->argument_count != 7) {
+    assert_always(fmt::format("{} - Invalid argument count!", __func__));
+  }
+
+  const X_PRESENCE_CREATE* create_args = reinterpret_cast<X_PRESENCE_CREATE*>(
       memory->TranslateVirtual(buffer_length));
 
-  const uint32_t user_index = xe::load_and_swap<uint32_t>(
-      memory->TranslateVirtual(args_list->user_index.object_ptr));
-  const uint32_t num_peers = xe::load_and_swap<uint32_t>(
-      memory->TranslateVirtual(args_list->num_peers.object_ptr));
-  const uint32_t max_peers = xe::load_and_swap<uint32_t>(
-      memory->TranslateVirtual(args_list->max_peers.object_ptr));
+  const uint32_t user_index =
+      xe::load_and_swap<uint32_t>(memory->TranslateVirtual(
+          static_cast<uint32_t>(create_args->user_index.argument_value_ptr)));
+  const uint32_t num_peers =
+      xe::load_and_swap<uint32_t>(memory->TranslateVirtual(
+          static_cast<uint32_t>(create_args->num_peers.argument_value_ptr)));
+  const uint32_t max_peers =
+      xe::load_and_swap<uint32_t>(memory->TranslateVirtual(
+          static_cast<uint32_t>(create_args->max_peers.argument_value_ptr)));
   const uint32_t starting_index = xe::load_and_swap<uint32_t>(
-      memory->TranslateVirtual(args_list->starting_index.object_ptr));
+      memory->TranslateVirtual(static_cast<uint32_t>(
+          create_args->starting_index.argument_value_ptr)));
 
   if (!kernel_state()->xam_state()->IsUserSignedIn(user_index)) {
     return X_E_INVALIDARG;
@@ -503,9 +523,12 @@ X_HRESULT XLiveBaseApp::XPresenceCreateEnumerator(uint32_t buffer_length) {
     return X_E_INVALIDARG;
   }
 
-  const uint32_t xuid_address = args_list->peer_xuids_ptr.object_ptr;
-  const uint32_t buffer_address = args_list->buffer_length_ptr.object_ptr;
-  const uint32_t handle_address = args_list->enumerator_handle_ptr.object_ptr;
+  const uint32_t xuid_address =
+      static_cast<uint32_t>(create_args->peer_xuids_ptr.argument_value_ptr);
+  const uint32_t buffer_address =
+      static_cast<uint32_t>(create_args->buffer_length_ptr.argument_value_ptr);
+  const uint32_t handle_address = static_cast<uint32_t>(
+      create_args->enumerator_handle_ptr.argument_value_ptr);
 
   if (!xuid_address) {
     return X_E_INVALIDARG;
@@ -559,13 +582,14 @@ X_HRESULT XLiveBaseApp::XPresenceCreateEnumerator(uint32_t buffer_length) {
     }
   }
 
-  uint32_t* buffer_ptr = memory->TranslateVirtual<uint32_t*>(buffer_address);
+  uint32_t* buffer_size_ptr =
+      memory->TranslateVirtual<uint32_t*>(buffer_address);
   uint32_t* handle_ptr = memory->TranslateVirtual<uint32_t*>(handle_address);
 
   const uint32_t presence_buffer_size =
       static_cast<uint32_t>(e->items_per_enumerate() * e->item_size());
 
-  *buffer_ptr = xe::byte_swap<uint32_t>(presence_buffer_size);
+  *buffer_size_ptr = xe::byte_swap<uint32_t>(presence_buffer_size);
 
   *handle_ptr = xe::byte_swap<uint32_t>(e->handle());
 
@@ -605,8 +629,8 @@ X_HRESULT XLiveBaseApp::XOnlineQuerySearch(uint32_t buffer_ptr) {
   return X_E_SUCCESS;
 }
 
-X_HRESULT XLiveBaseApp::GetServiceInfo(uint32_t serviceid,
-                                       uint32_t serviceinfo) {
+X_HRESULT XLiveBaseApp::XOnlineGetServiceInfo(uint32_t serviceid,
+                                              uint32_t serviceinfo) {
   if (!XLiveAPI::IsConnectedToServer()) {
     return X_ONLINE_E_LOGON_NOT_LOGGED_ON;
   }
@@ -634,27 +658,32 @@ X_HRESULT XLiveBaseApp::GetServiceInfo(uint32_t serviceid,
   return X_E_SUCCESS;
 }
 
-X_HRESULT XLiveBaseApp::CreateFriendsEnumerator(uint32_t buffer_args) {
-  if (!buffer_args) {
+X_HRESULT XLiveBaseApp::XFriendsCreateEnumerator(uint32_t buffer_ptr) {
+  if (!buffer_ptr) {
     return X_E_INVALIDARG;
   }
 
   Memory* memory = kernel_state_->memory();
 
-  X_ARGUMENT_LIST* arg_list =
-      memory->TranslateVirtual<X_ARGUMENT_LIST*>(buffer_args);
+  X_ARGUMENT_LIST* args_list =
+      memory->TranslateVirtual<X_ARGUMENT_LIST*>(buffer_ptr);
 
-  if (arg_list->argument_count <= 3) {
-    assert_always(
-        "XLiveBaseApp::CreateFriendsEnumerator - Invalid argument count!");
+  if (args_list->argument_count != 5) {
+    assert_always(fmt::format("{} - Invalid argument count!", __func__));
   }
 
+  X_CREATE_FRIENDS_ENUMERATOR* friends_enumerator =
+      memory->TranslateVirtual<X_CREATE_FRIENDS_ENUMERATOR*>(buffer_ptr);
+
   const uint32_t user_index = xe::load_and_swap<uint32_t>(
-      memory->TranslateVirtual(arg_list->entry[0].object_ptr));
+      memory->TranslateVirtual(static_cast<uint32_t>(
+          friends_enumerator->user_index.argument_value_ptr)));
   const uint32_t friends_starting_index = xe::load_and_swap<uint32_t>(
-      memory->TranslateVirtual(arg_list->entry[1].object_ptr));
+      memory->TranslateVirtual(static_cast<uint32_t>(
+          friends_enumerator->friends_starting_index.argument_value_ptr)));
   const uint32_t friends_amount = xe::load_and_swap<uint32_t>(
-      memory->TranslateVirtual(arg_list->entry[2].object_ptr));
+      memory->TranslateVirtual(static_cast<uint32_t>(
+          friends_enumerator->friends_amount.argument_value_ptr)));
 
   if (user_index >= XUserMaxUserCount) {
     return X_E_INVALIDARG;
@@ -668,8 +697,10 @@ X_HRESULT XLiveBaseApp::CreateFriendsEnumerator(uint32_t buffer_args) {
     return X_E_INVALIDARG;
   }
 
-  const uint32_t buffer_address = arg_list->entry[3].object_ptr;
-  const uint32_t handle_address = arg_list->entry[4].object_ptr;
+  const uint32_t buffer_address =
+      static_cast<uint32_t>(friends_enumerator->buffer_ptr.argument_value_ptr);
+  const uint32_t handle_address =
+      static_cast<uint32_t>(friends_enumerator->handle_ptr.argument_value_ptr);
 
   if (!buffer_address) {
     return X_E_INVALIDARG;
@@ -679,10 +710,11 @@ X_HRESULT XLiveBaseApp::CreateFriendsEnumerator(uint32_t buffer_args) {
     return X_E_INVALIDARG;
   }
 
-  uint32_t* buffer_ptr = memory->TranslateVirtual<uint32_t*>(buffer_address);
+  uint32_t* buffer_size_ptr =
+      memory->TranslateVirtual<uint32_t*>(buffer_address);
   uint32_t* handle_ptr = memory->TranslateVirtual<uint32_t*>(handle_address);
 
-  *buffer_ptr = 0;
+  *buffer_size_ptr = 0;
   *handle_ptr = X_INVALID_HANDLE_VALUE;
 
   if (!kernel_state()->xam_state()->IsUserSignedIn(user_index)) {
@@ -716,7 +748,7 @@ X_HRESULT XLiveBaseApp::CreateFriendsEnumerator(uint32_t buffer_args) {
   const uint32_t friends_buffer_size =
       static_cast<uint32_t>(e->items_per_enumerate() * e->item_size());
 
-  *buffer_ptr = xe::byte_swap<uint32_t>(friends_buffer_size);
+  *buffer_size_ptr = xe::byte_swap<uint32_t>(friends_buffer_size);
 
   *handle_ptr = xe::byte_swap<uint32_t>(e->handle());
   return X_E_SUCCESS;
@@ -766,14 +798,25 @@ void XLiveBaseApp::UpdatePresenceXUIDs(const std::vector<uint64_t>& xuids,
 }
 
 X_HRESULT XLiveBaseApp::XInviteGetAcceptedInfo(uint32_t buffer_length) {
+  Memory* memory = kernel_state_->memory();
+
+  const X_ARGUMENT_LIST* args_list =
+      memory->TranslateVirtual<X_ARGUMENT_LIST*>(buffer_length);
+
+  if (args_list->argument_count != 2) {
+    assert_always(fmt::format("{} - Invalid argument count!", __func__));
+  }
+
   X_INVITE_GET_ACCEPTED_INFO* AcceptedInfo =
-      memory_->TranslateVirtual<X_INVITE_GET_ACCEPTED_INFO*>(buffer_length);
+      memory->TranslateVirtual<X_INVITE_GET_ACCEPTED_INFO*>(buffer_length);
 
-  const uint32_t user_index = xe::load_and_swap<uint32_t>(
-      memory_->TranslateVirtual(AcceptedInfo->user_index.object_ptr));
+  const uint32_t user_index =
+      xe::load_and_swap<uint32_t>(memory_->TranslateVirtual(
+          static_cast<uint32_t>(AcceptedInfo->user_index.argument_value_ptr)));
 
-  X_INVITE_INFO* invite_info = reinterpret_cast<X_INVITE_INFO*>(
-      memory_->TranslateVirtual(AcceptedInfo->invite_info.object_ptr));
+  X_INVITE_INFO* invite_info =
+      reinterpret_cast<X_INVITE_INFO*>(memory_->TranslateVirtual(
+          static_cast<uint32_t>(AcceptedInfo->invite_info.argument_value_ptr)));
 
   if (!kernel_state()->xam_state()->IsUserSignedIn(user_index)) {
     return X_E_FAIL;
@@ -856,6 +899,17 @@ X_HRESULT XLiveBaseApp::GenericMarshalled(uint32_t buffer_ptr) {
       internal_data_ptr->results_ptr);
 
   std::fill_n(results_ptr, internal_data_ptr->results_size, 0);
+
+  return X_E_SUCCESS;
+}
+
+X_HRESULT XLiveBaseApp::XUserMuteListSetState(uint32_t buffer_ptr) {
+  X_MUTE_SET_STATE* remote_player_ptr =
+      memory_->TranslateVirtual<X_MUTE_SET_STATE*>(buffer_ptr);
+
+  if (!IsOnlineXUID(remote_player_ptr->remote_xuid)) {
+    return X_E_INVALIDARG;
+  }
 
   return X_E_SUCCESS;
 }
@@ -1292,8 +1346,7 @@ X_HRESULT XLiveBaseApp::XStorageEnumerate(uint32_t buffer_ptr) {
   return result;
 }
 
-X_HRESULT XLiveBaseApp::XStringVerify(uint32_t buffer_ptr,
-                                      uint32_t buffer_length) {
+X_HRESULT XLiveBaseApp::XStringVerify(uint32_t buffer_ptr) {
   if (!buffer_ptr) {
     return X_E_INVALIDARG;
   }
@@ -2557,14 +2610,22 @@ X_HRESULT XLiveBaseApp::Unkn58024(uint32_t buffer_length) {
 
   Memory* memory = kernel_state_->memory();
 
-  X_DATA_58024* entry = memory->TranslateVirtual<X_DATA_58024*>(buffer_length);
+  const X_ARGUMENT_LIST* args_list =
+      memory->TranslateVirtual<X_ARGUMENT_LIST*>(buffer_length);
 
-  uint64_t xuid = xe::load_and_swap<uint64_t>(
-      memory->TranslateVirtual(entry->xuid.object_ptr));
-  uint32_t ukn2 = xe::load_and_swap<uint32_t>(
-      memory->TranslateVirtual(entry->ukn2.object_ptr));
-  uint32_t ukn3_ptr = xe::load_and_swap<uint32_t>(
-      memory->TranslateVirtual(entry->ukn3.object_ptr));  // or uint64_t?
+  if (args_list->argument_count != 3) {
+    assert_always(fmt::format("{} - Invalid argument count!", __func__));
+  }
+
+  const X_DATA_58024* entry =
+      memory->TranslateVirtual<X_DATA_58024*>(buffer_length);
+
+  uint64_t xuid = xe::load_and_swap<uint64_t>(memory->TranslateVirtual(
+      static_cast<uint32_t>(entry->xuid.argument_value_ptr)));
+  uint32_t ukn2 = xe::load_and_swap<uint32_t>(memory->TranslateVirtual(
+      static_cast<uint32_t>(entry->ukn2.argument_value_ptr)));
+  uint32_t ukn3_ptr = xe::load_and_swap<uint32_t>(memory->TranslateVirtual(
+      static_cast<uint32_t>(entry->ukn3.argument_value_ptr)));  // or uint64_t?
 
   return X_E_SUCCESS;
 }
@@ -2578,14 +2639,22 @@ X_HRESULT XLiveBaseApp::Unkn5801C(uint32_t buffer_length) {
 
   Memory* memory = kernel_state_->memory();
 
-  X_DATA_5801C* entry = memory->TranslateVirtual<X_DATA_5801C*>(buffer_length);
+  const X_ARGUMENT_LIST* args_list =
+      memory->TranslateVirtual<X_ARGUMENT_LIST*>(buffer_length);
 
-  uint64_t xuid = xe::load_and_swap<uint64_t>(
-      memory->TranslateVirtual(entry->xuid.object_ptr));
-  uint32_t ukn2 = xe::load_and_swap<uint32_t>(
-      memory->TranslateVirtual(entry->ukn2.object_ptr));
-  uint32_t ukn3_ptr = xe::load_and_swap<uint32_t>(
-      memory->TranslateVirtual(entry->ukn3.object_ptr));
+  if (args_list->argument_count != 3) {
+    assert_always(fmt::format("{} - Invalid argument count!", __func__));
+  }
+
+  const X_DATA_5801C* entry =
+      memory->TranslateVirtual<X_DATA_5801C*>(buffer_length);
+
+  uint64_t xuid = xe::load_and_swap<uint64_t>(memory->TranslateVirtual(
+      static_cast<uint32_t>(entry->xuid.argument_value_ptr)));
+  uint32_t ukn2 = xe::load_and_swap<uint32_t>(memory->TranslateVirtual(
+      static_cast<uint32_t>(entry->ukn2.argument_value_ptr)));
+  uint32_t ukn3_ptr = xe::load_and_swap<uint32_t>(memory->TranslateVirtual(
+      static_cast<uint32_t>(entry->ukn3.argument_value_ptr)));
 
   return X_E_SUCCESS;
 }
