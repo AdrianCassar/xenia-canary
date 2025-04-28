@@ -255,20 +255,17 @@ static_assert_size(X_TITLE_SERVER, 0xD0);
 
 #pragma region XLiveBase
 
-// TODO(Gliniak): Find better names for these structures!
-struct X_ARGUEMENT_ENTRY {
-  xe::be<uint32_t> magic_number;
-  xe::be<uint32_t> unk_1;
-  xe::be<uint32_t> unk_2;
-  xe::be<uint32_t> object_ptr;
+struct X_ARGUMENT_ENTRY {
+  xe::be<uint32_t> native_size;  // 4
+  xe::be<uint64_t> argument_value_ptr;
 };
-static_assert_size(X_ARGUEMENT_ENTRY, 0x10);
+static_assert_size(X_ARGUMENT_ENTRY, 0x10);
 
-struct X_ARGUMENT_LIST {
-  X_ARGUEMENT_ENTRY entry[32];
+struct __declspec(align(8)) X_ARGUMENT_LIST {
+  X_ARGUMENT_ENTRY entry[32];
   xe::be<uint32_t> argument_count;
 };
-static_assert_size(X_ARGUMENT_LIST, 0x204);
+static_assert_size(X_ARGUMENT_LIST, 0x208);
 
 enum X_STORAGE_FACILITY : uint32_t {
   FACILITY_INVALID = 0,
@@ -296,31 +293,43 @@ struct X_MUTE_SET_STATE {
   xe::be<uint32_t> set_muted;
 };
 
+struct X_CREATE_FRIENDS_ENUMERATOR {
+  X_ARGUMENT_ENTRY user_index;
+  X_ARGUMENT_ENTRY friends_starting_index;
+  X_ARGUMENT_ENTRY friends_amount;
+  X_ARGUMENT_ENTRY buffer_ptr;
+  X_ARGUMENT_ENTRY handle_ptr;
+};
+
+struct X_PRESENCE_INITIALIZE {
+  X_ARGUMENT_ENTRY max_peer_subscriptions;
+};
+
 struct X_PRESENCE_SUBSCRIBE {
-  X_ARGUEMENT_ENTRY user_index;
-  X_ARGUEMENT_ENTRY peers;
-  X_ARGUEMENT_ENTRY peer_xuids_ptr;
+  X_ARGUMENT_ENTRY user_index;
+  X_ARGUMENT_ENTRY peers;
+  X_ARGUMENT_ENTRY peer_xuids_ptr;
 };
 
 struct X_PRESENCE_UNSUBSCRIBE {
-  X_ARGUEMENT_ENTRY user_index;
-  X_ARGUEMENT_ENTRY peers;
-  X_ARGUEMENT_ENTRY peer_xuids_ptr;
+  X_ARGUMENT_ENTRY user_index;
+  X_ARGUMENT_ENTRY peers;
+  X_ARGUMENT_ENTRY peer_xuids_ptr;
 };
 
 struct X_PRESENCE_CREATE {
-  X_ARGUEMENT_ENTRY user_index;
-  X_ARGUEMENT_ENTRY num_peers;
-  X_ARGUEMENT_ENTRY peer_xuids_ptr;
-  X_ARGUEMENT_ENTRY starting_index;
-  X_ARGUEMENT_ENTRY max_peers;
-  X_ARGUEMENT_ENTRY buffer_length_ptr;      // output
-  X_ARGUEMENT_ENTRY enumerator_handle_ptr;  // output
+  X_ARGUMENT_ENTRY user_index;
+  X_ARGUMENT_ENTRY num_peers;
+  X_ARGUMENT_ENTRY peer_xuids_ptr;
+  X_ARGUMENT_ENTRY starting_index;
+  X_ARGUMENT_ENTRY max_peers;
+  X_ARGUMENT_ENTRY buffer_length_ptr;      // output
+  X_ARGUMENT_ENTRY enumerator_handle_ptr;  // output
 };
 
 struct X_INVITE_GET_ACCEPTED_INFO {
-  X_ARGUEMENT_ENTRY user_index;
-  X_ARGUEMENT_ENTRY invite_info;
+  X_ARGUMENT_ENTRY user_index;
+  X_ARGUMENT_ENTRY invite_info;
 };
 
 struct X_CONTENT_GET_MARKETPLACE_COUNTS {
@@ -701,16 +710,16 @@ struct X_DATA_5800A {
 };
 
 struct X_DATA_58024 {
-  X_ARGUEMENT_ENTRY xuid;
-  X_ARGUEMENT_ENTRY ukn2;  // 125
-  X_ARGUEMENT_ENTRY ukn3;  // 0
+  X_ARGUMENT_ENTRY xuid;
+  X_ARGUMENT_ENTRY ukn2;  // 125
+  X_ARGUMENT_ENTRY ukn3;  // 0
 };
 static_assert_size(X_DATA_58024, 0x30);
 
 struct X_DATA_5801C {
-  X_ARGUEMENT_ENTRY xuid;
-  X_ARGUEMENT_ENTRY ukn2;
-  X_ARGUEMENT_ENTRY ukn3;
+  X_ARGUMENT_ENTRY xuid;
+  X_ARGUMENT_ENTRY ukn2;
+  X_ARGUMENT_ENTRY ukn3;
 };
 static_assert_size(X_DATA_5801C, 0x30);
 
