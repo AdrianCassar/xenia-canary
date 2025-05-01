@@ -212,6 +212,10 @@ class UserProfile {
 
   const std::vector<uint64_t> GetSubscribedXUIDs() const;
 
+  bool MutePlayer(uint64_t xuid);
+  bool UnmutePlayer(uint64_t xuid);
+  bool IsPlayerMuted(uint64_t xuid) const;
+
   std::u16string GetPresenceString() const;
   bool UpdatePresence();
   bool BuildPresenceString();
@@ -228,6 +232,7 @@ class UserProfile {
 
   std::vector<X_ONLINE_FRIEND> friends_;
   std::map<uint64_t, X_ONLINE_PRESENCE> subscriptions_;
+  std::vector<uint64_t> muted_players_;
 
   std::map<XTileType, std::vector<uint8_t>> profile_images_;
   std::u16string online_presence_desc_ = u"";
