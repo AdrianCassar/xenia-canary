@@ -94,8 +94,6 @@ static_assert_size(XGI_XUSER_STATS_RESET, 0x8);
 
 XgiApp::XgiApp(KernelState* kernel_state) : App(kernel_state, 0xFB) {}
 
-// http://mb.mirage.org/bugzilla/xliveless/main.c
-
 X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
                                       uint32_t buffer_length) {
   // NOTE: buffer_length may be zero or valid.
@@ -718,6 +716,7 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
       return XSession::GetWeightedSessions(kernel_state_, data, num_users);
     }
     case 0x000B0026: {
+      // 4D5307EA
       assert_true(!buffer_length || buffer_length == sizeof(XGI_STATS_WRITE));
 
       XGI_STATS_WRITE* data = reinterpret_cast<XGI_STATS_WRITE*>(buffer);
