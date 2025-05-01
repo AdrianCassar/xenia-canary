@@ -481,6 +481,32 @@ const std::vector<uint64_t> UserProfile::GetSubscribedXUIDs() const {
   return subscribed_xuids;
 }
 
+bool UserProfile::MutePlayer(uint64_t xuid) {
+  const bool muted = IsPlayerMuted(xuid);
+
+  if (!muted) {
+    muted_players_.push_back(xuid);
+  }
+
+  return !muted;
+}
+
+bool UserProfile::UnmutePlayer(uint64_t xuid) {
+  const bool unmuted = std::erase_if(
+      muted_players_,
+      [xuid](const uint64_t muted_xuid) { return muted_xuid == xuid; });
+
+  return unmuted;
+}
+
+bool UserProfile::IsPlayerMuted(uint64_t xuid) const {
+  const auto it = std::find_if(
+      muted_players_.cbegin(), muted_players_.cend(),
+      [xuid](const uint64_t muted_xuid) { return muted_xuid == xuid; });
+
+  return it != muted_players_.end();
+}
+
 std::u16string UserProfile::GetPresenceString() const {
   return online_presence_desc_;
 }

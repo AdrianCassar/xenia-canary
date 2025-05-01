@@ -548,7 +548,7 @@ std::optional<TitleInfo> UserTracker::GetUserTitleInfo(
 }
 
 std::vector<TitleInfo> UserTracker::GetPlayedTitles(uint64_t xuid) const {
-  auto user = kernel_state()->xam_state()->GetUserProfile(xuid);
+  auto user = kernel_state()->xam_state()->GetUserProfileAny(xuid);
   if (!user) {
     return {};
   }
