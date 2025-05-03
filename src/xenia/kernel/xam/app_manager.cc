@@ -46,7 +46,7 @@ X_HRESULT AppManager::DispatchMessageSync(uint32_t app_id, uint32_t message,
   if (it == app_lookup_.end()) {
     return X_E_NOTFOUND;
   }
-  return it->second->DispatchMessageSync(message, buffer_ptr, buffer_length);
+  return it->second->DispatchMessageSync(message, buffer_ptr, buffer_length, 0);
 }
 
 X_HRESULT AppManager::DispatchMessageAsync(uint32_t app_id, uint32_t message,
@@ -69,8 +69,10 @@ X_HRESULT AppManager::DispatchMessageAsync(uint32_t app_id, uint32_t message,
 
   auto post = [memory, buffer_in]() { memory->SystemHeapFree(buffer_in); };
 
-  auto run = [it, message, buffer_in, buffer_length]() -> X_RESULT {
-    return it->second->DispatchMessageSync(message, buffer_in, buffer_length);
+  auto run = [it, message, buffer_in, buffer_length,
+              overlapped_ptr]() -> X_RESULT {
+    return it->second->DispatchMessageSync(message, buffer_in, buffer_length,
+                                           overlapped_ptr);
   };
 
   if (overlapped_ptr) {

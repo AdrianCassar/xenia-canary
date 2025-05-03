@@ -333,8 +333,8 @@ class XSession : public XObject {
                          uint32_t session_info_ptr, uint32_t nonce_ptr);
   X_RESULT DeleteSession();
 
-  X_RESULT JoinSession(XSessionJoin* data);
-  X_RESULT LeaveSession(XSessionLeave* data);
+  X_RESULT JoinSession(XSessionJoin* data, uint32_t overlapped_ptr);
+  X_RESULT LeaveSession(XSessionLeave* data, uint32_t overlapped_ptr);
 
   X_RESULT ModifySession(XSessionModify* data);
   X_RESULT GetSessionDetails(XSessionDetails* data);

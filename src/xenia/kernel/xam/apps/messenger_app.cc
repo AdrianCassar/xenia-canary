@@ -22,7 +22,8 @@ MessengerApp::MessengerApp(KernelState* kernel_state)
 
 X_RESULT MessengerApp::DispatchMessageSync(uint32_t message,
                                            uint32_t buffer_ptr,
-                                           uint32_t buffer_length) {
+                                           uint32_t buffer_length,
+                                           uint32_t overlapped_ptr) {
   // NOTE: buffer_length may be zero or valid.
   auto buffer = memory_->TranslateVirtual(buffer_ptr);
   switch (message) {

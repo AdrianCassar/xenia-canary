@@ -238,7 +238,7 @@ X_RESULT XSession::DeleteSession() {
 // public slot instead.
 //
 // TODO: Add player to recent player list, maybe backend responsibility.
-X_RESULT XSession::JoinSession(XSessionJoin* data) {
+X_RESULT XSession::JoinSession(XSessionJoin* data, uint32_t overlapped_ptr) {
   const bool join_local = data->xuid_array_ptr == 0;
 
   std::string join_type =
@@ -345,13 +345,23 @@ X_RESULT XSession::JoinSession(XSessionJoin* data) {
   local_details_.ReturnedMemberCount = GetMembersCount();
 
   if (!members.empty() && IsHost() && IsXboxLive()) {
-    XLiveAPI::SessionJoinRemote(session_id_, members);
+    auto run = [](uint64_t session_id_,
+                  std::unordered_map<uint64_t, bool> members) {
+      XLiveAPI::SessionJoinRemote(session_id_, members);
+    };
+
+    if (!overlapped_ptr) {
+      std::thread work(run, session_id_, members);
+      work.detach();
+    } else {
+      run(session_id_, members);
+    }
   }
 
   return X_ERROR_SUCCESS;
 }
 
-X_RESULT XSession::LeaveSession(XSessionLeave* data) {
+X_RESULT XSession::LeaveSession(XSessionLeave* data, uint32_t overlapped_ptr) {
   const bool leave_local = data->xuid_array_ptr == 0;
 
   std::string leave_type =
@@ -467,7 +477,16 @@ X_RESULT XSession::LeaveSession(XSessionLeave* data) {
   local_details_.ReturnedMemberCount = GetMembersCount();
 
   if (!xuids.empty() && IsHost() && IsXboxLive()) {
-    XLiveAPI::SessionLeaveRemote(session_id_, xuids);
+    auto run = [](uint64_t session_id_, std::vector<xe::be<uint64_t>> xuids) {
+      XLiveAPI::SessionLeaveRemote(session_id_, xuids);
+    };
+
+    if (!overlapped_ptr) {
+      std::thread work(run, session_id_, xuids);
+      work.detach();
+    } else {
+      run(session_id_, xuids);
+    }
   }
 
   return X_ERROR_SUCCESS;

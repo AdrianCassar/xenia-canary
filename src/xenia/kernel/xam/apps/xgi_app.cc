@@ -106,7 +106,8 @@ XgiApp::XgiApp(KernelState* kernel_state) : App(kernel_state, 0xFB) {}
 // http://mb.mirage.org/bugzilla/xliveless/main.c
 
 X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
-                                      uint32_t buffer_length) {
+                                      uint32_t buffer_length,
+                                      uint32_t overlapped_ptr) {
   // NOTE: buffer_length may be zero or valid.
   auto buffer = memory_->TranslateVirtual(buffer_ptr);
 
@@ -560,7 +561,7 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
         return X_STATUS_INVALID_HANDLE;
       }
 
-      const auto result = session->JoinSession(data);
+      const auto result = session->JoinSession(data, overlapped_ptr);
       XLiveAPI::clearXnaddrCache();
       return result;
     }
@@ -577,7 +578,7 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
         return X_STATUS_INVALID_HANDLE;
       }
 
-      const auto result = session->LeaveSession(data);
+      const auto result = session->LeaveSession(data, overlapped_ptr);
       XLiveAPI::clearXnaddrCache();
 
       return result;

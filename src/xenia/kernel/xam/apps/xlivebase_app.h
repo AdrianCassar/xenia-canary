@@ -23,7 +23,8 @@ class XLiveBaseApp : public App {
   explicit XLiveBaseApp(KernelState* kernel_state);
 
   X_HRESULT DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
-                                uint32_t buffer_length) override;
+                                uint32_t buffer_length,
+                                uint32_t overlapped_ptr) override;
 
  private:
   X_HRESULT XPresenceInitialize(uint32_t buffer_length);
