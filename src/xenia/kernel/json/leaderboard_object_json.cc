@@ -30,8 +30,7 @@ bool LeaderboardObjectJSON::Serialize(
   writer->StartObject();
 
   for (auto& user_property : view_properties_) {
-    const std::string leaderboard_id =
-        std::to_string(user_property.leaderboard_id);
+    const std::string leaderboard_id = std::to_string(user_property.view_id);
 
     writer->Key(leaderboard_id);
     writer->StartObject();

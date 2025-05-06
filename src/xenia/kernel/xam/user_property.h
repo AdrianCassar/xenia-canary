@@ -38,6 +38,7 @@ struct XUSER_WEIGHTED_PROPERTY {
   X_USER_DATA data;
   xe::be<float> weight;
 };
+static_assert_size(XUSER_WEIGHTED_PROPERTY, 0x20);
 
 class Property : public UserData {
  public:
