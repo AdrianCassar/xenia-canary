@@ -39,7 +39,8 @@ class XLiveBaseApp : public App {
                            const uint32_t user_index);
   X_HRESULT GenericMarshalled(uint32_t buffer_ptr);
   X_HRESULT XInviteGetAcceptedInfo(uint32_t buffer_length);
-  X_HRESULT XUserMuteListSetState(uint32_t buffer_ptr);
+  X_HRESULT XUserMuteListAdd(uint32_t buffer_ptr);
+  X_HRESULT XUserMuteListRemove(uint32_t buffer_ptr);
   X_HRESULT XAccountGetUserInfo(uint32_t buffer_ptr);
   X_HRESULT XStorageEnumerate(uint32_t buffer_ptr);
   X_HRESULT XStringVerify(uint32_t buffer_ptr);
@@ -67,10 +68,10 @@ class XLiveBaseApp : public App {
   X_HRESULT Unkn50091(uint32_t buffer_ptr);
   X_HRESULT Unkn50097(uint32_t buffer_ptr);
 
-  X_HRESULT Unkn5800A(uint32_t buffer_ptr);
+  X_HRESULT XUpdateAccessTimes(uint32_t buffer_ptr);
 
-  X_HRESULT Unkn58024(uint32_t buffer_length);
-  X_HRESULT Unkn5801C(uint32_t buffer_length);
+  X_HRESULT XMessageEnumerate(uint32_t buffer_length);
+  X_HRESULT XPresenceGetState(uint32_t buffer_length);
 
   static constexpr std::string_view xstorage_symboliclink = "XSTORAGE:";
 };
