@@ -150,6 +150,8 @@ enum X_STATS_ENUMERATOR_TYPE : uint32_t {
 
 enum PLATFORM_TYPE : uint32_t { Xbox1, Xbox360, PC };
 
+enum X_NAT_TYPE { NAT_OPEN = 1, NAT_MODERATE, NAT_STRICT };
+
 enum X_STORAGE_BUILD_SERVER_PATH_RESULT : int32_t {
   Invalid = -1,
   Created = 0,
@@ -703,25 +705,40 @@ struct XOnlineQuerySearch_Args {
   uint32_t attributes_address;
 };
 
-struct X_DATA_5800A {
-  xe::be<uint32_t> unkn1;
-  xe::be<uint32_t> unkn2;
-  xe::be<uint32_t> unkn3;
+struct XLIVEBASE_UPDATE_ACCESS_TIMES {
+  xe::be<uint32_t> user_index;
+  xe::be<uint32_t> title_id;
+  xe::be<uint32_t> content_categories;
 };
 
-struct X_DATA_58024 {
+struct XLIVEBASE_MESSAGES_ENUMERATOR {
   X_ARGUMENT_ENTRY xuid;
-  X_ARGUMENT_ENTRY ukn2;  // 125
-  X_ARGUMENT_ENTRY ukn3;  // 0
+  X_ARGUMENT_ENTRY messages_count_ptr;
+  X_ARGUMENT_ENTRY message_summaries_ptr;
 };
-static_assert_size(X_DATA_58024, 0x30);
+static_assert_size(XLIVEBASE_MESSAGES_ENUMERATOR, 0x30);
 
-struct X_DATA_5801C {
+struct XLIVEBASE_PRESENCE_GET_STATE {
   X_ARGUMENT_ENTRY xuid;
-  X_ARGUMENT_ENTRY ukn2;
-  X_ARGUMENT_ENTRY ukn3;
+  X_ARGUMENT_ENTRY state_flags_ptr;
+  X_ARGUMENT_ENTRY session_id_ptr;
 };
-static_assert_size(X_DATA_5801C, 0x30);
+static_assert_size(XLIVEBASE_PRESENCE_GET_STATE, 0x30);
+
+struct X_MESSAGE_SUMMARY {
+  xe::be<uint64_t> sender_id;
+  xe::be<uint64_t> message_context;
+  X_FILETIME send_time;
+  xe::be<uint32_t> message_id;
+  xe::be<uint32_t> message_flags;
+  xe::be<uint32_t> sender_title_id;
+  xe::be<uint16_t> expire_minutes;
+  xe::be<uint16_t> details_size;
+  uint8_t msg_type;
+  char sender_name[15];
+  xe::be<char16_t> subject[20];
+};
+static_assert_size(X_MESSAGE_SUMMARY, 0x60);
 
 inline uint32_t XAccountGetUserInfoResponseSize() {
   return sizeof(X_GET_USER_INFO_RESPONSE) +
