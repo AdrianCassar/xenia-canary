@@ -64,7 +64,7 @@ struct XSOCKADDR_IN {
   in_addr address_ip;
   char sa_zero[8];
 
-  const sockaddr to_host() {
+  const sockaddr to_host() const {
     sockaddr sa = {};
     std::memcpy(&sa, this, sizeof(sockaddr));
 
@@ -83,6 +83,7 @@ struct XWSABUF {
   xe::be<uint32_t> len;
   xe::be<uint32_t> buf_ptr;
 };
+static_assert_size(XWSABUF, 0x8);
 
 struct XWSAOVERLAPPED {
   xe::be<uint32_t> internal;
@@ -91,6 +92,7 @@ struct XWSAOVERLAPPED {
   xe::be<uint32_t> offset_high;
   xe::be<uint32_t> event_handle;
 };
+static_assert_size(XWSAOVERLAPPED, 0x14);
 
 class XSocket : public XObject {
  public:
