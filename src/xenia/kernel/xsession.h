@@ -43,16 +43,6 @@ enum SessionFlags {
   GROUP_GAME = STATS | MATCHMAKING | PEER_NETWORK
 };
 
-enum class MEMBER_FLAGS : uint32_t { PRIVATE_SLOT = 0x01, ZOMBIE = 0x2 };
-
-enum class XSESSION_STATE : uint32_t {
-  LOBBY,
-  REGISTRATION,
-  INGAME,
-  REPORTING,
-  DELETED
-};
-
 enum STATE_FLAGS : uint32_t {
   STATE_FLAGS_CREATED = 0x01,
   STATE_FLAGS_HOST = 0x02,
@@ -65,93 +55,23 @@ struct X_KSESSION {
 };
 static_assert_size(X_KSESSION, 4);
 
-struct XSESSION_REGISTRANT {
-  xe::be<uint64_t> MachineID;
-  xe::be<uint32_t> Trustworthiness;
-  xe::be<uint32_t> bNumUsers;
-  xe::be<uint32_t> rgUsers;
-};
-
-struct XSESSION_REGISTRATION_RESULTS {
-  xe::be<uint32_t> registrants_count;
-  xe::be<uint32_t> registrants_ptr;
-};
-
-struct XSESSION_SEARCHRESULT {
-  XSESSION_INFO info;
-  xe::be<uint32_t> open_public_slots;
-  xe::be<uint32_t> open_private_slots;
-  xe::be<uint32_t> filled_public_slots;
-  xe::be<uint32_t> filled_private_slots;
-  xe::be<uint32_t> properties_count;
-  xe::be<uint32_t> contexts_count;
-  xe::be<uint32_t> properties_ptr;
-  xe::be<uint32_t> contexts_ptr;
-};
-
-struct XSESSION_SEARCHRESULT_HEADER {
-  xe::be<uint32_t> search_results_count;
-  xe::be<uint32_t> search_results_ptr;
-};
-
-struct XSESSION_LOCAL_DETAILS {
-  xe::be<uint32_t> UserIndexHost;
-  xe::be<uint32_t> GameType;
-  xe::be<uint32_t> GameMode;
-  xe::be<uint32_t> Flags;
-  xe::be<uint32_t> MaxPublicSlots;
-  xe::be<uint32_t> MaxPrivateSlots;
-  xe::be<uint32_t> AvailablePublicSlots;
-  xe::be<uint32_t> AvailablePrivateSlots;
-  xe::be<uint32_t> ActualMemberCount;
-  xe::be<uint32_t> ReturnedMemberCount;
-  XSESSION_STATE eState;
-  xe::be<uint64_t> Nonce;
-  XSESSION_INFO sessionInfo;
-  XNKID xnkidArbitration;
-  xe::be<uint32_t> SessionMembers_ptr;
-};
-
-struct XSESSION_MEMBER {
-  xe::be<uint64_t> OnlineXUID;
-  xe::be<uint32_t> UserIndex;
-  xe::be<uint32_t> Flags;
-
-  void SetPrivate() {
-    Flags |= static_cast<uint32_t>(MEMBER_FLAGS::PRIVATE_SLOT);
-  }
-
-  void SetZombie() { Flags |= static_cast<uint32_t>(MEMBER_FLAGS::ZOMBIE); }
-
-  const bool IsPrivate() const {
-    return (Flags & static_cast<uint32_t>(MEMBER_FLAGS::PRIVATE_SLOT)) ==
-           static_cast<uint32_t>(MEMBER_FLAGS::PRIVATE_SLOT);
-  }
-
-  const bool IsZombie() const {
-    return (Flags & static_cast<uint32_t>(MEMBER_FLAGS::ZOMBIE)) ==
-           static_cast<uint32_t>(MEMBER_FLAGS::ZOMBIE);
-  }
-};
-
 // TODO(Gliniak): Not sure if all these structures should be here.
-struct XSessionModify {
+struct XGI_SESSION_MODIFY {
   xe::be<uint32_t> obj_ptr;
   xe::be<uint32_t> flags;
   xe::be<uint32_t> maxPublicSlots;
   xe::be<uint32_t> maxPrivateSlots;
 };
+static_assert_size(XGI_SESSION_MODIFY, 0x10);
 
-struct XSessionStart {
+struct XGI_SESSION_STATE {
   xe::be<uint32_t> obj_ptr;
   xe::be<uint32_t> flags;
+  xe::be<uint64_t> session_nonce;
 };
+static_assert_size(XGI_SESSION_STATE, 0x10);
 
-struct XSessionEnd {
-  xe::be<uint32_t> obj_ptr;
-};
-
-struct XSessionSearch {
+struct XGI_SESSION_SEARCH {
   xe::be<uint32_t> proc_index;
   xe::be<uint32_t> user_index;
   xe::be<uint32_t> num_results;
@@ -162,31 +82,35 @@ struct XSessionSearch {
   xe::be<uint32_t> results_buffer_size;
   xe::be<uint32_t> search_results_ptr;
 };
+static_assert_size(XGI_SESSION_SEARCH, 0x20);
 
-struct XSessionSearchEx {
-  XSessionSearch session_search;
+struct XGI_SESSION_SEARCH_EX {
+  XGI_SESSION_SEARCH session_search;
   xe::be<uint32_t> num_users;
 };
+static_assert_size(XGI_SESSION_SEARCH_EX, 0x24);
 
-struct XSessionSearchByID {
+struct XGI_SESSION_SEARCH_BYID {
   xe::be<uint32_t> user_index;
   XNKID session_id;
   xe::be<uint32_t> results_buffer_size;
   xe::be<uint32_t> search_results_ptr;
 };
+static_assert_size(XGI_SESSION_SEARCH_BYID, 0x14);
 
-struct XSessionSearchByIDs {
+struct XGI_SESSION_SEARCH_BYIDS {
   xe::be<uint32_t> user_index;
   xe::be<uint32_t> num_session_ids;
-  xe::be<uint32_t> session_ids;
+  xe::be<uint32_t> session_ids_ptr;
   xe::be<uint32_t> results_buffer_size;
   xe::be<uint32_t> search_results_ptr;
-  xe::be<uint32_t> value_const1;  // 0
-  xe::be<uint32_t> value_const2;  // 0
-  xe::be<uint32_t> value_const3;  // 0
+  xe::be<uint32_t> reserved1;
+  xe::be<uint32_t> reserved2;
+  xe::be<uint32_t> reserved3;
 };
+static_assert_size(XGI_SESSION_SEARCH_BYIDS, 0x20);
 
-struct XSessionSearchWeighted {
+struct XGI_SESSION_SEARCH_WEIGHTED {
   xe::be<uint32_t> proc_index;
   xe::be<uint32_t> user_index;
   xe::be<uint32_t> num_results;
@@ -201,30 +125,41 @@ struct XSessionSearchWeighted {
   xe::be<uint32_t> results_buffer_size;
   xe::be<uint32_t> search_results_ptr;
   xe::be<uint32_t> num_users;
+  xe::be<uint32_t> weighted_search;
 };
+static_assert_size(XGI_SESSION_SEARCH_WEIGHTED, 0x34);
 
-struct XSessionDetails {
+struct XGI_SESSION_DETAILS {
   xe::be<uint32_t> obj_ptr;
   xe::be<uint32_t> details_buffer_size;
   xe::be<uint32_t> session_details_ptr;
+  xe::be<uint32_t> reserved1;
+  xe::be<uint32_t> reserved2;
+  xe::be<uint32_t> reserved3;
 };
+static_assert_size(XGI_SESSION_DETAILS, 0x18);
 
-struct XSessionMigate {
+struct XGI_SESSION_MIGRATE {
   xe::be<uint32_t> obj_ptr;
   xe::be<uint32_t> session_info_ptr;
   xe::be<uint32_t> user_index;
+  xe::be<uint32_t> reserved1;
+  xe::be<uint32_t> reserved2;
+  xe::be<uint32_t> reserved3;
 };
+static_assert_size(XGI_SESSION_MIGRATE, 0x18);
 
-struct XSessionArbitrationData {
+struct XGI_SESSION_ARBITRATION {
   xe::be<uint32_t> obj_ptr;
   xe::be<uint32_t> flags;
   xe::be<uint64_t> session_nonce;
-  xe::be<uint32_t> value_const;  // 300
+  xe::be<uint32_t> session_duration_sec;  // 300
   xe::be<uint32_t> results_buffer_size;
   xe::be<uint32_t> results_ptr;
 };
+static_assert_size(XGI_SESSION_ARBITRATION, 0x20);
 
-struct XSessionData {
+struct XGI_SESSION_CREATE {
   xe::be<uint32_t> obj_ptr;
   xe::be<uint32_t> flags;
   xe::be<uint32_t> num_slots_public;
@@ -233,41 +168,44 @@ struct XSessionData {
   xe::be<uint32_t> session_info_ptr;
   xe::be<uint32_t> nonce_ptr;
 };
+static_assert_size(XGI_SESSION_CREATE, 0x1C);
 
-struct XSessionWriteStats {
+struct XGI_STATS_WRITE {
   xe::be<uint32_t> obj_ptr;
-  xe::be<uint32_t> unk_value;
   xe::be<uint64_t> xuid;
-  xe::be<uint32_t> number_of_leaderboards;
-  xe::be<uint32_t> leaderboards_ptr;
+  xe::be<uint32_t> num_views;
+  xe::be<uint32_t> views_ptr;
 };
+static_assert_size(XGI_STATS_WRITE, 0x18);
 
-struct XSessionModifySkill {
+struct XGI_SESSION_MODIFYSKILL {
   xe::be<uint32_t> obj_ptr;
   xe::be<uint32_t> array_count;
   xe::be<uint32_t> xuid_array_ptr;
+  xe::be<uint32_t> reserved1;
+  xe::be<uint32_t> reserved2;
+  xe::be<uint32_t> reserved3;
 };
+static_assert_size(XGI_SESSION_MODIFYSKILL, 0x18);
 
-struct XSessionViewProperties {
-  xe::be<uint32_t> leaderboard_id;
-  xe::be<uint32_t> properties_count;
-  xe::be<uint32_t> properties_ptr;
-};
-
-struct XSessionJoin {
+struct XGI_SESSION_MANAGE {
   xe::be<uint32_t> obj_ptr;
   xe::be<uint32_t> array_count;
-  xe::be<uint32_t> xuid_array_ptr;     // 0 = Join Local
-  xe::be<uint32_t> indices_array_ptr;  // 0 = Join Remote
+  xe::be<uint32_t> xuid_array_ptr;
+  xe::be<uint32_t> indices_array_ptr;
   xe::be<uint32_t> private_slots_array_ptr;
 };
+static_assert_size(XGI_SESSION_MANAGE, 0x14);
 
-struct XSessionLeave {
-  xe::be<uint32_t> obj_ptr;
-  xe::be<uint32_t> array_count;
-  xe::be<uint32_t> xuid_array_ptr;     // 0 = Leave Local
-  xe::be<uint32_t> indices_array_ptr;  // 0 = Leave Remote
-  xe::be<uint32_t> unused;             // const 0
+struct XGI_SESSION_INVITE {
+  xe::be<uint32_t> user_index;
+  xe::be<uint32_t> session_info_ptr;
+};
+static_assert_size(XGI_SESSION_INVITE, 0x8);
+
+struct SEARCH_RESULTS {
+  XSESSION_SEARCHRESULT_HEADER header;
+  XSESSION_SEARCHRESULT* results_ptr;
 };
 
 struct Player {
@@ -277,11 +215,6 @@ struct Player {
   uint16_t port;
   xe::be<uint64_t> macAddress;  // 6 Bytes
   xe::be<uint64_t> sessionId;
-};
-
-struct SEARCH_RESULTS {
-  XSESSION_SEARCHRESULT_HEADER header;
-  XSESSION_SEARCHRESULT* results_ptr;
 };
 
 struct SessionJSON {
@@ -310,17 +243,6 @@ struct XSessionArbitrationJSON {
   std::vector<MachineInfo> machines;
 };
 
-struct XUSER_CONTEXT {
-  xe::be<uint32_t> context_id;
-  xe::be<uint32_t> value;
-};
-
-struct XUSER_WEIGHTED_CONTEXT {
-  xe::be<uint32_t> context_id;
-  xe::be<uint32_t> value;
-  xe::be<float> weight;
-};
-
 class XSession : public XObject {
  public:
   static const Type kObjectType = Type::Session;
@@ -331,30 +253,30 @@ class XSession : public XObject {
   X_RESULT CreateSession(uint8_t user_index, uint8_t public_slots,
                          uint8_t private_slots, uint32_t flags,
                          uint32_t session_info_ptr, uint32_t nonce_ptr);
-  X_RESULT DeleteSession();
+  X_RESULT DeleteSession(XGI_SESSION_STATE* state);
 
-  X_RESULT JoinSession(XSessionJoin* data);
-  X_RESULT LeaveSession(XSessionLeave* data);
+  X_RESULT JoinSession(XGI_SESSION_MANAGE* data);
+  X_RESULT LeaveSession(XGI_SESSION_MANAGE* data);
 
-  X_RESULT ModifySession(XSessionModify* data);
-  X_RESULT GetSessionDetails(XSessionDetails* data);
-  X_RESULT MigrateHost(XSessionMigate* data);
-  X_RESULT RegisterArbitration(XSessionArbitrationData* data);
-  X_RESULT ModifySkill(XSessionModifySkill* data);
-  X_RESULT WriteStats(XSessionWriteStats* data);
+  X_RESULT ModifySession(XGI_SESSION_MODIFY* data);
+  X_RESULT GetSessionDetails(XGI_SESSION_DETAILS* data);
+  X_RESULT MigrateHost(XGI_SESSION_MIGRATE* data);
+  X_RESULT RegisterArbitration(XGI_SESSION_ARBITRATION* data);
+  X_RESULT ModifySkill(XGI_SESSION_MODIFYSKILL* data);
+  X_RESULT WriteStats(XGI_STATS_WRITE* data);
 
-  X_RESULT StartSession(uint32_t flags);
-  X_RESULT EndSession();
+  X_RESULT StartSession(XGI_SESSION_STATE* state);
+  X_RESULT EndSession(XGI_SESSION_STATE* state);
 
-  static X_RESULT GetSessions(Memory* memory, XSessionSearch* search_data,
+  static X_RESULT GetSessions(Memory* memory, XGI_SESSION_SEARCH* search_data,
                               uint32_t num_users);
   static X_RESULT GetWeightedSessions(Memory* memory,
-                                      XSessionSearchWeighted* search_data,
+                                      XGI_SESSION_SEARCH_WEIGHTED* search_data,
                                       uint32_t num_users);
   static X_RESULT GetSessionByID(Memory* memory,
-                                 XSessionSearchByID* search_data);
+                                 XGI_SESSION_SEARCH_BYID* search_data);
   static X_RESULT GetSessionByIDs(Memory* memory,
-                                  XSessionSearchByIDs* search_data);
+                                  XGI_SESSION_SEARCH_BYIDS* search_data);
   static X_RESULT GetSessionByIDs(Memory* memory, XNKID* session_ids_ptr,
                                   uint32_t num_session_ids,
                                   uint32_t search_results_ptr,
