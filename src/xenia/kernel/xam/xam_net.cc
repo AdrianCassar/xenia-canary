@@ -273,6 +273,10 @@ DECLARE_XAM_EXPORT1(XNetLogonGetTitleID, kNetworking, kImplemented);
 
 dword_result_t NetDll_XnpLogonGetStatus_entry(
     dword_t caller, pointer_t<SGADDR> security_gateway_ptr, lpdword_t reason) {
+  if (security_gateway_ptr) {
+    security_gateway_ptr.Zero();
+  }
+
   return X_STATUS_SUCCESS;
 }
 DECLARE_XAM_EXPORT1(NetDll_XnpLogonGetStatus, kNetworking, kStub);
