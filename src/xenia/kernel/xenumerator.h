@@ -203,6 +203,7 @@ class XTitleEnumerator : public XEnumerator {
 
 class XUserStatsEnumerator : public XEnumerator {
  public:
+  // X_USER_STATS_SPEC
   struct StatsSpec {
     uint32_t ViewId;
     uint32_t NumColumnIds;

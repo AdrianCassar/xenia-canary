@@ -159,7 +159,7 @@ struct XAUTH_SETTINGS {
   xe::be<uint32_t> Flags;
 };
 
-typedef struct {
+struct XNQOSLISTENSTATS {
   uint32_t size_of_struct;
   uint32_t requests_received_count;
   uint32_t probes_received_count;
@@ -167,7 +167,8 @@ typedef struct {
   uint32_t data_replies_sent_count;
   uint32_t data_reply_bytes_sent;
   uint32_t probe_replies_sent_count;
-} XNQOSLISTENSTATS;
+};
+static_assert_size(XNQOSLISTENSTATS, 0x1C);
 
 XNetStartupParams xnet_startup_params{};
 

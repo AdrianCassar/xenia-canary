@@ -2452,7 +2452,9 @@ X_HRESULT XLiveBaseApp::XAccountGetPointsBalance(uint32_t buffer_ptr) {
   memset(results_ptr, 0, internal_data_ptr->results_size);
 
   results_ptr->balance = 1000000000;
-  results_ptr->unkn = 0;
+  results_ptr->dmp_account_status = DMP_STATUS_TYPE::DMP_STATUS_ACTIVE;
+  results_ptr->response_flags =
+      GET_POINTS_BALANCE_RESPONSE_FLAGS::ABOVE_LOW_BALANCE;
 
   return X_E_SUCCESS;
 }
