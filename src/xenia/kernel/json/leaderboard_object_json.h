@@ -27,20 +27,20 @@ class LeaderboardObjectJSON : public BaseObjectJSON {
   virtual bool Serialize(
       rapidjson::PrettyWriter<rapidjson::StringBuffer>* writer) const;
 
-  const std::vector<XSessionViewProperties>& ViewProperties() const {
+  const std::vector<XSESSION_VIEW_PROPERTIES>& ViewProperties() const {
     return view_properties_;
   }
   void ViewProperties(
-      const std::vector<XSessionViewProperties>& view_properties) {
+      const std::vector<XSESSION_VIEW_PROPERTIES>& view_properties) {
     view_properties_ = view_properties;
   }
 
-  const XSessionWriteStats& Stats() const { return stats_; }
-  void Stats(const XSessionWriteStats& stats) { stats_ = stats; }
+  const XGI_STATS_WRITE& Stats() const { return stats_; }
+  void Stats(const XGI_STATS_WRITE& stats) { stats_ = stats; }
 
  private:
-  XSessionWriteStats stats_;
-  std::vector<XSessionViewProperties> view_properties_;
+  XGI_STATS_WRITE stats_;
+  std::vector<XSESSION_VIEW_PROPERTIES> view_properties_;
 };
 }  // namespace kernel
 }  // namespace xe

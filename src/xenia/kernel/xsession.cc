@@ -142,11 +142,11 @@ X_RESULT XSession::CreateHostSession(XSESSION_INFO* session_info,
   std::uniform_int_distribution<uint64_t> dist(0, -1);
   *nonce_ptr = dist(rd);
 
-  XSessionData* session_data = new XSessionData();
-  session_data->user_index = user_index;
-  session_data->num_slots_public = public_slots;
-  session_data->num_slots_private = private_slots;
-  session_data->flags = flags;
+  XGI_SESSION_CREATE session_data = {};
+  session_data.user_index = user_index;
+  session_data.num_slots_public = public_slots;
+  session_data.num_slots_private = private_slots;
+  session_data.flags = flags;
 
   const uint64_t systemlink_id = XLiveAPI::systemlink_id;
 
@@ -164,7 +164,7 @@ X_RESULT XSession::CreateHostSession(XSESSION_INFO* session_info,
     XELOGI("Creating xbox live session");
     session_id_ = GenerateSessionId(XNKID_ONLINE);
 
-    XLiveAPI::XSessionCreate(session_id_, session_data);
+    XLiveAPI::XSessionCreate(session_id_, &session_data);
     XLiveAPI::SessionContextSet(session_id_, contexts_);
   }
 
@@ -212,7 +212,7 @@ X_RESULT XSession::JoinExistingSession(XSESSION_INFO* session_info) {
   return X_ERROR_SUCCESS;
 }
 
-X_RESULT XSession::DeleteSession() {
+X_RESULT XSession::DeleteSession(XGI_SESSION_STATE* state) {
   // Begin XNetUnregisterKey?
 
   state_ |= STATE_FLAGS_DELETED;
@@ -238,7 +238,7 @@ X_RESULT XSession::DeleteSession() {
 // public slot instead.
 //
 // TODO: Add player to recent player list, maybe backend responsibility.
-X_RESULT XSession::JoinSession(XSessionJoin* data) {
+X_RESULT XSession::JoinSession(XGI_SESSION_MANAGE* data) {
   const bool join_local = data->xuid_array_ptr == 0;
 
   std::string join_type =
@@ -351,7 +351,7 @@ X_RESULT XSession::JoinSession(XSessionJoin* data) {
   return X_ERROR_SUCCESS;
 }
 
-X_RESULT XSession::LeaveSession(XSessionLeave* data) {
+X_RESULT XSession::LeaveSession(XGI_SESSION_MANAGE* data) {
   const bool leave_local = data->xuid_array_ptr == 0;
 
   std::string leave_type =
@@ -473,10 +473,10 @@ X_RESULT XSession::LeaveSession(XSessionLeave* data) {
   return X_ERROR_SUCCESS;
 }
 
-X_RESULT XSession::ModifySession(XSessionModify* data) {
+X_RESULT XSession::ModifySession(XGI_SESSION_MODIFY* data) {
   XELOGI("Modifying session {:016X}", session_id_);
 
-  XSessionModify modify = *data;
+  XGI_SESSION_MODIFY modify = *data;
 
   if (IsValidModifyFlags(data->flags)) {
     PrintSessionType(static_cast<SessionFlags>((uint32_t)data->flags));
@@ -513,7 +513,7 @@ X_RESULT XSession::ModifySession(XSessionModify* data) {
   return X_ERROR_SUCCESS;
 }
 
-X_RESULT XSession::GetSessionDetails(XSessionDetails* data) {
+X_RESULT XSession::GetSessionDetails(XGI_SESSION_DETAILS* data) {
   // 4E4D085C checks ReturnedMemberCount when creating a session
 
   auto local_details_ptr =
@@ -549,7 +549,7 @@ X_RESULT XSession::GetSessionDetails(XSessionDetails* data) {
   return X_ERROR_SUCCESS;
 }
 
-X_RESULT XSession::MigrateHost(XSessionMigate* data) {
+X_RESULT XSession::MigrateHost(XGI_SESSION_MIGRATE* data) {
   auto SessionInfo_ptr =
       kernel_state_->memory()->TranslateVirtual<XSESSION_INFO*>(
           data->session_info_ptr);
@@ -587,7 +587,7 @@ X_RESULT XSession::MigrateHost(XSessionMigate* data) {
 
 // Server dependancy can be removed if we calculate remote machine id from
 // remote mac address.
-X_RESULT XSession::RegisterArbitration(XSessionArbitrationData* data) {
+X_RESULT XSession::RegisterArbitration(XGI_SESSION_ARBITRATION* data) {
   XSESSION_REGISTRATION_RESULTS* results_ptr =
       kernel_state_->memory()->TranslateVirtual<XSESSION_REGISTRATION_RESULTS*>(
           data->results_ptr);
@@ -605,22 +605,22 @@ X_RESULT XSession::RegisterArbitration(XSessionArbitrationData* data) {
           registrants_ptr);
 
   for (uint8_t i = 0; i < result->Machines().size(); i++) {
-    registrants[i].Trustworthiness = 1;
+    registrants[i].trustworthiness = 1;
 
-    registrants[i].MachineID = result->Machines()[i].machine_id;
-    registrants[i].bNumUsers = result->Machines()[i].player_count;
+    registrants[i].machine_id = result->Machines()[i].machine_id;
+    registrants[i].num_users = result->Machines()[i].player_count;
 
     const uint32_t users_ptr = kernel_state_->memory()->SystemHeapAlloc(
-        sizeof(uint64_t) * registrants[i].bNumUsers);
+        sizeof(uint64_t) * registrants[i].num_users);
 
     uint64_t* users_xuid_ptr =
         kernel_state_->memory()->TranslateVirtual<uint64_t*>(users_ptr);
 
-    for (uint8_t j = 0; j < registrants[i].bNumUsers; j++) {
+    for (uint8_t j = 0; j < registrants[i].num_users; j++) {
       users_xuid_ptr[j] = result->Machines()[i].xuids[j];
     }
 
-    registrants[i].rgUsers = users_ptr;
+    registrants[i].users_ptr = users_ptr;
   }
 
   Uint64toXNKID(session_id_, &local_details_.xnkidArbitration);
@@ -633,7 +633,7 @@ X_RESULT XSession::RegisterArbitration(XSessionArbitrationData* data) {
   return X_ERROR_SUCCESS;
 }
 
-X_RESULT XSession::ModifySkill(XSessionModifySkill* data) {
+X_RESULT XSession::ModifySkill(XGI_SESSION_MODIFYSKILL* data) {
   const auto xuid_array =
       kernel_state_->memory()->TranslateVirtual<xe::be<uint64_t>*>(
           data->xuid_array_ptr);
@@ -647,7 +647,7 @@ X_RESULT XSession::ModifySkill(XSessionModifySkill* data) {
   return X_ERROR_SUCCESS;
 }
 
-X_RESULT XSession::WriteStats(XSessionWriteStats* data) {
+X_RESULT XSession::WriteStats(XGI_STATS_WRITE* data) {
   if (!HasSessionFlag(static_cast<SessionFlags>((uint32_t)local_details_.Flags),
                       STATS)) {
     XELOGW("Session does not support stats.");
@@ -659,33 +659,33 @@ X_RESULT XSession::WriteStats(XSessionWriteStats* data) {
     return X_ERROR_FUNCTION_FAILED;
   }
 
-  if (!data->number_of_leaderboards) {
+  if (!data->num_views) {
     XELOGW("No leaderboard stats to write.");
     return X_ERROR_SUCCESS;
   }
 
-  XSessionViewProperties* leaderboard =
-      kernel_state_->memory()->TranslateVirtual<XSessionViewProperties*>(
-          data->leaderboards_ptr);
+  XSESSION_VIEW_PROPERTIES* leaderboard =
+      kernel_state_->memory()->TranslateVirtual<XSESSION_VIEW_PROPERTIES*>(
+          data->views_ptr);
 
   XLiveAPI::SessionWriteStats(session_id_, data, leaderboard);
 
   return X_ERROR_SUCCESS;
 }
 
-X_RESULT XSession::StartSession(uint32_t flags) {
+X_RESULT XSession::StartSession(XGI_SESSION_STATE* state) {
   local_details_.eState = XSESSION_STATE::INGAME;
 
   return X_ERROR_SUCCESS;
 }
 
-X_RESULT XSession::EndSession() {
+X_RESULT XSession::EndSession(XGI_SESSION_STATE* state) {
   local_details_.eState = XSESSION_STATE::REPORTING;
 
   return X_ERROR_SUCCESS;
 }
 
-X_RESULT XSession::GetSessions(Memory* memory, XSessionSearch* search_data,
+X_RESULT XSession::GetSessions(Memory* memory, XGI_SESSION_SEARCH* search_data,
                                uint32_t num_users) {
   if (!search_data->results_buffer_size) {
     search_data->results_buffer_size =
@@ -731,9 +731,9 @@ X_RESULT XSession::GetSessions(Memory* memory, XSessionSearch* search_data,
 }
 
 X_RESULT XSession::GetWeightedSessions(
-    Memory* memory, XSessionSearchWeighted* weighted_search_data,
+    Memory* memory, XGI_SESSION_SEARCH_WEIGHTED* weighted_search_data,
     uint32_t num_users) {
-  XSessionSearch search_data = {};
+  XGI_SESSION_SEARCH search_data = {};
 
   search_data.proc_index = weighted_search_data->proc_index;
   search_data.user_index = weighted_search_data->user_index;
@@ -750,7 +750,7 @@ X_RESULT XSession::GetWeightedSessions(
 }
 
 X_RESULT XSession::GetSessionByID(Memory* memory,
-                                  XSessionSearchByID* search_data) {
+                                  XGI_SESSION_SEARCH_BYID* search_data) {
   if (!search_data->results_buffer_size) {
     search_data->results_buffer_size = sizeof(XSESSION_SEARCHRESULT);
     return X_ONLINE_E_SESSION_INSUFFICIENT_BUFFER;
@@ -771,7 +771,7 @@ X_RESULT XSession::GetSessionByID(Memory* memory,
 }
 
 X_RESULT XSession::GetSessionByIDs(Memory* memory,
-                                   XSessionSearchByIDs* search_data) {
+                                   XGI_SESSION_SEARCH_BYIDS* search_data) {
   if (!search_data->results_buffer_size) {
     search_data->results_buffer_size =
         search_data->num_session_ids * sizeof(XSESSION_SEARCHRESULT);
@@ -789,7 +789,7 @@ X_RESULT XSession::GetSessionByIDs(Memory* memory,
   }
 
   XNKID* session_ids_ptr =
-      memory->TranslateVirtual<XNKID*>(search_data->session_ids);
+      memory->TranslateVirtual<XNKID*>(search_data->session_ids_ptr);
 
   GetSessionByIDs(memory, session_ids_ptr, search_data->num_session_ids,
                   search_data->search_results_ptr,
@@ -882,10 +882,10 @@ void XSession::FillSessionContext(Memory* memory,
   result->contexts_count = (uint32_t)contexts.size();
 
   const uint32_t context_ptr = memory->SystemHeapAlloc(
-      uint32_t(sizeof(XUSER_CONTEXT) * contexts.size()));
+      uint32_t(sizeof(xam::XUSER_CONTEXT) * contexts.size()));
 
-  XUSER_CONTEXT* contexts_to_get =
-      memory->TranslateVirtual<XUSER_CONTEXT*>(context_ptr);
+  xam::XUSER_CONTEXT* contexts_to_get =
+      memory->TranslateVirtual<xam::XUSER_CONTEXT*>(context_ptr);
 
   uint32_t i = 0;
   for (const auto context : contexts) {
