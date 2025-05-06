@@ -104,13 +104,13 @@ class XLiveAPI {
 
   static response_data QoSGet(uint64_t sessionId);
 
-  static void SessionModify(uint64_t sessionId, XSessionModify* data);
+  static void SessionModify(uint64_t sessionId, XGI_SESSION_MODIFY* data);
 
   static std::vector<std::unique_ptr<SessionObjectJSON>> GetTitleSessions(
       uint32_t title_id = 0);
 
   static const std::vector<std::unique_ptr<SessionObjectJSON>> SessionSearch(
-      XSessionSearch* data, uint32_t num_users);
+      XGI_SESSION_SEARCH* data, uint32_t num_users);
 
   static void SessionContextSet(uint64_t session_id,
                                 std::map<uint32_t, uint32_t> contexts);
@@ -122,13 +122,13 @@ class XLiveAPI {
       uint64_t sessionId);
 
   static std::unique_ptr<SessionObjectJSON> XSessionMigration(
-      uint64_t sessionId, XSessionMigate* data);
+      uint64_t sessionId, XGI_SESSION_MIGRATE* data);
 
   static std::unique_ptr<ArbitrationObjectJSON> XSessionArbitration(
       uint64_t sessionId);
 
-  static void SessionWriteStats(uint64_t sessionId, XSessionWriteStats* stats,
-                                XSessionViewProperties* probs);
+  static void SessionWriteStats(uint64_t sessionId, XGI_STATS_WRITE* stats,
+                                XSESSION_VIEW_PROPERTIES* probs);
 
   static std::unique_ptr<HTTPResponseObjectJSON> LeaderboardsFind(
       const uint8_t* data);
@@ -139,7 +139,7 @@ class XLiveAPI {
 
   static void DeleteAllSessions();
 
-  static void XSessionCreate(uint64_t sessionId, XSessionData* data);
+  static void XSessionCreate(uint64_t sessionId, XGI_SESSION_CREATE* data);
 
   static std::unique_ptr<SessionObjectJSON> XSessionGet(uint64_t sessionId);
 
