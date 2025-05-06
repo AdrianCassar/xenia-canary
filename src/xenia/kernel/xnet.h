@@ -14,6 +14,7 @@
 
 #include "xenia/base/byte_order.h"
 #include "xenia/kernel/util/xfiletime.h"
+#include "xenia/kernel/xam/user_data.h"
 
 #ifdef XE_PLATFORM_WIN32
 #define _WINSOCK_DEPRECATED_NO_WARNINGS  // inet_addr
@@ -165,15 +166,25 @@ enum X_STORAGE_UPLOAD_RESULT : int32_t {
   PAYLOAD_TOO_LARGE = 2,
 };
 
+enum GET_POINTS_BALANCE_RESPONSE_FLAGS : uint32_t { ABOVE_LOW_BALANCE = 1 };
+
+enum DMP_STATUS_TYPE : uint32_t {
+  DMP_STATUS_ACTIVE = 0,
+  DMP_STATUS_DISABLED = 1,
+  DMP_STATUS_CLOSED = 2
+};
+
 struct XNKID {
   uint8_t ab[8];
   uint64_t as_uint64() { return *reinterpret_cast<uint64_t*>(&ab); }
   uint64_t as_uintBE64() { return xe::byte_swap(as_uint64()); }
 };
+static_assert_size(XNKID, 0x8);
 
 struct XNKEY {
   uint8_t ab[16];
 };
+static_assert_size(XNKEY, 0x10);
 
 #pragma pack(push, 4)
 
@@ -186,6 +197,7 @@ struct SGADDR {
   xe::be<uint64_t> xbox_id;                     // Unique identifier of client machine account - maybe XUID?
   uint8_t reserved[4];
 };
+static_assert_size(SGADDR, 0x14);
 
 // clang-format on
 
@@ -206,11 +218,105 @@ struct XSESSION_INFO {
   XNADDR hostAddress;
   XNKEY keyExchangeKey;
 };
+static_assert_size(XSESSION_INFO, 0x3C);
+
+struct XSESSION_REGISTRANT {
+  xe::be<uint64_t> machine_id;
+  xe::be<uint32_t> trustworthiness;
+  xe::be<uint32_t> num_users;
+  xe::be<uint32_t> users_ptr;
+};
+static_assert_size(XSESSION_REGISTRANT, 0x18);
+
+struct XSESSION_REGISTRATION_RESULTS {
+  xe::be<uint32_t> registrants_count;
+  xe::be<uint32_t> registrants_ptr;
+};
+static_assert_size(XSESSION_REGISTRATION_RESULTS, 0x8);
+
+struct XSESSION_SEARCHRESULT {
+  XSESSION_INFO info;
+  xe::be<uint32_t> open_public_slots;
+  xe::be<uint32_t> open_private_slots;
+  xe::be<uint32_t> filled_public_slots;
+  xe::be<uint32_t> filled_private_slots;
+  xe::be<uint32_t> properties_count;
+  xe::be<uint32_t> contexts_count;
+  xe::be<uint32_t> properties_ptr;
+  xe::be<uint32_t> contexts_ptr;
+};
+static_assert_size(XSESSION_SEARCHRESULT, 0x5C);
+
+struct XSESSION_SEARCHRESULT_HEADER {
+  xe::be<uint32_t> search_results_count;
+  xe::be<uint32_t> search_results_ptr;
+};
+static_assert_size(XSESSION_SEARCHRESULT_HEADER, 0x8);
+
+enum class XSESSION_STATE : uint32_t {
+  LOBBY,
+  REGISTRATION,
+  INGAME,
+  REPORTING,
+  DELETED
+};
+
+struct XSESSION_LOCAL_DETAILS {
+  xe::be<uint32_t> UserIndexHost;
+  xe::be<uint32_t> GameType;
+  xe::be<uint32_t> GameMode;
+  xe::be<uint32_t> Flags;
+  xe::be<uint32_t> MaxPublicSlots;
+  xe::be<uint32_t> MaxPrivateSlots;
+  xe::be<uint32_t> AvailablePublicSlots;
+  xe::be<uint32_t> AvailablePrivateSlots;
+  xe::be<uint32_t> ActualMemberCount;
+  xe::be<uint32_t> ReturnedMemberCount;
+  XSESSION_STATE eState;
+  xe::be<uint64_t> Nonce;
+  XSESSION_INFO sessionInfo;
+  XNKID xnkidArbitration;
+  xe::be<uint32_t> SessionMembers_ptr;
+};
+static_assert_size(XSESSION_LOCAL_DETAILS, 0x80);
+
+struct XSESSION_VIEW_PROPERTIES {
+  xe::be<uint32_t> view_id;
+  xe::be<uint32_t> properties_count;
+  xe::be<uint32_t> properties_ptr;
+};
+static_assert_size(XSESSION_VIEW_PROPERTIES, 0xC);
+
+enum class MEMBER_FLAGS : uint32_t { PRIVATE_SLOT = 0x01, ZOMBIE = 0x2 };
+
+struct XSESSION_MEMBER {
+  xe::be<uint64_t> OnlineXUID;
+  xe::be<uint32_t> UserIndex;
+  xe::be<uint32_t> Flags;
+
+  void SetPrivate() {
+    Flags |= static_cast<uint32_t>(MEMBER_FLAGS::PRIVATE_SLOT);
+  }
+
+  void SetZombie() { Flags |= static_cast<uint32_t>(MEMBER_FLAGS::ZOMBIE); }
+
+  const bool IsPrivate() const {
+    return (Flags & static_cast<uint32_t>(MEMBER_FLAGS::PRIVATE_SLOT)) ==
+           static_cast<uint32_t>(MEMBER_FLAGS::PRIVATE_SLOT);
+  }
+
+  const bool IsZombie() const {
+    return (Flags & static_cast<uint32_t>(MEMBER_FLAGS::ZOMBIE)) ==
+           static_cast<uint32_t>(MEMBER_FLAGS::ZOMBIE);
+  }
+};
+static_assert_size(XSESSION_MEMBER, 0x10);
 
 struct X_PARTY_CUSTOM_DATA {
   xe::be<uint64_t> First;
   xe::be<uint64_t> Second;
 };
+static_assert_size(X_PARTY_CUSTOM_DATA, 0x10);
 
 struct X_PARTY_USER_INFO {
   xe::be<uint64_t> Xuid;
@@ -222,16 +328,43 @@ struct X_PARTY_USER_INFO {
   XSESSION_INFO SessionInfo;
   X_PARTY_CUSTOM_DATA CustomData;
 };
+static_assert_size(X_PARTY_USER_INFO, 0x78);
 
 struct X_PARTY_USER_LIST {
   xe::be<uint32_t> UserCount;
   X_PARTY_USER_INFO Users[X_PARTY_MAX_USERS];
 };
+static_assert_size(X_PARTY_USER_LIST, 0xF08);
+
+struct X_USER_STATS_VIEW {
+  xe::be<uint32_t> ViewId;
+  xe::be<uint32_t> TotalViewRows;
+  xe::be<uint32_t> NumRows;
+  xe::be<uint32_t> pRows;
+};
+static_assert_size(X_USER_STATS_VIEW, 0x10);
+
+struct X_USER_STATS_COLUMN {
+  xe::be<uint16_t> ColumnId;
+  xam::X_USER_DATA Value;
+};
+static_assert_size(X_USER_STATS_COLUMN, 0x18);
+
+struct X_USER_STATS_ROW {
+  xe::be<uint64_t> xuid;
+  xe::be<uint32_t> Rank;
+  xe::be<uint64_t> i64Rating;
+  CHAR szGamertag[16];
+  xe::be<uint32_t> NumColumns;
+  xe::be<uint32_t> pColumns;
+};
+static_assert_size(X_USER_STATS_ROW, 0x30);
 
 struct X_USER_STATS_READ_RESULTS {
   xe::be<uint32_t> NumViews;
   xe::be<uint32_t> Views_ptr;
 };
+static_assert_size(X_USER_STATS_READ_RESULTS, 0x8);
 
 struct X_USER_STATS_SPEC {
   xe::be<uint32_t> view_id;
@@ -278,7 +411,6 @@ enum X_STORAGE_FACILITY : uint32_t {
 
 struct X_STORAGE_BUILD_SERVER_PATH {
   xe::be<uint32_t> user_index;
-  uint8_t unkn[4];
   xe::be<uint64_t> xuid;
   xe::be<X_STORAGE_FACILITY> storage_location;
   xe::be<uint32_t> storage_location_info_ptr;
@@ -340,11 +472,13 @@ struct X_CONTENT_GET_MARKETPLACE_COUNTS {
   xe::be<uint32_t> content_categories;
   xe::be<uint32_t> results_ptr;
 };
+static_assert_size(X_CONTENT_GET_MARKETPLACE_COUNTS, 0x10);
 
 struct X_OFFERING_CONTENTAVAILABLE_RESULT {
   xe::be<uint32_t> new_offers;
   xe::be<uint32_t> total_offers;
 };
+static_assert_size(X_OFFERING_CONTENTAVAILABLE_RESULT, 0x8);
 
 struct X_GET_TASK_PROGRESS {
   xe::be<uint32_t> overlapped_ptr;
@@ -352,6 +486,7 @@ struct X_GET_TASK_PROGRESS {
   xe::be<uint32_t> numerator_ptr;
   xe::be<uint32_t> denominator_ptr;
 };
+static_assert_size(X_GET_TASK_PROGRESS, 0x10);
 
 #pragma pack(push, 4)
 
@@ -362,7 +497,7 @@ struct X_ONLINE_PRESENCE {
   xe::be<uint32_t> title_id;
   X_FILETIME state_change_time;
   xe::be<uint32_t> cchRichPresence;
-  xe::be<char16_t> wszRichPresence[64];
+  xe::be<char16_t> wszRichPresence[X_MAX_RICHPRESENCE_SIZE];
 };
 static_assert_size(X_ONLINE_PRESENCE, 0xA4);
 
@@ -387,6 +522,7 @@ struct X_INVITE_INFO {
   XSESSION_INFO host_info;
   xe::be<uint32_t> from_game_invite;
 };
+static_assert_size(X_INVITE_INFO, 0x54);
 
 #pragma pack(pop)
 
@@ -397,6 +533,7 @@ struct X_STORAGE_DOWNLOAD_TO_MEMORY_RESULTS {
   xe::be<uint64_t> xuid_owner;
   X_FILETIME ft_created;
 };
+static_assert_size(X_STORAGE_DOWNLOAD_TO_MEMORY_RESULTS, 0x14);
 
 struct X_STORAGE_FILE_INFO {
   xe::be<uint32_t> title_id;
@@ -421,6 +558,8 @@ struct X_STORAGE_ENUMERATE_RESULTS {
   xe::be<uint32_t> num_items_returned;
   xe::be<uint32_t> items_ptr;
 };
+static_assert_size(X_STORAGE_ENUMERATE_RESULTS, 0xC);
+
 struct STRING_VERIFY_RESPONSE {
   xe::be<uint16_t> num_strings;
   xe::be<uint32_t> string_result_ptr;
@@ -431,11 +570,13 @@ struct FIND_USER_INFO {
   xe::be<uint64_t> xuid;
   char gamertag[16];
 };
+static_assert_size(FIND_USER_INFO, 0x18);
 
 struct FIND_USERS_RESPONSE {
   xe::be<uint32_t> results_size;
   xe::be<uint32_t> users_address;
 };
+static_assert_size(FIND_USERS_RESPONSE, 0x8);
 
 struct X_ADDRESS_INFO {
   xe::be<uint16_t> street_1_length;
@@ -451,6 +592,7 @@ struct X_ADDRESS_INFO {
   xe::be<uint16_t> postal_code_length;
   xe::be<uint32_t> postal_code;  // uint16_t*
 };
+static_assert_size(X_ADDRESS_INFO, 0x24);
 
 struct X_GET_USER_INFO_RESPONSE {
   xe::be<uint16_t> first_name_length;
@@ -466,6 +608,7 @@ struct X_GET_USER_INFO_RESPONSE {
   xe::be<uint8_t> parter_optin;
   xe::be<uint8_t> age;
 };
+static_assert_size(X_GET_USER_INFO_RESPONSE, 0x3C);
 
 struct X_ONLINE_QUERY_ATTRIBUTE_INTEGER {
   xe::be<uint32_t> length;
@@ -505,10 +648,12 @@ struct QUERY_SEARCH_RESULT {
   xe::be<uint32_t> attributes_ptr;  // X_ONLINE_QUERY_ATTRIBUTE
 };
 
-struct X_GET_POINTS_BALANCE_RESPONSE {
+struct __declspec(align(2)) X_GET_POINTS_BALANCE_RESPONSE {
   xe::be<uint32_t> balance;
-  xe::be<uint16_t> unkn;
+  uint8_t dmp_account_status;
+  uint8_t response_flags;
 };
+static_assert_size(X_GET_POINTS_BALANCE_RESPONSE, 0x6);
 
 struct X_GET_FEATURED_DOWNLOADS_RESPONSE {
   uint8_t data[12];
@@ -703,7 +848,9 @@ struct XOnlineQuerySearch_Args {
   uint32_t attribute_specs_address;
   uint32_t num_attributes;
   uint32_t attributes_address;
+  uint8_t unkn[24];
 };
+static_assert_size(XOnlineQuerySearch_Args, 0x3C);
 
 struct XLIVEBASE_UPDATE_ACCESS_TIMES {
   xe::be<uint32_t> user_index;

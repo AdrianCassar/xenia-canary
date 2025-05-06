@@ -825,7 +825,7 @@ response_data XLiveAPI::QoSGet(uint64_t sessionId) {
   return response->RawResponse();
 }
 
-void XLiveAPI::SessionModify(uint64_t sessionId, XSessionModify* data) {
+void XLiveAPI::SessionModify(uint64_t sessionId, XGI_SESSION_MODIFY* data) {
   std::string endpoint = fmt::format("title/{:08X}/sessions/{:016x}/modify",
                                      kernel_state()->title_id(), sessionId);
 
@@ -895,7 +895,7 @@ std::vector<std::unique_ptr<SessionObjectJSON>> XLiveAPI::GetTitleSessions(
 }
 
 const std::vector<std::unique_ptr<SessionObjectJSON>> XLiveAPI::SessionSearch(
-    XSessionSearch* data, uint32_t num_users) {
+    XGI_SESSION_SEARCH* data, uint32_t num_users) {
   std::string endpoint =
       fmt::format("title/{:08X}/sessions/search", kernel_state()->title_id());
 
@@ -966,7 +966,7 @@ const std::unique_ptr<SessionObjectJSON> XLiveAPI::SessionDetails(
 }
 
 std::unique_ptr<SessionObjectJSON> XLiveAPI::XSessionMigration(
-    uint64_t sessionId, XSessionMigate* data) {
+    uint64_t sessionId, XGI_SESSION_MIGRATE* data) {
   std::string endpoint = fmt::format("title/{:08X}/sessions/{:016x}/migrate",
                                      kernel_state()->title_id(), sessionId);
 
@@ -1043,14 +1043,14 @@ std::unique_ptr<ArbitrationObjectJSON> XLiveAPI::XSessionArbitration(
   return arbitration;
 }
 
-void XLiveAPI::SessionWriteStats(uint64_t sessionId, XSessionWriteStats* stats,
-                                 XSessionViewProperties* view_properties) {
+void XLiveAPI::SessionWriteStats(uint64_t sessionId, XGI_STATS_WRITE* stats,
+                                 XSESSION_VIEW_PROPERTIES* view_properties) {
   std::string endpoint =
       fmt::format("title/{:08X}/sessions/{:016x}/leaderboards",
                   kernel_state()->title_id(), sessionId);
 
-  std::vector<XSessionViewProperties> properties(
-      view_properties, view_properties + stats->number_of_leaderboards);
+  std::vector<XSESSION_VIEW_PROPERTIES> properties(
+      view_properties, view_properties + stats->num_views);
 
   LeaderboardObjectJSON leaderboard = LeaderboardObjectJSON();
 
@@ -1131,7 +1131,7 @@ void XLiveAPI::DeleteAllSessions() {
   }
 }
 
-void XLiveAPI::XSessionCreate(uint64_t sessionId, XSessionData* data) {
+void XLiveAPI::XSessionCreate(uint64_t sessionId, XGI_SESSION_CREATE* data) {
   std::string endpoint =
       fmt::format("title/{:08X}/sessions", kernel_state()->title_id());
 
