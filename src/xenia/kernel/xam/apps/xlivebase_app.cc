@@ -116,16 +116,6 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
       XELOGD("XAccountGetUserInfo({:08X}, {:08X})", buffer_ptr, buffer_length);
       return XAccountGetUserInfo(buffer_ptr);
     }
-    case 0x0005801C: {
-      XELOGD("XLiveBaseUnk5801C({:08X}, {:08X}) Stubbed", buffer_ptr,
-             buffer_length);
-      return Unkn5801C(buffer_length);
-    }
-    case 0x00058024: {
-      XELOGD("XLiveBaseUnk58024({:08X}, {:08X}) Stubbed", buffer_ptr,
-             buffer_length);
-      return Unkn58024(buffer_length);
-    }
     case 0x00050036: {
       // 534507D4
       XELOGD("XOnlineQuerySearch({:08X}, {:08X})", buffer_ptr, buffer_length);
@@ -174,16 +164,15 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
       return Unkn50097(buffer_ptr);
     }
     case 0x00058004: {
-      // Called on startup, seems to just return a bool in the buffer.
-      assert_true(!buffer_length || buffer_length == 4);
-      XELOGD("XLiveBaseGetLogonId({:08X})", buffer_ptr);
-      xe::store_and_swap<uint32_t>(buffer + 0, 1);  // ?
+      assert_true(!buffer_length || buffer_length == sizeof(uint32_t));
+      XELOGD("XOnlineGetLogonID({:08X})", buffer_ptr);
+      xe::store_and_swap<uint32_t>(buffer, 1);
       return X_E_SUCCESS;
     }
     case 0x00058006: {
-      assert_true(!buffer_length || buffer_length == 4);
-      XELOGD("XLiveBaseGetNatType({:08X})", buffer_ptr);
-      xe::store_and_swap<uint32_t>(buffer + 0, 1);  // XONLINE_NAT_OPEN
+      assert_true(!buffer_length || buffer_length == sizeof(uint32_t));
+      XELOGD("XOnlineGetNatType({:08X})", buffer_ptr);
+      xe::store_and_swap<uint32_t>(buffer, X_NAT_TYPE::NAT_OPEN);
       return X_E_SUCCESS;
     }
     case 0x00058007: {
@@ -199,21 +188,19 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
     }
     case 0x0005800A: {
       assert_true(!buffer_length || buffer_length == 12);
-      XELOGD("XLiveBaseUnk5800A({:08X}, {:08X}) unimplemented", buffer_ptr,
+      XELOGD("XUpdateAccessTimes({:08X}, {:08X}) unimplemented", buffer_ptr,
              buffer_length);
-      return Unkn5800A(buffer_ptr);
+      return XUpdateAccessTimes(buffer_ptr);
     }
     case 0x0005800C: {
       // 464F0800
-      XELOGD("XUserMuteListSetState({:08X}, {:08X})", buffer_ptr,
-             buffer_length);
-      return XUserMuteListSetState(buffer_ptr);
+      XELOGD("XUserMuteListAdd({:08X}, {:08X})", buffer_ptr, buffer_length);
+      return XUserMuteListAdd(buffer_ptr);
     }
     case 0x0005800D: {
       // 464F0800
-      XELOGD("XUserMuteListSetState({:08X}, {:08X})", buffer_ptr,
-             buffer_length);
-      return XUserMuteListSetState(buffer_ptr);
+      XELOGD("XUserMuteListRemove({:08X}, {:08X})", buffer_ptr, buffer_length);
+      return XUserMuteListRemove(buffer_ptr);
     }
     case 0x0005800E: {
       // Fixes Xbox Live error for 513107D9
@@ -231,6 +218,11 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
       XELOGD("XPresenceCreateEnumerator({:08X}, {:08X})", buffer_ptr,
              buffer_length);
       return XPresenceCreateEnumerator(buffer_length);
+    }
+    case 0x0005801C: {
+      XELOGD("XPresenceGetState({:08X}, {:08X}) Stubbed", buffer_ptr,
+             buffer_length);
+      return XPresenceGetState(buffer_length);
     }
     case 0x0005801E: {
       // 54510846
@@ -256,6 +248,11 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
           "CXLiveMessaging::XMessageGameInviteGetAcceptedInfo({:08X}, {:08X})",
           buffer_ptr, buffer_length);
       return XInviteGetAcceptedInfo(buffer_length);
+    }
+    case 0x00058024: {
+      XELOGD("XMessageEnumerate({:08X}, {:08X}) Stubbed", buffer_ptr,
+             buffer_length);
+      return XMessageEnumerate(buffer_length);
     }
     case 0x00058032: {
       XELOGD("XOnlineGetTaskProgress({:08X}, {:08X})", buffer_ptr,
@@ -903,7 +900,18 @@ X_HRESULT XLiveBaseApp::GenericMarshalled(uint32_t buffer_ptr) {
   return X_E_SUCCESS;
 }
 
-X_HRESULT XLiveBaseApp::XUserMuteListSetState(uint32_t buffer_ptr) {
+X_HRESULT XLiveBaseApp::XUserMuteListAdd(uint32_t buffer_ptr) {
+  X_MUTE_SET_STATE* remote_player_ptr =
+      memory_->TranslateVirtual<X_MUTE_SET_STATE*>(buffer_ptr);
+
+  if (!IsOnlineXUID(remote_player_ptr->remote_xuid)) {
+    return X_E_INVALIDARG;
+  }
+
+  return X_E_SUCCESS;
+}
+
+X_HRESULT XLiveBaseApp::XUserMuteListRemove(uint32_t buffer_ptr) {
   X_MUTE_SET_STATE* remote_player_ptr =
       memory_->TranslateVirtual<X_MUTE_SET_STATE*>(buffer_ptr);
 
@@ -2592,16 +2600,17 @@ X_HRESULT XLiveBaseApp::Unkn50097(uint32_t buffer_ptr) {
   return X_E_SUCCESS;
 }
 
-X_HRESULT XLiveBaseApp::Unkn5800A(uint32_t buffer_ptr) {
+X_HRESULT XLiveBaseApp::XUpdateAccessTimes(uint32_t buffer_ptr) {
   // Called on blades dashboard v1888
   // More Videos and Downloads
 
-  X_DATA_5800A* data_ptr = memory_->TranslateVirtual<X_DATA_5800A*>(buffer_ptr);
+  XLIVEBASE_UPDATE_ACCESS_TIMES* data_ptr =
+      memory_->TranslateVirtual<XLIVEBASE_UPDATE_ACCESS_TIMES*>(buffer_ptr);
 
   return X_E_SUCCESS;
 }
 
-X_HRESULT XLiveBaseApp::Unkn58024(uint32_t buffer_length) {
+X_HRESULT XLiveBaseApp::XMessageEnumerate(uint32_t buffer_length) {
   // Called on blades dashboard v1888
 
   if (!buffer_length) {
@@ -2617,20 +2626,28 @@ X_HRESULT XLiveBaseApp::Unkn58024(uint32_t buffer_length) {
     assert_always(fmt::format("{} - Invalid argument count!", __func__));
   }
 
-  const X_DATA_58024* entry =
-      memory->TranslateVirtual<X_DATA_58024*>(buffer_length);
+  XLIVEBASE_MESSAGES_ENUMERATOR* entry =
+      memory->TranslateVirtual<XLIVEBASE_MESSAGES_ENUMERATOR*>(buffer_length);
 
   uint64_t xuid = xe::load_and_swap<uint64_t>(memory->TranslateVirtual(
       static_cast<uint32_t>(entry->xuid.argument_value_ptr)));
-  uint32_t ukn2 = xe::load_and_swap<uint32_t>(memory->TranslateVirtual(
-      static_cast<uint32_t>(entry->ukn2.argument_value_ptr)));
-  uint32_t ukn3_ptr = xe::load_and_swap<uint32_t>(memory->TranslateVirtual(
-      static_cast<uint32_t>(entry->ukn3.argument_value_ptr)));  // or uint64_t?
+  auto messages_count = memory->TranslateVirtual<xe::be<uint32_t>*>(
+      static_cast<uint32_t>(entry->messages_count_ptr.argument_value_ptr));
+  X_MESSAGE_SUMMARY* message_summaries =
+      memory->TranslateVirtual<X_MESSAGE_SUMMARY*>(static_cast<uint32_t>(
+          entry->message_summaries_ptr.argument_value_ptr));
+
+  *messages_count = 0;
+
+  for (uint32_t i = 0; i < *messages_count; i++) {
+    X_MESSAGE_SUMMARY* summary = &message_summaries[i];
+    std::memset(summary, 0, sizeof(X_MESSAGE_SUMMARY));
+  }
 
   return X_E_SUCCESS;
 }
 
-X_HRESULT XLiveBaseApp::Unkn5801C(uint32_t buffer_length) {
+X_HRESULT XLiveBaseApp::XPresenceGetState(uint32_t buffer_length) {
   // Called on blades dashboard v1888
 
   if (!buffer_length) {
@@ -2646,15 +2663,18 @@ X_HRESULT XLiveBaseApp::Unkn5801C(uint32_t buffer_length) {
     assert_always(fmt::format("{} - Invalid argument count!", __func__));
   }
 
-  const X_DATA_5801C* entry =
-      memory->TranslateVirtual<X_DATA_5801C*>(buffer_length);
+  const XLIVEBASE_PRESENCE_GET_STATE* entry =
+      memory->TranslateVirtual<XLIVEBASE_PRESENCE_GET_STATE*>(buffer_length);
 
   uint64_t xuid = xe::load_and_swap<uint64_t>(memory->TranslateVirtual(
       static_cast<uint32_t>(entry->xuid.argument_value_ptr)));
-  uint32_t ukn2 = xe::load_and_swap<uint32_t>(memory->TranslateVirtual(
-      static_cast<uint32_t>(entry->ukn2.argument_value_ptr)));
-  uint32_t ukn3_ptr = xe::load_and_swap<uint32_t>(memory->TranslateVirtual(
-      static_cast<uint32_t>(entry->ukn3.argument_value_ptr)));
+  auto state_flags_ptr = memory->TranslateVirtual<xe::be<uint32_t>*>(
+      static_cast<uint32_t>(entry->state_flags_ptr.argument_value_ptr));
+  auto session_id_ptr = memory->TranslateVirtual<XNKID*>(
+      static_cast<uint32_t>(entry->session_id_ptr.argument_value_ptr));
+
+  *state_flags_ptr = 0;
+  *session_id_ptr = {};
 
   return X_E_SUCCESS;
 }
