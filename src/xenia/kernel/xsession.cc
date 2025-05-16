@@ -664,11 +664,7 @@ X_RESULT XSession::WriteStats(XGI_STATS_WRITE* data) {
     return X_ERROR_SUCCESS;
   }
 
-  XSESSION_VIEW_PROPERTIES* leaderboard =
-      kernel_state_->memory()->TranslateVirtual<XSESSION_VIEW_PROPERTIES*>(
-          data->views_ptr);
-
-  XLiveAPI::SessionWriteStats(session_id_, data, leaderboard);
+  XLiveAPI::SessionWriteStats(session_id_, *data);
 
   return X_ERROR_SUCCESS;
 }

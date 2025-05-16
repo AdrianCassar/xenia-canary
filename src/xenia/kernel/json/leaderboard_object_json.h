@@ -20,7 +20,9 @@ class LeaderboardObjectJSON : public BaseObjectJSON {
   using BaseObjectJSON::Deserialize;
   using BaseObjectJSON::Serialize;
 
-  LeaderboardObjectJSON();
+  LeaderboardObjectJSON(XGI_STATS_WRITE stats,
+                        std::vector<XSESSION_VIEW_PROPERTIES> view_properties);
+
   virtual ~LeaderboardObjectJSON();
 
   virtual bool Deserialize(const rapidjson::Value& obj);
