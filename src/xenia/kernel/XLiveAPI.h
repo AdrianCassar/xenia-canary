@@ -127,8 +127,7 @@ class XLiveAPI {
   static std::unique_ptr<ArbitrationObjectJSON> XSessionArbitration(
       uint64_t sessionId);
 
-  static void SessionWriteStats(uint64_t sessionId, XGI_STATS_WRITE* stats,
-                                XSESSION_VIEW_PROPERTIES* probs);
+  static void SessionWriteStats(uint64_t sessionId, XGI_STATS_WRITE stats);
 
   static std::unique_ptr<HTTPResponseObjectJSON> LeaderboardsFind(
       const uint8_t* data);

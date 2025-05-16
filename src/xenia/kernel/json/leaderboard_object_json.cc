@@ -2,22 +2,28 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2024 Xenia Emulator. All rights reserved.                        *
+ * Copyright 2025 Xenia Canary. All rights reserved.                          *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
 
 #include "xenia/kernel/json/leaderboard_object_json.h"
 #include "xenia/kernel/util/shim_utils.h"
+#include "xenia/kernel/xam/user_data.h"
 
 namespace xe {
 namespace kernel {
-LeaderboardObjectJSON::LeaderboardObjectJSON() : stats_{}, view_properties_{} {}
+LeaderboardObjectJSON::LeaderboardObjectJSON(
+    XGI_STATS_WRITE stats,
+    std::vector<XSESSION_VIEW_PROPERTIES> view_properties) {
+  stats_ = stats;
+  view_properties_ = view_properties;
+}
 
 LeaderboardObjectJSON::~LeaderboardObjectJSON() {}
 
 bool LeaderboardObjectJSON::Deserialize(const rapidjson::Value& obj) {
-  return true;
+  return false;
 }
 
 bool LeaderboardObjectJSON::Serialize(
@@ -56,9 +62,13 @@ bool LeaderboardObjectJSON::Serialize(
       writer->Int(static_cast<uint32_t>(stat.data.type));
 
       switch (stat.data.type) {
+        case xam::X_USER_DATA_TYPE::CONTEXT: {
+          writer->String("value");
+          writer->Uint(stat.data.data.u32);
+        } break;
         case xam::X_USER_DATA_TYPE::INT32: {
           writer->String("value");
-          writer->Uint(stat.data.data.s32);
+          writer->Int(stat.data.data.s32);
         } break;
         case xam::X_USER_DATA_TYPE::INT64: {
           writer->String("value");
@@ -68,21 +78,17 @@ bool LeaderboardObjectJSON::Serialize(
           writer->String("value");
           writer->Double(stat.data.data.f64);
         } break;
-        case xam::X_USER_DATA_TYPE::WSTRING: {
-          XELOGW("Unimplemented statistic type: WSTRING");
-        } break;
         case xam::X_USER_DATA_TYPE::FLOAT: {
           XELOGW("Unimplemented statistic type: FLOAT");
-        } break;
-        case xam::X_USER_DATA_TYPE::BINARY: {
-          XELOGW("Unimplemented statistic type: BINARY");
         } break;
         case xam::X_USER_DATA_TYPE::DATETIME: {
           XELOGW("Unimplemented statistic type: DATETIME");
         } break;
         case xam::X_USER_DATA_TYPE::UNSET: {
-          XELOGW("Unimplemented statistic type: UNSET");
+          // Ignore
         } break;
+        case xam::X_USER_DATA_TYPE::WSTRING:
+        case xam::X_USER_DATA_TYPE::BINARY:
         default:
           XELOGW("Unsupported statistic type for write {}",
                  static_cast<uint32_t>(stat.data.type));
