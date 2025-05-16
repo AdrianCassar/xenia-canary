@@ -1043,22 +1043,23 @@ std::unique_ptr<ArbitrationObjectJSON> XLiveAPI::XSessionArbitration(
   return arbitration;
 }
 
-void XLiveAPI::SessionWriteStats(uint64_t sessionId, XGI_STATS_WRITE* stats,
-                                 XSESSION_VIEW_PROPERTIES* view_properties) {
+void XLiveAPI::SessionWriteStats(uint64_t sessionId, XGI_STATS_WRITE stats) {
   std::string endpoint =
       fmt::format("title/{:08X}/sessions/{:016x}/leaderboards",
                   kernel_state()->title_id(), sessionId);
 
+  XSESSION_VIEW_PROPERTIES* view_properties =
+      kernel_state()->memory()->TranslateVirtual<XSESSION_VIEW_PROPERTIES*>(
+          stats.views_ptr);
+
   std::vector<XSESSION_VIEW_PROPERTIES> properties(
-      view_properties, view_properties + stats->num_views);
+      view_properties, view_properties + stats.num_views);
 
-  LeaderboardObjectJSON leaderboard = LeaderboardObjectJSON();
-
-  leaderboard.Stats(*stats);
-  leaderboard.ViewProperties(properties);
+  LeaderboardObjectJSON* leaderboard =
+      new LeaderboardObjectJSON(stats, properties);
 
   std::string output;
-  bool valid = leaderboard.Serialize(output);
+  bool valid = leaderboard->Serialize(output);
   assert_true(valid);
 
   if (cvars::logging) {
