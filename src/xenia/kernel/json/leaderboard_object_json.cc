@@ -54,14 +54,18 @@ bool LeaderboardObjectJSON::Serialize(
       const std::string property_id =
           fmt::format("{:08X}", stat.property_id.get());
 
+      // 41560901 doesn't set property type
+      xam::X_USER_DATA_TYPE property_type =
+          xam::UserData::get_type(stat.property_id);
+
       // Write each stat ID
       writer->Key(property_id);
       writer->StartObject();
 
       writer->Key("type");
-      writer->Int(static_cast<uint32_t>(stat.data.type));
+      writer->Int(static_cast<uint32_t>(property_type));
 
-      switch (stat.data.type) {
+      switch (property_type) {
         case xam::X_USER_DATA_TYPE::CONTEXT: {
           writer->String("value");
           writer->Uint(stat.data.data.u32);
