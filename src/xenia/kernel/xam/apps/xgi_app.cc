@@ -313,8 +313,6 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
         uint32_t playerIndex = 0;
         for (Value::ConstValueIterator playerObjectPtr = playersArray.Begin();
              playerObjectPtr != playersArray.End(); ++playerObjectPtr) {
-          player[playerIndex].Rank = 1;
-          player[playerIndex].i64Rating = 1;
           auto gamertag = (*playerObjectPtr)["gamertag"].GetString();
           auto gamertagLength =
               (*playerObjectPtr)["gamertag"].GetStringLength();
@@ -338,6 +336,7 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
                    statisticsArray.Begin();
                statObjectPtr != statisticsArray.End(); ++statObjectPtr) {
             stat[statIndex].ColumnId = (*statObjectPtr)["id"].GetUint();
+
             stat[statIndex].Value.type = static_cast<X_USER_DATA_TYPE>(
                 (*statObjectPtr)["type"].GetUint());
 
@@ -356,36 +355,43 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
               case X_USER_DATA_TYPE::DOUBLE: {
                 XELOGW("Statistic type: DOUBLE");
               } break;
-              case X_USER_DATA_TYPE::WSTRING: {
-                XELOGW("Statistic type: WSTRING");
-              } break;
               case X_USER_DATA_TYPE::FLOAT: {
                 XELOGW("Statistic type: FLOAT");
-              } break;
-              case X_USER_DATA_TYPE::BINARY: {
-                XELOGW("Statistic type: BINARY");
               } break;
               case X_USER_DATA_TYPE::DATETIME: {
                 XELOGW("Statistic type: DATETIME");
               } break;
               case X_USER_DATA_TYPE::UNSET: {
-                XELOGW("Statistic type: UNSET");
+                // Backend returns placeholder stats for display
+                XELOGW(
+                    "Row Index: {} - Placeholder stat missing stat ID in "
+                    "stats.json",
+                    playerIndex);
               } break;
-              default:
+              case X_USER_DATA_TYPE::WSTRING:
+              case X_USER_DATA_TYPE::BINARY:
+              default: {
                 XELOGW("Unsupported statistic type.",
                        static_cast<uint32_t>(stat_type));
-                break;
+              } break;
             }
 
             switch (stat_type) {
-              case X_USER_DATA_TYPE::INT32:
+              case X_USER_DATA_TYPE::CONTEXT:
                 stat[statIndex].Value.data.u32 =
                     (*statObjectPtr)["value"].GetUint();
                 break;
+              case X_USER_DATA_TYPE::INT32:
+                stat[statIndex].Value.data.s32 =
+                    (*statObjectPtr)["value"].GetInt();
+                break;
               case X_USER_DATA_TYPE::INT64:
                 stat[statIndex].Value.data.s64 =
-                    (*statObjectPtr)["value"].GetUint64();
+                    (*statObjectPtr)["value"].GetInt64();
                 break;
+              case X_USER_DATA_TYPE::UNSET: {
+                // Ignore don't read missing/placeholder stat
+              } break;
               default:
                 XELOGW("Unimplemented stat type for read, will attempt anyway.",
                        static_cast<uint32_t>(stat[statIndex].Value.type));
@@ -395,8 +401,13 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
                 }
             }
 
-            stat[statIndex].Value.type = static_cast<X_USER_DATA_TYPE>(
-                (*statObjectPtr)["type"].GetUint());
+            player[playerIndex].Rank = 1;
+
+            if ((*statObjectPtr)["value"].IsNumber()) {
+              // 41560901 uses i64Rating for ranking friends scores
+              player[playerIndex].i64Rating =
+                  (*statObjectPtr)["value"].GetUint64();
+            }
 
             statIndex++;
           }
