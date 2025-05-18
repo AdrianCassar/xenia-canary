@@ -1199,6 +1199,53 @@ dword_result_t XamUserCreateStatsEnumerator_entry(
       kernel_state()->memory()->TranslateVirtual<X_USER_STATS_VIEW*>(
           view_address);
 
+  uint32_t player_count = num_rows;
+
+  auto players_guest_address = kernel_state()->memory()->SystemHeapAlloc(
+      sizeof(X_USER_STATS_ROW) * player_count);
+
+  auto players = kernel_state()->memory()->TranslateVirtual<X_USER_STATS_ROW*>(
+      players_guest_address);
+
+  for (uint32_t i = 0; i < views; i++) {
+    view_ptr[i].ViewId = static_cast<uint32_t>(stats_ptr->column_Ids[i]);
+    view_ptr[i].NumRows = 1;
+    view_ptr[i].TotalViewRows = static_cast<uint32_t>(num_rows);
+
+    for (uint32_t player_index = 0; player_index < player_count;
+         player_index++) {
+      players[player_index].Rank = 1;
+      players[player_index].i64Rating = 1;
+
+      const char* gamertag = "Testing Stats";
+
+      memcpy(players[player_index].szGamertag, gamertag, strlen(gamertag));
+
+      xe::be<uint64_t> xuid = 0x0009000012345678;
+      memcpy(&players[player_index].xuid, &xuid, sizeof(uint64_t));
+
+      uint32_t columns_count = stats_ptr->num_column_ids;
+
+      players[player_index].NumColumns = columns_count;
+
+      auto stats_guest_address = kernel_state()->memory()->SystemHeapAlloc(
+          sizeof(X_USER_STATS_COLUMN) * columns_count);
+
+      auto columns =
+          kernel_state()->memory()->TranslateVirtual<X_USER_STATS_COLUMN*>(
+              stats_guest_address);
+
+      players[player_index].pColumns = stats_guest_address;
+
+      for (uint32_t i = 0; i < columns_count; i++) {
+        columns[i].Value.type = X_USER_DATA_TYPE::INT32;
+        columns[i].Value.data.u32 = 100;
+      }
+
+      view_ptr[i].pRows = players_guest_address;
+    }
+  }
+
   X_USER_STATS_READ_RESULTS* results = e->AppendItem();
 
   // Games expect 1 view, 0 causes issues.
@@ -1206,8 +1253,10 @@ dword_result_t XamUserCreateStatsEnumerator_entry(
   results->num_views = views;
   results->views_ptr = view_address;
 
-  *buffer_size_ptr =
-      sizeof(X_USER_STATS_READ_RESULTS) + (views * sizeof(X_USER_STATS_VIEW));
+  *buffer_size_ptr = sizeof(X_USER_STATS_READ_RESULTS) +
+                     (views * sizeof(X_USER_STATS_VIEW)) +
+                     (num_rows * sizeof(X_USER_STATS_ROW)) +
+                     (stats_ptr->num_column_ids * sizeof(X_USER_STATS_COLUMN));
 
   assert_false(*buffer_size_ptr == 0);
 
