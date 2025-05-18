@@ -1129,11 +1129,7 @@ dword_result_t XamUserCreateStatsEnumerator_entry(
     return X_ERROR_INVALID_PARAMETER;
   }
 
-  // auto e = object_ref<XUserStatsEnumerator>(new XUserStatsEnumerator(
-  //     kernel_state(), stats_ptr->num_column_ids, enumerator_type));
-
-  auto e = make_object<XStaticEnumerator<X_USER_STATS_SPEC>>(
-      kernel_state(), stats_ptr->num_column_ids);
+  auto e = new XStaticEnumerator<X_USER_STATS_READ_RESULTS>(kernel_state(), 1);
 
   const X_STATUS result =
       e->Initialize(XUserIndexNone, 0xFB, 0xB0023, 0xB0024, 0);
@@ -1164,25 +1160,31 @@ dword_result_t XamUserCreateStatsEnumerator_entry(
     case X_STATS_ENUMERATOR_TYPE::BY_RATING: {
       xuid = pivot_user;
       XELOGI("XamUserCreateStatsEnumeratorByRating: {:016X}", xuid);
+      // auto e = new XStaticEnumerator<X_USER_ESTIMATE_RANK_RESULTS>(
+      //     kernel_state(), 1);
     } break;
     default:
       break;
   }
 
-  // start = Rank, Raiting, XUID?
-  for (auto i = 0; i < e->items_per_enumerate(); i++) {
-    //  XUserStatsEnumerator::StatsSpec stat = {};
-    //  stat.NumColumnIds = 0;
-    //  stat.ViewId = stats_ptr->view_id;
-    //  e->AppendItem(stat);
+  uint32_t views = 0;  // 1
 
-    X_USER_STATS_SPEC* item = e->AppendItem();
-  }
+  uint32_t view_address =
+      kernel_state()->memory()->SystemHeapAlloc(sizeof(X_USER_STATS_VIEW));
 
-  // XUSER_STATS_READ_RESULTS?
-  if (buffer_size_ptr) {
-    *buffer_size_ptr = stats_ptr->num_column_ids * sizeof(X_USER_STATS_SPEC);
-  }
+  X_USER_STATS_VIEW* view_ptr =
+      kernel_state()->memory()->TranslateVirtual<X_USER_STATS_VIEW*>(
+          view_address);
+
+  X_USER_STATS_READ_RESULTS* results = e->AppendItem();
+
+  results->num_views = views;
+  results->views_ptr = view_address;
+
+  *buffer_size_ptr =
+      sizeof(X_USER_STATS_READ_RESULTS) + (views * sizeof(X_USER_STATS_VIEW));
+
+  assert_false(*buffer_size_ptr == 0);
 
   *handle_ptr = e->handle();
   return X_ERROR_SUCCESS;

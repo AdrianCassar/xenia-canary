@@ -180,29 +180,6 @@ class XTitleEnumerator : public XEnumerator {
   size_t current_item_ = 0;
 };
 
-class XUserStatsEnumerator : public XEnumerator {
- public:
-  // X_USER_STATS_SPEC
-  struct StatsSpec {
-    uint32_t ViewId;
-    uint32_t NumColumnIds;
-    uint16_t rgwColumnIds[kXUserMaxStatsAttributes];
-  };
-
-  XUserStatsEnumerator(KernelState* kernel_state, size_t items_per_enumerate,
-                       uint32_t enumerator_type)
-      : XEnumerator(kernel_state, items_per_enumerate, 0) {}
-
-  void AppendItem(StatsSpec item) { items_.push_back(std::move(item)); }
-
-  uint32_t WriteItems(uint32_t buffer_ptr, uint8_t* buffer_data,
-                      uint32_t* written_count) override;
-
- private:
-  std::vector<StatsSpec> items_;
-  size_t current_item_ = 0;
-};
-
 }  // namespace kernel
 }  // namespace xe
 
