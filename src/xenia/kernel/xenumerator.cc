@@ -181,25 +181,6 @@ uint32_t XTitleEnumerator::WriteItems(uint8_t* buffer_data,
   return X_ERROR_SUCCESS;
 }
 
-uint32_t XUserStatsEnumerator::WriteItems(uint8_t* buffer_data,
-                                          uint32_t buffer_size,
-                                          uint32_t* written_count) {
-  size_t count = std::min(items_.size() - current_item_, items_per_enumerate());
-  if (!count) {
-    return X_ERROR_NO_MORE_FILES;
-  }
-
-  size_t size = count * item_size();
-
-  auto details = reinterpret_cast<X_USER_STATS_SPEC*>(buffer_data);
-
-  if (written_count) {
-    *written_count = static_cast<uint32_t>(count);
-  }
-
-  return X_ERROR_SUCCESS;
-}
-
 uint32_t XMPCreateUserPlaylistEnumerator::WriteItems(uint8_t* buffer_data,
                                                      uint32_t buffer_size,
                                                      uint32_t* written_count) {
