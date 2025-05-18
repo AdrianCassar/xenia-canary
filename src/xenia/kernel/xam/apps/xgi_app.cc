@@ -291,8 +291,8 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
       auto resultsHeader =
           memory_->TranslateVirtual<X_USER_STATS_READ_RESULTS*>(
               data->results_ptr);
-      resultsHeader->NumViews = leaderboardsArray.Size();
-      resultsHeader->Views_ptr = leaderboards_guest_address;
+      resultsHeader->num_views = leaderboardsArray.Size();
+      resultsHeader->views_ptr = leaderboards_guest_address;
 
       uint32_t leaderboardIndex = 0;
       for (Value::ConstValueIterator leaderboardObjectPtr =

@@ -378,8 +378,8 @@ struct X_USER_STATS_ROW {
 static_assert_size(X_USER_STATS_ROW, 0x30);
 
 struct X_USER_STATS_READ_RESULTS {
-  xe::be<uint32_t> NumViews;
-  xe::be<uint32_t> Views_ptr;
+  xe::be<uint32_t> num_views;
+  xe::be<uint32_t> views_ptr;
 };
 static_assert_size(X_USER_STATS_READ_RESULTS, 0x8);
 
@@ -389,6 +389,12 @@ struct X_USER_STATS_SPEC {
   xe::be<uint16_t> column_Ids[kXUserMaxStatsAttributes];
 };
 static_assert_size(X_USER_STATS_SPEC, 8 + kXUserMaxStatsAttributes * 2);
+
+struct X_USER_ESTIMATE_RANK_RESULTS {
+  xe::be<uint32_t> num_ranks;
+  xe::be<uint32_t> ranks_ptr;
+};
+static_assert_size(X_USER_ESTIMATE_RANK_RESULTS, 0x8);
 
 struct X_ONLINE_SERVICE_INFO {
   xe::be<uint32_t> id;
@@ -540,6 +546,12 @@ struct X_INVITE_INFO {
   xe::be<uint32_t> from_game_invite;
 };
 static_assert_size(X_INVITE_INFO, 0x54);
+
+struct X_USER_RANK_REQUEST {
+  xe::be<uint32_t> view_id;
+  xe::be<uint64_t> i64_rating;
+};
+static_assert_size(X_USER_RANK_REQUEST, 0xC);
 
 #pragma pack(pop)
 
