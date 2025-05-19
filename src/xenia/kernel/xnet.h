@@ -444,6 +444,11 @@ struct X_STORAGE_BUILD_SERVER_PATH {
 };
 static_assert_size(X_STORAGE_BUILD_SERVER_PATH, 0x28);
 
+struct X_STORAGE_FACILITY_INFO_GAME_CLIP {
+  xe::be<uint32_t> leaderboard_id;
+};
+static_assert_size(X_STORAGE_FACILITY_INFO_GAME_CLIP, 0x4);
+
 struct X_MUTE_SET_STATE {
   xe::be<uint32_t> user_index;
   xe::be<uint64_t> remote_xuid;
