@@ -1814,7 +1814,7 @@ X_HRESULT XLiveBaseApp::XStorageUploadFromMemory(uint32_t buffer_ptr) {
     return X_E_INVALIDARG;
   }
 
-  if (buffer_size > kTMSUserMaxSize) {
+  if (buffer_size > kTMSClipMaxSize) {
     return X_ONLINE_E_STORAGE_FILE_IS_TOO_BIG;
   }
 
@@ -1967,26 +1967,30 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
 
   switch (args->storage_location) {
     case X_STORAGE_FACILITY::FACILITY_GAME_CLIP: {
+      X_STORAGE_FACILITY_INFO_GAME_CLIP game_clip_info_ptr = {};
+
+      if (args->storage_location_info_ptr) {
+        game_clip_info_ptr =
+            *kernel_state_->memory()
+                 ->TranslateVirtual<X_STORAGE_FACILITY_INFO_GAME_CLIP*>(
+                     args->storage_location_info_ptr);
+
+        XELOGI("{}: Leaderboard ID: {:08X}", __func__,
+               game_clip_info_ptr.leaderboard_id.get());
+      }
+
+      // Validate ID via XLast
+      assert_false(game_clip_info_ptr.leaderboard_id == 0);
+
       const std::string path = fmt::format(
-          "title/{:08X}/clips/{}", kernel_state()->title_id(), filename_str);
+          "clips/title/{:08X}/{:016X}/{:08X}/{}", kernel_state()->title_id(),
+          xuid, game_clip_info_ptr.leaderboard_id.get(), filename_str);
 
       backend_server_path_str =
           fmt::format("{}/{}", backend_domain_prefix, path);
 
       symlink_path = fmt::format("{}{}", xstorage_symboliclink, path);
       symlink_path = utf8::fix_guest_path_separators(symlink_path);
-
-      xe::be<uint32_t> leaderboard_id = 0;
-
-      if (args->storage_location_info_ptr) {
-        uint32_t* leaderboard_id_ptr =
-            kernel_state_->memory()->TranslateVirtual<uint32_t*>(
-                args->storage_location_info_ptr);
-
-        leaderboard_id = *leaderboard_id_ptr;
-
-        XELOGI("{}: Leaderboard ID: {}", __func__, leaderboard_id.get());
-      }
 
       storage_type = "Game Clip";
     } break;
@@ -2369,8 +2373,7 @@ X_STORAGE_FACILITY XLiveBaseApp::GetStorageFacilityTypeFromServerPath(
   std::string user_facility = R"(user(/|\\)[0-9a-fA-F]{16}(/|\\))";
 
   std::regex title_facility_regex(title_facility);
-  std::regex clips_facility_regex(
-      fmt::format("{}{}", title_facility, clips_facility));
+  std::regex clips_facility_regex(clips_facility);
   std::regex user_facility_regex(
       fmt::format("{}{}", user_facility, title_facility));
 
