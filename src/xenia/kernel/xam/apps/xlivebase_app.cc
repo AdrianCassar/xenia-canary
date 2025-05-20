@@ -1940,10 +1940,11 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
     xuid = args->xuid;
   }
 
-  bool is_per_user_title =
-      args->storage_location == X_STORAGE_FACILITY::FACILITY_PER_USER_TITLE;
+  bool xuid_reqiured =
+      args->storage_location == X_STORAGE_FACILITY::FACILITY_PER_USER_TITLE ||
+      args->storage_location == X_STORAGE_FACILITY::FACILITY_GAME_CLIP;
 
-  if (!xuid && is_per_user_title) {
+  if (!xuid && xuid_reqiured) {
     xuid = kernel_state()
                ->xam_state()
                ->GetUserProfile(args->user_index.get())
