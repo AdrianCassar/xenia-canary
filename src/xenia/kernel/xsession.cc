@@ -8,6 +8,7 @@
  */
 
 #include <algorithm>
+#include <ranges>
 
 #include "xenia/base/logging.h"
 #include "xenia/kernel/XLiveAPI.h"
@@ -346,6 +347,16 @@ X_RESULT XSession::JoinSession(XGI_SESSION_MANAGE* data) {
 
   if (!members.empty() && IsHost() && IsXboxLive()) {
     XLiveAPI::SessionJoinRemote(session_id_, members);
+  } else {
+    // To improve XNetInAddrToXnAddr stability each members session id
+    // must match host. This is a workaround and should be fixed properly.
+    //
+    // 545107D1 will fail to join sessions if session id doesn't match.
+
+    const auto keys = std::views::keys(members);
+    std::set<uint64_t> xuids{keys.begin(), keys.end()};
+
+    XLiveAPI::SessionPreJoin(session_id_, xuids);
   }
 
   return X_ERROR_SUCCESS;
