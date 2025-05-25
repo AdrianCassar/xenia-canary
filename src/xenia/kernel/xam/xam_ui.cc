@@ -1417,7 +1417,7 @@ bool xeDrawFriendsContent(xe::ui::ImGuiDrawer* imgui_drawer,
 
     ImGui::BeginDisabled(!profile->GetFriendsCount());
     if (ImGui::Button("Refresh", half_width_btn)) {
-      args.refersh_presence = true;
+      args.refresh_presence = true;
       *presences = {};
     }
     ImGui::EndDisabled();
@@ -1436,21 +1436,21 @@ bool xeDrawFriendsContent(xe::ui::ImGuiDrawer* imgui_drawer,
     ImGui::Separator();
     ImGui::Spacing();
 
-    if (args.refersh_presence || args.refersh_presence_sync ||
+    if (args.refresh_presence || args.refresh_presence_sync ||
         args.add_friend_args.added_friend) {
       auto run = [presences, user_index]() {
         *presences = kernel::XLiveAPI::GetAllFriendsPresence(user_index);
       };
 
-      if (args.refersh_presence_sync) {
+      if (args.refresh_presence_sync) {
         run();
 
-        args.refersh_presence_sync = false;
+        args.refresh_presence_sync = false;
       } else {
         std::thread get_presences_thread(run);
         get_presences_thread.detach();
 
-        args.refersh_presence = false;
+        args.refresh_presence = false;
         args.add_friend_args.added_friend = false;
       }
     }
@@ -1627,6 +1627,7 @@ bool xeDrawSessionContent(xe::ui::ImGuiDrawer* imgui_drawer,
   ImGui::Spacing();
   ImGui::Spacing();
 
+  // What is player presence session is null?
   ImGui::BeginDisabled(!session->SessionID_UInt() || caller);
   if (ImGui::Button(join_label.c_str(),
                     ImVec2(ImGui::GetContentRegionAvail().x, 25))) {
@@ -1692,7 +1693,7 @@ bool xeDrawSessionsContent(
     if (ImGui::Button("Refresh",
                       ImVec2(ImGui::GetContentRegionAvail().x, 25))) {
       sessions->clear();
-      sessions_args.refersh_sessions = true;
+      sessions_args.refresh_sessions = true;
     }
 
     ImGui::Separator();
@@ -1700,18 +1701,18 @@ bool xeDrawSessionsContent(
     ImGui::Spacing();
     ImGui::Spacing();
 
-    if (sessions_args.refersh_sessions || sessions_args.refersh_sessions_sync) {
+    if (sessions_args.refresh_sessions || sessions_args.refresh_sessions_sync) {
       auto run = [sessions]() { *sessions = XLiveAPI::GetTitleSessions(); };
 
-      if (sessions_args.refersh_sessions_sync) {
+      if (sessions_args.refresh_sessions_sync) {
         run();
 
-        sessions_args.refersh_sessions_sync = false;
+        sessions_args.refresh_sessions_sync = false;
       } else {
-        std::thread refersh_sessions_thread(run);
-        refersh_sessions_thread.detach();
+        std::thread refresh_sessions_thread(run);
+        refresh_sessions_thread.detach();
 
-        sessions_args.refersh_sessions = false;
+        sessions_args.refresh_sessions = false;
       }
     }
 
@@ -1722,10 +1723,6 @@ bool xeDrawSessionsContent(
       if (sessions_args.filter_own && caller) {
         continue;
       }
-
-      // if (sessions_args.filter_own && !caller) {
-      //   continue;
-      // }
 
       xeDrawSessionContent(imgui_drawer, profile, session);
 

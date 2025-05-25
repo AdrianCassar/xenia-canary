@@ -458,13 +458,13 @@ void ManagerDialog::OnDraw(ImGuiIO& io) {
 
     if (!friends_args.friends_open) {
       friends_args.first_draw = false;
-      friends_args.refersh_presence_sync = true;
+      friends_args.refresh_presence_sync = true;
       presences = {};
     }
 
     if (!sessions_args.sessions_open) {
       sessions_args.first_draw = false;
-      sessions_args.refersh_sessions_sync = true;
+      sessions_args.refresh_sessions_sync = true;
       sessions.clear();
     }
 
