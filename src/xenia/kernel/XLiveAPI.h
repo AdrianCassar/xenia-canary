@@ -153,6 +153,9 @@ class XLiveAPI {
   static void SessionLeaveRemote(uint64_t sessionId,
                                  const std::vector<xe::be<uint64_t>> xuids);
 
+  static void SessionPreJoin(uint64_t sessionId,
+                             const std::set<uint64_t>& xuids);
+
   static std::unique_ptr<FriendsPresenceObjectJSON> GetFriendsPresence(
       const std::vector<uint64_t>& xuids);
 
