@@ -32,8 +32,8 @@ struct FriendsContentArgs {
   bool filter_joinable;
   bool filter_title;
   bool filter_offline;
-  bool refersh_presence;
-  bool refersh_presence_sync;
+  bool refresh_presence;
+  bool refresh_presence_sync;
   AddFriendArgs add_friend_args = {};
   ImGuiTextFilter filter = {};
 };
@@ -42,8 +42,8 @@ struct SessionsContentArgs {
   bool first_draw;
   bool sessions_open;
   bool filter_own;
-  bool refersh_sessions;
-  bool refersh_sessions_sync;
+  bool refresh_sessions;
+  bool refresh_sessions_sync;
 };
 
 struct MyDeletedProfilesArgs {
