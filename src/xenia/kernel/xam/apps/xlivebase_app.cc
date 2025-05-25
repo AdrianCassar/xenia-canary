@@ -855,6 +855,18 @@ X_HRESULT XLiveBaseApp::XInviteGetAcceptedInfo(uint32_t buffer_length) {
     return X_ONLINE_E_SESSION_NOT_FOUND;
   }
 
+  std::set<uint64_t> local_members = {};
+
+  for (uint32_t i = 0; i < XUserMaxUserCount; i++) {
+    const auto profile = kernel_state()->xam_state()->GetUserProfile(i);
+
+    if (profile && profile->IsLiveEnabled()) {
+      local_members.insert(profile->GetOnlineXUID());
+    }
+  }
+
+  XLiveAPI::SessionPreJoin(session_id, local_members);
+
   // Use GetXnAddrFromSessionObject
   Uint64toXNKID(session->SessionID_UInt(), &invite_info->host_info.sessionID);
   GenerateIdentityExchangeKey(&invite_info->host_info.keyExchangeKey);
