@@ -21,7 +21,7 @@ FriendsUI::FriendsUI(xe::ui::ImGuiDrawer* imgui_drawer, UserProfile* profile)
 void FriendsUI::OnDraw(ImGuiIO& io) {
   if (!args.friends_open) {
     args.first_draw = true;
-    args.refersh_presence_sync = true;
+    args.refresh_presence_sync = true;
     args.friends_open = true;
 
     ImGui::OpenPopup("Friends");
