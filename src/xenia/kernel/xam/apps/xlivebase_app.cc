@@ -13,9 +13,11 @@
 #include "xenia/kernel/xenumerator.h"
 
 #include "xenia/base/logging.h"
+#include "xenia/emulator.h"
 #include "xenia/kernel/XLiveAPI.h"
 #include "xenia/kernel/util/shim_utils.h"
 #include "xenia/kernel/xnet.h"
+#include "xenia/ui/imgui_host_notification.h"
 
 #ifdef XE_PLATFORM_WIN32
 // NOTE: must be included last as it expects windows.h to already be included.
@@ -836,13 +838,21 @@ X_HRESULT XLiveBaseApp::XInviteGetAcceptedInfo(uint32_t buffer_length) {
   }
 
   if (!session_id) {
-    return X_E_FAIL;
+    new xe::ui::HostNotificationWindow(
+        kernel_state()->emulator()->imgui_drawer(), "Joining Session",
+        "Unable to join session", 0);
+
+    return X_ONLINE_E_SESSION_NOT_FOUND;
   }
 
   const auto session = XLiveAPI::XSessionGet(session_id);
 
   if (!session->SessionID_UInt()) {
-    return X_E_FAIL;
+    new xe::ui::HostNotificationWindow(
+        kernel_state()->emulator()->imgui_drawer(), "Joining Session",
+        "Unable to join session", 0);
+
+    return X_ONLINE_E_SESSION_NOT_FOUND;
   }
 
   // Use GetXnAddrFromSessionObject
