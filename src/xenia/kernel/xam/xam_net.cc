@@ -810,19 +810,23 @@ dword_result_t NetDll_XNetInAddrToXnAddr_entry(dword_t caller, dword_t in_addr,
     if (!XLiveAPI::systemlink_id || EXPLICIT_XBOXLIVE_KEY) {
       IsValidXNKID(player->SessionID());
 
-      XLiveAPI::sessionIdCache.emplace(xn_addr->inaOnline.s_addr,
-                                       player->SessionID());
+      if (player->SessionID()) {
+        XLiveAPI::sessionIdCache[xn_addr->inaOnline.s_addr] =
+            player->SessionID();
+      }
 
-      XLiveAPI::macAddressCache.emplace(xn_addr->inaOnline.s_addr,
-                                        player->MacAddress());
+      if (player->MacAddress()) {
+        XLiveAPI::macAddressCache[xn_addr->inaOnline.s_addr] =
+            player->MacAddress();
+      }
     } else {
       // Remote mac missing for systemlink!
       // 415607E1 (CoD 3) checks for this!
       //
       // If we're connected to server then use it
       if (player->MacAddress()) {
-        XLiveAPI::macAddressCache.emplace(xn_addr->inaOnline.s_addr,
-                                          player->MacAddress());
+        XLiveAPI::macAddressCache[xn_addr->inaOnline.s_addr] =
+            player->MacAddress();
       }
     }
   }
@@ -839,14 +843,13 @@ dword_result_t NetDll_XNetInAddrToXnAddr_entry(dword_t caller, dword_t in_addr,
 
   if (xid_ptr != nullptr) {
     XNKID* sessionId_ptr = kernel_memory()->TranslateVirtual<XNKID*>(xid_ptr);
-    uint64_t session_id = 0;
+    xe::be<uint64_t> session_id = 0;
 
     // FIXME
     if (XLiveAPI::systemlink_id) {
-      session_id = xe::byte_swap(XLiveAPI::systemlink_id);
+      session_id = XLiveAPI::systemlink_id;
     } else {
-      session_id =
-          xe::byte_swap(XLiveAPI::sessionIdCache[xn_addr->inaOnline.s_addr]);
+      session_id = XLiveAPI::sessionIdCache[xn_addr->inaOnline.s_addr];
     }
 
     memcpy(sessionId_ptr, &session_id, sizeof(uint64_t));
