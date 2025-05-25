@@ -1416,6 +1416,38 @@ void XLiveAPI::SessionLeaveRemote(uint64_t sessionId,
   }
 }
 
+void XLiveAPI::SessionPreJoin(uint64_t sessionId,
+                              const std::set<uint64_t>& xuids) {
+  std::string endpoint = fmt::format("title/{:08X}/sessions/{:016X}/prejoin",
+                                     kernel_state()->title_id(), sessionId);
+
+  Document doc;
+  doc.SetObject();
+
+  Value xuids_array(kArrayType);
+
+  for (const auto& xuid : xuids) {
+    const std::string xuid_str = xe::string_util::to_hex_string(xuid);
+
+    Value xuid_value = Value(xuid_str.c_str(), 16, doc.GetAllocator());
+    xuids_array.PushBack(xuid_value.Move(), doc.GetAllocator());
+  }
+
+  doc.AddMember("xuids", xuids_array, doc.GetAllocator());
+
+  rapidjson::StringBuffer buffer;
+  Writer<rapidjson::StringBuffer> writer(buffer);
+  doc.Accept(writer);
+
+  std::unique_ptr<HTTPResponseObjectJSON> response =
+      Post(endpoint, reinterpret_cast<const uint8_t*>(buffer.GetString()));
+
+  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_CREATED) {
+    XELOGE("SessionPreJoin error message: {}", response->Message());
+    assert_always();
+  }
+}
+
 std::unique_ptr<FriendsPresenceObjectJSON> XLiveAPI::GetFriendsPresence(
     const std::vector<uint64_t>& xuids) {
   const std::string endpoint = "players/presence";
