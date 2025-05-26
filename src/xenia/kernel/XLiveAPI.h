@@ -27,6 +27,7 @@
 #include "xenia/kernel/json/http_response_object_json.h"
 #include "xenia/kernel/json/leaderboard_object_json.h"
 #include "xenia/kernel/json/player_object_json.h"
+#include "xenia/kernel/json/presence_object_json.h"
 #include "xenia/kernel/json/properties_object_json.h"
 #include "xenia/kernel/json/service_info_json.h"
 #include "xenia/kernel/json/session_object_json.h"
@@ -180,6 +181,8 @@ class XLiveAPI {
 
   static std::unique_ptr<FindUsersObjectJSON> GetFindUsers(
       const std::vector<FIND_USER_INFO>& find_users_info);
+
+  static void SetPresence();
 
   static std::unique_ptr<HTTPResponseObjectJSON> PraseResponse(
       response_data response);
