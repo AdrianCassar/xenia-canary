@@ -1688,6 +1688,44 @@ std::unique_ptr<FindUsersObjectJSON> XLiveAPI::GetFindUsers(
   return find_users;
 }
 
+void XLiveAPI::SetPresence() {
+  const std::string endpoint = "players/setpresence";
+
+  std::unique_ptr<PresenceObjectJSON> presence =
+      std::make_unique<PresenceObjectJSON>();
+
+  // Update presence for all signed in xbox live enabled profiles
+  for (uint32_t i = 0; i < XUserMaxUserCount; i++) {
+    const auto user_profile = kernel_state()->xam_state()->GetUserProfile(i);
+
+    if (user_profile) {
+      FriendPresenceObjectJSON* profile_presence = new FriendPresenceObjectJSON();
+
+      if (user_profile->IsLiveEnabled()) {
+        profile_presence->XUID(user_profile->GetOnlineXUID());
+        profile_presence->RichPresence(user_profile->GetPresenceString());
+      }
+
+      presence->AddPresence(*profile_presence);
+    }
+  }
+
+  std::string player_presence;
+  bool valid = presence->Serialize(player_presence);
+  assert_true(valid);
+
+  const uint8_t* player_presence_data =
+      reinterpret_cast<const uint8_t*>(player_presence.c_str());
+
+  std::unique_ptr<HTTPResponseObjectJSON> response =
+      Post(endpoint, player_presence_data);
+
+  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_CREATED) {
+    XELOGE("SetPresence error message: {}", response->Message());
+    assert_always();
+  }
+}
+
 std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::PraseResponse(
     response_data chunk) {
   std::unique_ptr<HTTPResponseObjectJSON> response =

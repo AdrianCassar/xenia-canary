@@ -509,6 +509,11 @@ bool UserProfile::UpdatePresence() {
       kernel_state()->emulator()->on_presence_change(
           kernel_state()->emulator()->title_name(), updated_presence);
     }
+
+    auto run = [] { XLiveAPI::SetPresence(); };
+
+    std::thread update_presence(run);
+    update_presence.detach();
   }
 
   return updated;
