@@ -73,35 +73,6 @@ bool FriendPresenceObjectJSON::Deserialize(const rapidjson::Value& obj) {
 
 bool FriendPresenceObjectJSON::Serialize(
     rapidjson::PrettyWriter<rapidjson::StringBuffer>* writer) const {
-  // writer->StartObject();
-
-  // writer->String("xuid");
-  // writer->String(fmt::format("{:016X}", xuid_));
-
-  // writer->String("gamertag");
-  // writer->Uint(gamertag_);
-
-  // writer->String("state");
-  // writer->Uint(state_);
-
-  // writer->String("sessionId");
-  // writer->String(fmt::format("{:016X}", sessionId_));
-
-  // writer->String("titleId");
-  // writer->String(title_id_);
-
-  // writer->String("stateChangeTime");
-  // writer->Uint64(state_change_time_);
-
-  // writer->String("richPresenceStateSize");
-  // writer->Uint(rich_state_presence_size_);
-
-  //// Problem :/
-  // writer->String("richPresence");
-  //// writer->String(rich_presence_);
-
-  // writer->EndObject();
-
   return false;
 }
 
