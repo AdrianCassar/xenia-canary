@@ -297,6 +297,8 @@ struct XNADDR {
 };
 static_assert_size(XNADDR, 0x24);
 
+typedef XNADDR TSADDR;
+
 struct XSESSION_INFO {
   XNKID sessionID;
   XNADDR hostAddress;
@@ -1005,6 +1007,7 @@ inline uint32_t XAccountGetUserInfoResponseSize() {
 
 constexpr uint8_t XNKID_ONLINE = 0xAE;
 constexpr uint8_t XNKID_SYSTEM_LINK = 0x00;
+constexpr uint8_t XNKID_SERVER = 0xC0;
 
 inline bool IsOnlinePeer(uint64_t session_id) {
   return ((session_id >> 56) & 0xFF) == XNKID_ONLINE;
@@ -1014,8 +1017,13 @@ inline bool IsSystemlink(uint64_t session_id) {
   return ((session_id >> 56) & 0xFF) == XNKID_SYSTEM_LINK;
 }
 
+inline bool IsServer(uint64_t session_id) {
+  return ((session_id >> 56) & 0xFF) == XNKID_SERVER;
+}
+
 inline bool IsValidXNKID(uint64_t session_id) {
-  if (!IsOnlinePeer(session_id) && !IsSystemlink(session_id) ||
+  if (!IsOnlinePeer(session_id) && !IsSystemlink(session_id) &&
+          !IsServer(session_id) ||
       session_id == 0) {
     assert_always();
 
@@ -1047,6 +1055,10 @@ inline void GenerateIdentityExchangeKey(XNKEY* key) {
   for (uint8_t i = 0; i < sizeof(XNKEY); i++) {
     key->ab[i] = i;
   }
+}
+
+inline bool IsDeadSg(SGADDR sgaddr) {
+  return (sgaddr.security_parameter_index == 0) && (sgaddr.xbox_id == 0);
 }
 
 }  // namespace kernel
