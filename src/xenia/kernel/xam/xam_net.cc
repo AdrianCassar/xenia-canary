@@ -698,8 +698,7 @@ dword_result_t NetDll_XNetServerToInAddr_entry(dword_t caller,
                                                dword_t server_addr,
                                                dword_t service_id,
                                                pointer_t<in_addr> pina) {
-  XELOGI("XNetServerToInAddr({:08X} {:08X})", server_addr.value(),
-         pina.guest_address());
+  XELOGI("XNetServerToInAddr");
 
   if (XLiveAPI::GetInitState() != XLiveAPI::InitState::Success) {
     return static_cast<uint32_t>(X_WSAError::X_WSANOTINITIALISED);
@@ -711,9 +710,7 @@ dword_result_t NetDll_XNetServerToInAddr_entry(dword_t caller,
 
   pina->s_addr = htonl(server_addr);
 
-  if (cvars::logging) {
-    XELOGI("Server IP: {}", ip_to_string(*pina));
-  }
+  XELOGI("Server IP: {}", ip_to_string(*pina));
 
   return X_ERROR_SUCCESS;
 }
@@ -722,8 +719,11 @@ DECLARE_XAM_EXPORT1(NetDll_XNetServerToInAddr, kNetworking, kImplemented);
 dword_result_t NetDll_XNetInAddrToServer_entry(dword_t caller,
                                                dword_t server_addr,
                                                pointer_t<in_addr> pina) {
-  XELOGI("XNetServerToInAddr({:08X} {:08X})", server_addr.value(),
-         pina.guest_address());
+  XELOGI("XNetInAddrToServer");
+
+  if (!server_addr) {
+    return static_cast<uint32_t>(X_WSAError::X_WSAEINVAL);
+  }
 
   pina->s_addr = htonl(server_addr);
 
@@ -732,6 +732,30 @@ dword_result_t NetDll_XNetInAddrToServer_entry(dword_t caller,
   return X_ERROR_SUCCESS;
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetInAddrToServer, kNetworking, kSketchy);
+
+dword_result_t NetDll_XNetTsAddrToInAddr_entry(dword_t caller,
+                                               pointer_t<TSADDR> tsaddr_ptr,
+                                               dword_t service_id,
+                                               pointer_t<XNKID> xnkid_ptr,
+                                               pointer_t<in_addr> ina_ptr) {
+  XELOGI("XNetTsAddrToInAddr");
+
+  if (!tsaddr_ptr || !service_id || !xnkid_ptr || !ina_ptr) {
+    return static_cast<uint32_t>(X_WSAError::X_WSAEINVAL);
+  }
+
+  // Use XNKID to lookup security association?
+
+  *ina_ptr = tsaddr_ptr->inaOnline;
+
+  IsValidXNKID(xnkid_ptr->as_uintBE64());
+
+  XELOGI("Server IP: {}, Service ID: {:08X}", ip_to_string(*ina_ptr),
+         static_cast<uint32_t>(service_id));
+
+  return X_ERROR_SUCCESS;
+}
+DECLARE_XAM_EXPORT1(NetDll_XNetTsAddrToInAddr, kNetworking, kSketchy);
 
 dword_result_t NetDll_XNetInAddrToString_entry(dword_t caller, dword_t ina,
                                                lpstring_t string_out,
@@ -1990,7 +2014,13 @@ dword_result_t NetDll_XNetRegisterKey_entry(dword_t caller,
     return 0;
   }
 
-  XELOGI("XNetRegisterKey: Unknown");
+  if (IsServer(session_key->as_uintBE64())) {
+    XELOGI("XNetRegisterKey: Server");
+    return 0;
+  }
+
+  XELOGI(fmt::format("XNetRegisterKey: {:016X} (Unknown)",
+                     session_key->as_uintBE64()));
 
   return 0;
 }
