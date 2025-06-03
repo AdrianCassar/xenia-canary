@@ -29,7 +29,7 @@
 #include "xenia/kernel/json/player_object_json.h"
 #include "xenia/kernel/json/presence_object_json.h"
 #include "xenia/kernel/json/properties_object_json.h"
-#include "xenia/kernel/json/service_info_json.h"
+#include "xenia/kernel/json/services_json.h"
 #include "xenia/kernel/json/session_object_json.h"
 #include "xenia/kernel/json/xstorage_file_info_object_json.h"
 #include "xenia/kernel/xsession.h"
@@ -151,8 +151,7 @@ class XLiveAPI {
 
   static std::vector<X_TITLE_SERVER> GetServers();
 
-  static HTTP_STATUS_CODE GetServiceInfoById(
-      uint32_t serviceId, X_ONLINE_SERVICE_INFO* session_info);
+  static std::unique_ptr<ServicesObjectJSON> GetServices();
 
   static void SessionJoinRemote(
       uint64_t sessionId, const std::unordered_map<uint64_t, bool> members);

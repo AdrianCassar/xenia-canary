@@ -641,18 +641,16 @@ X_HRESULT XLiveBaseApp::XOnlineGetServiceInfo(uint32_t serviceid,
   X_ONLINE_SERVICE_INFO* service_info_ptr =
       memory_->TranslateVirtual<X_ONLINE_SERVICE_INFO*>(serviceinfo);
 
-  memset(service_info_ptr, 0, sizeof(X_ONLINE_SERVICE_INFO));
+  std::memset(service_info_ptr, 0, sizeof(X_ONLINE_SERVICE_INFO));
 
-  X_ONLINE_SERVICE_INFO service_info = {};
+  const auto services = XLiveAPI::GetServices();
 
-  HTTP_STATUS_CODE status =
-      XLiveAPI::GetServiceInfoById(serviceid, &service_info);
-
-  if (status != HTTP_STATUS_CODE::HTTP_OK) {
-    return X_ONLINE_E_LOGON_SERVICE_NOT_REQUESTED;
+  for (const auto& service_info : services->ServicesResults()) {
+    if (service_info.id == serviceid) {
+      std::memcpy(service_info_ptr, &service_info,
+                  sizeof(X_ONLINE_SERVICE_INFO));
+    }
   }
-
-  memcpy(service_info_ptr, &service_info, sizeof(X_ONLINE_SERVICE_INFO));
 
   return X_E_SUCCESS;
 }
