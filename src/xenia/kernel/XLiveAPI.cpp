@@ -1330,33 +1330,23 @@ std::vector<X_TITLE_SERVER> XLiveAPI::GetServers() {
   return xlsp_servers;
 }
 
-HTTP_STATUS_CODE XLiveAPI::GetServiceInfoById(
-    uint32_t serviceId, X_ONLINE_SERVICE_INFO* session_info) {
-  std::string endpoint = fmt::format("title/{:08X}/services/{:08X}",
-                                     kernel_state()->title_id(), serviceId);
+std::unique_ptr<ServicesObjectJSON> XLiveAPI::GetServices() {
+  std::string endpoint =
+      fmt::format("title/{:08X}/services", kernel_state()->title_id());
 
   std::unique_ptr<HTTPResponseObjectJSON> response = Get(endpoint);
 
-  HTTP_STATUS_CODE status =
-      static_cast<HTTP_STATUS_CODE>(response->StatusCode());
+  std::unique_ptr<ServicesObjectJSON> services =
+      std::make_unique<ServicesObjectJSON>();
 
-  if (status != HTTP_STATUS_CODE::HTTP_OK) {
-    XELOGE("GetServiceById error message: {}", response->Message());
+  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_OK) {
+    XELOGE("GetServices error message: {}", response->Message());
     assert_always();
-
-    return status;
   }
 
-  std::unique_ptr<ServiceInfoObjectJSON> service_info =
-      response->Deserialize<ServiceInfoObjectJSON>();
+  services = response->Deserialize<ServicesObjectJSON>();
 
-  XELOGD("GetServiceById IP: {}", service_info->Address());
-
-  session_info->id = serviceId;
-  session_info->port = service_info->Port();
-  session_info->ip = ip_to_in_addr(service_info->Address());
-
-  return status;
+  return services;
 }
 
 void XLiveAPI::SessionJoinRemote(uint64_t sessionId,
