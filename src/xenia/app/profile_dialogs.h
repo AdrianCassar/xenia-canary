@@ -10,6 +10,7 @@
 #ifndef XENIA_APP_PROFILE_DIALOGS_H_
 #define XENIA_APP_PROFILE_DIALOGS_H_
 
+#include "xenia/app/updater.h"
 #include "xenia/kernel/json/friend_presence_object_json.h"
 #include "xenia/kernel/json/session_object_json.h"
 #include "xenia/kernel/xam/ui/netplay_manager_util.h"
@@ -73,6 +74,38 @@ class ManagerDialog final : public ui::ImGuiDialog {
   std::vector<xe::kernel::FriendPresenceObjectJSON> presences;
   std::vector<std::unique_ptr<xe::kernel::SessionObjectJSON>> sessions;
   std::map<uint64_t, std::string> deleted_profiles;
+  EmulatorWindow* emulator_window_;
+};
+
+class UpdaterDialog final : public ui::ImGuiDialog {
+ public:
+  UpdaterDialog(Updater* updater, ui::ImGuiDrawer* imgui_drawer,
+                EmulatorWindow* emulator_window)
+      : ui::ImGuiDialog(imgui_drawer), emulator_window_(emulator_window) {
+    updater_ = updater;
+  }
+
+ protected:
+  void OnDraw(ImGuiIO& io) override;
+
+ private:
+  bool updater_opened_ = false;
+  Updater* updater_ = nullptr;
+  uint32_t response_code_ = 0;
+  bool update_available_ = false;
+  bool checked_for_updates_ = false;
+  bool downloading_ = false;
+  bool downloaded_ = false;
+  bool downloaded_failed_ = false;
+  bool hide_download_button_ = false;
+  bool show_replace_dialog_ = false;
+  bool replace_file_ = false;
+  std::filesystem::path downloaded_file_path_;
+  const std::string windows_artifact_name_ = "xenia_canary_netplay_windows.zip";
+  std::string latest_commit_hash_ = "";
+  std::string latest_commit_date_ = "";
+  std::vector<std::string> commit_messages_ = {};
+  std::string changelog_ = "";
   EmulatorWindow* emulator_window_;
 };
 

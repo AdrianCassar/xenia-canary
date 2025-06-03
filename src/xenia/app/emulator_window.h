@@ -14,6 +14,7 @@
 #include <string>
 
 #include "xenia/app/profile_dialogs.h"
+#include "xenia/app/updater.h"
 #include "xenia/emulator.h"
 #include "xenia/gpu/command_processor.h"
 #include "xenia/ui/imgui_dialog.h"
@@ -98,6 +99,7 @@ class EmulatorWindow {
   void ToggleProfilesConfigDialog();
   void ToggleXMPConfigDialog();
   void ToggleFriendsDialog();
+  void ToggleUpdaterDialog();
   void SetHotkeysState(bool enabled) { disable_hotkeys_ = !enabled; }
 
   // Types of button functions for hotkeys.
@@ -318,6 +320,8 @@ class EmulatorWindow {
   std::string base_title_;
   bool initializing_shader_storage_ = false;
 
+  Updater* updater_;
+
   std::unique_ptr<DisplayConfigDialog> display_config_dialog_;
 
   // Storing pointers and toggling dialog state is useful for broadcasting
@@ -327,6 +331,8 @@ class EmulatorWindow {
   std::unique_ptr<XMPConfigDialog> xmp_config_dialog_;
 
   std::unique_ptr<ManagerDialog> friends_manager_dialog_;
+
+  std::unique_ptr<UpdaterDialog> updater_dialog_;
 
   std::vector<RecentTitleEntry> recently_launched_titles_;
 };
