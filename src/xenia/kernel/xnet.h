@@ -415,28 +415,48 @@ struct XSESSION_MEMBER {
 static_assert_size(XSESSION_MEMBER, 0x10);
 
 struct X_PARTY_CUSTOM_DATA {
-  xe::be<uint64_t> First;
-  xe::be<uint64_t> Second;
+  xe::be<uint64_t> first;
+  xe::be<uint64_t> second;
 };
 static_assert_size(X_PARTY_CUSTOM_DATA, 0x10);
 
 struct X_PARTY_USER_INFO {
-  xe::be<uint64_t> Xuid;
-  char GamerTag[16];
-  xe::be<uint32_t> UserIndex;
-  xe::be<uint32_t> NatType;
-  xe::be<uint32_t> TitleId;
-  xe::be<uint32_t> Flags;
-  XSESSION_INFO SessionInfo;
-  X_PARTY_CUSTOM_DATA CustomData;
+  xe::be<uint64_t> xuid;
+  char gamertag[16];
+  xe::be<uint32_t> user_index;
+  xe::be<uint32_t> nat_type;
+  xe::be<uint32_t> title_id;
+  xe::be<uint32_t> flags;
+  XSESSION_INFO session_info;
+  X_PARTY_CUSTOM_DATA custom_data;
 };
 static_assert_size(X_PARTY_USER_INFO, 0x78);
 
 struct X_PARTY_USER_LIST {
-  xe::be<uint32_t> UserCount;
-  X_PARTY_USER_INFO Users[X_PARTY_MAX_USERS];
+  xe::be<uint32_t> user_count;
+  X_PARTY_USER_INFO users[X_PARTY_MAX_USERS];
 };
 static_assert_size(X_PARTY_USER_LIST, 0xF08);
+
+struct X_PARTY_USER_INFO_INTERNAL {
+  xe::be<uint64_t> xuid;
+  char gamertag[16];
+  xe::be<uint32_t> user_index;
+  xe::be<uint32_t> nat_type;
+  xe::be<uint32_t> title_id;
+  xe::be<uint32_t> flags;
+  XSESSION_INFO session_info;
+  X_PARTY_CUSTOM_DATA custom_data;
+  xe::be<uint32_t> peer_id;
+  xe::be<uint32_t> mute_mask;
+};
+static_assert_size(X_PARTY_USER_INFO_INTERNAL, 0x80);
+
+struct X_PARTY_USER_LIST_INTERNAL {
+  xe::be<uint32_t> user_count;
+  X_PARTY_USER_INFO_INTERNAL users[X_PARTY_MAX_USERS];
+};
+static_assert_size(X_PARTY_USER_LIST_INTERNAL, 0x1008);
 
 struct X_USER_STATS_VIEW {
   xe::be<uint32_t> ViewId;
