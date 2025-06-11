@@ -44,6 +44,16 @@ dword_result_t XamPartyGetBandwidth_entry(dword_t r3, dword_t r4) {
 }
 DECLARE_XAM_EXPORT1(XamPartyGetBandwidth, kNone, kStub);
 
+dword_result_t XamPartyGetUserListInternal_entry(
+    pointer_t<X_PARTY_USER_LIST_INTERNAL> party_list_ptr) {
+  if (party_list_ptr) {
+    party_list_ptr.Zero();
+  }
+
+  return X_ERROR_SUCCESS;
+}
+DECLARE_XAM_EXPORT1(XamPartyGetUserListInternal, kNone, kStub);
+
 }  // namespace xam
 }  // namespace kernel
 }  // namespace xe
