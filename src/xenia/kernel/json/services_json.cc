@@ -31,7 +31,13 @@ bool ServicesObjectJSON::Deserialize(const rapidjson::Value& obj) {
       X_ONLINE_SERVICE_INFO service_info = {};
 
       if (service.HasMember("service_id")) {
-        service_info.id = service["service_id"].GetInt();
+        const auto service_id_str =
+            std::string(service["service_id"].GetString());
+
+        if (!service_id_str.empty()) {
+          service_info.id =
+              string_util::from_string<uint32_t>(service_id_str, true);
+        }
       }
 
       if (service.HasMember("address")) {
