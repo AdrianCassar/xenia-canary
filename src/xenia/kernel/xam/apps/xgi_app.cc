@@ -275,17 +275,13 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
 
       if (chunk->RawResponse().response == nullptr ||
           chunk->StatusCode() != HTTP_STATUS_CODE::HTTP_CREATED) {
-        return X_ERROR_FUNCTION_FAILED;
+        // FM2 crashes with X_ERROR_FUNCTION_FAILED
+        return X_ERROR_SUCCESS;
       }
 
       Document leaderboards;
       leaderboards.Parse(chunk->RawResponse().response);
       const Value& leaderboardsArray = leaderboards.GetArray();
-
-      // Fixed FM4 and RDR GOTY from crashing.
-      if (leaderboardsArray.Empty()) {
-        return X_ERROR_IO_PENDING;
-      }
 
       auto leaderboards_guest_address = memory_->SystemHeapAlloc(
           sizeof(X_USER_STATS_VIEW) * leaderboardsArray.Size());
