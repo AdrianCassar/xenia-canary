@@ -296,6 +296,12 @@ class XSession : public XObject {
     return (flags & ~systemlink) == 0;
   }
 
+  bool HasLiveFeatures(uint8_t flags) const {
+    const uint8_t live_features = PRESENCE | STATS | MATCHMAKING | ARBITRATION;
+
+    return flags & live_features;
+  }
+
   const uint32_t GetMembersCount() const {
     const uint32_t max_slots =
         local_details_.MaxPrivateSlots + local_details_.MaxPublicSlots;

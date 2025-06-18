@@ -52,6 +52,21 @@ X_RESULT XSession::CreateSession(uint8_t user_index, uint8_t public_slots,
     return X_ERROR_FUNCTION_FAILED;
   }
 
+  // Session type is ranked but ARBITRATION flag isn't set
+  if (GetGameTypeValue(user_profile->xuid()) == X_CONTEXT_GAME_TYPE_RANKED &&
+      !(flags & ARBITRATION)) {
+    return X_ONLINE_E_SESSION_REQUIRES_ARBITRATION;
+  }
+
+  // 58410889
+  // If a session requires online features but we're offline then we must fail.
+  // e.g. Trying to create a SINGLEPLAYER_WITH_STATS session while not connected
+  // to live.
+  if (HasLiveFeatures(flags) && user_profile->signin_state() !=
+                                    xam::X_USER_SIGNIN_STATE::SignedInToLive) {
+    return X_ONLINE_E_SESSION_NOT_LOGGED_ON;
+  }
+
   XSESSION_INFO* SessionInfo_ptr =
       kernel_state_->memory()->TranslateVirtual<XSESSION_INFO*>(
           session_info_ptr);
