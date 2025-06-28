@@ -105,7 +105,8 @@ namespace xe {
 #define X_PARTY_MAX_USERS                                   32
 
 #define X_MARKETPLACE_CONTENT_ID_LEN                        20
-
+#define X_MARKETPLACE_ASSET_SIGNATURE_SIZE                  256
+    
 #define X_PROPERTY_TYPE_MASK                                0xF0000000
 #define X_PROPERTY_SCOPE_MASK                               0x00008000
 #define X_PROPERTY_ID_MASK                                  0x00007FFF
@@ -568,6 +569,26 @@ struct X_MARKETPLACE_CONTENTOFFER_INFO {
   xe::be<uint32_t> points_price;
 };
 static_assert_size(X_MARKETPLACE_CONTENTOFFER_INFO, 0x68);
+
+struct X_MARKETPLACE_ASSET {
+  xe::be<uint32_t> asset_id;
+  xe::be<uint32_t> quantity;
+};
+static_assert_size(X_MARKETPLACE_ASSET, 0x8);
+
+struct X_MARKETPLACE_ASSET_PACKAGE {
+  X_FILETIME filetime_enumerate;
+  xe::be<uint32_t> num_assets;
+  xe::be<uint32_t> total_assets;
+  X_MARKETPLACE_ASSET assets[1];
+};
+static_assert_size(X_MARKETPLACE_ASSET_PACKAGE, 0x18);
+
+struct X_MARKETPLACE_ASSET_ENUMERATE_REPLY {
+  uint8_t signature[X_MARKETPLACE_ASSET_SIGNATURE_SIZE];
+  X_MARKETPLACE_ASSET_PACKAGE asset_package;
+};
+static_assert_size(X_MARKETPLACE_ASSET_ENUMERATE_REPLY, 0x118);
 
 #pragma region XLiveBase
 
