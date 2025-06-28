@@ -218,12 +218,11 @@ void UserTracker::AddDefaultProperties(uint64_t xuid) {
     return;
   }
 
-  const std::u16string gamertag =
-      xe::string_util::read_u16string_and_swap(user->account_info_.gamertag);
+  const std::u16string gamertag = user->account_info_.gamertag;
 
   Property PUID =
       Property(XPROPERTY_GAMER_PUID,
-               static_cast<int64_t>(user->account_info_.xuid_online));
+               static_cast<int64_t>(user->account_info_.GetOnlineXUID()));
   Property GAMER_HOST_NAME = Property(XPROPERTY_GAMER_HOSTNAME, gamertag);
   Property GAMER_NAME = Property(XPROPERTY_GAMERNAME, gamertag);
   Property GAMER_ZONE = Property(
