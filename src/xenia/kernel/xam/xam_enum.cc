@@ -101,14 +101,46 @@ static uint32_t XTitleServerCreateEnumerator(
     *item = server;
   }
 
-  XELOGI("XTitleServerCreateEnumerator: added {} items to enumerator",
-         e->item_count());
+  XELOGI("{}: added {} items to enumerator", __func__, e->item_count());
 
   *out_handle = e->handle();
   return X_ERROR_SUCCESS;
 }
 
+static uint32_t XMarketplaceCreateOfferEnumerator(
+    uint32_t user_index, uint32_t app_id, uint32_t open_message,
+    uint32_t close_message, uint32_t extra_size, uint32_t item_count,
+    uint32_t flags, uint32_t* out_handle) {
+  auto e = make_object<XStaticEnumerator<X_MARKETPLACE_CONTENTOFFER_INFO>>(
+      kernel_state(), item_count);
+
+  auto result = e->Initialize(user_index, app_id, open_message, close_message,
+                              flags, extra_size, nullptr);
+
+  if (XFAILED(result)) {
+    return result;
+  }
+
+  std::vector<X_MARKETPLACE_CONTENTOFFER_INFO> content_offers = {};
+
+  for (const auto& content : content_offers) {
+    X_MARKETPLACE_CONTENTOFFER_INFO* item = e->AppendItem();
+
+    *item = content;
+  }
+
+  XELOGI("{}: added {} items to enumerator", __func__, e->item_count());
+
+  *out_handle = e->handle();
+  return X_ERROR_SUCCESS;
+}
+
+// XMarketplaceCreateOfferEnumeratorByOffering ->
+// XMarketplaceCreateOfferEnumeratorEx
+
 constexpr uint32_t XTitleServerMessage = 0x58039;
+constexpr uint32_t XMarketplaceCreateOfferEnumeratorMessage = 0x58040;
+constexpr uint32_t XMarketplaceCreateOfferEnumeratorExMessage = 0x58040;
 
 dword_result_t XamCreateEnumeratorHandle_entry(
     dword_t user_index, dword_t app_id, dword_t open_message,
@@ -128,7 +160,26 @@ dword_result_t XamCreateEnumeratorHandle_entry(
 
       *out_handle = out_handle_ptr;
     } break;
+    case XMarketplaceCreateOfferEnumeratorMessage: {
+      auto result = XMarketplaceCreateOfferEnumerator(
+          user_index, app_id, open_message, close_message, extra_size,
+          item_count, flags, &out_handle_ptr);
+
+      if (XFAILED(result)) {
+        return result;
+      }
+
+      *out_handle = out_handle_ptr;
+    } break;
     default: {
+      std::string enumerator_log = fmt::format(
+          "Unimplemented XamCreateEnumeratorHandle app={:04X}, "
+          "open_message={:04X}, close_message={:04X}, flags={:04X}",
+          app_id.value(), open_message.value(), close_message.value(),
+          flags.value());
+
+      XELOGI(enumerator_log);
+
       auto e = object_ref<XStaticUntypedEnumerator>(
           new XStaticUntypedEnumerator(kernel_state(), item_count, extra_size));
 
