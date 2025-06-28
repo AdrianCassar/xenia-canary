@@ -135,12 +135,41 @@ static uint32_t XMarketplaceCreateOfferEnumerator(
   return X_ERROR_SUCCESS;
 }
 
+static uint32_t XMarketplaceCreateAssetEnumerator(
+    uint32_t user_index, uint32_t app_id, uint32_t open_message,
+    uint32_t close_message, uint32_t extra_size, uint32_t item_count,
+    uint32_t flags, uint32_t* out_handle) {
+  auto e = make_object<XStaticEnumerator<X_MARKETPLACE_ASSET_ENUMERATE_REPLY>>(
+      kernel_state(), item_count);
+
+  auto result = e->Initialize(user_index, app_id, open_message, close_message,
+                              flags, extra_size, nullptr);
+
+  if (XFAILED(result)) {
+    return result;
+  }
+
+  std::vector<X_MARKETPLACE_ASSET_ENUMERATE_REPLY> marketplace_assets = {};
+
+  for (const auto& asset : marketplace_assets) {
+    X_MARKETPLACE_ASSET_ENUMERATE_REPLY* item = e->AppendItem();
+
+    *item = asset;
+  }
+
+  XELOGI("{}: added {} items to enumerator", __func__, e->item_count());
+
+  *out_handle = e->handle();
+  return X_ERROR_SUCCESS;
+}
+
 // XMarketplaceCreateOfferEnumeratorByOffering ->
 // XMarketplaceCreateOfferEnumeratorEx
 
 constexpr uint32_t XTitleServerMessage = 0x58039;
 constexpr uint32_t XMarketplaceCreateOfferEnumeratorMessage = 0x58040;
 constexpr uint32_t XMarketplaceCreateOfferEnumeratorExMessage = 0x58040;
+constexpr uint32_t XMarketplaceCreateAssetEnumeratorMessage = 0x58042;
 
 dword_result_t XamCreateEnumeratorHandle_entry(
     dword_t user_index, dword_t app_id, dword_t open_message,
@@ -162,6 +191,17 @@ dword_result_t XamCreateEnumeratorHandle_entry(
     } break;
     case XMarketplaceCreateOfferEnumeratorMessage: {
       auto result = XMarketplaceCreateOfferEnumerator(
+          user_index, app_id, open_message, close_message, extra_size,
+          item_count, flags, &out_handle_ptr);
+
+      if (XFAILED(result)) {
+        return result;
+      }
+
+      *out_handle = out_handle_ptr;
+    } break;
+    case XMarketplaceCreateAssetEnumeratorMessage: {
+      auto result = XMarketplaceCreateAssetEnumerator(
           user_index, app_id, open_message, close_message, extra_size,
           item_count, flags, &out_handle_ptr);
 
