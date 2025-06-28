@@ -104,6 +104,8 @@ namespace xe {
 
 #define X_PARTY_MAX_USERS                                   32
 
+#define X_MARKETPLACE_CONTENT_ID_LEN                        20
+
 #define X_PROPERTY_TYPE_MASK                                0xF0000000
 #define X_PROPERTY_SCOPE_MASK                               0x00008000
 #define X_PROPERTY_ID_MASK                                  0x00007FFF
@@ -542,6 +544,30 @@ struct X_TITLE_SERVER {
   char server_description[200];
 };
 static_assert_size(X_TITLE_SERVER, 0xD0);
+
+struct X_MARKETPLACE_CONTENTOFFER_INFO {
+  xe::be<uint64_t> offer_id;
+  xe::be<uint64_t> preview_offer_id;
+  xe::be<uint32_t> offer_name_length;
+  xe::be<uint32_t> offer_name_ptr;  // char16_t*
+  xe::be<uint32_t> offer_type;
+  uint8_t content_id[X_MARKETPLACE_CONTENT_ID_LEN];
+  xe::be<uint32_t> is_unrestricted_license;
+  xe::be<uint32_t> license_mask;
+  xe::be<uint32_t> title_id;
+  xe::be<uint32_t> content_category;
+  xe::be<uint32_t> title_name_length;
+  xe::be<uint32_t> title_name_ptr;  // char16_t*
+  xe::be<uint32_t> user_has_purchased;
+  xe::be<uint32_t> package_size;
+  xe::be<uint32_t> install_size;
+  xe::be<uint32_t> sell_text_length;
+  xe::be<uint32_t> sell_text_ptr;  // char16_t*
+  xe::be<uint32_t> asset_id;
+  xe::be<uint32_t> purchase_quantity;
+  xe::be<uint32_t> points_price;
+};
+static_assert_size(X_MARKETPLACE_CONTENTOFFER_INFO, 0x68);
 
 #pragma region XLiveBase
 
