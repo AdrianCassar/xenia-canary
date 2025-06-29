@@ -252,7 +252,7 @@ class XSession : public XObject {
   XSession(KernelState* kernel_state);
 
   X_STATUS Initialize();
-  X_RESULT CreateSession(uint8_t user_index, uint8_t public_slots,
+  X_RESULT CreateSession(uint32_t user_index, uint8_t public_slots,
                          uint8_t private_slots, uint32_t flags,
                          uint32_t session_info_ptr, uint32_t nonce_ptr);
   X_RESULT DeleteSession(XGI_SESSION_STATE* state);
@@ -285,21 +285,19 @@ class XSession : public XObject {
                                   uint32_t search_results_ptr,
                                   uint32_t results_buffer_size);
 
-  const bool IsXboxLive() { return !is_systemlink_; }
+  bool HasOfflineFlags() const { return !local_details_.Flags; }
 
-  const bool IsSystemlink() { return is_systemlink_; }
-
-  static const bool IsSystemlinkFlags(uint8_t flags) {
+  bool HasSystemlinkFlags() const {
     // STATS
     const uint32_t systemlink = HOST | PEER_NETWORK;
 
-    return (flags & ~systemlink) == 0;
+    return !HasOfflineFlags() && (local_details_.Flags & ~systemlink) == 0;
   }
 
-  bool HasLiveFeatures(uint8_t flags) const {
+  bool HasXboxLiveFeatureFlags() const {
     const uint8_t live_features = PRESENCE | STATS | MATCHMAKING | ARBITRATION;
 
-    return flags & live_features;
+    return !HasOfflineFlags() && (local_details_.Flags & live_features);
   }
 
   const uint32_t GetMembersCount() const {
@@ -411,8 +409,6 @@ class XSession : public XObject {
   // uint64_t migrated_session_id_;
   uint64_t session_id_ = 0;
   uint32_t state_ = 0;
-
-  bool is_systemlink_ = false;
 
   XSESSION_LOCAL_DETAILS local_details_{};
 
