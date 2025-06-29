@@ -37,7 +37,7 @@ X_STATUS XSession::Initialize() {
   return X_STATUS_SUCCESS;
 }
 
-X_RESULT XSession::CreateSession(uint8_t user_index, uint8_t public_slots,
+X_RESULT XSession::CreateSession(uint32_t user_index, uint8_t public_slots,
                                  uint8_t private_slots, uint32_t flags,
                                  uint32_t session_info_ptr,
                                  uint32_t nonce_ptr) {
@@ -47,7 +47,7 @@ X_RESULT XSession::CreateSession(uint8_t user_index, uint8_t public_slots,
   }
 
   const xam::UserProfile* user_profile =
-      kernel_state_->xam_state()->GetUserProfile((uint32_t)user_index);
+      kernel_state_->xam_state()->GetUserProfile(user_index);
   if (!user_profile) {
     return X_ERROR_FUNCTION_FAILED;
   }
@@ -62,8 +62,9 @@ X_RESULT XSession::CreateSession(uint8_t user_index, uint8_t public_slots,
   // If a session requires online features but we're offline then we must fail.
   // e.g. Trying to create a SINGLEPLAYER_WITH_STATS session while not connected
   // to live.
-  if (HasLiveFeatures(flags) && user_profile->signin_state() !=
-                                    xam::X_USER_SIGNIN_STATE::SignedInToLive) {
+  if (HasXboxLiveFeatureFlags() &&
+      user_profile->signin_state() !=
+          xam::X_USER_SIGNIN_STATE::SignedInToLive) {
     return X_ONLINE_E_SESSION_NOT_LOGGED_ON;
   }
 
@@ -79,11 +80,11 @@ X_RESULT XSession::CreateSession(uint8_t user_index, uint8_t public_slots,
 
   local_details_.UserIndexHost = XUserIndexNone;
 
+  // Set early so utility functions can check flags
+  local_details_.Flags = flags;
+
   // CSGO only uses STATS flag to create a session to POST stats pre round.
   // Minecraft and Portal 2 use flags HOST + STATS.
-  //
-  // Creating a session when not host can cause failure in joining sessions
-  // such as L4D2 and Portal 2.
   //
   // Hexic creates a session with SINGLEPLAYER_WITH_STATS (without HOST bit)
   // with contexts
@@ -93,15 +94,17 @@ X_RESULT XSession::CreateSession(uint8_t user_index, uint8_t public_slots,
   // - Explicitly create a presence session (Frogger without HOST bit)
   // Based on Presence flag set?
 
-  if (IsSystemlinkFlags(flags)) {
-    is_systemlink_ = true;
-  }
+  // 584107FB expects offline session creation by specifying 0 (a session
+  // without Xbox Live features) to succeed while offline for local multiplayer.
+  //
+  // 58410889 expects SINGLEPLAYER_WITH_STATS session creation failure while
+  // offline.
 
   if (flags == STATS) {
     CreateStatsSession(SessionInfo_ptr, Nonce_ptr, user_index, public_slots,
                        private_slots, flags);
   } else if (HasSessionFlag((SessionFlags)flags, HOST) ||
-             flags == SINGLEPLAYER_WITH_STATS) {
+             flags == SINGLEPLAYER_WITH_STATS || HasOfflineFlags()) {
     CreateHostSession(SessionInfo_ptr, Nonce_ptr, user_index, public_slots,
                       private_slots, flags);
   } else {
@@ -110,7 +113,6 @@ X_RESULT XSession::CreateSession(uint8_t user_index, uint8_t public_slots,
 
   local_details_.GameType = GetGameTypeValue(user_profile->xuid());
   local_details_.GameMode = GetGameModeValue(user_profile->xuid());
-  local_details_.Flags = flags;
   local_details_.MaxPublicSlots = public_slots;
   local_details_.MaxPrivateSlots = private_slots;
   local_details_.AvailablePublicSlots = public_slots;
@@ -152,7 +154,13 @@ X_RESULT XSession::CreateHostSession(XSESSION_INFO* session_info,
 
   const uint64_t systemlink_id = XLiveAPI::systemlink_id;
 
-  if (IsSystemlink()) {
+  if (HasOfflineFlags()) {
+    XELOGI("Creating an offline session");
+
+    // what session ID mask should be used here?
+    session_id_ = GenerateSessionId(XNKID_SYSTEM_LINK);
+
+  } else if (HasSystemlinkFlags()) {
     XELOGI("Creating systemlink session");
 
     // If XNetRegisterKey did not register key then we must register it here
@@ -162,7 +170,7 @@ X_RESULT XSession::CreateHostSession(XSESSION_INFO* session_info,
       session_id_ = GenerateSessionId(XNKID_SYSTEM_LINK);
       XLiveAPI::systemlink_id = session_id_;
     }
-  } else {
+  } else if (HasXboxLiveFeatureFlags()) {
     XELOGI("Creating xbox live session");
     session_id_ = GenerateSessionId(XNKID_ONLINE);
 
@@ -171,6 +179,8 @@ X_RESULT XSession::CreateHostSession(XSESSION_INFO* session_info,
     // update if value changed to reduce POST requests.
     XLiveAPI::XSessionCreate(session_id_, &session_data);
     XLiveAPI::SessionPropertiesSet(session_id_, session_data.user_index);
+  } else {
+    assert_always();
   }
 
   XELOGI("Created session {:016X}", session_id_);
@@ -199,10 +209,12 @@ X_RESULT XSession::JoinExistingSession(XSESSION_INFO* session_info) {
 
   if (kernel::IsSystemlink(session_id_)) {
     XELOGI("Joining systemlink session");
-    is_systemlink_ = true;
     return X_ERROR_SUCCESS;
-  } else {
+  } else if (kernel::IsOnlinePeer(session_id_)) {
     XELOGI("Joining xbox live session");
+  } else {
+    XELOGI("Joining unknown session type!");
+    assert_always();
   }
 
   const std::unique_ptr<SessionObjectJSON> session =
@@ -222,7 +234,7 @@ X_RESULT XSession::DeleteSession(XGI_SESSION_STATE* state) {
 
   state_ |= STATE_FLAGS_DELETED;
 
-  if (IsHost() && IsXboxLive()) {
+  if (IsHost() && HasXboxLiveFeatureFlags()) {
     XLiveAPI::DeleteSession(session_id_);
   }
 
@@ -242,7 +254,10 @@ X_RESULT XSession::DeleteSession(XGI_SESSION_STATE* state) {
 // If there are no private slots available then the member will occupy a
 // public slot instead.
 //
-// TODO: Add player to recent player list, maybe backend responsibility.
+// TODO(Adrian):
+// Add player to recent player list.
+// Joining a offline session uses which XUID offline or online (flags = 0)
+// Return correct error codes
 X_RESULT XSession::JoinSession(XGI_SESSION_MANAGE* data) {
   const bool join_local = data->xuid_array_ptr == 0;
 
@@ -275,7 +290,7 @@ X_RESULT XSession::JoinSession(XGI_SESSION_MANAGE* data) {
       const uint32_t user_index = static_cast<uint32_t>(indices_array[i]);
 
       if (!kernel_state()->xam_state()->IsUserSignedIn(user_index)) {
-        return X_E_FAIL;
+        return X_ONLINE_E_SESSION_NOT_LOGGED_ON;
       }
 
       const auto user_profile =
@@ -349,9 +364,9 @@ X_RESULT XSession::JoinSession(XGI_SESSION_MANAGE* data) {
 
   local_details_.ReturnedMemberCount = GetMembersCount();
 
-  if (!members.empty() && IsHost() && IsXboxLive()) {
+  if (!members.empty() && IsHost() && HasXboxLiveFeatureFlags()) {
     XLiveAPI::SessionJoinRemote(session_id_, members);
-  } else {
+  } else if (!members.empty() && !HasOfflineFlags()) {
     // To improve XNetInAddrToXnAddr stability each members session id
     // must match host. This is a workaround and should be fixed properly.
     //
@@ -362,6 +377,8 @@ X_RESULT XSession::JoinSession(XGI_SESSION_MANAGE* data) {
 
     XLiveAPI::SessionPreJoin(session_id_, xuids);
   }
+
+  // XamUserAddRecentPlayer
 
   return X_ERROR_SUCCESS;
 }
@@ -400,7 +417,7 @@ X_RESULT XSession::LeaveSession(XGI_SESSION_MANAGE* data) {
       const uint32_t user_index = static_cast<uint32_t>(indices_array[i]);
 
       if (!kernel_state()->xam_state()->IsUserSignedIn(user_index)) {
-        return X_E_FAIL;
+        return X_ONLINE_E_SESSION_NOT_LOGGED_ON;
       }
 
       const auto user_profile =
@@ -481,7 +498,7 @@ X_RESULT XSession::LeaveSession(XGI_SESSION_MANAGE* data) {
 
   local_details_.ReturnedMemberCount = GetMembersCount();
 
-  if (!xuids.empty() && IsHost() && IsXboxLive()) {
+  if (!xuids.empty() && IsHost() && HasXboxLiveFeatureFlags()) {
     XLiveAPI::SessionLeaveRemote(session_id_, xuids);
   }
 
@@ -521,7 +538,7 @@ X_RESULT XSession::ModifySession(XGI_SESSION_MODIFY* data) {
 
   PrintSessionDetails();
 
-  if (IsHost() && IsXboxLive()) {
+  if (IsHost() && HasXboxLiveFeatureFlags()) {
     XLiveAPI::SessionModify(session_id_, &modify);
   }
 
@@ -1109,6 +1126,11 @@ void XSession::PrintSessionDetails() {
 
 void XSession::PrintSessionType(SessionFlags flags) {
   std::string session_description = "";
+
+  if (!flags) {
+    XELOGI("Session Flags Empty!");
+    return;
+  }
 
   const std::map<SessionFlags, std::string> basic = {
       {HOST, "Host"},
