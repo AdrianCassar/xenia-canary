@@ -37,7 +37,6 @@
 #include "xenia/kernel/xam/profile_manager.h"
 #include "xenia/kernel/xam/xam_module.h"
 #include "xenia/kernel/xam/xam_state.h"
-#include "xenia/kernel/xnet.h"
 #include "xenia/ui/file_picker.h"
 #include "xenia/ui/graphics_provider.h"
 #include "xenia/ui/imgui_dialog.h"
@@ -48,7 +47,8 @@
 #include "xenia/ui/ui_event.h"
 #include "xenia/ui/virtual_key.h"
 
-#include <xenia/kernel/XLiveAPI.h>
+#include "xenia/kernel/XLiveAPI.h"
+
 #include "version.h"
 
 DECLARE_bool(debug);
