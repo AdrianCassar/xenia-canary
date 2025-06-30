@@ -14,7 +14,6 @@
 
 #include "xenia/kernel/xam/achievement_manager.h"
 #include "xenia/kernel/xam/user_tracker.h"
-#include "xenia/kernel/xnet.h"
 #include "xenia/kernel/xobject.h"
 
 namespace xe {
