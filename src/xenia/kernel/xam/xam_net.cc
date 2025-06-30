@@ -38,7 +38,7 @@
 #include <sys/socket.h>
 #endif
 
-#include <xenia/kernel/XLiveAPI.h>
+#include "xenia/kernel/XLiveAPI.h"
 
 DECLARE_bool(logging);
 

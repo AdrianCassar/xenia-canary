@@ -16,7 +16,6 @@
 #include "xenia/kernel/xam/content_manager.h"
 #include "xenia/kernel/xam/user_tracker.h"
 #include "xenia/kernel/xam/xam.h"
-#include "xenia/kernel/xnet.h"
 #include "xenia/kernel/xobject.h"
 
 namespace xe {

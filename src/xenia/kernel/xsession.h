@@ -15,7 +15,6 @@
 #include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/util/xlast.h"
 #include "xenia/kernel/xam/user_property.h"
-#include "xenia/kernel/xnet.h"
 #include "xenia/kernel/xobject.h"
 
 namespace xe {

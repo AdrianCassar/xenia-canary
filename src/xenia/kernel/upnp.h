@@ -11,7 +11,8 @@
 #include <shared_mutex>
 
 #include <third_party/miniupnp/miniupnpc/include/miniupnpc.h>
-#include <xenia/base/threading_timer_queue.h>
+
+#include "xenia/base/threading_timer_queue.h"
 
 namespace xe {
 namespace kernel {
