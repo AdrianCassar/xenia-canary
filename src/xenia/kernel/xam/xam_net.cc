@@ -9,7 +9,6 @@
 
 #include <random>
 
-#include <xenia/kernel/xboxkrnl/xboxkrnl_modules.h>
 #include "xenia/base/logging.h"
 #include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/util/shim_utils.h"
@@ -17,6 +16,7 @@
 #include "xenia/kernel/xam/xam_net.h"
 #include "xenia/kernel/xam/xam_private.h"
 #include "xenia/kernel/xboxkrnl/xboxkrnl_error.h"
+#include "xenia/kernel/xboxkrnl/xboxkrnl_modules.h"
 #include "xenia/kernel/xboxkrnl/xboxkrnl_threading.h"
 #include "xenia/kernel/xevent.h"
 #include "xenia/kernel/xsocket.h"
@@ -37,7 +37,7 @@
 #include <sys/socket.h>
 #endif
 
-#include <xenia/kernel/XLiveAPI.h>
+#include "xenia/kernel/XLiveAPI.h"
 
 DECLARE_bool(logging);
 
