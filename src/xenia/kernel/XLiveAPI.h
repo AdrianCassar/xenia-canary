@@ -18,7 +18,7 @@
 #include "xenia/base/byte_order.h"
 #include "xenia/kernel/upnp.h"
 #include "xenia/kernel/util/net_utils.h"
-#include "xenia/kernel/xnet.h"
+#include "xenia/kernel/xsession.h"
 
 #include "xenia/kernel/json/arbitration_object_json.h"
 #include "xenia/kernel/json/delete_my_profiles_json.h"
@@ -32,7 +32,6 @@
 #include "xenia/kernel/json/services_json.h"
 #include "xenia/kernel/json/session_object_json.h"
 #include "xenia/kernel/json/xstorage_file_info_object_json.h"
-#include "xenia/kernel/xsession.h"
 
 #ifdef XE_PLATFORM_WIN32
 #include <iphlpapi.h>

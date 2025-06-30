@@ -28,16 +28,7 @@
 #include "xenia/kernel/xam/unmarshaller/xuser_estimate_rank_for_ratings_unmarshaller.h"
 #include "xenia/kernel/xam/unmarshaller/xuser_findusers_unmarshaller.h"
 #include "xenia/kernel/xenumerator.h"
-#include "xenia/kernel/xnet.h"
 #include "xenia/ui/imgui_host_notification.h"
-
-#ifdef XE_PLATFORM_WIN32
-// NOTE: must be included last as it expects windows.h to already be included.
-#define _WINSOCK_DEPRECATED_NO_WARNINGS  // inet_addr
-#include <winsock2.h>                    // NOLINT(build/include_order)
-#elif XE_PLATFORM_LINUX
-#include <netinet/in.h>
-#endif
 
 DEFINE_bool(stub_xlivebase, false,
             "Return success for all unimplemented XLiveBase calls.", "Live");

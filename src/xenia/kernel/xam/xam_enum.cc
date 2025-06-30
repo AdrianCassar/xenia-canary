@@ -16,7 +16,7 @@
 #include "xenia/kernel/xenumerator.h"
 #include "xenia/xbox.h"
 
-#include <xenia/kernel/XLiveAPI.h>
+#include "xenia/kernel/XLiveAPI.h"
 
 namespace xe {
 namespace kernel {
