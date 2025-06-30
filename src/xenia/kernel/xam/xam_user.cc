@@ -578,10 +578,17 @@ DECLARE_XAM_EXPORT1(XamUserGetMembershipTierFromXUID, kUserProfiles,
                     kImplemented);
 
 dword_result_t XamUserAreUsersFriends_entry(
-    dword_t user_index, pointer_t<xe::be<uint64_t>> xuids_ptr,
-    dword_t xuids_count, lpdword_t out_value, dword_t overlapped_ptr) {
+    dword_t user_index, lpqword_t xuids_ptr, dword_t xuids_count,
+    lpdword_t are_friends_ptr, pointer_t<XAM_OVERLAPPED> overlapped_ptr) {
+  X_RESULT result = X_ERROR_SUCCESS;
   bool are_friends = false;
-  X_RESULT result;
+
+  // 415607D2 provides are_friends_ptr and overlapped_ptr possibly a bug?
+  assert_true(!overlapped_ptr);
+
+  if (are_friends_ptr) {
+    *are_friends_ptr = false;
+  }
 
   if (user_index >= XUserMaxUserCount) {
     result = X_ERROR_INVALID_PARAMETER;
@@ -589,48 +596,44 @@ dword_result_t XamUserAreUsersFriends_entry(
     if (kernel_state()->xam_state()->IsUserSignedIn(user_index)) {
       const auto& user_profile =
           kernel_state()->xam_state()->GetUserProfile(user_index);
-      if (!user_profile->IsLiveEnabled() ||
-          user_profile->signin_state() == X_USER_SIGNIN_STATE::NotSignedIn) {
+
+      if (user_profile->signin_state() != X_USER_SIGNIN_STATE::SignedInToLive) {
         result = X_ERROR_NOT_LOGGED_ON;
       } else {
-        uint32_t friend_count = 0;
+        uint32_t friends_count = 0;
 
         for (uint32_t i = 0; i < xuids_count; i++) {
-          const xe::be<uint64_t> xuid = xuids_ptr[i];
+          uint64_t xuid = xuids_ptr[i];
 
-          const bool is_friend = user_profile->IsFriend(xuid);
+          assert_true(IsOnlineXUID(xuid));
 
-          if (is_friend) {
-            friend_count++;
+          if (user_profile->IsFriend(xuid)) {
+            friends_count++;
           }
         }
 
-        are_friends = friend_count == xuids_count;
-        result = X_ERROR_SUCCESS;
+        are_friends = friends_count == xuids_count;
       }
     } else {
-      // Only support user 0.
-      result =
-          X_ERROR_NO_SUCH_USER;  // if user is local -> X_ERROR_NOT_LOGGED_ON
+      result = X_ERROR_NO_SUCH_USER;
     }
   }
 
-  if (out_value) {
-    assert_true(!overlapped_ptr);
-    *out_value = result == X_ERROR_SUCCESS ? are_friends : 0;
-    return result;
-  } else if (overlapped_ptr) {
-    assert_true(!out_value);
+  if (overlapped_ptr) {
+    assert_true(!are_friends_ptr);
     kernel_state()->CompleteOverlappedImmediateEx(
         overlapped_ptr,
         result == X_ERROR_SUCCESS ? X_ERROR_SUCCESS : X_ERROR_FUNCTION_FAILED,
-        X_HRESULT_FROM_WIN32(result),
-        result == X_ERROR_SUCCESS ? are_friends : 0);
-    return X_ERROR_IO_PENDING;
-  } else {
-    assert_always();
-    return X_ERROR_INVALID_PARAMETER;
+        X_HRESULT_FROM_WIN32(result), are_friends);
+
+    return X_ERROR_SUCCESS;
   }
+
+  if (!overlapped_ptr && are_friends_ptr) {
+    *are_friends_ptr = are_friends;
+  }
+
+  return result;
 }
 DECLARE_XAM_EXPORT1(XamUserAreUsersFriends, kUserProfiles, kImplemented);
 
