@@ -38,6 +38,7 @@ namespace xe {
 #define X_ONLINE_E_LOGON_NO_NETWORK_CONNECTION              static_cast<X_HRESULT>(0x80151000L)
 #define X_ONLINE_S_LOGON_CONNECTION_ESTABLISHED             static_cast<X_HRESULT>(0x001510F0L)
 #define X_ONLINE_S_LOGON_DISCONNECTED                       static_cast<X_HRESULT>(0x001510F1L)
+#define X_ONLINE_E_USER_NOT_LOGGED_ON                       static_cast<X_HRESULT>(0x80150003L)
 #define X_ONLINE_E_SESSION_WRONG_STATE                      static_cast<X_HRESULT>(0x80155206L)
 #define X_ONLINE_E_SESSION_INSUFFICIENT_BUFFER              static_cast<X_HRESULT>(0x80155207L)
 #define X_ONLINE_E_SESSION_JOIN_ILLEGAL                     static_cast<X_HRESULT>(0x8015520AL)
