@@ -580,20 +580,18 @@ dword_result_t XamUserAreUsersFriends_entry(
       if (user_profile->signin_state() != X_USER_SIGNIN_STATE::SignedInToLive) {
         result = X_ERROR_NOT_LOGGED_ON;
       } else {
-        uint32_t friend_count = 0;
+        uint32_t friends_count = 0;
 
         for (uint32_t i = 0; i < xuids_count; i++) {
-          const xe::be<uint64_t> xuid = xuids_ptr[i];
+          // xuid is 0 sometimes?
+          uint64_t xuid = xuids_ptr[i];
 
-          const bool is_friend = user_profile->IsFriend(xuid);
-
-          if (is_friend) {
-            friend_count++;
+          if (user_profile->IsFriend(xuid)) {
+            friends_count++;
           }
         }
 
-        are_friends = friend_count == xuids_count;
-        result = X_ERROR_SUCCESS;
+        are_friends = friends_count == xuids_count;
       }
     } else {
       result = X_ERROR_NO_SUCH_USER;
