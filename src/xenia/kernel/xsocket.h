@@ -117,6 +117,13 @@ class XSocket : public XObject {
     X_IPPROTO_VDP = 254,
   };
 
+  enum WSAInfo {
+    sendto_flag = 1,
+    recvfrom_flag = 2,
+    complete = 4,
+    closed = 8,
+  };
+
   XSocket(KernelState* kernel_state);
   ~XSocket();
 
@@ -150,6 +157,11 @@ class XSocket : public XObject {
 
   int WSAEventSelect(uint64_t socket_handle, uint64_t event_handle,
                      uint32_t flags);
+
+  int WSASendTo(XWSABUF* buffers, uint32_t num_buffers,
+                xe::be<uint32_t>* num_bytes_sent_ptr, uint32_t flags,
+                XSOCKADDR_IN* to_ptr, uint32_t to_len,
+                XWSAOVERLAPPED* overlapped_ptr);
 
   int WSARecvFrom(XWSABUF* buffers, uint32_t num_buffers,
                   xe::be<uint32_t>* num_bytes_recv_ptr,
@@ -197,12 +209,20 @@ class XSocket : public XObject {
   std::mutex incoming_packet_mutex_;
   std::queue<uint8_t*> incoming_packets_;
 
+  std::future<int> send_task_;
+  std::mutex send_mutex_;
+  std::condition_variable send_cv_;
+  std::mutex send_socket_mutex_;
+  XWSAOVERLAPPED* send_active_overlapped_ = nullptr;
+
   std::future<int> polling_task_;
 
   std::mutex receive_mutex_;
   std::condition_variable receive_cv_;
   std::mutex receive_socket_mutex_;
-  XWSAOVERLAPPED* active_overlapped_ = nullptr;
+  XWSAOVERLAPPED* receive_active_overlapped_ = nullptr;
+
+  int PushWSASendTo(bool wait, struct WSASendToData send_async_data);
 
   int PollWSARecvFrom(bool wait, struct WSARecvFromData data);
 
