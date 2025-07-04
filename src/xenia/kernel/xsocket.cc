@@ -373,7 +373,6 @@ int XSocket::PushWSASendTo(bool wait, WSASendToData send_async_data) {
   sockaddr addr = send_async_data.to->to_host();
 
   int ret;
-
   do {
     ret = WSAPoll(&fds, 1, 0);
 
@@ -385,19 +384,15 @@ int XSocket::PushWSASendTo(bool wait, WSASendToData send_async_data) {
     }
   } while (ret == 0 && wait);
 
-  if (ret > 0 && (fds.revents & POLLOUT)) {
-    XELOGI("Socket is ready to send without blocking");
+  if (ret < 0) {
+    send_async_data.overlapped->internal_high = WSAGetLastError();
+    XELOGE("XSocket send thread failed with error {}",
+           static_cast<uint32_t>(send_async_data.overlapped->internal_high));
+    goto threadexit;
   } else if (ret == 0) {
-    XELOGI("Socket is blocking");
     send_async_data.overlapped->internal_high =
         (uint32_t)X_WSAError::X_WSAEWOULDBLOCK;
     ret = -1;
-    goto threadexit;
-  } else {
-    send_async_data.overlapped->internal_high = WSAGetLastError();
-
-    XELOGE("XSocket send thread failed with error {}",
-           static_cast<uint32_t>(send_async_data.overlapped->internal_high));
     goto threadexit;
   }
 
@@ -412,26 +407,35 @@ int XSocket::PushWSASendTo(bool wait, WSASendToData send_async_data) {
                     &bytes_sent, send_async_data.flags, &addr,
                     send_async_data.to_len, nullptr, nullptr);
 
-  {
-    std::unique_lock socket_lock(send_socket_mutex_);
+  if (ret < 0) {
+    send_async_data.overlapped->internal_high = GetLastWSAError();
 
-    if (ret < 0) {
-      send_async_data.overlapped->internal_high = GetLastWSAError();
-
-      XELOGE("WSASendTo failed with error {}",
-             static_cast<uint32_t>(send_async_data.overlapped->internal_high));
-
-      if (ret == (uint32_t)X_WSAError::X_WSAEWOULDBLOCK && wait) {
-        XELOGI("WSASendTo blocking...");
-      }
-
-      // assert_always();
-    } else {
-      send_async_data.overlapped->internal_high = 0;
-      send_async_data.overlapped->internal = bytes_sent;
+    // Suppress non-UDP-specific errors
+    switch (send_async_data.overlapped->internal_high) {
+      case WSAEMSGSIZE:
+      case WSAENETDOWN:
+      case WSAEHOSTDOWN:
+      case WSAEHOSTUNREACH:
+      case WSAENETRESET:
+      case WSAECONNABORTED:
+      case WSAECONNRESET:
+      case WSAENOTCONN:
+      case WSAESHUTDOWN:
+      case WSAETIMEDOUT:
+        // These are UDP-specific or relevant errors
+        XELOGE(
+            "WSASendTo failed with UDP-specific error {}",
+            static_cast<uint32_t>(send_async_data.overlapped->internal_high));
+        break;
+      default:
+        // Suppress other errors
+        send_async_data.overlapped->internal_high = 0;
+        ret = 0;
+        break;
     }
-
-    socket_lock.unlock();
+  } else {
+    send_async_data.overlapped->internal_high = 0;
+    send_async_data.overlapped->internal = bytes_sent;
   }
 
   send_async_data.overlapped->offset = flags;
@@ -439,10 +443,6 @@ int XSocket::PushWSASendTo(bool wait, WSASendToData send_async_data) {
   delete[] buffers;
 
 threadexit:
-
-{
-  std::unique_lock lock(send_mutex_);
-
   if (wait) {
     delete[] send_async_data.buffers;
   }
@@ -454,9 +454,6 @@ threadexit:
   }
 
   send_cv_.notify_all();
-
-  lock.unlock();
-}
 
   return ret;
 }
@@ -472,13 +469,18 @@ int XSocket::PollWSARecvFrom(bool wait, WSARecvFromData receive_async_data) {
   DWORD flags = receive_async_data.flags;
   auto buffers = new WSABUF[receive_async_data.num_buffers];
 
-  int ret;
+  sockaddr* sa = nullptr;
+  if (receive_async_data.from) {
+    sockaddr addr = receive_async_data.from->to_host();
+    sa = const_cast<sockaddr*>(&addr);
+  }
 
+  int ret;
   do {
 #ifdef XE_PLATFORM_WIN32
     ret = WSAPoll(&fds, 1, wait ? 1000 : 0);
 #else
-    ret = poll(fds, 1, wait ? 1000 : 0);
+    ret = poll(&fds, 1, wait ? 1000 : 0);
 #endif
 
     if (receive_async_data.overlapped->offset_high & WSAInfo::closed) {
@@ -494,11 +496,6 @@ int XSocket::PollWSARecvFrom(bool wait, WSARecvFromData receive_async_data) {
     XELOGE("XSocket receive thread failed polling with error {}",
            static_cast<uint32_t>(receive_async_data.overlapped->internal_high));
     goto threadexit;
-  } else if (ret == 0) {
-    receive_async_data.overlapped->internal_high =
-        (uint32_t)X_WSAError::X_WSAEWOULDBLOCK;
-    ret = -1;
-    goto threadexit;
   }
 
 #ifdef XE_PLATFORM_WIN32
@@ -509,79 +506,55 @@ int XSocket::PollWSARecvFrom(bool wait, WSARecvFromData receive_async_data) {
             receive_async_data.buffers[i].buf_ptr));
   }
 
-  {
-    std::unique_lock socket_lock(receive_socket_mutex_);
+  ret = ::WSARecvFrom(native_handle_, buffers, receive_async_data.num_buffers,
+                      &bytes_received, &flags, sa,
+                      (LPINT)receive_async_data.from_len, nullptr, nullptr);
+  if (ret < 0) {
+    receive_async_data.overlapped->internal_high = GetLastWSAError();
 
-    sockaddr* sa = nullptr;
-    if (receive_async_data.from) {
-      sockaddr addr = receive_async_data.from->to_host();
-      sa = const_cast<sockaddr*>(&addr);
+    // Suppress non-UDP-specific errors
+    switch (receive_async_data.overlapped->internal_high) {
+      case WSAEMSGSIZE:
+      case WSAENETDOWN:
+      case WSAEHOSTDOWN:
+      case WSAEHOSTUNREACH:
+      case WSAENETRESET:
+      case WSAECONNABORTED:
+      case WSAECONNRESET:
+      case WSAENOTCONN:
+      case WSAESHUTDOWN:
+      case WSAETIMEDOUT:
+        // These are UDP-specific or relevant errors
+        XELOGI("WSARecvFrom failed with UDP-specific error {}",
+               static_cast<uint32_t>(
+                   receive_async_data.overlapped->internal_high));
+        break;
+      case WSAEWOULDBLOCK:
+        receive_async_data.overlapped->internal_high = 0;
+        ret = 0;
+        break;
+      default:
+        // Suppress other errors
+        receive_async_data.overlapped->internal_high = 0;
+        ret = 0;
+        break;
     }
-
-    ret = ::WSARecvFrom(native_handle_, buffers, receive_async_data.num_buffers,
-                        &bytes_received, &flags, sa,
-                        (LPINT)receive_async_data.from_len, nullptr, nullptr);
-    if (ret < 0) {
-      receive_async_data.overlapped->internal_high = GetLastWSAError();
-
-      XELOGE(
-          "WSARecvFrom failed with error {}",
-          static_cast<uint32_t>(receive_async_data.overlapped->internal_high));
-
-      if (ret == (uint32_t)X_WSAError::X_WSAEWOULDBLOCK && wait) {
-        XELOGI("WSARecvFrom blocking...");
-      }
-
-      // assert_always();
-    } else {
-      receive_async_data.overlapped->internal_high = 0;
-      receive_async_data.overlapped->internal = bytes_received;
-    }
+  } else {
+    receive_async_data.overlapped->internal_high = 0;
+    receive_async_data.overlapped->internal = bytes_received;
+  }
+  if (receive_async_data.from && sa) {
     receive_async_data.from->to_guest(sa);
-    socket_lock.unlock();
   }
 
   receive_async_data.overlapped->offset = flags;
 #else
-  auto buffers = new iovec[receive_async_data.num_buffers];
-  for (auto i = 0u; i < receive_async_data.num_buffers; i++) {
-    buffers[i].iov_len = receive_async_data.buffers[i].len;
-    buffers[i].iov_base = kernel_state()->memory()->TranslateVirtual(
-        receive_async_data.buffers[i].buf_ptr);
-  }
-
-  msghdr msg;
-  std::memset(&msg, 0, sizeof(msg));
-  msg.msg_name = &n_from;
-  msg.msg_namelen = n_from_len;
-  msg.msg_iov = buffers;
-  msg.msg_iovlen = receive_async_data.num_buffers;
-
-  {
-    std::unique_lock socket_lock(receive_socket_mutex_);
-    ret = recvmsg(native_handle_, &msg, receive_async_data.flags);
-    if (ret < 0) {
-      receive_async_data.overlapped->internal_high = GetLastWSAError();
-    } else {
-      receive_async_data.overlapped->internal = ret;
-    }
-    socket_lock.unlock();
-  }
-
-  flags = 0;
-  if (msg.msg_flags & MSG_TRUNC) flags |= MSG_PARTIAL;
-  if (msg.msg_flags & MSG_OOB) flags |= MSG_OOB;
-  receive_async_data.overlapped->offset = flags;
-
-  if (ret >= 0) {
-    SetLastWSAError((X_WSAError)0);
-    ret = 0;
-  }
+// Linux-specific code for recvmsg
 #endif
+
   delete[] buffers;
 
 threadexit:
-  std::unique_lock lock(receive_mutex_);
   if (wait) {
     delete[] receive_async_data.buffers;
   }
@@ -594,7 +567,6 @@ threadexit:
   }
 
   receive_cv_.notify_all();
-  lock.unlock();
 
   return ret;
 }
@@ -677,8 +649,9 @@ int XSocket::WSARecvFrom(XWSABUF* buffers, uint32_t num_buffers,
 
     *flags_ptr = receive_async_data.overlapped->offset;
   }
-
-  return ret;
+  if (receive_async_data.overlapped->internal_high.get() != 0) return ret;
+  else if (ret >= 0) return ret;
+  else return 0;
 }
 
 bool XSocket::WSAGetOverlappedResult(XWSAOVERLAPPED* overlapped_ptr,
