@@ -496,6 +496,13 @@ DECLARE_XAM_EXPORT1(NetDll_WSACleanup, kNetworking, kStub);
 dword_result_t NetDll_WSAGetLastError_entry() {
   uint32_t last_error = XThread::GetLastError();
   XELOGD("NetDll_WSAGetLastError: {}", last_error);
+
+  if (last_error != (uint32_t)X_WSAError::X_WSA_IO_PENDING &&
+      last_error != (uint32_t)X_WSAError::X_WSA_IO_INCOMPLETE &&
+      last_error != (uint32_t)X_WSAError::X_WSAEWOULDBLOCK) {
+    XELOGE("NetDll_WSAGetLastError: {}", last_error);
+  }
+
   return last_error;
 }
 DECLARE_XAM_EXPORT1(NetDll_WSAGetLastError, kNetworking, kImplemented);
@@ -558,12 +565,7 @@ dword_result_t NetDll_WSASendTo_entry(
     dword_t num_buffers, lpdword_t num_bytes_sent, dword_t flags,
     pointer_t<XSOCKADDR_IN> to_ptr, dword_t to_len,
     pointer_t<XWSAOVERLAPPED> overlapped, lpvoid_t completion_routine) {
-  assert(!overlapped);
   assert(!completion_routine);
-
-  if (overlapped) {
-    XELOGW("NetDll_WSASendTo: overlapped!");
-  }
 
   auto socket =
       kernel_state()->object_table()->LookupObject<XSocket>(socket_handle);
@@ -572,42 +574,44 @@ dword_result_t NetDll_WSASendTo_entry(
     return -1;
   }
 
-  // Our sockets implementation doesn't support multiple buffers, so we need
-  // to combine the buffers the game has given us!
-  std::vector<uint8_t> combined_buffer_mem;
-  uint32_t combined_buffer_size = 0;
-  uint32_t combined_buffer_offset = 0;
-  for (uint32_t i = 0; i < num_buffers; i++) {
-    combined_buffer_size += buffers[i].len;
-    combined_buffer_mem.resize(combined_buffer_size);
-    uint8_t* combined_buffer = combined_buffer_mem.data();
-
-    std::memcpy(combined_buffer + combined_buffer_offset,
-                kernel_memory()->TranslateVirtual(buffers[i].buf_ptr),
-                buffers[i].len);
-    combined_buffer_offset += buffers[i].len;
-  }
-
-  const int result = socket->SendTo(
-      combined_buffer_mem.data(), combined_buffer_size, flags, to_ptr, to_len);
+  int result = socket->WSASendTo(buffers, num_buffers, num_bytes_sent, flags,
+                                 to_ptr, to_len, overlapped);
 
   if (result == -1) {
-    XThread::SetLastError(socket->GetLastWSAError());
-    return result;
-  } else if (result != -1 && to_ptr && !cvars::log_mask_ips) {
-    XELOGI("NetDll_WSASendTo: Send {} bytes to: {}:{}({})", result,
+    uint32_t error = socket->GetLastWSAError();
+
+    if (error != (uint32_t)X_WSAError::X_WSAEWOULDBLOCK) {
+      XELOGI("WSASendTo failed with error code {}", error);
+    }
+
+    XThread::SetLastError(error);
+  } else if (to_ptr && num_bytes_sent && !cvars::log_mask_ips) {
+    XELOGI("NetDll_WSASendTo: Send {} bytes to: {}:{}({})",
+           static_cast<uint32_t>(*num_bytes_sent),
            ip_to_string(to_ptr->address_ip), to_ptr->address_port.get(),
            socket->GetProtocolUPnPString());
   }
 
-  if (num_bytes_sent && !overlapped) {
-    *num_bytes_sent = result;
-  }
-  // TODO: Instantly complete overlapped
-
-  return 0;
+  return result;
 }
 DECLARE_XAM_EXPORT1(NetDll_WSASendTo, kNetworking, kImplemented);
+
+dword_result_t NetDll_WSACancelOverlappedIO_entry(dword_t caller,
+                                                  dword_t socket_handle) {
+  auto socket =
+      kernel_state()->object_table()->LookupObject<XSocket>(socket_handle);
+  if (!socket) {
+    XThread::SetLastError(uint32_t(X_WSAError::X_WSAENOTSOCK));
+    return -1;
+  }
+
+  int ret = socket->WSACancelOverlappedIO();
+
+  XThread::SetLastError(socket->GetLastWSAError());
+
+  return ret;
+}
+DECLARE_XAM_EXPORT1(NetDll_WSACancelOverlappedIO, kNetworking, kImplemented)
 
 dword_result_t NetDll_WSAWaitForMultipleEvents_entry(dword_t num_events,
                                                      lpdword_t events,
