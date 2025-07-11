@@ -1531,7 +1531,7 @@ dword_result_t NetDll_ioctlsocket_entry(dword_t caller, dword_t socket_handle,
     return -1;
   }
 
-  X_STATUS status = socket->IOControl(cmd, arg_ptr);
+  X_STATUS status = socket->IOControl(cmd, arg_ptr.as<u_long*>());
   if (XFAILED(status)) {
     XThread::SetLastError(socket->XWSAGetLastError());
     return -1;
