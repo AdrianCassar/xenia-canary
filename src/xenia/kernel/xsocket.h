@@ -37,7 +37,7 @@
 
 namespace xe {
 namespace kernel {
-enum class X_WSAError : uint32_t {
+enum class X_WSA_ERROR : uint32_t {
   X_WSA_NO_ERROR = 0,
   X_WSA_INVALID_PARAMETER = 87,
   X_WSA_OPERATION_ABORTED = 995,
@@ -117,9 +117,9 @@ struct XWSABUF {
 static_assert_size(XWSABUF, 0x8);
 
 struct XWSAOVERLAPPED {
-  xe::be<uint32_t> internal;
-  xe::be<uint32_t> internal_high;
-  xe::be<uint32_t> offset;
+  xe::be<uint32_t> internal;       // Status Code
+  xe::be<uint32_t> internal_high;  // The amount of bytes sent/recv
+  xe::be<uint32_t> offset;         // Flags
   xe::be<uint32_t> offset_high;
   xe::be<uint32_t> event_handle;
 };
@@ -209,9 +209,9 @@ class XSocket : public XObject {
                 XSOCKADDR_IN* to_ptr, uint32_t to_len,
                 XWSAOVERLAPPED* overlapped_ptr);
 
-  int WSAPollWrite(bool wait, X_WSAError* error);
+  int WSAPollWrite(bool wait, X_WSA_ERROR* error);
 
-  int WSAPollRead(bool wait, X_WSAError* error);
+  int WSAPollRead(bool wait, X_WSA_ERROR* error);
 
   int WSARecvFrom(XWSABUF* buffers, uint32_t num_buffers,
                   xe::be<uint32_t>* num_bytes_recv_ptr,
@@ -225,9 +225,9 @@ class XSocket : public XObject {
 
   int WSACancelOverlappedIO();
 
-  static uint32_t GetLastWSAError();
+  static bool XWSAIsKnownError(X_WSA_ERROR error);
 
-  bool blocking_mode_ = true;
+  static uint32_t XWSAGetLastError();
 
   struct packet {
     // These values are in network byte order.
@@ -279,7 +279,7 @@ class XSocket : public XObject {
 
   int PollWSARecvFrom(bool wait, WSARecvFromData data);
 
-  void SetLastWSAError(X_WSAError) const;
+  void XWSASetLastError(X_WSA_ERROR) const;
 };
 
 }  // namespace kernel
