@@ -317,10 +317,46 @@ bool Updater::ParseCommitMessages(std::vector<uint8_t>& response_buffer,
 }
 
 bool Updater::UpdateAndRestart(const std::filesystem::path& zip_path,
-                              const std::filesystem::path& exe_path) {
-  auto temp_script_path = exe_path / L"updater.cmd";
-  std::wstring exe_name = xe::filesystem::GetExecutablePath().filename().wstring();
-  std::filesystem::path full_exe_path = exe_path / exe_name;
+                               const std::filesystem::path& exe_path) {
+  std::error_code ec;
+  if (zip_path.empty() || exe_path.empty()) {
+    return false;
+  }
+  if (!std::filesystem::exists(zip_path, ec) || ec) {
+    return false;
+  }
+  if (!std::filesystem::exists(exe_path, ec) || ec) {
+    return false;
+  }
+  if (!std::filesystem::is_directory(exe_path, ec) || ec) {
+    return false;
+  }
+  const auto exe_name = xe::filesystem::GetExecutablePath().filename().wstring();
+  if (exe_name.empty()) {
+    return false;
+  }
+
+  const auto full_exe_path = exe_path / exe_name;
+  const auto temp_script_path = exe_path / L"updater.cmd";
+
+  if (!std::filesystem::exists(full_exe_path, ec) || ec) {
+    return false;
+  }
+  const auto exe_path_str = exe_path.wstring();
+  const auto full_exe_path_str = full_exe_path.wstring();
+  const auto zip_path_str = zip_path.wstring();
+  {
+    std::wofstream test_file(temp_script_path);
+    if (!test_file.is_open()) {
+      return false;
+    }
+  }
+  if (std::filesystem::exists(temp_script_path, ec) && !ec) {
+    std::filesystem::remove(temp_script_path, ec);
+    if (ec) {
+      return false;
+    }
+  }
 
   std::wstring script_content =
       L"@echo off\n"
@@ -335,44 +371,65 @@ bool Updater::UpdateAndRestart(const std::filesystem::path& zip_path,
       L")\n"
       L"echo Cleaning and creating backup folder...\n"
       L"if exist \"" +
-      exe_path.wstring() + L"\\old\" rd /s /q \"" + exe_path.wstring() +
+      exe_path_str + L"\\old\" rd /s /q \"" + exe_path_str +
       L"\\old\"\n"
       L"mkdir \"" +
-      exe_path.wstring() +
+      exe_path_str +
       L"\\old\"\n"
       L"echo Backing up old Xenia executable...\n"
       L"move /Y \"" +
-      full_exe_path.wstring() + L"\" \"" + exe_path.wstring() + L"\\old\\" +
-      exe_name +
+      full_exe_path_str + L"\" \"" + exe_path_str + L"\\old\\" + exe_name +
       L"\"\n"
       L"echo Extracting Xenia update...\n"
       L"powershell -Command \"Expand-Archive -Force '" +
-      zip_path.wstring() + L"' '" + exe_path.wstring() +
+      zip_path_str + L"' '" + exe_path_str +
       L"'\"\n"
       L"echo Starting updated Xenia...\n"
       L"start \"\" \"" +
-      full_exe_path.wstring() +
+      full_exe_path_str +
       L"\"\n"
       L"echo Deleting Xenia update zip file...\n"
       L"del \"" +
-      zip_path.wstring() +
+      zip_path_str +
       L"\"\n"
       L"del \"%~f0\"\n";
 
+  {
+    std::wofstream script_file(temp_script_path);
+    if (!script_file.is_open()) {
+      return false;
+    }
 
-  std::wofstream script_file(temp_script_path);
-  if (!script_file.is_open()) {
-    return true;
+    script_file << script_content;
+
+    if (script_file.bad() || script_file.fail()) {
+      return false;
+    }
+
+    script_file.close();
+
+    if (!std::filesystem::exists(temp_script_path, ec) || ec) {
+      return false;
+    }
   }
-  script_file << script_content;
-  script_file.close();
-  
-  HINSTANCE result = ShellExecuteW(nullptr, L"open", temp_script_path.wstring().c_str(), nullptr,
-      nullptr, SW_HIDE);
-  if ((uintptr_t)result <= 32) {
-    return true;
+
+  HINSTANCE ps_test = ShellExecuteW(nullptr, L"open", L"powershell.exe",
+                                    L"-Command \"exit\"", nullptr, SW_HIDE);
+  if (reinterpret_cast<uintptr_t>(ps_test) <= 32) {
+    std::filesystem::remove(temp_script_path, ec);
+    return false;
   }
-  return false;
+
+  const HINSTANCE result = ShellExecuteW(nullptr, L"open", temp_script_path.c_str(), nullptr, nullptr, SW_HIDE);
+
+  const bool success = reinterpret_cast<uintptr_t>(result) > 32;
+
+  if (!success) {
+    std::filesystem::remove(temp_script_path, ec);
+  }
+
+  return success;
 }
+
 }  // namespace app
 }  // namespace xe

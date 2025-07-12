@@ -733,8 +733,7 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
 #ifdef XE_PLATFORM_WIN32
         if (ImGui::Button("Apply Update and Restart")) {
 
-            update_failed_ = updater_->UpdateAndRestart(downloaded_file_path_,
-                                                   executable_folder_path_);
+            update_failed_ = !updater_->UpdateAndRestart(downloaded_file_path_,executable_folder_path_);
           if (!update_failed_) {
             exit(0);
           }
