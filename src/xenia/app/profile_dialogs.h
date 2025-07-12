@@ -97,10 +97,12 @@ class UpdaterDialog final : public ui::ImGuiDialog {
   bool downloading_ = false;
   bool downloaded_ = false;
   bool downloaded_failed_ = false;
+  bool update_failed_ = false;
   bool hide_download_button_ = false;
   bool show_replace_dialog_ = false;
   bool replace_file_ = false;
   std::filesystem::path downloaded_file_path_;
+  std::filesystem::path executable_folder_path_ = xe::filesystem::GetExecutableFolder();
   const std::string windows_artifact_name_ = "xenia_canary_netplay_windows.zip";
   std::string latest_commit_hash_ = "";
   std::string latest_commit_date_ = "";

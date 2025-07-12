@@ -657,23 +657,7 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
 
       if (!hide_download_button_) {
         if (ImGui::Button("Download Nightly")) {
-          auto file_picker = xe::ui::FilePicker::Create();
-          file_picker->set_mode(xe::ui::FilePicker::Mode::kOpen);
-          file_picker->set_type(xe::ui::FilePicker::Type::kDirectory);
-          file_picker->set_multi_selection(false);
-          file_picker->set_title("Download Directory");
-
-          if (file_picker->Show(emulator_window_->window())) {
-            auto selected_files = file_picker->selected_files();
-            if (!selected_files.empty()) {
-              downloaded_file_path_ = selected_files[0];
-            }
-          }
-
-          if (!downloaded_file_path_.empty()) {
-            downloaded_file_path_ =
-                downloaded_file_path_ / windows_artifact_name_;
-          }
+          downloaded_file_path_ = executable_folder_path_ / windows_artifact_name_;
         }
 
         if (!downloaded_file_path_.empty()) {
@@ -747,15 +731,25 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
         ImGui::Separator();
 
 #ifdef XE_PLATFORM_WIN32
-        if (ImGui::Button("Open downloaded zip")) {
-          LPCWSTR path = reinterpret_cast<LPCWSTR>(
-              downloaded_file_path_.u16string().data());
+        if (ImGui::Button("Apply Update and Restart")) {
 
-          ShellExecute(0, 0, path, 0, 0, SW_SHOW);
+            update_failed_ = updater_->UpdateAndRestart(downloaded_file_path_,
+                                                   executable_folder_path_);
+          if (!update_failed_) {
+            exit(0);
+          }
         }
 
-        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
-          ImGui::SetTooltip("Extract archive and replace to complete update.");
+        if (ImGui::IsItemHovered()) {
+          ImGui::SetTooltip(
+              "This will close Xenia, extract the update and restart Xenia.");
+        }
+
+        if (update_failed_) {
+          ImGui::Spacing();
+          ImGui::TextColored(ImVec4(1, 0, 0, 1),
+                             "Failed to apply update. Please try again.");
+          ImGui::Spacing();
         }
 #else
         ImGui::Text("Download Complete!");

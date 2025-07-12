@@ -12,6 +12,7 @@
 
 #include <string>
 #include <vector>
+#include <filesystem>
 
 namespace xe {
 namespace app {
@@ -20,6 +21,8 @@ class Updater {
   Updater(const std::string& owner, const std::string& repo);
 
   ~Updater() {};
+  bool UpdateAndRestart(const std::filesystem::path& zip_path,
+                                const std::filesystem::path& exe_path);
 
   uint32_t GetRequest(const std::string& endpoint,
                       std::vector<uint8_t>& response_buffer) const;
