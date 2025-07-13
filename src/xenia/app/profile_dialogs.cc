@@ -657,7 +657,8 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
 
       if (!hide_download_button_) {
         if (ImGui::Button("Download Nightly")) {
-          downloaded_file_path_ = executable_folder_path_ / windows_artifact_name_;
+          downloaded_file_path_ =
+              executable_folder_path_ / windows_artifact_name_;
         }
 
         if (!downloaded_file_path_.empty()) {
@@ -732,16 +733,16 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
 
 #ifdef XE_PLATFORM_WIN32
         if (ImGui::Button("Apply Update and Restart")) {
+          update_failed_ = !updater_->UpdateAndRestart(downloaded_file_path_);
 
-            update_failed_ = !updater_->UpdateAndRestart(downloaded_file_path_,executable_folder_path_);
           if (!update_failed_) {
+            XELOGI("Applying update...");
             exit(0);
           }
         }
 
         if (ImGui::IsItemHovered()) {
-          ImGui::SetTooltip(
-              "This will close Xenia, extract the update and restart Xenia.");
+          ImGui::SetTooltip("Xenia will restart and apply the update.");
         }
 
         if (update_failed_) {

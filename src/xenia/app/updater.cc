@@ -7,10 +7,10 @@
  ******************************************************************************
  */
 
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <string>
-#include <filesystem>
 
 // math.h and curl.h conflict so we include it first
 #include "xenia/kernel/xnet.h"
@@ -316,116 +316,86 @@ bool Updater::ParseCommitMessages(std::vector<uint8_t>& response_buffer,
   return true;
 }
 
-bool Updater::UpdateAndRestart(const std::filesystem::path& zip_path,
-                               const std::filesystem::path& exe_path) {
+bool Updater::UpdateAndRestart(const std::filesystem::path& zip_path) {
   std::error_code ec;
-  if (zip_path.empty() || exe_path.empty()) {
+
+  if (zip_path.empty()) {
     return false;
   }
+
   if (!std::filesystem::exists(zip_path, ec) || ec) {
     return false;
   }
-  if (!std::filesystem::exists(exe_path, ec) || ec) {
-    return false;
-  }
-  if (!std::filesystem::is_directory(exe_path, ec) || ec) {
-    return false;
-  }
-  const auto exe_name = xe::filesystem::GetExecutablePath().filename().wstring();
-  if (exe_name.empty()) {
-    return false;
-  }
 
-  const auto full_exe_path = exe_path / exe_name;
-  const auto temp_script_path = exe_path / L"updater.cmd";
+  const auto exe_path = xe::filesystem::GetExecutablePath();
+  const auto exe_filename = exe_path.filename().string();
+  const auto exe_parent = xe::filesystem::GetExecutableFolder();
 
-  if (!std::filesystem::exists(full_exe_path, ec) || ec) {
-    return false;
-  }
-  const auto exe_path_str = exe_path.wstring();
-  const auto full_exe_path_str = full_exe_path.wstring();
-  const auto zip_path_str = zip_path.wstring();
-  {
-    std::wofstream test_file(temp_script_path);
-    if (!test_file.is_open()) {
-      return false;
-    }
-  }
-  if (std::filesystem::exists(temp_script_path, ec) && !ec) {
-    std::filesystem::remove(temp_script_path, ec);
+  const auto update_script_path = exe_parent / "updater.bat";
+  const auto zip_filename = zip_path.filename().string();
+
+  if (std::filesystem::exists(update_script_path, ec) && !ec) {
+    std::filesystem::remove(update_script_path, ec);
+
     if (ec) {
       return false;
     }
-  }
-
-  std::wstring script_content =
-      L"@echo off\n"
-      L"echo Waiting for Xenia to exit...\n"
-      L":loop\n"
-      L"tasklist | findstr /I \"" +
-      exe_name +
-      L"\" >nul\n"
-      L"if not errorlevel 1 (\n"
-      L"  timeout /t 1 >nul\n"
-      L"  goto loop\n"
-      L")\n"
-      L"echo Cleaning and creating backup folder...\n"
-      L"if exist \"" +
-      exe_path_str + L"\\old\" rd /s /q \"" + exe_path_str +
-      L"\\old\"\n"
-      L"mkdir \"" +
-      exe_path_str +
-      L"\\old\"\n"
-      L"echo Backing up old Xenia executable...\n"
-      L"move /Y \"" +
-      full_exe_path_str + L"\" \"" + exe_path_str + L"\\old\\" + exe_name +
-      L"\"\n"
-      L"echo Extracting Xenia update...\n"
-      L"powershell -Command \"Expand-Archive -Force '" +
-      zip_path_str + L"' '" + exe_path_str +
-      L"'\"\n"
-      L"echo Starting updated Xenia...\n"
-      L"start \"\" \"" +
-      full_exe_path_str +
-      L"\"\n"
-      L"echo Deleting Xenia update zip file...\n"
-      L"del \"" +
-      zip_path_str +
-      L"\"\n"
-      L"del \"%~f0\"\n";
-
-  {
-    std::wofstream script_file(temp_script_path);
-    if (!script_file.is_open()) {
-      return false;
-    }
-
-    script_file << script_content;
-
-    if (script_file.bad() || script_file.fail()) {
-      return false;
-    }
-
-    script_file.close();
-
-    if (!std::filesystem::exists(temp_script_path, ec) || ec) {
-      return false;
-    }
-  }
-
-  HINSTANCE ps_test = ShellExecuteW(nullptr, L"open", L"powershell.exe",
-                                    L"-Command \"exit\"", nullptr, SW_HIDE);
-  if (reinterpret_cast<uintptr_t>(ps_test) <= 32) {
-    std::filesystem::remove(temp_script_path, ec);
+  } else if (ec) {
     return false;
   }
 
-  const HINSTANCE result = ShellExecuteW(nullptr, L"open", temp_script_path.c_str(), nullptr, nullptr, SW_HIDE);
+  std::string script_content = fmt::format(
+      "@echo off\n"
+      "echo Changing to extract directory so tar can find zip.\n"
+      "cd \"{1}\"\n"
+      "echo Waiting for Xenia to exit...\n"
+      ":loop\n"
+      "tasklist | findstr /I \"{0}\" > nul\n"
+      "if not errorlevel 1 (\n"
+      "  timeout /t 1 > nul\n"
+      "  goto loop\n"
+      ")\n"
+      "echo Cleaning and creating backup folder...\n"
+      "if exist \"{1}\\old\" rd /s /q \"{1}\\old\"\n"
+      "mkdir \"{1}\\old\"\n"
+      "echo Backing up old Xenia executable...\n"
+      "copy /y \"{2}\" \"{1}\\old\\{0}\"\n"
+      "echo Extracting Xenia update...\n"
+      "tar -xf {3}\n"
+      "echo Starting updated Xenia...\n"
+      "start \"\" \"{2}\"\n"
+      "echo Deleting Xenia update zip file...\n"
+      "del \"{4}\"\n"
+      "del \"%~f0\"\n",
+      exe_filename,  // {0}
+      exe_parent,    // {1}
+      exe_path,      // {2}
+      zip_filename,  // {3}
+      zip_path       // {4}
+  );
+
+  std::ofstream update_script_file(update_script_path);
+
+  if (!update_script_file.is_open()) {
+    return false;
+  }
+
+  update_script_file << script_content;
+
+  if (update_script_file.fail()) {
+    update_script_file.close();
+    return false;
+  }
+
+  update_script_file.close();
+
+  const HINSTANCE result = ShellExecuteW(
+      nullptr, L"open", update_script_path.c_str(), nullptr, nullptr, SW_HIDE);
 
   const bool success = reinterpret_cast<uintptr_t>(result) > 32;
 
   if (!success) {
-    std::filesystem::remove(temp_script_path, ec);
+    std::filesystem::remove(update_script_path, ec);
   }
 
   return success;
