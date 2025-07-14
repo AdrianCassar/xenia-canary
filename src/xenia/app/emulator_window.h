@@ -96,9 +96,12 @@ class EmulatorWindow {
   void SaveImage(const std::filesystem::path& path,
                  const xe::ui::RawImage& image);
 
+  void UpdateCompletionNotification();
+
   void ToggleProfilesConfigDialog();
   void ToggleFriendsDialog();
   void ToggleUpdaterDialog();
+  void ToggleCompletionDialog();
   void SetHotkeysState(bool enabled) { disable_hotkeys_ = !enabled; }
 
   // Types of button functions for hotkeys.
@@ -307,6 +310,8 @@ class EmulatorWindow {
   std::unique_ptr<ManagerDialog> friends_manager_dialog_;
 
   std::unique_ptr<UpdaterDialog> updater_dialog_;
+
+  std::unique_ptr<UpdaterCompletionDialog> updater_completion_dialog_;
 
   std::vector<RecentTitleEntry> recently_launched_titles_;
 };

@@ -1639,6 +1639,11 @@ void EmulatorWindow::SetNetworkMode(uint32_t mode) {
   xe::kernel::XLiveAPI::SetNetworkMode(mode);
 }
 
+void EmulatorWindow::UpdateCompletionNotification() {
+  new xe::ui::HostNotificationWindow(imgui_drawer(), "Updater",
+                                     "Successfully Updated!", 0);
+}
+
 void EmulatorWindow::ToggleDisplayConfigDialog() {
   if (!display_config_dialog_) {
     display_config_dialog_ = std::unique_ptr<DisplayConfigDialog>(
@@ -1689,6 +1694,21 @@ void EmulatorWindow::ToggleUpdaterDialog() {
     disable_hotkeys_ = false;
     emulator_->kernel_state()->BroadcastNotification(kXNotificationSystemUI, 0);
     updater_dialog_.reset();
+    kernel::xam::xam_dialogs_shown_--;
+  }
+}
+
+void EmulatorWindow::ToggleCompletionDialog() {
+  if (!updater_completion_dialog_) {
+    disable_hotkeys_ = true;
+    emulator_->kernel_state()->BroadcastNotification(kXNotificationSystemUI, 1);
+    updater_completion_dialog_ = std::make_unique<UpdaterCompletionDialog>(
+        imgui_drawer_.get(), this, cvar::updated);
+    kernel::xam::xam_dialogs_shown_++;
+  } else {
+    disable_hotkeys_ = false;
+    emulator_->kernel_state()->BroadcastNotification(kXNotificationSystemUI, 0);
+    updater_completion_dialog_.reset();
     kernel::xam::xam_dialogs_shown_--;
   }
 }
@@ -2402,6 +2422,11 @@ xe::X_STATUS EmulatorWindow::RunTitle(
     kernel::xam::xam_dialogs_shown_--;
   }
 
+  if (updater_completion_dialog_) {
+    updater_completion_dialog_.reset();
+    kernel::xam::xam_dialogs_shown_--;
+  }
+
   ClearDialogs();
 
   if (result) {
@@ -2545,6 +2570,10 @@ void EmulatorWindow::ClearDialogs() {
 
   if (updater_dialog_) {
     updater_dialog_.reset();
+  }
+
+  if (updater_completion_dialog_) {
+    updater_completion_dialog_.reset();
   }
 
   imgui_drawer_.get()->ClearDialogs();

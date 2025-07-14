@@ -112,6 +112,23 @@ class UpdaterDialog final : public ui::ImGuiDialog {
   EmulatorWindow* emulator_window_;
 };
 
+class UpdaterCompletionDialog final : public ui::ImGuiDialog {
+ public:
+  UpdaterCompletionDialog(ui::ImGuiDrawer* imgui_drawer,
+                          EmulatorWindow* emulator_window, bool updated)
+      : ui::ImGuiDialog(imgui_drawer), emulator_window_(emulator_window) {
+    updated_ = updated;
+  }
+
+ protected:
+  void OnDraw(ImGuiIO& io) override;
+
+  bool upater_completion_opened_ = false;
+  bool show_update_log_ = false;
+  bool updated_ = false;
+  EmulatorWindow* emulator_window_;
+};
+
 }  // namespace app
 }  // namespace xe
 

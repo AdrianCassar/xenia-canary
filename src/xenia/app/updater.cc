@@ -334,6 +334,8 @@ bool Updater::UpdateAndRestart(const std::filesystem::path& zip_path) {
   const auto update_script_path = exe_parent / "updater.bat";
   const auto zip_filename = zip_path.filename().string();
 
+  const auto update_log_filename = "xenia_canary_update.log";
+
   if (std::filesystem::exists(update_script_path, ec) && !ec) {
     std::filesystem::remove(update_script_path, ec);
 
@@ -344,9 +346,9 @@ bool Updater::UpdateAndRestart(const std::filesystem::path& zip_path) {
     return false;
   }
 
-std::string script_content = fmt::format(
+  std::string script_content = fmt::format(
       "@echo off\n"
-      "set LOG_FILE=\"{1}\\xenia_update.log\"\n"
+      "set LOG_FILE=\"{1}\\{5}\"\n"
       "echo [%date% %time%] Starting Xenia update script > %LOG_FILE%\n"
       "echo [%date% %time%] Changed to extract directory >> %LOG_FILE%\n"
       "cd \"{1}\"\n"
@@ -392,17 +394,18 @@ std::string script_content = fmt::format(
       "  echo [%date% %time%] tar extraction succeeded >> %LOG_FILE%\n"
       ")\n"
       "echo [%date% %time%] Starting updated Xenia executable >> %LOG_FILE%\n"
-      "start \"\" \"{2}\"\n"
+      "start \"\" \"{2}\" --updated=true\n"
       "echo [%date% %time%] Deleting zip file: {4} >> %LOG_FILE%\n"
       "del \"{4}\" >> %LOG_FILE% 2>&1\n"
       "echo [%date% %time%] Update script completed successfully >> "
       "%LOG_FILE%\n"
       "del \"%~f0\"\n",
-      exe_filename,  // {0}
-      exe_parent,    // {1}
-      exe_path,      // {2}
-      zip_filename,  // {3}
-      zip_path       // {4}
+      exe_filename,        // {0}
+      exe_parent,          // {1}
+      exe_path,            // {2}
+      zip_filename,        // {3}
+      zip_path,            // {4}
+      update_log_filename  // {5}
   );
 
   std::ofstream update_script_file(update_script_path);

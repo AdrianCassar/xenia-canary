@@ -747,8 +747,11 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
 
         if (update_failed_) {
           ImGui::Spacing();
-          ImGui::TextColored(ImVec4(1, 0, 0, 1),
-                             "Failed to apply update. Please try again.");
+
+          ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(240, 50, 50, 255));
+          ImGui::Text("Failed to apply update. Please try again.");
+          ImGui::PopStyleColor();
+
           ImGui::Spacing();
         }
 #else
@@ -812,6 +815,127 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
   if (!updater_opened_) {
     ImGui::CloseCurrentPopup();
     emulator_window_->ToggleUpdaterDialog();
+  }
+}
+
+void UpdaterCompletionDialog::OnDraw(ImGuiIO& io) {
+  if (!upater_completion_opened_) {
+    upater_completion_opened_ = true;
+    ImGui::OpenPopup("Updater");
+  }
+
+  ImGuiViewport* viewport = ImGui::GetMainViewport();
+  ImVec2 center = viewport->GetCenter();
+
+  float btn_height = 25;
+  ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+  if (ImGui::BeginPopupModal("Updater", &upater_completion_opened_,
+                             ImGuiWindowFlags_AlwaysAutoResize)) {
+    float btn_width = (ImGui::GetContentRegionAvail().x * 0.5f) -
+                      (ImGui::GetStyle().ItemSpacing.x * 0.5f);
+    ImVec2 btn_size = ImVec2(btn_width, btn_height);
+
+    if (!updated_) {
+      const std::string desc = "Automatic update failed.";
+      ImVec2 desc_size = ImGui::CalcTextSize(desc.c_str());
+
+      ImGui::SetCursorPosX((ImGui::GetWindowWidth() - desc_size.x) * 0.5f);
+
+      ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(240, 50, 50, 255));
+      ImGui::Text(desc.c_str());
+      ImGui::PopStyleColor();
+
+      ImGui::Separator();
+
+      ImGui::Spacing();
+      ImGui::Spacing();
+
+      ImGui::SetCursorPosX((ImGui::GetWindowWidth() - btn_size.x) * 0.5f);
+      if (ImGui::Button("Try updating again?", btn_size)) {
+        upater_completion_opened_ = false;
+        emulator_window_->ToggleUpdaterDialog();
+      }
+
+      ImGui::Spacing();
+      ImGui::Spacing();
+
+      ImGui::SetCursorPosX((ImGui::GetWindowWidth() - btn_size.x) * 0.5f);
+      if (ImGui::Button("Check update log", btn_size)) {
+        show_update_log_ = true;
+        ImGui::OpenPopup("Update Log");
+      }
+
+      ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+      ImGui::SetNextWindowSizeConstraints(ImVec2(550, -1), ImVec2(550, -1));
+      if (ImGui::BeginPopupModal("Update Log", &show_update_log_,
+                                 ImGuiWindowFlags_AlwaysAutoResize)) {
+        float btn_width = (ImGui::GetContentRegionAvail().x * 0.5f) -
+                          (ImGui::GetStyle().ItemSpacing.x * 0.5f);
+        ImVec2 btn_size = ImVec2(btn_width, btn_height);
+
+        const uint32_t lines = 20;
+        float height = ImGui::GetTextLineHeight() * lines;
+
+        const auto update_log_filename = "xenia_canary_update.log";
+        const auto update_log_path =
+            xe::filesystem::GetExecutableFolder() / update_log_filename;
+
+        std::stringstream buffer;
+        std::stringstream::pos_type size;
+
+        if (std::filesystem::exists(update_log_path)) {
+          std::ifstream log(update_log_path);
+
+          buffer << log.rdbuf();
+          size = log.tellg();
+          log.close();
+        } else {
+          ImGui::Text(
+              fmt::format("{} not found.", update_log_filename).c_str());
+          ImGui::Separator();
+          ImGui::Spacing();
+        }
+
+        const ImVec2 muli_input_text_pos = ImGui::GetCursorScreenPos();
+
+        ImGui::InputTextMultiline(
+            "##Updatelog", const_cast<char*>(buffer.str().c_str()),
+            static_cast<size_t>(size) + 1, ImVec2(-1, height),
+            ImGuiInputTextFlags_ReadOnly);
+
+        const ImVec2 item_size = ImGui::GetItemRectSize();
+        const ImVec2 end_pos = ImVec2(muli_input_text_pos.x + item_size.x,
+                                      muli_input_text_pos.y + item_size.y);
+
+        ImDrawList* draw_list = ImGui::GetWindowDrawList();
+
+        draw_list->AddRect(muli_input_text_pos, end_pos,
+                           IM_COL32(50, 96, 168, 200), 0.0f, 0, 3.0f);
+
+        if (ImGui::Button("Copy", ImVec2(-1, btn_height))) {
+          ImGui::SetClipboardText(buffer.str().c_str());
+        }
+
+        ImGui::EndPopup();
+      }
+
+      ImGui::Spacing();
+      ImGui::Spacing();
+
+      ImGui::Separator();
+
+      ImGui::Text("To update Xenia Canary manually:");
+      ImGui::Text("1. Extract the zip file: xenia_canary_netplay_windows.zip");
+      ImGui::Text("2. Replace the current Xenia executable with the new one.");
+      ImGui::Text("3. Delete the zip file.");
+    }
+
+    ImGui::EndPopup();
+  }
+
+  if (!upater_completion_opened_) {
+    ImGui::CloseCurrentPopup();
+    emulator_window_->ToggleCompletionDialog();
   }
 }
 

@@ -726,6 +726,15 @@ void EmulatorApp::EmulatorThread() {
   app_context().CallInUIThread(
       [this]() { emulator_window_->OnEmulatorInitialized(); });
 
+  if (cvar::updated_arg_present) {
+    if (cvar::updated) {
+      app_context().CallInUIThread(
+          [&]() { emulator_window_->UpdateCompletionNotification(); });
+    } else {
+      emulator_window_->ToggleCompletionDialog();
+    }
+  }
+
   // Grab path from the flag or unnamed argument.
   std::filesystem::path path;
   if (!cvars::target.empty()) {

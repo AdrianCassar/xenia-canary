@@ -31,6 +31,9 @@ std::map<std::string, ICommandVar*>* CmdVars;
 std::map<std::string, IConfigVar*>* ConfigVars;
 std::multimap<uint32_t, const IConfigVarUpdate*>* IConfigVarUpdate::updates_;
 
+bool updated;
+bool updated_arg_present;
+
 void PrintHelpAndExit() {
   std::cout << options.help({""}) << std::endl;
   std::cout << "For the full list of command line arguments, see xenia.cfg."
@@ -42,6 +45,7 @@ void ParseLaunchArguments(int& argc, char**& argv,
                           const std::string_view positional_help,
                           const std::vector<std::string>& positional_options) {
   options.add_options()("help", "Prints help and exit.");
+  options.add_options()("updated", "App update completion result.");
 
   if (!CmdVars) {
     CmdVars = new std::map<std::string, ICommandVar*>();
@@ -75,6 +79,11 @@ void ParseLaunchArguments(int& argc, char**& argv,
                                  options.help({""}));
         exit(0);
       }
+    }
+
+    if (result.contains("updated")) {
+      updated_arg_present = true;
+      updated = result["updated"].as<bool>();
     }
 
     for (auto& it : *CmdVars) {
