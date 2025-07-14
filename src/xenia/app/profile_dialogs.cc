@@ -669,7 +669,8 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
           if (!show_replace_dialog_) {
             auto run = [this]() {
               uint32_t response = updater_->DownloadLatestNightlyArtifact(
-                  "Windows_build", XE_BUILD_BRANCH, windows_artifact_name_,
+                  "Windows_build", XE_BUILD_BRANCH,
+                  std::string(windows_artifact_name_),
                   downloaded_file_path_.string());
 
               downloading_ = false;

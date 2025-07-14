@@ -327,14 +327,23 @@ bool Updater::UpdateAndRestart(const std::filesystem::path& zip_path) {
     return false;
   }
 
-  const auto exe_path = xe::filesystem::GetExecutablePath();
-  const auto exe_filename = exe_path.filename().string();
-  const auto exe_parent = xe::filesystem::GetExecutableFolder();
+  const auto executable_path = xe::filesystem::GetExecutablePath();
+  const auto executable_filename = executable_path.filename().string();
+  const auto executable_parent = xe::filesystem::GetExecutableFolder();
 
-  const auto update_script_path = exe_parent / "updater.bat";
+  std::string update_script_filename = "";
+
+#ifdef XE_PLATFORM_WIN32
+  update_script_filename = "updater.bat";
+#elif XE_PLATFORM_LINUX
+  update_script_filename = "updater.sh";
+#endif
+
+  const auto update_script_path = executable_parent / update_script_filename;
   const auto zip_filename = zip_path.filename().string();
 
   const auto update_log_filename = "xenia_canary_update.log";
+  const auto backup_folder_name = ".old";
 
   if (std::filesystem::exists(update_script_path, ec) && !ec) {
     std::filesystem::remove(update_script_path, ec);
@@ -344,8 +353,11 @@ bool Updater::UpdateAndRestart(const std::filesystem::path& zip_path) {
     return false;
   }
 
+  std::string script_content = "";
+
+#ifdef XE_PLATFORM_WIN32
   // Batch script for completing the automatic update process.
-  std::string script_content = fmt::format(
+  script_content = fmt::format(
       "@echo off\n"
       "set LOG_FILE=\"{1}\\{5}\"\n"
       "echo [INF] Starting Xenia update script > %LOG_FILE%\n"
@@ -360,10 +372,10 @@ bool Updater::UpdateAndRestart(const std::filesystem::path& zip_path) {
       ")\n"
       "echo [INF] Xenia process has exited >> %LOG_FILE%\n"
       "echo [INF] Cleaning and creating backup folder >> %LOG_FILE%\n"
-      "if exist \"{1}\\old\" rd /s /q \"{1}\\old\"\n"
-      "mkdir     \"{1}\\old\"\n"
+      "if exist \"{1}\\{6}\" rd /s /q \"{1}\\{6}\"\n"
+      "mkdir     \"{1}\\{6}\"\n"
       "echo [INF] Backing up old executable: {2} >> %LOG_FILE%\n"
-      "copy /y \"{2}\" \"{1}\\old\\{0}\" >> %LOG_FILE% 2>&1\n"
+      "copy /y \"{2}\" \"{1}\\{6}\\{0}\" >> %LOG_FILE% 2>&1\n"
       "echo [INF] Extracting Xenia update... >> %LOG_FILE%\n"
       "echo [INF] Attempting tar extraction of {3} >> %LOG_FILE%\n"
       "tar -xf {3} >> %LOG_FILE% 2>&1\n"
@@ -399,13 +411,24 @@ bool Updater::UpdateAndRestart(const std::filesystem::path& zip_path) {
       "echo [INF] Update script completed successfully >> "
       "%LOG_FILE%\n"
       "del \"%~f0\"\n",
-      exe_filename,        // {0}
-      exe_parent,          // {1}
-      exe_path,            // {2}
-      zip_filename,        // {3}
-      zip_path,            // {4}
-      update_log_filename  // {5}
+      executable_filename,  // {0}
+      executable_parent,    // {1}
+      executable_path,      // {2}
+      zip_filename,         // {3}
+      zip_path,             // {4}
+      update_log_filename,  // {5}
+      backup_folder_name    // {6}
   );
+#elif XE_PLATFORM_LINUX
+  // Restart with updated false for manual update
+  script_content = fmt::format(
+      "#! /bin/bash\n"
+      "while pgrep {0} > /dev/null; do sleep 1; done\n"
+      "./{1} --updated=false\n",
+      executable_filename,  // {0}
+      executable_path       // {1}
+  );
+#endif
 
   std::ofstream update_script_file(update_script_path);
 
@@ -422,6 +445,7 @@ bool Updater::UpdateAndRestart(const std::filesystem::path& zip_path) {
 
   update_script_file.close();
 
+#ifdef XE_PLATFORM_WIN32
   SHELLEXECUTEINFO ShExecInfo = {};
 
   const std::wstring update_script_path_wstr_ = update_script_path.wstring();
@@ -432,6 +456,12 @@ bool Updater::UpdateAndRestart(const std::filesystem::path& zip_path) {
   ShExecInfo.nShow = SW_HIDE;
 
   return ShellExecuteEx(&ShExecInfo);
+#elif XE_PLATFORM_LINUX
+  system(fmt::format("chmod +x {} && ./{}", update_script_filename,
+                     update_script_filename)
+             .c_str());
+  return true;
+#endif
 }
 
 }  // namespace app
