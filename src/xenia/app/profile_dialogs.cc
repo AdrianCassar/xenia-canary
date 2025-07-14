@@ -628,11 +628,9 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
 
         const ImVec2 muli_input_text_pos = ImGui::GetCursorScreenPos();
 
-        ImGui::InputTextMultiline("##Changelog",
-                                  const_cast<char*>(changelog_.c_str()),
-                                  changelog_.size() + 1, ImVec2(-1, height),
-                                  ImGuiInputTextFlags_ReadOnly);
-
+        ImGui::BeginChild("##ChangelogChild", ImVec2(-1, height), true, 0);
+        ImGui::TextWrapped(changelog_.c_str());
+        ImGui::EndChild();
         const ImVec2 item_size = ImGui::GetItemRectSize();
         const ImVec2 end_pos = ImVec2(muli_input_text_pos.x + item_size.x,
                                       muli_input_text_pos.y + item_size.y);
@@ -899,11 +897,9 @@ void UpdaterCompletionDialog::OnDraw(ImGuiIO& io) {
 
         const ImVec2 muli_input_text_pos = ImGui::GetCursorScreenPos();
 
-        ImGui::InputTextMultiline(
-            "##Updatelog", const_cast<char*>(buffer.str().c_str()),
-            static_cast<size_t>(size) + 1, ImVec2(-1, height),
-            ImGuiInputTextFlags_ReadOnly);
-
+        ImGui::BeginChild("##UpdatelogChild", ImVec2(-1, height), true, 0);
+        ImGui::TextWrapped(buffer.str().c_str());
+        ImGui::EndChild();
         const ImVec2 item_size = ImGui::GetItemRectSize();
         const ImVec2 end_pos = ImVec2(muli_input_text_pos.x + item_size.x,
                                       muli_input_text_pos.y + item_size.y);
