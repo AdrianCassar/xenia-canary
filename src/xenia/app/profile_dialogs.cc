@@ -576,8 +576,9 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
   float btn_height = 25;
   ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
   ImGui::SetNextWindowSizeConstraints(ImVec2(350, -1), ImVec2(350, -1));
-  if (ImGui::BeginPopupModal("Updater", &updater_opened_,
-                             ImGuiWindowFlags_AlwaysAutoResize)) {
+  if (ImGui::BeginPopupModal(
+          "Updater", &updater_opened_,
+          ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove)) {
     ImVec2 popup_size = ImGui::GetWindowSize();
     ImVec2 center = ImGui::GetMainViewport()->GetCenter();
     ImVec2 pos(center.x - popup_size.x * 0.5f, center.y - popup_size.y * 0.5f);
@@ -825,8 +826,11 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
   }
 }
 
-#ifdef XE_PLATFORM_WIN32
 bool UpdaterCompletionDialog::CopyFilePathToClipboard(
+#ifndef XE_PLATFORM_WIN32
+    return false;
+#endif
+
     const std::wstring& file_path) {
   size_t path_len = file_path.length() + 1;
   size_t buffer_size = sizeof(DROPFILES) + (path_len + 1) * sizeof(wchar_t);
@@ -866,7 +870,6 @@ bool UpdaterCompletionDialog::CopyFilePathToClipboard(
     return false;
   }
 }
-#endif
 
 void UpdaterCompletionDialog::OnDraw(ImGuiIO& io) {
   if (!updater_completion_opened_) {
@@ -961,20 +964,25 @@ void UpdaterCompletionDialog::OnDraw(ImGuiIO& io) {
         draw_list->AddRect(muli_input_text_pos, end_pos,
                            IM_COL32(50, 96, 168, 200), 0.0f, 0, 3.0f);
 
-        if (ImGui::Button("Copy", ImVec2(-1, btn_height))) {
+        std::string copy_btn = "";
+
+#ifdef XE_PLATFORM_WIN32
+        copy_btn = "Copy Log File";
+#else
+        copy_btn = "Copy Log Text";
+#endif
+
+        if (ImGui::Button(copy_btn.c_str(), ImVec2(-1, btn_height))) {
 #ifdef XE_PLATFORM_WIN32
           bool copy_success = UpdaterCompletionDialog::CopyFilePathToClipboard(
               update_log_path.wstring());
 
           if (!copy_success) {
-            XELOGFS(
+            XELOGE(
                 "Failed to copy file to clipboard. Copying the text instead.");
             ImGui::SetClipboardText(buffer.str().c_str());
           }
 #else
-          XELOGFS(
-              "Copying file to clipboard is not supported on this platform. "
-              "Copying the text instead.");
           ImGui::SetClipboardText(buffer.str().c_str());
 #endif
         }
