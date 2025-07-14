@@ -658,7 +658,7 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
       if (!hide_download_button_) {
         if (ImGui::Button("Download Nightly")) {
           downloaded_file_path_ =
-              executable_folder_path_ / windows_artifact_name_;
+              xe::filesystem::GetExecutableFolder() / windows_artifact_name_;
         }
 
         if (!downloaded_file_path_.empty()) {
@@ -819,8 +819,8 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
 }
 
 void UpdaterCompletionDialog::OnDraw(ImGuiIO& io) {
-  if (!upater_completion_opened_) {
-    upater_completion_opened_ = true;
+  if (!updater_completion_opened_) {
+    updater_completion_opened_ = true;
     ImGui::OpenPopup("Updater");
   }
 
@@ -829,7 +829,7 @@ void UpdaterCompletionDialog::OnDraw(ImGuiIO& io) {
 
   float btn_height = 25;
   ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-  if (ImGui::BeginPopupModal("Updater", &upater_completion_opened_,
+  if (ImGui::BeginPopupModal("Updater", &updater_completion_opened_,
                              ImGuiWindowFlags_AlwaysAutoResize)) {
     float btn_width = (ImGui::GetContentRegionAvail().x * 0.5f) -
                       (ImGui::GetStyle().ItemSpacing.x * 0.5f);
@@ -852,7 +852,7 @@ void UpdaterCompletionDialog::OnDraw(ImGuiIO& io) {
 
       ImGui::SetCursorPosX((ImGui::GetWindowWidth() - btn_size.x) * 0.5f);
       if (ImGui::Button("Try updating again?", btn_size)) {
-        upater_completion_opened_ = false;
+        updater_completion_opened_ = false;
         emulator_window_->ToggleUpdaterDialog();
       }
 
@@ -876,14 +876,15 @@ void UpdaterCompletionDialog::OnDraw(ImGuiIO& io) {
         const uint32_t lines = 20;
         float height = ImGui::GetTextLineHeight() * lines;
 
-        const auto update_log_filename = "xenia_canary_update.log";
         const auto update_log_path =
-            xe::filesystem::GetExecutableFolder() / update_log_filename;
+            xe::filesystem::GetExecutableFolder() / update_log_filename_;
 
         std::stringstream buffer;
         std::stringstream::pos_type size;
 
-        if (std::filesystem::exists(update_log_path)) {
+        std::error_code ec;
+
+        if (std::filesystem::exists(update_log_path, ec) && !ec) {
           std::ifstream log(update_log_path);
 
           buffer << log.rdbuf();
@@ -891,7 +892,7 @@ void UpdaterCompletionDialog::OnDraw(ImGuiIO& io) {
           log.close();
         } else {
           ImGui::Text(
-              fmt::format("{} not found.", update_log_filename).c_str());
+              fmt::format("{} not found.", update_log_filename_).c_str());
           ImGui::Separator();
           ImGui::Spacing();
         }
@@ -925,7 +926,9 @@ void UpdaterCompletionDialog::OnDraw(ImGuiIO& io) {
       ImGui::Separator();
 
       ImGui::Text("To update Xenia Canary manually:");
-      ImGui::Text("1. Extract the zip file: xenia_canary_netplay_windows.zip");
+      ImGui::Text(
+          fmt::format("1. Extract the zip file: {}", windows_artifact_name_)
+              .c_str());
       ImGui::Text("2. Replace the current Xenia executable with the new one.");
       ImGui::Text("3. Delete the zip file.");
     }
@@ -933,7 +936,7 @@ void UpdaterCompletionDialog::OnDraw(ImGuiIO& io) {
     ImGui::EndPopup();
   }
 
-  if (!upater_completion_opened_) {
+  if (!updater_completion_opened_) {
     ImGui::CloseCurrentPopup();
     emulator_window_->ToggleCompletionDialog();
   }

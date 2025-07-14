@@ -44,6 +44,9 @@ void PrintHelpAndExit() {
 void ParseLaunchArguments(int& argc, char**& argv,
                           const std::string_view positional_help,
                           const std::vector<std::string>& positional_options) {
+  // Prevent throwing exceptions during argv parsing
+  options.allow_unrecognised_options();
+
   options.add_options()("help", "Prints help and exit.");
   options.add_options()("updated", "App update completion result.");
 

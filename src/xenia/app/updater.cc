@@ -338,14 +338,13 @@ bool Updater::UpdateAndRestart(const std::filesystem::path& zip_path) {
 
   if (std::filesystem::exists(update_script_path, ec) && !ec) {
     std::filesystem::remove(update_script_path, ec);
+  }
 
-    if (ec) {
-      return false;
-    }
-  } else if (ec) {
+  if (ec) {
     return false;
   }
 
+  // Batch script for completing the automatic update process.
   std::string script_content = fmt::format(
       "@echo off\n"
       "set LOG_FILE=\"{1}\\{5}\"\n"
@@ -423,16 +422,16 @@ bool Updater::UpdateAndRestart(const std::filesystem::path& zip_path) {
 
   update_script_file.close();
 
-  const HINSTANCE result = ShellExecuteW(
-      nullptr, L"open", update_script_path.c_str(), nullptr, nullptr, SW_HIDE);
+  SHELLEXECUTEINFO ShExecInfo = {};
 
-  const bool success = reinterpret_cast<uintptr_t>(result) > 32;
+  const std::wstring update_script_path_wstr_ = update_script_path.wstring();
+  const wchar_t* update_script_path_wstr_ptr = update_script_path_wstr_.c_str();
 
-  if (!success) {
-    std::filesystem::remove(update_script_path, ec);
-  }
+  ShExecInfo.cbSize = sizeof(SHELLEXECUTEINFO);
+  ShExecInfo.lpFile = update_script_path_wstr_ptr;
+  ShExecInfo.nShow = SW_HIDE;
 
-  return success;
+  return ShellExecuteEx(&ShExecInfo);
 }
 
 }  // namespace app

@@ -102,9 +102,7 @@ class UpdaterDialog final : public ui::ImGuiDialog {
   bool show_replace_dialog_ = false;
   bool replace_file_ = false;
   std::filesystem::path downloaded_file_path_;
-  std::filesystem::path executable_folder_path_ =
-      xe::filesystem::GetExecutableFolder();
-  const std::string windows_artifact_name_ = "xenia_canary_netplay_windows.zip";
+  std::string_view windows_artifact_name_ = "xenia_canary_netplay_windows.zip";
   std::string latest_commit_hash_ = "";
   std::string latest_commit_date_ = "";
   std::vector<std::string> commit_messages_ = {};
@@ -123,9 +121,11 @@ class UpdaterCompletionDialog final : public ui::ImGuiDialog {
  protected:
   void OnDraw(ImGuiIO& io) override;
 
-  bool upater_completion_opened_ = false;
+  bool updater_completion_opened_ = false;
   bool show_update_log_ = false;
   bool updated_ = false;
+  std::string_view windows_artifact_name_ = "xenia_canary_netplay_windows.zip";
+  std::string_view update_log_filename_ = "xenia_canary_update.log";
   EmulatorWindow* emulator_window_;
 };
 
