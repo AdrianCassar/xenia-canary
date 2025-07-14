@@ -24,7 +24,7 @@
 #include "xenia/kernel/xam/ui/title_info_ui.h"
 
 #include <string>
-#ifdef _WIN32
+#ifdef XE_PLATFORM_WIN32
 #include <shlobj.h>
 #include <windows.h>
 #else
@@ -825,6 +825,49 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
   }
 }
 
+#ifdef XE_PLATFORM_WIN32
+bool UpdaterCompletionDialog::CopyFilePathToClipboard(
+    const std::wstring& file_path) {
+  size_t path_len = file_path.length() + 1;
+  size_t buffer_size = sizeof(DROPFILES) + (path_len + 1) * sizeof(wchar_t);
+
+  HGLOBAL hGlobal = GlobalAlloc(GHND, buffer_size);
+  if (!hGlobal) return false;
+
+  DROPFILES* pDropFiles = (DROPFILES*)GlobalLock(hGlobal);
+  if (!pDropFiles) {
+    GlobalFree(hGlobal);
+    return false;
+  }
+
+  pDropFiles->pFiles = sizeof(DROPFILES);
+  pDropFiles->pt.x = 0;
+  pDropFiles->pt.y = 0;
+  pDropFiles->fNC = FALSE;
+  pDropFiles->fWide = TRUE;
+
+  wchar_t* pFiles = (wchar_t*)((BYTE*)pDropFiles + sizeof(DROPFILES));
+  wcscpy_s(pFiles, path_len + 1, file_path.c_str());
+  pFiles[path_len] = L'\0';
+
+  GlobalUnlock(hGlobal);
+
+  if (OpenClipboard(nullptr)) {
+    EmptyClipboard();
+    if (SetClipboardData(CF_HDROP, hGlobal) == nullptr) {
+      GlobalFree(hGlobal);
+      CloseClipboard();
+      return false;
+    }
+    CloseClipboard();
+    return true;
+  } else {
+    GlobalFree(hGlobal);
+    return false;
+  }
+}
+#endif
+
 void UpdaterCompletionDialog::OnDraw(ImGuiIO& io) {
   if (!updater_completion_opened_) {
     updater_completion_opened_ = true;
@@ -919,46 +962,10 @@ void UpdaterCompletionDialog::OnDraw(ImGuiIO& io) {
                            IM_COL32(50, 96, 168, 200), 0.0f, 0, 3.0f);
 
         if (ImGui::Button("Copy", ImVec2(-1, btn_height))) {
-#ifdef _WIN32
-          const std::wstring& file_path = update_log_path.wstring();
-          size_t path_len = file_path.length() + 1;
-          size_t buffer_size =
-              sizeof(DROPFILES) + (path_len + 1) * sizeof(wchar_t);
+#ifdef XE_PLATFORM_WIN32
+          bool copy_success = UpdaterCompletionDialog::CopyFilePathToClipboard(
+              update_log_path.wstring());
 
-          HGLOBAL hGlobal = GlobalAlloc(GHND, buffer_size);
-          bool copy_success = false;
-          if (hGlobal) {
-            DROPFILES* pDropFiles = (DROPFILES*)GlobalLock(hGlobal);
-            if (pDropFiles) {
-              pDropFiles->pFiles = sizeof(DROPFILES);
-              pDropFiles->pt.x = 0;
-              pDropFiles->pt.y = 0;
-              pDropFiles->fNC = FALSE;
-              pDropFiles->fWide = TRUE;
-
-              wchar_t* pFiles =
-                  (wchar_t*)((BYTE*)pDropFiles + sizeof(DROPFILES));
-              wcscpy_s(pFiles, path_len + 1, file_path.c_str());
-              pFiles[path_len] = L'\0';
-
-              GlobalUnlock(hGlobal);
-
-              if (OpenClipboard(nullptr)) {
-                EmptyClipboard();
-                if (SetClipboardData(CF_HDROP, hGlobal) == nullptr) {
-                  GlobalFree(hGlobal);
-                  copy_success = false;
-                } else {
-                  copy_success = true;
-                }
-                CloseClipboard();
-              } else {
-                GlobalFree(hGlobal);
-              }
-            } else {
-              GlobalFree(hGlobal);
-            }
-          }
           if (!copy_success) {
             XELOGFS(
                 "Failed to copy file to clipboard. Copying the text instead.");

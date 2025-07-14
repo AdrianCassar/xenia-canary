@@ -119,8 +119,8 @@ class UpdaterCompletionDialog final : public ui::ImGuiDialog {
   }
 
  protected:
+  bool CopyFilePathToClipboard(const std::wstring& file_path);
   void OnDraw(ImGuiIO& io) override;
-
   bool updater_completion_opened_ = false;
   bool show_update_log_ = false;
   bool updated_ = false;
