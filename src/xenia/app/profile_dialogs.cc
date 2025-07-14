@@ -23,7 +23,6 @@
 #include "xenia/kernel/xam/ui/signin_ui.h"
 #include "xenia/kernel/xam/ui/title_info_ui.h"
 
-#include <string>
 #ifdef XE_PLATFORM_WIN32
 #include <shlobj.h>
 #include <windows.h>
@@ -574,16 +573,20 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
   ImVec2 center = viewport->GetCenter();
 
   float btn_height = 25;
-  ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-  ImGui::SetNextWindowSizeConstraints(ImVec2(350, -1), ImVec2(350, -1));
+  ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+
+  if (changelog_.empty() || (checked_for_updates_ && !update_available_)) {
+    ImGui::SetNextWindowSizeConstraints(ImVec2(250, -1), ImVec2(250, -1));
+  } else {
+    ImGui::SetNextWindowSizeConstraints(ImVec2(450, -1), ImVec2(450, -1));
+  }
+
   if (ImGui::BeginPopupModal(
           "Updater", &updater_opened_,
           ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove)) {
-    ImVec2 popup_size = ImGui::GetWindowSize();
-    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
-    ImVec2 pos(center.x - popup_size.x * 0.5f, center.y - popup_size.y * 0.5f);
-    ImGui::SetWindowPos(pos);
-#ifdef DEBUG
+    ImGui::SetWindowFontScale(1.05f);
+
+#ifndef DEBUG
     ImGui::Text("This is a debug build, therefore updates are unavailable.");
     ImGui::EndPopup();
   }
@@ -629,15 +632,18 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
     ImGui::Spacing();
 
     if (checked_for_updates_ && update_available_) {
-      const uint32_t lines = 10;
+      const uint32_t lines = 15;
       float height = ImGui::GetTextLineHeight() * lines;
 
       if (!changelog_.empty()) {
         ImGui::Text("Changelog:");
 
+        ImGui::Spacing();
+
         const ImVec2 muli_input_text_pos = ImGui::GetCursorScreenPos();
 
-        ImGui::BeginChild("##ChangelogChild", ImVec2(-1, height), true, 0);
+        ImGui::BeginChild("##ChangelogChild", ImVec2(-1, height),
+                          ImGuiChildFlags_Borders);
         ImGui::TextWrapped(changelog_.c_str());
         ImGui::EndChild();
         const ImVec2 item_size = ImGui::GetItemRectSize();
@@ -701,10 +707,11 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
         }
       }
 
-      ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+      ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
       ImGui::SetNextWindowSizeConstraints(ImVec2(300, 90), ImVec2(300, 90));
-      if (ImGui::BeginPopupModal("Replace", nullptr,
-                                 ImGuiWindowFlags_AlwaysAutoResize)) {
+      if (ImGui::BeginPopupModal(
+              "Replace", nullptr,
+              ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove)) {
         float btn_width = (ImGui::GetContentRegionAvail().x * 0.5f) -
                           (ImGui::GetStyle().ItemSpacing.x * 0.5f);
         ImVec2 btn_size = ImVec2(btn_width, btn_height);
@@ -816,6 +823,8 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
       ImGui::Spacing();
     }
 
+    ImGui::SetWindowFontScale(1.0f);
+
     ImGui::EndPopup();
   }
 #endif  //  DEBUG
@@ -881,12 +890,15 @@ void UpdaterCompletionDialog::OnDraw(ImGuiIO& io) {
   ImVec2 center = viewport->GetCenter();
 
   float btn_height = 25;
-  ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-  if (ImGui::BeginPopupModal("Updater", &updater_completion_opened_,
-                             ImGuiWindowFlags_AlwaysAutoResize)) {
+  ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+  if (ImGui::BeginPopupModal(
+          "Updater", &updater_completion_opened_,
+          ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove)) {
     float btn_width = (ImGui::GetContentRegionAvail().x * 0.5f) -
                       (ImGui::GetStyle().ItemSpacing.x * 0.5f);
     ImVec2 btn_size = ImVec2(btn_width, btn_height);
+
+    ImGui::SetWindowFontScale(1.05f);
 
     if (!updated_) {
       const std::string desc = "Automatic update failed.";
@@ -918,10 +930,15 @@ void UpdaterCompletionDialog::OnDraw(ImGuiIO& io) {
         ImGui::OpenPopup("Update Log");
       }
 
-      ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+      // SetWindowFontScale causes vertical scroll bar to show so we use
+      // ImGuiWindowFlags_NoScrollbar
+
+      ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
       ImGui::SetNextWindowSizeConstraints(ImVec2(550, -1), ImVec2(550, -1));
       if (ImGui::BeginPopupModal("Update Log", &show_update_log_,
-                                 ImGuiWindowFlags_AlwaysAutoResize)) {
+                                 ImGuiWindowFlags_AlwaysAutoResize |
+                                     ImGuiWindowFlags_NoMove |
+                                     ImGuiWindowFlags_NoScrollbar)) {
         float btn_width = (ImGui::GetContentRegionAvail().x * 0.5f) -
                           (ImGui::GetStyle().ItemSpacing.x * 0.5f);
         ImVec2 btn_size = ImVec2(btn_width, btn_height);
@@ -952,7 +969,8 @@ void UpdaterCompletionDialog::OnDraw(ImGuiIO& io) {
 
         const ImVec2 muli_input_text_pos = ImGui::GetCursorScreenPos();
 
-        ImGui::BeginChild("##UpdatelogChild", ImVec2(-1, height), true, 0);
+        ImGui::BeginChild("##UpdatelogChild", ImVec2(-1, height),
+                          ImGuiChildFlags_Borders);
         ImGui::TextWrapped(buffer.str().c_str());
         ImGui::EndChild();
         const ImVec2 item_size = ImGui::GetItemRectSize();
@@ -1002,6 +1020,8 @@ void UpdaterCompletionDialog::OnDraw(ImGuiIO& io) {
       ImGui::Text("2. Replace the current Xenia executable with the new one.");
       ImGui::Text("3. Delete the zip file.");
     }
+
+    ImGui::SetWindowFontScale(1.0f);
 
     ImGui::EndPopup();
   }
