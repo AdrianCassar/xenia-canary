@@ -836,48 +836,49 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
 }
 
 bool UpdaterCompletionDialog::CopyFilePathToClipboard(
-#ifndef XE_PLATFORM_WIN32
-    return false;
-#endif
-
     const std::wstring& file_path) {
-  size_t path_len = file_path.length() + 1;
-  size_t buffer_size = sizeof(DROPFILES) + (path_len + 1) * sizeof(wchar_t);
+  std::u16string file_to_copy_path(file_path.begin(), file_path.end());
 
-  HGLOBAL hGlobal = GlobalAlloc(GHND, buffer_size);
-  if (!hGlobal) return false;
+#ifdef XE_PLATFORM_WIN32
+  size_t path_size =
+      string_util::size_in_bytes(file_to_copy_path.c_str(), true);
+  size_t buffer_size = path_size + sizeof(DROPFILES);
 
-  DROPFILES* pDropFiles = (DROPFILES*)GlobalLock(hGlobal);
-  if (!pDropFiles) {
-    GlobalFree(hGlobal);
+  HGLOBAL dropped_files_data_ptr = GlobalAlloc(GHND, buffer_size);
+
+  if (!dropped_files_data_ptr) {
     return false;
   }
 
-  pDropFiles->pFiles = sizeof(DROPFILES);
-  pDropFiles->pt.x = 0;
-  pDropFiles->pt.y = 0;
-  pDropFiles->fNC = FALSE;
-  pDropFiles->fWide = TRUE;
+  DROPFILES* drop_files_ptr =
+      reinterpret_cast<DROPFILES*>(GlobalLock(dropped_files_data_ptr));
 
-  wchar_t* pFiles = (wchar_t*)((BYTE*)pDropFiles + sizeof(DROPFILES));
-  wcscpy_s(pFiles, path_len + 1, file_path.c_str());
-  pFiles[path_len] = L'\0';
+  if (!drop_files_ptr) {
+    GlobalFree(dropped_files_data_ptr);
+    return false;
+  }
 
-  GlobalUnlock(hGlobal);
+  drop_files_ptr->pFiles = sizeof(DROPFILES);
+  drop_files_ptr->fWide = TRUE;
+
+  char16_t* files_ptr = reinterpret_cast<char16_t*>(drop_files_ptr + 1);
+  memcpy(files_ptr, file_to_copy_path.c_str(), path_size);
+
+  bool copied = false;
 
   if (OpenClipboard(nullptr)) {
     EmptyClipboard();
-    if (SetClipboardData(CF_HDROP, hGlobal) == nullptr) {
-      GlobalFree(hGlobal);
-      CloseClipboard();
-      return false;
-    }
-    CloseClipboard();
-    return true;
-  } else {
-    GlobalFree(hGlobal);
-    return false;
+    copied = SetClipboardData(CF_HDROP, dropped_files_data_ptr);
   }
+
+  CloseClipboard();
+  GlobalUnlock(dropped_files_data_ptr);
+  GlobalFree(dropped_files_data_ptr);
+
+  return copied;
+#else
+  return false;
+#endif
 }
 
 void UpdaterCompletionDialog::OnDraw(ImGuiIO& io) {
@@ -992,8 +993,8 @@ void UpdaterCompletionDialog::OnDraw(ImGuiIO& io) {
 
         if (ImGui::Button(copy_btn.c_str(), ImVec2(-1, btn_height))) {
 #ifdef XE_PLATFORM_WIN32
-          bool copy_success = UpdaterCompletionDialog::CopyFilePathToClipboard(
-              update_log_path.wstring());
+          bool copy_success =
+              CopyFilePathToClipboard(update_log_path.wstring());
 
           if (!copy_success) {
             XELOGE(
