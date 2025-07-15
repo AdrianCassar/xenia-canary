@@ -576,7 +576,7 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
   ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
 
   if (changelog_.empty() || (checked_for_updates_ && !update_available_)) {
-    ImGui::SetNextWindowSizeConstraints(ImVec2(250, -1), ImVec2(250, -1));
+    ImGui::SetNextWindowSizeConstraints(ImVec2(280, -1), ImVec2(280, -1));
   } else {
     ImGui::SetNextWindowSizeConstraints(ImVec2(450, -1), ImVec2(450, -1));
   }
