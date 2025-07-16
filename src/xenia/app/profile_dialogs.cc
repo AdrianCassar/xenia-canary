@@ -637,48 +637,6 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
     ImGui::EndPopup();
   }
 #else
-    std::string update_desc = "";
-
-    if (stable_toggle_) {
-      update_desc = "Check for Stable Updates";
-    } else {
-      update_desc = "Check for Nightly Updates";
-    }
-
-    ImVec2 update_desc_size = ImGui::CalcTextSize(update_desc.c_str());
-
-    ImGui::SetCursorPosX((ImGui::GetWindowWidth() - update_desc_size.x) * 0.5f);
-
-    if (ImGui::Button(update_desc.c_str())) {
-      checked_for_updates_ = true;
-
-      update_available_ = updater_->CheckForUpdates(
-          stable_toggle_, XE_BUILD_BRANCH, &latest_commit_hash_,
-          &latest_commit_date_, &response_code_);
-
-      if (response_code_ != HTTP_STATUS_CODE::HTTP_OK) {
-        update_available_ = false;
-      }
-
-      if (update_available_) {
-        commit_messages_.clear();
-
-        const uint32_t result = updater_->GetChangelogBetweenCommits(
-            XE_BUILD_COMMIT, latest_commit_hash_, commit_messages_);
-
-        if (result == HTTP_STATUS_CODE::HTTP_OK) {
-          if (!commit_messages_.empty()) {
-            changelog_.clear();
-          }
-
-          for (const auto& message : commit_messages_) {
-            changelog_.append(fmt::format("- {}\n", message));
-          }
-        }
-      }
-
-      checked_for_updates_ = true;
-    }
 
     const std::string toggle_lbl = "Stable";
 
@@ -717,6 +675,45 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
       latest_commit_hash_ = "";
       latest_commit_date_ = "";
       changelog_.clear();
+    }
+
+    ImGui::Spacing();
+    std::string update_desc = stable_toggle_ ? "Check for Stable Updates"
+                                             : "Check for Nightly Updates";
+
+    ImVec2 update_desc_size = ImGui::CalcTextSize(update_desc.c_str());
+
+    ImGui::SetCursorPosX((ImGui::GetWindowWidth() - update_desc_size.x) * 0.5f);
+
+    if (ImGui::Button(update_desc.c_str())) {
+      checked_for_updates_ = true;
+
+      update_available_ = updater_->CheckForUpdates(
+          stable_toggle_, XE_BUILD_BRANCH, &latest_commit_hash_,
+          &latest_commit_date_, &response_code_);
+
+      if (response_code_ != HTTP_STATUS_CODE::HTTP_OK) {
+        update_available_ = false;
+      }
+
+      if (update_available_) {
+        commit_messages_.clear();
+
+        const uint32_t result = updater_->GetChangelogBetweenCommits(
+            XE_BUILD_COMMIT, latest_commit_hash_, commit_messages_);
+
+        if (result == HTTP_STATUS_CODE::HTTP_OK) {
+          if (!commit_messages_.empty()) {
+            changelog_.clear();
+          }
+
+          for (const auto& message : commit_messages_) {
+            changelog_.append(fmt::format("- {}\n", message));
+          }
+        }
+      }
+
+      checked_for_updates_ = true;
     }
 
     ImGui::Spacing();
@@ -986,7 +983,7 @@ bool UpdaterCompletionDialog::CopyFilePathToClipboard(
 void UpdaterCompletionDialog::OnDraw(ImGuiIO& io) {
   if (!updater_completion_opened_) {
     updater_completion_opened_ = true;
-    ImGui::OpenPopup("Updater");
+    ImGui::OpenPopup("Update Failed");
   }
 
   ImGuiViewport* viewport = ImGui::GetMainViewport();
@@ -995,7 +992,7 @@ void UpdaterCompletionDialog::OnDraw(ImGuiIO& io) {
   float btn_height = 25;
   ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
   if (ImGui::BeginPopupModal(
-          "Updater", &updater_completion_opened_,
+          "Update Failed", &updater_completion_opened_,
           ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove)) {
     float btn_width = (ImGui::GetContentRegionAvail().x * 0.5f) -
                       (ImGui::GetStyle().ItemSpacing.x * 0.5f);
