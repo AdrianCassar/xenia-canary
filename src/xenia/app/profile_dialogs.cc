@@ -632,58 +632,17 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
           ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove)) {
     ImGui::SetWindowFontScale(1.05f);
 
-#ifndef DEBUG
+#ifdef DEBUG
     ImGui::Text("This is a debug build, therefore updates are unavailable.");
     ImGui::EndPopup();
   }
 #else
-    const std::string toggle_lbl = "Stable";
+    float cursor_x = ImGui::GetCursorPosX();
 
-    // same as in ToggleButton()
-    float btn_height = ImGui::GetFrameHeight();
-    float btn_width = ImGui::GetFrameHeight() * 2.00f;
+    ImGui::BeginGroup();
 
-    ImVec2 text_size = ImGui::CalcTextSize(toggle_lbl.c_str());
-
-    float total_width =
-        text_size.x + ImGui::GetStyle().ItemSpacing.x + btn_width;
-
-    float lbl_align_x = ImGui::GetWindowContentRegionMax().x - total_width;
-
-    float cursor_y = ImGui::GetCursorPosY();
-    ImGui::SetCursorPosX(lbl_align_x);
-
-    // Vertically centre text with switch height
-    float lbl_align_y = cursor_y + (btn_height - text_size.y) * 0.5f;
-    ImGui::SetCursorPosY(lbl_align_y);
-
-    ImGui::Text(toggle_lbl.c_str());
-
-    ImGui::SameLine();
-    ImGui::SetCursorPosY(cursor_y);
-
-    float btn_aiign_x = ImGui::GetWindowContentRegionMax().x - btn_width;
-
-    ImGui::SetCursorPosX(btn_aiign_x);
-
-    if (ToggleButton("ToggleStable", &stable_toggle_)) {
-      // Reset current data if toggled
-      response_code_ = 0;
-      checked_for_updates_ = false;
-      update_available_ = false;
-      latest_commit_hash_ = "";
-      latest_commit_date_ = "";
-      stable_release_tag_ = "";
-      changelog_.clear();
-    }
-
-    ImGui::Spacing();
     std::string update_desc = stable_toggle_ ? "Check for Stable Updates"
                                              : "Check for Nightly Updates";
-
-    ImVec2 update_desc_size = ImGui::CalcTextSize(update_desc.c_str());
-
-    ImGui::SetCursorPosX((ImGui::GetWindowWidth() - update_desc_size.x) * 0.5f);
 
     if (ImGui::Button(update_desc.c_str())) {
       checked_for_updates_ = true;
@@ -715,6 +674,49 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
 
       checked_for_updates_ = true;
     }
+
+    ImGui::EndGroup();
+
+    ImGui::SameLine();
+
+    ImGui::BeginGroup();
+
+    const std::string toggle_lbl = "Stable";
+
+    // same as in ToggleButton()
+    float btn_height = ImGui::GetFrameHeight();
+    float btn_width = ImGui::GetFrameHeight() * 2.00f;
+
+    ImVec2 text_size = ImGui::CalcTextSize(toggle_lbl.c_str());
+
+    float total_width =
+        text_size.x + ImGui::GetStyle().ItemSpacing.x + btn_width;
+
+    float lbl_align_x = ImGui::GetWindowContentRegionMax().x - total_width;
+    ImGui::SetCursorPosX(lbl_align_x);
+
+    ImGui::Text(toggle_lbl.c_str());
+
+    ImGui::EndGroup();
+
+    ImGui::SameLine();
+
+    ImGui::BeginGroup();
+
+    if (ToggleButton("ToggleStable", &stable_toggle_)) {
+      // Reset current data if toggled
+      response_code_ = 0;
+      checked_for_updates_ = false;
+      update_available_ = false;
+      latest_commit_hash_ = "";
+      latest_commit_date_ = "";
+      stable_release_tag_ = "";
+      changelog_.clear();
+    }
+
+    ImGui::SetCursorPosX(cursor_x);
+
+    ImGui::EndGroup();
 
     ImGui::Spacing();
     ImGui::Separator();
@@ -753,16 +755,33 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
 
       ImGui::BeginDisabled(true);
       if (downloading_) {
-        ImGui::Button("Downloading...");
+        // Centre
+        std::string downloading = "Downloading...";
+
+        ImVec2 downloading_lbl_size = ImGui::CalcTextSize(downloading.c_str());
+        ImGui::SetCursorPosX(
+            (ImGui::GetWindowWidth() - downloading_lbl_size.x) * 0.5f);
+
+        ImGui::Button(downloading.c_str());
       }
       ImGui::EndDisabled();
 
       if (!hide_download_button_) {
+        if (!changelog_.empty()) {
+          ImGui::Separator();
+        }
+
         std::string dl_lbl =
             stable_toggle_ ? fmt::format("Download {}", stable_release_tag_)
                            : "Download";
 
-        if (ImGui::Button(dl_lbl.c_str())) {
+        // Centre
+        ImVec2 dl_lbl_size = ImGui::CalcTextSize(dl_lbl.c_str());
+        ImGui::SetCursorPosX((ImGui::GetWindowWidth() - dl_lbl_size.x) * 0.5f);
+
+        ImVec2 dl_btn_size = ImVec2(dl_lbl_size.x + 20, dl_lbl_size.y + 10);
+
+        if (ImGui::Button(dl_lbl.c_str(), dl_btn_size)) {
           downloaded_file_path_ =
               xe::filesystem::GetExecutableFolder() / windows_artifact_name_;
         }
@@ -849,7 +868,13 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
           ImGui::Separator();
         }
 
-        if (ImGui::Button("Apply Update and Restart")) {
+        // Centre
+        std::string apply_lbl = "Apply Update and Restart";
+        ImVec2 apply_lbl_size = ImGui::CalcTextSize(apply_lbl.c_str());
+        ImGui::SetCursorPosX((ImGui::GetWindowWidth() - apply_lbl_size.x) *
+                             0.5f);
+
+        if (ImGui::Button(apply_lbl.c_str())) {
           update_failed_ = !updater_->UpdateAndRestart(downloaded_file_path_);
 
           if (!update_failed_) {

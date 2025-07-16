@@ -62,8 +62,7 @@ uint32_t Updater::GetRequest(const std::string& endpoint,
 
 bool Updater::CheckForUpdates(bool stable, const std::string& branch,
                               std::string* commit_hash,
-                              std::string* commit_date,
-                              std::string* tag,
+                              std::string* commit_date, std::string* tag,
                               uint32_t* response_code) {
   uint32_t result = 0;
 
