@@ -61,15 +61,14 @@ uint32_t Updater::GetRequest(const std::string& endpoint,
 }
 
 bool Updater::CheckForUpdates(bool stable, const std::string& branch,
-                              std::string* commit_hash,
-                              std::string* commit_date, std::string* tag,
-                              uint32_t* response_code) {
+                              std::string* commit_hash, std::string* date,
+                              std::string* tag, uint32_t* response_code) {
   uint32_t result = 0;
 
   if (stable) {
-    result = GetLatestReleaseCommitHash(commit_hash, tag);
+    result = GetLatestReleaseCommitHash(commit_hash, tag, date);
   } else {
-    result = GetLatestCommitHash(branch, commit_hash, commit_date);
+    result = GetLatestCommitHash(branch, commit_hash, date);
   }
 
   if (response_code) {
@@ -144,7 +143,8 @@ uint32_t Updater::GetLatestCommitHash(const std::string& branch,
 }
 
 uint32_t Updater::GetLatestReleaseCommitHash(std::string* commit_hash,
-                                             std::string* tag) {
+                                             std::string* tag,
+                                             std::string* published_date) {
   if (!commit_hash) {
     return -1;
   }
@@ -170,6 +170,14 @@ uint32_t Updater::GetLatestReleaseCommitHash(std::string* commit_hash,
   if (document.HasMember("tag_name") && document["tag_name"].IsString()) {
     if (tag) {
       *tag = document["tag_name"].GetString();
+    }
+  }
+
+  if (document.HasMember("published_at") &&
+      document["published_at"].IsString()) {
+    if (published_date) {
+      *published_date =
+          FormatDate(document["published_at"].GetString()).c_str();
     }
   }
 

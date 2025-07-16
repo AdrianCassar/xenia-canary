@@ -777,9 +777,9 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
 
         // Centre
         ImVec2 dl_lbl_size = ImGui::CalcTextSize(dl_lbl.c_str());
-        ImGui::SetCursorPosX((ImGui::GetWindowWidth() - dl_lbl_size.x) * 0.5f);
-
         ImVec2 dl_btn_size = ImVec2(dl_lbl_size.x + 20, dl_lbl_size.y + 10);
+
+        ImGui::SetCursorPosX((ImGui::GetWindowWidth() - dl_btn_size.x) * 0.5f);
 
         if (ImGui::Button(dl_lbl.c_str(), dl_btn_size)) {
           downloaded_file_path_ =

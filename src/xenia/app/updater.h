@@ -27,7 +27,7 @@ class Updater {
                       std::vector<uint8_t>& response_buffer) const;
 
   bool CheckForUpdates(bool stable, const std::string& branch,
-                       std::string* commit_hash, std::string* commit_date,
+                       std::string* commit_hash, std::string* date,
                        std::string* tag, uint32_t* response_code);
 
   uint32_t GetLatestCommitHash(const std::string& branch,
@@ -35,7 +35,8 @@ class Updater {
                                std::string* commit_date);
 
   uint32_t GetLatestReleaseCommitHash(std::string* commit_hash,
-                                      std::string* tag);
+                                      std::string* tag,
+                                      std::string* published_date);
 
   std::string FormatDate(const std::string& iso_date) const;
 
