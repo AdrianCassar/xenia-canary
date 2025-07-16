@@ -28,7 +28,7 @@ class Updater {
 
   bool CheckForUpdates(bool stable, const std::string& branch,
                        std::string* commit_hash, std::string* commit_date,
-                       uint32_t* response_code);
+                       std::string* tag, uint32_t* response_code);
 
   uint32_t GetLatestCommitHash(const std::string& branch,
                                std::string* commit_hash,

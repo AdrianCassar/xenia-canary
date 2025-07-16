@@ -63,11 +63,12 @@ uint32_t Updater::GetRequest(const std::string& endpoint,
 bool Updater::CheckForUpdates(bool stable, const std::string& branch,
                               std::string* commit_hash,
                               std::string* commit_date,
+                              std::string* tag,
                               uint32_t* response_code) {
   uint32_t result = 0;
 
   if (stable) {
-    result = GetLatestReleaseCommitHash(commit_hash, nullptr);
+    result = GetLatestReleaseCommitHash(commit_hash, tag);
   } else {
     result = GetLatestCommitHash(branch, commit_hash, commit_date);
   }

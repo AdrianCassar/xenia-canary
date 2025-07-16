@@ -108,6 +108,7 @@ class UpdaterDialog final : public ui::ImGuiDialog {
   std::string_view windows_artifact_name_ = "xenia_canary_netplay_windows.zip";
   std::string latest_commit_hash_ = "";
   std::string latest_commit_date_ = "";
+  std::string stable_release_tag_ = "";
   std::vector<std::string> commit_messages_ = {};
   std::string changelog_ = "";
   EmulatorWindow* emulator_window_;

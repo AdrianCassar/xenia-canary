@@ -637,7 +637,6 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
     ImGui::EndPopup();
   }
 #else
-
     const std::string toggle_lbl = "Stable";
 
     // same as in ToggleButton()
@@ -667,13 +666,14 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
 
     ImGui::SetCursorPosX(btn_aiign_x);
 
-    if (ToggleButton("Text", &stable_toggle_)) {
+    if (ToggleButton("ToggleStable", &stable_toggle_)) {
       // Reset current data if toggled
       response_code_ = 0;
       checked_for_updates_ = false;
       update_available_ = false;
       latest_commit_hash_ = "";
       latest_commit_date_ = "";
+      stable_release_tag_ = "";
       changelog_.clear();
     }
 
@@ -690,7 +690,7 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
 
       update_available_ = updater_->CheckForUpdates(
           stable_toggle_, XE_BUILD_BRANCH, &latest_commit_hash_,
-          &latest_commit_date_, &response_code_);
+          &latest_commit_date_, &stable_release_tag_, &response_code_);
 
       if (response_code_ != HTTP_STATUS_CODE::HTTP_OK) {
         update_available_ = false;
@@ -758,7 +758,11 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
       ImGui::EndDisabled();
 
       if (!hide_download_button_) {
-        if (ImGui::Button("Download")) {
+        std::string dl_lbl =
+            stable_toggle_ ? fmt::format("Download {}", stable_release_tag_)
+                           : "Download";
+
+        if (ImGui::Button(dl_lbl.c_str())) {
           downloaded_file_path_ =
               xe::filesystem::GetExecutableFolder() / windows_artifact_name_;
         }
@@ -845,7 +849,6 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
           ImGui::Separator();
         }
 
-#ifdef XE_PLATFORM_WIN32
         if (ImGui::Button("Apply Update and Restart")) {
           update_failed_ = !updater_->UpdateAndRestart(downloaded_file_path_);
 
@@ -868,12 +871,7 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
 
           ImGui::Spacing();
         }
-#else
-        ImGui::Text("Download Complete!");
-        ImGui::Text("Manually extract archive and replace to complete update.");
-#endif  // DEBUG
       }
-
     } else if (checked_for_updates_ && !update_available_) {
       switch (response_code_) {
         case HTTP_STATUS_CODE::HTTP_OK: {
