@@ -60,11 +60,17 @@ uint32_t Updater::GetRequest(const std::string& endpoint,
   return response_code;
 }
 
-bool Updater::CheckForUpdates(const std::string& branch,
+bool Updater::CheckForUpdates(bool stable, const std::string& branch,
                               std::string* commit_hash,
                               std::string* commit_date,
                               uint32_t* response_code) {
-  const uint32_t result = GetLatestCommitHash(branch, commit_hash, commit_date);
+  uint32_t result = 0;
+
+  if (stable) {
+    result = GetLatestReleaseCommitHash(commit_hash, nullptr);
+  } else {
+    result = GetLatestCommitHash(branch, commit_hash, commit_date);
+  }
 
   if (response_code) {
     *response_code = result;
@@ -132,6 +138,44 @@ uint32_t Updater::GetLatestCommitHash(const std::string& branch,
 
   if (commit_date) {
     *commit_date = FormatDate(commit_date_).c_str();
+  }
+
+  return response_code;
+}
+
+uint32_t Updater::GetLatestReleaseCommitHash(std::string* commit_hash,
+                                             std::string* tag) {
+  if (!commit_hash) {
+    return -1;
+  }
+
+  std::vector<uint8_t> response_buffer = {};
+
+  const std::string endpoint = fmt::format(
+      "https://api.github.com/repos/{}/{}/releases/latest", owner_, repo_);
+
+  uint32_t response_code = GetRequest(endpoint, response_buffer);
+
+  if (response_code != HTTP_STATUS_CODE::HTTP_OK) {
+    return response_code;
+  }
+
+  rapidjson::Document document;
+  document.Parse(reinterpret_cast<char*>(response_buffer.data()));
+
+  if (document.HasParseError()) {
+    return -1;
+  }
+
+  if (document.HasMember("tag_name") && document["tag_name"].IsString()) {
+    if (tag) {
+      *tag = document["tag_name"].GetString();
+    }
+  }
+
+  if (document.HasMember("target_commitish") &&
+      document["target_commitish"].IsString()) {
+    *commit_hash = document["target_commitish"].GetString();
   }
 
   return response_code;

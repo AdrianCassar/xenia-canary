@@ -26,12 +26,16 @@ class Updater {
   uint32_t GetRequest(const std::string& endpoint,
                       std::vector<uint8_t>& response_buffer) const;
 
-  bool CheckForUpdates(const std::string& branch, std::string* commit_hash,
-                       std::string* commit_date, uint32_t* response_code);
+  bool CheckForUpdates(bool stable, const std::string& branch,
+                       std::string* commit_hash, std::string* commit_date,
+                       uint32_t* response_code);
 
   uint32_t GetLatestCommitHash(const std::string& branch,
                                std::string* commit_hash,
                                std::string* commit_date);
+
+  uint32_t GetLatestReleaseCommitHash(std::string* commit_hash,
+                                      std::string* tag);
 
   std::string FormatDate(const std::string& iso_date) const;
 

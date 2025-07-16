@@ -89,6 +89,8 @@ class UpdaterDialog final : public ui::ImGuiDialog {
   void OnDraw(ImGuiIO& io) override;
 
  private:
+  bool ToggleButton(const char* str_id, bool* v);
+
   bool updater_opened_ = false;
   Updater* updater_ = nullptr;
   uint32_t response_code_ = 0;
@@ -101,6 +103,7 @@ class UpdaterDialog final : public ui::ImGuiDialog {
   bool hide_download_button_ = false;
   bool show_replace_dialog_ = false;
   bool replace_file_ = false;
+  bool stable_toggle_ = false;
   std::filesystem::path downloaded_file_path_;
   std::string_view windows_artifact_name_ = "xenia_canary_netplay_windows.zip";
   std::string latest_commit_hash_ = "";

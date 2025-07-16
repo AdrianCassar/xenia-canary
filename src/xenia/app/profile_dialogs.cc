@@ -23,6 +23,8 @@
 #include "xenia/kernel/xam/ui/signin_ui.h"
 #include "xenia/kernel/xam/ui/title_info_ui.h"
 
+#include "third_party/imgui/imgui_internal.h"
+
 #ifdef XE_PLATFORM_WIN32
 #include <shlobj.h>
 #include <windows.h>
@@ -563,6 +565,50 @@ void ManagerDialog::OnDraw(ImGuiIO& io) {
   }
 }
 
+// https://github.com/ocornut/imgui/issues/1537#issuecomment-780262461
+bool UpdaterDialog::ToggleButton(const char* str_id, bool* v) {
+  ImVec4* colors = ImGui::GetStyle().Colors;
+  ImVec2 p = ImGui::GetCursorScreenPos();
+  ImDrawList* draw_list = ImGui::GetWindowDrawList();
+
+  float height = ImGui::GetFrameHeight();
+  float width = height * 2.00f;
+  float radius = height * 0.50f;
+
+  bool clicked = false;
+
+  ImGui::InvisibleButton(str_id, ImVec2(width, height));
+
+  if (ImGui::IsItemClicked()) {
+    *v = !*v;
+    clicked = true;
+  }
+
+  ImGuiContext& gg = *GImGui;
+  float ANIM_SPEED = 0.085f;
+  if (gg.LastActiveId ==
+      gg.CurrentWindow->GetID(str_id))  // && g.LastActiveIdTimer < ANIM_SPEED)
+    float t_anim = ImSaturate(gg.LastActiveIdTimer / ANIM_SPEED);
+  if (ImGui::IsItemHovered())
+    draw_list->AddRectFilled(
+        p, ImVec2(p.x + width, p.y + height),
+        ImGui::GetColorU32(*v ? colors[ImGuiCol_ButtonActive]
+                              : ImVec4(0.78f, 0.78f, 0.78f, 1.0f)),
+        height * 0.5f);
+  else
+    draw_list->AddRectFilled(
+        p, ImVec2(p.x + width, p.y + height),
+        ImGui::GetColorU32(*v ? colors[ImGuiCol_Button]
+                              : ImVec4(0.85f, 0.85f, 0.85f, 1.0f)),
+        height * 0.50f);
+  draw_list->AddCircleFilled(
+      ImVec2(p.x + radius + (*v ? 1 : 0) * (width - radius * 2.0f),
+             p.y + radius),
+      radius - 1.5f, IM_COL32(255, 255, 255, 255));
+
+  return clicked;
+}
+
 void UpdaterDialog::OnDraw(ImGuiIO& io) {
   if (!updater_opened_) {
     updater_opened_ = true;
@@ -591,7 +637,14 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
     ImGui::EndPopup();
   }
 #else
-    std::string update_desc = "Check for Nightly Updates";
+    std::string update_desc = "";
+
+    if (stable_toggle_) {
+      update_desc = "Check for Stable Updates";
+    } else {
+      update_desc = "Check for Nightly Updates";
+    }
+
     ImVec2 update_desc_size = ImGui::CalcTextSize(update_desc.c_str());
 
     ImGui::SetCursorPosX((ImGui::GetWindowWidth() - update_desc_size.x) * 0.5f);
@@ -599,9 +652,9 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
     if (ImGui::Button(update_desc.c_str())) {
       checked_for_updates_ = true;
 
-      update_available_ =
-          updater_->CheckForUpdates(XE_BUILD_BRANCH, &latest_commit_hash_,
-                                    &latest_commit_date_, &response_code_);
+      update_available_ = updater_->CheckForUpdates(
+          stable_toggle_, XE_BUILD_BRANCH, &latest_commit_hash_,
+          &latest_commit_date_, &response_code_);
 
       if (response_code_ != HTTP_STATUS_CODE::HTTP_OK) {
         update_available_ = false;
@@ -625,6 +678,45 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
       }
 
       checked_for_updates_ = true;
+    }
+
+    const std::string toggle_lbl = "Stable";
+
+    // same as in ToggleButton()
+    float btn_height = ImGui::GetFrameHeight();
+    float btn_width = ImGui::GetFrameHeight() * 2.00f;
+
+    ImVec2 text_size = ImGui::CalcTextSize(toggle_lbl.c_str());
+
+    float total_width =
+        text_size.x + ImGui::GetStyle().ItemSpacing.x + btn_width;
+
+    float lbl_align_x = ImGui::GetWindowContentRegionMax().x - total_width;
+
+    float cursor_y = ImGui::GetCursorPosY();
+    ImGui::SetCursorPosX(lbl_align_x);
+
+    // Vertically centre text with switch height
+    float lbl_align_y = cursor_y + (btn_height - text_size.y) * 0.5f;
+    ImGui::SetCursorPosY(lbl_align_y);
+
+    ImGui::Text(toggle_lbl.c_str());
+
+    ImGui::SameLine();
+    ImGui::SetCursorPosY(cursor_y);
+
+    float btn_aiign_x = ImGui::GetWindowContentRegionMax().x - btn_width;
+
+    ImGui::SetCursorPosX(btn_aiign_x);
+
+    if (ToggleButton("Text", &stable_toggle_)) {
+      // Reset current data if toggled
+      response_code_ = 0;
+      checked_for_updates_ = false;
+      update_available_ = false;
+      latest_commit_hash_ = "";
+      latest_commit_date_ = "";
+      changelog_.clear();
     }
 
     ImGui::Spacing();
@@ -669,7 +761,7 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
       ImGui::EndDisabled();
 
       if (!hide_download_button_) {
-        if (ImGui::Button("Download Nightly")) {
+        if (ImGui::Button("Download")) {
           downloaded_file_path_ =
               xe::filesystem::GetExecutableFolder() / windows_artifact_name_;
         }
@@ -683,10 +775,18 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
 
           if (!show_replace_dialog_) {
             auto run = [this]() {
-              uint32_t response = updater_->DownloadLatestNightlyArtifact(
-                  "Windows_build", XE_BUILD_BRANCH,
-                  std::string(windows_artifact_name_),
-                  downloaded_file_path_.string());
+              uint32_t response = 0;
+
+              if (stable_toggle_) {
+                response = updater_->DownloadLatestRelease(
+                    std::string(windows_artifact_name_),
+                    downloaded_file_path_.string());
+              } else {
+                response = updater_->DownloadLatestNightlyArtifact(
+                    "Windows_build", XE_BUILD_BRANCH,
+                    std::string(windows_artifact_name_),
+                    downloaded_file_path_.string());
+              }
 
               downloading_ = false;
 
@@ -744,7 +844,9 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
       }
 
       if (downloaded_) {
-        ImGui::Separator();
+        if (!changelog_.empty()) {
+          ImGui::Separator();
+        }
 
 #ifdef XE_PLATFORM_WIN32
         if (ImGui::Button("Apply Update and Restart")) {
