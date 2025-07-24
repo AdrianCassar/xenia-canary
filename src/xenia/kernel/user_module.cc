@@ -518,6 +518,14 @@ void UserModule::Dump() {
           sb.AppendFormat("    {} - {} imports\n", name,
                           (uint16_t)library->count);
 
+          auto module = kernel_state()->GetModule(name);
+
+          if (module == nullptr) {
+            sb.AppendFormat("      Module Unloaded!\n");
+          } else {
+            sb.AppendFormat("      Module Loaded\n");
+          }
+
           xex2_version version, version_min;
           version = library->version();
           version_min = library->version_min();
@@ -752,9 +760,18 @@ void UserModule::Dump() {
   for (std::vector<cpu::XexModule::ImportLibrary>::const_iterator library =
            import_libs->begin();
        library != import_libs->end(); ++library) {
+    auto module = kernel_state()->GetModule(library->name);
+
     if (library->imports.size() > 0) {
       sb.AppendFormat(" {} - {} imports\n", library->name,
                       library->imports.size());
+
+      if (module == nullptr) {
+        sb.AppendFormat("   Status: Unloaded!\n");
+      } else {
+        sb.AppendFormat("   Status: Loaded\n");
+      }
+
       sb.AppendFormat("   Version: {}.{}.{}.{}\n", library->version.major,
                       library->version.minor, library->version.build,
                       library->version.qfe);

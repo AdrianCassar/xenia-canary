@@ -26,6 +26,7 @@
 #include "xenia/cpu/processor.h"
 #include "xenia/emulator.h"
 #include "xenia/kernel/kernel_state.h"
+#include "xenia/kernel/user_module.h"
 #include "xenia/kernel/xmodule.h"
 
 #include "third_party/crypto/TinySHA1.hpp"
@@ -1165,6 +1166,48 @@ bool XexModule::SetupLibraryImports(const std::string_view name,
   }
 
   auto user_module = kernel_state_->GetModule(name);
+
+  if (user_module == nullptr) {
+    XELOGI("Loading statically imported library {}", name);
+
+    kernel::object_ref<kernel::XHostThread> lib_thread =
+        kernel::object_ref<kernel::XHostThread>(new xe::kernel::XHostThread(
+            kernel_state_, 128 * 1024, 0,
+            [this, name]() {
+              std::string lib_name = fmt::format("game:\\{}", name);
+
+              auto module = kernel_state_->LoadUserModule(lib_name);
+
+              if (!module) {
+                return 0;
+              }
+
+              kernel_state_->FinishLoadingUserModule(module);
+              const uint32_t hmodule = module->hmodule_ptr();
+
+              if (hmodule == 0) {
+                return 0;
+              }
+
+              kernel_state_->memory()
+                  ->TranslateVirtual<xe::kernel::X_LDR_DATA_TABLE_ENTRY*>(
+                      hmodule)
+                  ->load_count++;
+
+              return 0;
+            },
+            kernel_state_->GetSystemProcess()));
+
+    // Title process not available
+    // kernel_state_->GetTitleProcess()
+
+    lib_thread->set_name(fmt::format("{} Thread", name));
+    lib_thread->Create();
+
+    xe::threading::Wait(lib_thread->thread(), false);
+
+    user_module = kernel_state_->GetModule(name);
+  }
 
   auto base_name = utf8::find_base_name_from_guest_path(name);
 

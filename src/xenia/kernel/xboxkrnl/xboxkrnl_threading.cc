@@ -238,7 +238,13 @@ dword_result_t NtSuspendThread_entry(dword_t handle,
 
       if (current_pcr->prcb_data.current_thread == thread->guest_object() ||
           !thread->guest_object<X_KTHREAD>()->terminated) {
-        result = thread->Suspend(&suspend_count);
+        // 485507D4, 485507D1 will black screen if threads are suspended
+        if (kernel_state()->title_id() == 0x485507D4 ||
+            kernel_state()->title_id() == 0x485507D1) {
+          result = X_STATUS_SUCCESS;
+        } else {
+          result = thread->Suspend(&suspend_count);
+        }
       } else {
         return X_STATUS_THREAD_IS_TERMINATING;
       }
