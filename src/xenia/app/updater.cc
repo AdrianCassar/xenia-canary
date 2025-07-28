@@ -27,6 +27,11 @@
 namespace xe {
 namespace app {
 
+// TODO:
+// - Increase GitHub rate limit/alternative solution
+//   Therefore checking for updates can be done at start-up.
+//
+// - SSL backend for libcurl on Linux using wolfssl
 Updater::Updater(const std::string& owner, const std::string& repo)
     : owner_(owner), repo_(repo) {}
 

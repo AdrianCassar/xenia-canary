@@ -621,11 +621,15 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
   float btn_height = 25;
   ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
 
+#ifndef DEBUG
   if (changelog_.empty() || (checked_for_updates_ && !update_available_)) {
     ImGui::SetNextWindowSizeConstraints(ImVec2(280, -1), ImVec2(280, -1));
   } else {
-    ImGui::SetNextWindowSizeConstraints(ImVec2(450, -1), ImVec2(450, -1));
+    // Don't use -1 for y due to SetWindowFontScale causing Separator to appear
+    // thin. Ideally use a larger font instead of using SetWindowFontScale.
+    ImGui::SetNextWindowSizeConstraints(ImVec2(450, 410), ImVec2(450, 410));
   }
+#endif
 
   if (ImGui::BeginPopupModal(
           "Updater", &updater_opened_,
@@ -634,6 +638,9 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
 
 #ifdef DEBUG
     ImGui::Text("This is a debug build, therefore updates are unavailable.");
+
+    ImGui::SetWindowFontScale(1.0f);
+
     ImGui::EndPopup();
   }
 #else
@@ -727,7 +734,21 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
       float height = ImGui::GetTextLineHeight() * lines;
 
       if (!changelog_.empty()) {
+        // How do we know if we are downgrading or upgrading to a stable build?
+        // If we are downgrading then changelog will show the commits we are
+        // missing out on instead of getting.
+        // Determine using build date?
+
         ImGui::Text("Changelog:");
+
+        if (stable_toggle_) {
+          ImGui::SetWindowFontScale(0.9f);
+          ImGui::Spacing();
+          ImGui::TextWrapped(
+              "If you're downgrading from nightly to stable then these are the "
+              "commits you're missing out on.");
+          ImGui::SetWindowFontScale(1.05f);
+        }
 
         ImGui::Spacing();
 
@@ -753,8 +774,11 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
 
       ImGui::Spacing();
 
-      ImGui::BeginDisabled(true);
       if (downloading_) {
+        if (!changelog_.empty()) {
+          ImGui::Separator();
+        }
+
         // Centre
         std::string downloading = "Downloading...";
 
@@ -762,9 +786,10 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
         ImGui::SetCursorPosX(
             (ImGui::GetWindowWidth() - downloading_lbl_size.x) * 0.5f);
 
+        ImGui::BeginDisabled(true);
         ImGui::Button(downloading.c_str());
+        ImGui::EndDisabled();
       }
-      ImGui::EndDisabled();
 
       if (!hide_download_button_) {
         if (!changelog_.empty()) {

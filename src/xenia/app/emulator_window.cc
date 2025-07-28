@@ -1641,7 +1641,7 @@ void EmulatorWindow::SetNetworkMode(uint32_t mode) {
 
 void EmulatorWindow::UpdateCompletionNotification() {
   new xe::ui::HostNotificationWindow(imgui_drawer(), "Updater",
-                                     "Successfully Updated!", 0);
+                                     "Successfully Updated", 0);
 }
 
 void EmulatorWindow::ToggleDisplayConfigDialog() {
