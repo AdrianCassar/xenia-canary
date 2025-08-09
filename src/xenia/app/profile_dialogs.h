@@ -93,13 +93,14 @@ class UpdaterDialog final : public ui::ImGuiDialog {
 
   bool updater_opened_ = false;
   Updater* updater_ = nullptr;
-  uint32_t response_code_ = 0;
+  uint32_t update_response_code_ = 0;
+  uint32_t download_response_code_ = 0;
   bool update_available_ = false;
   bool checked_for_updates_ = false;
   bool downloading_ = false;
   bool downloaded_ = false;
   bool downloaded_failed_ = false;
-  bool update_failed_ = false;
+  bool applying_update_failed_ = false;
   bool hide_download_button_ = false;
   bool show_replace_dialog_ = false;
   bool replace_file_ = false;

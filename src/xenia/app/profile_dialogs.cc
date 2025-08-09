@@ -618,16 +618,18 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
   ImGuiViewport* viewport = ImGui::GetMainViewport();
   ImVec2 center = viewport->GetCenter();
 
-  float btn_height = 25;
+  float btn_height_padding = ImGui::GetStyle().FramePadding.x * 2.5f;
+  float btn_width_padding = ImGui::GetStyle().FramePadding.x * 5.0f;
+
   ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
 
 #ifndef DEBUG
   if (changelog_.empty() || (checked_for_updates_ && !update_available_)) {
-    ImGui::SetNextWindowSizeConstraints(ImVec2(280, -1), ImVec2(280, -1));
+    ImGui::SetNextWindowSizeConstraints(ImVec2(300, -1), ImVec2(300, -1));
   } else {
-    // Don't use -1 for y due to SetWindowFontScale causing Separator to appear
-    // thin. Ideally use a larger font instead of using SetWindowFontScale.
-    ImGui::SetNextWindowSizeConstraints(ImVec2(450, 410), ImVec2(450, 410));
+    // Using -1 for y with SetWindowFontScale causes Separator to appear thin.
+    // Ideally use a larger font instead of using SetWindowFontScale.
+    ImGui::SetNextWindowSizeConstraints(ImVec2(450, -1), ImVec2(450, -1));
   }
 #endif
 
@@ -650,15 +652,18 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
 
     std::string update_desc = stable_toggle_ ? "Check for Stable Updates"
                                              : "Check for Nightly Updates";
+    ImVec2 update_lbl_size = ImGui::CalcTextSize(update_desc.c_str());
+    ImVec2 update_btn_size = ImVec2(update_lbl_size.x + btn_width_padding,
+                                    update_lbl_size.y + btn_height_padding);
 
-    if (ImGui::Button(update_desc.c_str())) {
+    if (ImGui::Button(update_desc.c_str(), update_btn_size)) {
       checked_for_updates_ = true;
 
       update_available_ = updater_->CheckForUpdates(
           stable_toggle_, XE_BUILD_BRANCH, &latest_commit_hash_,
-          &latest_commit_date_, &stable_release_tag_, &response_code_);
+          &latest_commit_date_, &stable_release_tag_, &update_response_code_);
 
-      if (response_code_ != HTTP_STATUS_CODE::HTTP_OK) {
+      if (update_response_code_ != HTTP_STATUS_CODE::HTTP_OK) {
         update_available_ = false;
       }
 
@@ -691,13 +696,13 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
     const std::string toggle_lbl = "Stable";
 
     // same as in ToggleButton()
-    float btn_height = ImGui::GetFrameHeight();
-    float btn_width = ImGui::GetFrameHeight() * 2.00f;
+    float toggle_btn_height = ImGui::GetFrameHeight();
+    float toggle_btn_width = ImGui::GetFrameHeight() * 2.00f;
 
     ImVec2 text_size = ImGui::CalcTextSize(toggle_lbl.c_str());
 
     float total_width =
-        text_size.x + ImGui::GetStyle().ItemSpacing.x + btn_width;
+        text_size.x + ImGui::GetStyle().ItemSpacing.x + toggle_btn_width;
 
     float lbl_align_x = ImGui::GetWindowContentRegionMax().x - total_width;
     ImGui::SetCursorPosX(lbl_align_x);
@@ -712,7 +717,8 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
 
     if (ToggleButton("ToggleStable", &stable_toggle_)) {
       // Reset current data if toggled
-      response_code_ = 0;
+      update_response_code_ = 0;
+      download_response_code_ = 0;
       checked_for_updates_ = false;
       update_available_ = false;
       latest_commit_hash_ = "";
@@ -779,16 +785,34 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
           ImGui::Separator();
         }
 
-        // Centre
-        std::string downloading = "Downloading...";
+        std::string downloading_lbl = "Downloading...";
 
-        ImVec2 downloading_lbl_size = ImGui::CalcTextSize(downloading.c_str());
-        ImGui::SetCursorPosX(
-            (ImGui::GetWindowWidth() - downloading_lbl_size.x) * 0.5f);
+        ImVec2 dl_lbl_size = ImGui::CalcTextSize(downloading_lbl.c_str());
+        ImVec2 dl_btn_size = ImVec2(dl_lbl_size.x + btn_width_padding,
+                                    dl_lbl_size.y + btn_height_padding);
+
+        ImGui::SetCursorPosX((ImGui::GetWindowWidth() - dl_btn_size.x) * 0.5f);
 
         ImGui::BeginDisabled(true);
-        ImGui::Button(downloading.c_str());
+        ImGui::Button(downloading_lbl.c_str(), dl_btn_size);
         ImGui::EndDisabled();
+      }
+
+      if (downloaded_failed_) {
+        std::string dl_failed_desc = "Downloading update failed, try again!";
+
+        ImVec2 dl_lbl_size = ImGui::CalcTextSize(dl_failed_desc.c_str());
+        ImGui::SetCursorPosX((ImGui::GetWindowWidth() - dl_lbl_size.x) * 0.5f);
+        ImGui::Text(dl_failed_desc.c_str());
+
+        if (download_response_code_ != HTTP_STATUS_CODE::HTTP_OK) {
+          std::string error_code = fmt::format(
+              "Error Code: {}", static_cast<int32_t>(download_response_code_));
+
+          ImGui::SetCursorPosX((ImGui::GetWindowWidth() - dl_lbl_size.x) *
+                               0.5f);
+          ImGui::Text(error_code.c_str());
+        }
       }
 
       if (!hide_download_button_) {
@@ -800,9 +824,9 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
             stable_toggle_ ? fmt::format("Download {}", stable_release_tag_)
                            : "Download";
 
-        // Centre
         ImVec2 dl_lbl_size = ImGui::CalcTextSize(dl_lbl.c_str());
-        ImVec2 dl_btn_size = ImVec2(dl_lbl_size.x + 20, dl_lbl_size.y + 10);
+        ImVec2 dl_btn_size = ImVec2(dl_lbl_size.x + btn_width_padding,
+                                    dl_lbl_size.y + btn_height_padding);
 
         ImGui::SetCursorPosX((ImGui::GetWindowWidth() - dl_btn_size.x) * 0.5f);
 
@@ -820,46 +844,49 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
 
           if (!show_replace_dialog_) {
             auto run = [this]() {
-              uint32_t response = 0;
-
               if (stable_toggle_) {
-                response = updater_->DownloadLatestRelease(
+                download_response_code_ = updater_->DownloadLatestRelease(
                     std::string(windows_artifact_name_),
                     downloaded_file_path_.string());
               } else {
-                response = updater_->DownloadLatestNightlyArtifact(
-                    "Windows_build", XE_BUILD_BRANCH,
-                    std::string(windows_artifact_name_),
-                    downloaded_file_path_.string());
+                download_response_code_ =
+                    updater_->DownloadLatestNightlyArtifact(
+                        "Windows_build", XE_BUILD_BRANCH,
+                        std::string(windows_artifact_name_),
+                        downloaded_file_path_.string());
+              }
+
+              if (download_response_code_ == HTTP_STATUS_CODE::HTTP_OK) {
+                downloaded_ = true;
+              } else {
+                // If download failed show download button again to retry
+                downloaded_ = false;
+                downloaded_failed_ = true;
+                hide_download_button_ = false;
+                downloaded_file_path_ = "";
               }
 
               downloading_ = false;
-
-              if (response == HTTP_STATUS_CODE::HTTP_OK) {
-                downloaded_ = true;
-              } else {
-                downloaded_failed_ = true;
-                downloaded_ = false;
-              }
             };
 
             std::thread download = std::thread(run);
             download.detach();
 
             hide_download_button_ = true;
+            downloaded_failed_ = false;
             downloading_ = true;
           }
         }
       }
 
       ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-      ImGui::SetNextWindowSizeConstraints(ImVec2(300, 90), ImVec2(300, 90));
-      if (ImGui::BeginPopupModal(
-              "Replace", nullptr,
-              ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove)) {
+      ImGui::SetNextWindowSizeConstraints(ImVec2(300, -1), ImVec2(300, -1));
+      if (ImGui::BeginPopupModal("Replace", nullptr,
+                                 ImGuiWindowFlags_AlwaysAutoResize |
+                                     ImGuiWindowFlags_NoMove |
+                                     ImGuiWindowFlags_NoScrollbar)) {
         float btn_width = (ImGui::GetContentRegionAvail().x * 0.5f) -
                           (ImGui::GetStyle().ItemSpacing.x * 0.5f);
-        ImVec2 btn_size = ImVec2(btn_width, btn_height);
 
         const std::string desc =
             std::format("Replace existing {}?", windows_artifact_name_);
@@ -870,7 +897,12 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
         ImGui::Text(desc.c_str());
         ImGui::Separator();
 
-        if (ImGui::Button("Yes", btn_size)) {
+        std::string yes_lbl = "Yes";
+        ImVec2 yes_lbl_size = ImGui::CalcTextSize(yes_lbl.c_str());
+        ImVec2 yes_btn_size =
+            ImVec2(btn_width, yes_lbl_size.y + btn_height_padding);
+
+        if (ImGui::Button(yes_lbl.c_str(), yes_btn_size)) {
           replace_file_ = true;
           show_replace_dialog_ = false;
           ImGui::CloseCurrentPopup();
@@ -878,7 +910,12 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
 
         ImGui::SameLine();
 
-        if (ImGui::Button("Cancel", btn_size)) {
+        std::string cancel_lbl = "Cancel";
+        ImVec2 cancel_lbl_size = ImGui::CalcTextSize(cancel_lbl.c_str());
+        ImVec2 cancel_btn_size =
+            ImVec2(btn_width, cancel_lbl_size.y + btn_height_padding);
+
+        if (ImGui::Button(cancel_lbl.c_str(), cancel_btn_size)) {
           downloaded_file_path_ = "";
           show_replace_dialog_ = false;
 
@@ -893,16 +930,19 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
           ImGui::Separator();
         }
 
-        // Centre
         std::string apply_lbl = "Apply Update and Restart";
         ImVec2 apply_lbl_size = ImGui::CalcTextSize(apply_lbl.c_str());
-        ImGui::SetCursorPosX((ImGui::GetWindowWidth() - apply_lbl_size.x) *
+        ImVec2 apply_btn_size = ImVec2(apply_lbl_size.x + btn_width_padding,
+                                       apply_lbl_size.y + btn_height_padding);
+
+        ImGui::SetCursorPosX((ImGui::GetWindowWidth() - apply_btn_size.x) *
                              0.5f);
 
-        if (ImGui::Button(apply_lbl.c_str())) {
-          update_failed_ = !updater_->UpdateAndRestart(downloaded_file_path_);
+        if (ImGui::Button(apply_lbl.c_str(), apply_btn_size)) {
+          applying_update_failed_ =
+              !updater_->UpdateAndRestart(downloaded_file_path_);
 
-          if (!update_failed_) {
+          if (!applying_update_failed_) {
             XELOGI("Applying update...");
             exit(0);
           }
@@ -912,7 +952,7 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
           ImGui::SetTooltip("Xenia will restart and apply the update.");
         }
 
-        if (update_failed_) {
+        if (applying_update_failed_) {
           ImGui::Spacing();
 
           ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(240, 50, 50, 255));
@@ -923,7 +963,7 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
         }
       }
     } else if (checked_for_updates_ && !update_available_) {
-      switch (response_code_) {
+      switch (update_response_code_) {
         case HTTP_STATUS_CODE::HTTP_OK: {
           ImGui::Spacing();
           ImGui::Text("You're using latest build.");
@@ -957,17 +997,15 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
           ImGui::Spacing();
         } break;
         default: {
+          std::string error_code = fmt::format(
+              "Error Code: {}", static_cast<int32_t>(update_response_code_));
+
           ImGui::Spacing();
           ImGui::Text("Failed to check for updates!");
-          ImGui::Text(fmt::format("Error Code: {}", response_code_).c_str());
+          ImGui::Text(error_code.c_str());
           ImGui::Spacing();
         } break;
       }
-    } else if (downloaded_failed_ && !downloading_) {
-      ImGui::Spacing();
-      ImGui::Text("Failed to check for updates!");
-      ImGui::Text("Try Again!");
-      ImGui::Spacing();
     }
 
     ImGui::SetWindowFontScale(1.0f);
@@ -1037,14 +1075,14 @@ void UpdaterCompletionDialog::OnDraw(ImGuiIO& io) {
   ImGuiViewport* viewport = ImGui::GetMainViewport();
   ImVec2 center = viewport->GetCenter();
 
-  float btn_height = 25;
+  float btn_height_padding = ImGui::GetStyle().FramePadding.x * 4.0f;
+
   ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
   if (ImGui::BeginPopupModal(
           "Update Failed", &updater_completion_opened_,
           ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove)) {
     float btn_width = (ImGui::GetContentRegionAvail().x * 0.5f) -
                       (ImGui::GetStyle().ItemSpacing.x * 0.5f);
-    ImVec2 btn_size = ImVec2(btn_width, btn_height);
 
     ImGui::SetWindowFontScale(1.05f);
 
@@ -1063,8 +1101,15 @@ void UpdaterCompletionDialog::OnDraw(ImGuiIO& io) {
       ImGui::Spacing();
       ImGui::Spacing();
 
-      ImGui::SetCursorPosX((ImGui::GetWindowWidth() - btn_size.x) * 0.5f);
-      if (ImGui::Button("Try updating again?", btn_size)) {
+      std::string update_lbl = "Try updating again?";
+
+      ImVec2 update_lbl_size = ImGui::CalcTextSize(update_lbl.c_str());
+      ImVec2 update_btn_size =
+          ImVec2(btn_width, update_lbl_size.y + btn_height_padding);
+
+      ImGui::SetCursorPosX((ImGui::GetWindowWidth() - update_btn_size.x) *
+                           0.5f);
+      if (ImGui::Button(update_lbl.c_str(), update_btn_size)) {
         updater_completion_opened_ = false;
         emulator_window_->ToggleUpdaterDialog();
       }
@@ -1072,8 +1117,15 @@ void UpdaterCompletionDialog::OnDraw(ImGuiIO& io) {
       ImGui::Spacing();
       ImGui::Spacing();
 
-      ImGui::SetCursorPosX((ImGui::GetWindowWidth() - btn_size.x) * 0.5f);
-      if (ImGui::Button("Check update log", btn_size)) {
+      std::string update_log_lbl = "View update log";
+
+      ImVec2 update_log_lbl_size = ImGui::CalcTextSize(update_log_lbl.c_str());
+      ImVec2 update_log_btn_size =
+          ImVec2(btn_width, update_log_lbl_size.y + btn_height_padding);
+
+      ImGui::SetCursorPosX((ImGui::GetWindowWidth() - update_log_btn_size.x) *
+                           0.5f);
+      if (ImGui::Button(update_log_lbl.c_str(), update_log_btn_size)) {
         show_update_log_ = true;
         ImGui::OpenPopup("Update Log");
       }
@@ -1087,10 +1139,6 @@ void UpdaterCompletionDialog::OnDraw(ImGuiIO& io) {
                                  ImGuiWindowFlags_AlwaysAutoResize |
                                      ImGuiWindowFlags_NoMove |
                                      ImGuiWindowFlags_NoScrollbar)) {
-        float btn_width = (ImGui::GetContentRegionAvail().x * 0.5f) -
-                          (ImGui::GetStyle().ItemSpacing.x * 0.5f);
-        ImVec2 btn_size = ImVec2(btn_width, btn_height);
-
         const uint32_t lines = 20;
         float height = ImGui::GetTextLineHeight() * lines;
 
@@ -1138,7 +1186,11 @@ void UpdaterCompletionDialog::OnDraw(ImGuiIO& io) {
         copy_btn = "Copy Log Text";
 #endif
 
-        if (ImGui::Button(copy_btn.c_str(), ImVec2(-1, btn_height))) {
+        ImVec2 copy_log_lbl_size = ImGui::CalcTextSize(copy_btn.c_str());
+        ImVec2 copy_log_btn_size =
+            ImVec2(-1, copy_log_lbl_size.y + btn_height_padding);
+
+        if (ImGui::Button(copy_btn.c_str(), copy_log_btn_size)) {
 #ifdef XE_PLATFORM_WIN32
           bool copy_success =
               CopyFilePathToClipboard(update_log_path.wstring());
