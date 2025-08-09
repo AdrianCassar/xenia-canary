@@ -230,8 +230,11 @@ uint32_t Updater::DownloadLatestRelease(const std::string& asset_name,
     return response_code;
   }
 
+  const std::string response_data =
+      std::string(response_buffer.cbegin(), response_buffer.cend());
+
   rapidjson::Document doc;
-  doc.Parse(reinterpret_cast<char*>(response_buffer.data()));
+  doc.Parse(response_data.c_str());
 
   if (!doc.IsObject() || !doc.HasMember("assets")) {
     XELOGE("Invalid JSON or no assets.", output_path);
@@ -347,13 +350,14 @@ uint32_t Updater::GetChangelogBetweenCommits(
 
 bool Updater::ParseCommitMessages(std::vector<uint8_t>& response_buffer,
                                   std::vector<std::string>& messages) const {
-  std::string response = std::string(
-      reinterpret_cast<char*>(response_buffer.data()), response_buffer.size());
+  const std::string response_data =
+      std::string(response_buffer.cbegin(), response_buffer.cend());
 
   rapidjson::Document doc;
-  doc.Parse(response.c_str());
+  doc.Parse(response_data.c_str());
 
   if (!doc.IsObject() || !doc.HasMember("commits")) {
+    XELOGE("Invalid JSON or no commits array to parse.");
     return false;
   }
 
