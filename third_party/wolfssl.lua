@@ -10,11 +10,7 @@ project("wolfssl")
     "WOLFSSL_LIB",
     "WOLFSSL_USER_SETTINGS"
   })
-  filter({"configurations:Release", "platforms:Windows"})
-    buildoptions({
-      "/Os",
-      "/O1",
-    })
+
   filter {}
 
   includedirs({

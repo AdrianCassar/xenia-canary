@@ -10,11 +10,6 @@ project("miniupnp")
   defines({
     "MINIUPNP_STATICLIB"
   })
-  filter({"configurations:Release", "platforms:Windows"})
-    buildoptions({
-      "/Os",
-      "/O1",
-    })
 
   filter { "platforms:Windows" }
     prebuildcommands {
