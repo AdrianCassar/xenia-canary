@@ -39,7 +39,6 @@ defines({
   "IMGUI_USE_STB_SPRINTF",
   --"IMGUI_ENABLE_FREETYPE",
   "USE_CPP17", -- Tabulate
-  "CURL_STATICLIB",
 })
 
 cdialect("C17")
