@@ -8,11 +8,7 @@ project("rapidjson")
   defines({
     "RAPIDJSON_SSE42",
   })
-  filter({"configurations:Release", "platforms:Windows"})
-    buildoptions({
-      "/Os",
-      "/O1"
-    })
+
   filter {}
 
   includedirs({

@@ -17,11 +17,7 @@ project("libcurl")
     -- "WITHOUT_SSL",
     -- "OPENSSL_EXTRA",
   })
-  filter({"configurations:Release", "platforms:Windows"})
-    buildoptions({
-      "/Os",
-      "/O1"
-    })
+
   filter {}
 
   includedirs({
