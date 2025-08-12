@@ -5,6 +5,9 @@ project("rapidjson")
   language("C++")
   links({
   })
+  defines({
+    "RAPIDJSON_SSE42",
+  })
   filter({"configurations:Release", "platforms:Windows"})
     buildoptions({
       "/Os",
