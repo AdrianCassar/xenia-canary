@@ -42,7 +42,6 @@ project("xenia-app")
     "XBYAK_NO_OP_NAMES",
     "XBYAK_ENABLE_OMITTED_OPERAND",
     "CURL_STATICLIB",
-    "MINIUPNP_STATICLIB"
   })
   local_platform_files()
   files({
