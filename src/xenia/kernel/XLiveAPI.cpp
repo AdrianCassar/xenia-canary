@@ -331,16 +331,25 @@ void XLiveAPI::Init() {
   }
 
   if (cvars::logging) {
-    curl_version_info_data* vinfo = curl_version_info(CURLVERSION_NOW);
+    curl_version_info_data* curl_info = curl_version_info(CURLVERSION_NOW);
 
-    XELOGI("libcurl version {}.{}.{}\n", (vinfo->version_num >> 16) & 0xFF,
-           (vinfo->version_num >> 8) & 0xFF, vinfo->version_num & 0xFF);
+    uint32_t major = (curl_info->version_num >> 16) & 0xFF;
+    uint32_t minor = (curl_info->version_num >> 8) & 0xFF;
+    uint32_t patch = curl_info->version_num & 0xFF;
 
-    if (vinfo->features & CURL_VERSION_SSL) {
-      XELOGI("SSL support enabled");
+    XELOGI("libcurl version {}.{}.{}\n", major, minor, patch);
+
+    if (curl_info->features & CURL_VERSION_SSL) {
+      XELOGI("SSL support: Yes");
     } else {
       assert_always();
-      XELOGI("No SSL");
+      XELOGI("SSL support: No");
+    }
+
+    if (curl_info->features & CURL_VERSION_HTTP2) {
+      XELOGI("HTTP/2 support: Yes");
+    } else {
+      XELOGI("HTTP/2 support: No");
     }
   }
 
@@ -426,10 +435,7 @@ std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::Get(std::string endpoint,
   std::string endpoint_API = fmt::format("{}{}", GetApiAddress(), endpoint);
 
   if (cvars::logging) {
-    XELOGI("cURL: {}", endpoint_API);
-
-    curl_easy_setopt(curl_handle, CURLOPT_VERBOSE, 1);
-    curl_easy_setopt(curl_handle, CURLOPT_STDERR, stderr);
+    XELOGI("{} Endpoint: {}", __func__, endpoint_API);
   }
 
   curl_slist* headers = NULL;
@@ -496,10 +502,7 @@ std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::Post(std::string endpoint,
   std::string endpoint_API = fmt::format("{}{}", GetApiAddress(), endpoint);
 
   if (cvars::logging) {
-    XELOGI("cURL: {}", endpoint_API);
-
-    curl_easy_setopt(curl_handle, CURLOPT_VERBOSE, 1);
-    curl_easy_setopt(curl_handle, CURLOPT_STDERR, stderr);
+    XELOGI("{} Endpoint: {}", __func__, endpoint_API);
   }
 
   curl_slist* headers = NULL;
@@ -567,6 +570,10 @@ std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::Delete(std::string endpoint) {
   }
 
   std::string endpoint_API = fmt::format("{}{}", GetApiAddress(), endpoint);
+
+  if (cvars::logging) {
+    XELOGI("{} Endpoint: {}", __func__, endpoint_API);
+  }
 
   struct curl_slist* headers = NULL;
   headers = curl_slist_append(headers, "Content-Type: application/json");
