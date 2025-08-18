@@ -704,7 +704,9 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
     float total_width =
         text_size.x + ImGui::GetStyle().ItemSpacing.x + toggle_btn_width;
 
-    float lbl_align_x = ImGui::GetWindowContentRegionMax().x - total_width;
+    const float region_max =
+        ImGui::GetContentRegionAvail().x + ImGui::GetCursorPos().x;
+    float lbl_align_x = region_max - total_width;
     ImGui::SetCursorPosX(lbl_align_x);
 
     ImGui::Text(toggle_lbl.c_str());
@@ -728,6 +730,7 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
     }
 
     ImGui::SetCursorPosX(cursor_x);
+    ImGui::Dummy(ImVec2(0, 0));
 
     ImGui::EndGroup();
 
