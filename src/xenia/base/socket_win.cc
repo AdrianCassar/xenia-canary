@@ -254,7 +254,7 @@ class Win32SocketServer : public SocketServer {
 
     sockaddr_in socket_addr = {0};
     socket_addr.sin_family = AF_INET;
-    socket_addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    socket_addr.sin_addr.s_addr = htonl(INADDR_ANY);
     socket_addr.sin_port = htons(port);
     if (bind(socket_, reinterpret_cast<sockaddr*>(&socket_addr),
              sizeof(socket_addr)) == SOCKET_ERROR) {

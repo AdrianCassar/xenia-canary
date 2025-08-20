@@ -1133,7 +1133,7 @@ std::string GDBStub::HandleGDBCommand(GDBClient& client,
           // Create breakpoint
           {"Z",
            [&](const GDBCommand& cmd) {
-             auto& hex_addr = cmd.data.substr(2);
+             const auto& hex_addr = cmd.data.substr(2);
              uint64_t addr = std::stoull(hex_addr.substr(0, hex_addr.find(',')),
                                          nullptr, 16);
 
@@ -1142,7 +1142,7 @@ std::string GDBStub::HandleGDBCommand(GDBClient& client,
           // Delete breakpoint
           {"z",
            [&](const GDBCommand& cmd) {
-             auto& hex_addr = cmd.data.substr(2);
+             const auto& hex_addr = cmd.data.substr(2);
              uint64_t addr = std::stoull(hex_addr.substr(0, hex_addr.find(',')),
                                          nullptr, 16);
              DeleteCodeBreakpoint(addr);
