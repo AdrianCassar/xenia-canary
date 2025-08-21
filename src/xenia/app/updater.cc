@@ -106,8 +106,15 @@ uint32_t Updater::GetLatestCommitHash(const std::string& branch,
     return response_code;
   }
 
+  const std::string response_data =
+      std::string(response_buffer.cbegin(), response_buffer.cend());
+
   rapidjson::Document document;
-  document.Parse(reinterpret_cast<char*>(response_buffer.data()));
+  document.Parse(response_data.c_str());
+
+  if (document.HasParseError()) {
+    return -1;
+  }
 
   if (!document.IsArray() || document.Empty()) {
     return -1;
@@ -165,8 +172,11 @@ uint32_t Updater::GetLatestReleaseCommitHash(std::string* commit_hash,
     return response_code;
   }
 
+  const std::string response_data =
+      std::string(response_buffer.cbegin(), response_buffer.cend());
+
   rapidjson::Document document;
-  document.Parse(reinterpret_cast<char*>(response_buffer.data()));
+  document.Parse(response_data.c_str());
 
   if (document.HasParseError()) {
     return -1;
@@ -300,10 +310,11 @@ uint32_t Updater::GetRecentCommitMessages(const std::string& branch,
     return response_code;
   }
 
-  std::string json =
-      std::string(reinterpret_cast<char*>(response_buffer.data()));
+  const std::string response_data =
+      std::string(response_buffer.cbegin(), response_buffer.cend());
 
-  std::string json_wrapper = fmt::format(R"({{"commits": {}}})", json);
+  std::string json_wrapper =
+      fmt::format(R"({{"commits": {}}})", response_data.c_str());
 
   response_buffer.resize(json_wrapper.size());
 
