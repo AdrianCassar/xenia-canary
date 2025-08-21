@@ -53,14 +53,17 @@ class Updater {
 
   uint32_t GetRecentCommitMessages(const std::string& branch,
                                    std::vector<std::string>& messages,
+                                   std::string& status,
                                    uint32_t count = 5) const;
 
   uint32_t GetChangelogBetweenCommits(const std::string& base_commit,
                                       const std::string& head_commit,
+                                      std::string& status,
                                       std::vector<std::string>& messages) const;
 
   bool ParseCommitMessages(std::vector<uint8_t>& response_buffer,
-                           std::vector<std::string>& messages) const;
+                           std::vector<std::string>& messages,
+                           std::string& status) const;
 
   const std::string GetOwner() const { return owner_; }
 

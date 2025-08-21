@@ -670,16 +670,41 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
       if (update_available_) {
         commit_messages_.clear();
 
-        const uint32_t result = updater_->GetChangelogBetweenCommits(
-            XE_BUILD_COMMIT, latest_commit_hash_, commit_messages_);
+        uint32_t result = 0;
+
+        std::string commit_compare_status_ = "";
+
+        if (stable_toggle_) {
+          result = updater_->GetChangelogBetweenCommits(
+              XE_BUILD_COMMIT, stable_release_tag_, commit_compare_status_,
+              commit_messages_);
+        } else {
+          result = updater_->GetChangelogBetweenCommits(
+              XE_BUILD_COMMIT, latest_commit_hash_, commit_compare_status_,
+              commit_messages_);
+        }
+
+        if (commit_compare_status_ == "identical") {
+          update_available_ = false;
+          compare_status_ = COMPARE_STATE::IDENTICAL;
+        } else if (commit_compare_status_ == "ahead") {
+          compare_status_ = COMPARE_STATE::AHEAD;
+        } else if (commit_compare_status_ == "behind") {
+          compare_status_ = COMPARE_STATE::BEHIND;
+        } else if (commit_compare_status_ == "diverged") {
+          compare_status_ = COMPARE_STATE::DIVERGED;
+        }
 
         if (result == HTTP_STATUS_CODE::HTTP_OK) {
-          if (!commit_messages_.empty()) {
-            changelog_.clear();
-          }
+          if (compare_status_ == COMPARE_STATE::AHEAD ||
+              compare_status_ == COMPARE_STATE::BEHIND) {
+            if (!commit_messages_.empty()) {
+              changelog_.clear();
+            }
 
-          for (const auto& message : commit_messages_) {
-            changelog_.append(fmt::format("- {}\n", message));
+            for (const auto& message : commit_messages_) {
+              changelog_.append(fmt::format("- {}\n", message));
+            }
           }
         }
       }
@@ -723,6 +748,7 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
       download_response_code_ = 0;
       checked_for_updates_ = false;
       update_available_ = false;
+      compare_status_ = COMPARE_STATE::IDENTICAL;
       latest_commit_hash_ = "";
       latest_commit_date_ = "";
       stable_release_tag_ = "";
@@ -743,20 +769,12 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
       float height = ImGui::GetTextLineHeight() * lines;
 
       if (!changelog_.empty()) {
-        // How do we know if we are downgrading or upgrading to a stable build?
-        // If we are downgrading then changelog will show the commits we are
-        // missing out on instead of getting.
-        // Determine using build date?
-
-        ImGui::Text("Changelog:");
-
-        if (stable_toggle_) {
-          ImGui::SetWindowFontScale(0.9f);
-          ImGui::Spacing();
-          ImGui::TextWrapped(
-              "If you're downgrading from nightly to stable then these are the "
-              "commits you're missing out on.");
-          ImGui::SetWindowFontScale(1.05f);
+        if (compare_status_ == COMPARE_STATE::AHEAD) {
+          ImGui::Text("What's new:");
+        } else if (compare_status_ == COMPARE_STATE::BEHIND) {
+          ImGui::Text("Rolling back:");
+        } else {
+          ImGui::Text("Changelog:");
         }
 
         ImGui::Spacing();

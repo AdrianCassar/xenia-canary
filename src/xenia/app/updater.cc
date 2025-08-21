@@ -70,8 +70,10 @@ bool Updater::CheckForUpdates(bool stable, const std::string& branch,
                               std::string* tag, uint32_t* response_code) {
   uint32_t result = 0;
 
+  bool update_available = false;
+
   if (stable) {
-    result = GetLatestReleaseCommitHash(commit_hash, tag, date);
+    result = GetLatestReleaseCommitHash(nullptr, tag, date);
   } else {
     result = GetLatestCommitHash(branch, commit_hash, date);
   }
@@ -84,7 +86,28 @@ bool Updater::CheckForUpdates(bool stable, const std::string& branch,
     return false;
   }
 
-  return *commit_hash != XE_BUILD_COMMIT;
+  if (stable) {
+    std::string commit_compare_status;
+    std::vector<std::string> commit_messages;
+
+    // Either get commit hash from tag or compare commits to get state
+    result = GetChangelogBetweenCommits(XE_BUILD_COMMIT, *tag,
+                                        commit_compare_status, commit_messages);
+
+    if (response_code) {
+      *response_code = result;
+    }
+
+    if (result != HTTP_STATUS_CODE::HTTP_OK) {
+      return false;
+    }
+
+    update_available = commit_compare_status != "identical";
+  } else {
+    update_available = *commit_hash != XE_BUILD_COMMIT;
+  }
+
+  return update_available;
 }
 
 uint32_t Updater::GetLatestCommitHash(const std::string& branch,
@@ -157,10 +180,6 @@ uint32_t Updater::GetLatestCommitHash(const std::string& branch,
 uint32_t Updater::GetLatestReleaseCommitHash(std::string* commit_hash,
                                              std::string* tag,
                                              std::string* published_date) {
-  if (!commit_hash) {
-    return -1;
-  }
-
   std::vector<uint8_t> response_buffer = {};
 
   const std::string endpoint = fmt::format(
@@ -198,7 +217,9 @@ uint32_t Updater::GetLatestReleaseCommitHash(std::string* commit_hash,
 
   if (document.HasMember("target_commitish") &&
       document["target_commitish"].IsString()) {
-    *commit_hash = document["target_commitish"].GetString();
+    if (commit_hash) {
+      *commit_hash = document["target_commitish"].GetString();
+    }
   }
 
   return response_code;
@@ -243,17 +264,21 @@ uint32_t Updater::DownloadLatestRelease(const std::string& asset_name,
   const std::string response_data =
       std::string(response_buffer.cbegin(), response_buffer.cend());
 
-  rapidjson::Document doc;
-  doc.Parse(response_data.c_str());
+  rapidjson::Document document;
+  document.Parse(response_data.c_str());
 
-  if (!doc.IsObject() || !doc.HasMember("assets")) {
+  if (document.HasParseError()) {
+    return -1;
+  }
+
+  if (!document.IsObject() || !document.HasMember("assets")) {
     XELOGE("Invalid JSON or no assets.", output_path);
     return -1;
   }
 
   std::string asset_url;
 
-  for (const auto& asset : doc["assets"].GetArray()) {
+  for (const auto& asset : document["assets"].GetArray()) {
     if (asset.HasMember("name") && asset["name"].IsString() &&
         asset["name"].GetString() == asset_name &&
         asset.HasMember("browser_download_url")) {
@@ -297,6 +322,7 @@ uint32_t Updater::DownloadFile(const std::string& file_endpoint,
 
 uint32_t Updater::GetRecentCommitMessages(const std::string& branch,
                                           std::vector<std::string>& messages,
+                                          std::string& status,
                                           uint32_t count) const {
   std::vector<uint8_t> response_buffer = {};
 
@@ -321,7 +347,7 @@ uint32_t Updater::GetRecentCommitMessages(const std::string& branch,
   std::memcpy(response_buffer.data(), json_wrapper.c_str(),
               json_wrapper.size());
 
-  bool result = ParseCommitMessages(response_buffer, messages);
+  bool result = ParseCommitMessages(response_buffer, messages, status);
 
   if (!result) {
     return -1;
@@ -334,7 +360,7 @@ uint32_t Updater::GetRecentCommitMessages(const std::string& branch,
 
 uint32_t Updater::GetChangelogBetweenCommits(
     const std::string& base_commit, const std::string& head_commit,
-    std::vector<std::string>& messages) const {
+    std::string& status, std::vector<std::string>& messages) const {
   std::vector<uint8_t> response_buffer = {};
 
   const std::string endpoint =
@@ -348,7 +374,7 @@ uint32_t Updater::GetChangelogBetweenCommits(
   }
 
   // Max 250 commits returned by compare API
-  bool result = ParseCommitMessages(response_buffer, messages);
+  bool result = ParseCommitMessages(response_buffer, messages, status);
 
   if (!result) {
     return -1;
@@ -360,19 +386,28 @@ uint32_t Updater::GetChangelogBetweenCommits(
 }
 
 bool Updater::ParseCommitMessages(std::vector<uint8_t>& response_buffer,
-                                  std::vector<std::string>& messages) const {
+                                  std::vector<std::string>& messages,
+                                  std::string& status) const {
   const std::string response_data =
       std::string(response_buffer.cbegin(), response_buffer.cend());
 
-  rapidjson::Document doc;
-  doc.Parse(response_data.c_str());
+  rapidjson::Document document;
+  document.Parse(response_data.c_str());
 
-  if (!doc.IsObject() || !doc.HasMember("commits")) {
+  if (document.HasParseError()) {
+    return false;
+  }
+
+  if (!document.IsObject() || !document.HasMember("commits")) {
     XELOGE("Invalid JSON or no commits array to parse.");
     return false;
   }
 
-  const auto& commits = doc["commits"];
+  const auto& commits = document["commits"];
+
+  if (document.HasMember("status")) {
+    status = document["status"].GetString();
+  }
 
   if (!commits.IsArray()) {
     return false;

@@ -91,6 +91,8 @@ class UpdaterDialog final : public ui::ImGuiDialog {
  private:
   bool ToggleButton(const char* str_id, bool* v);
 
+  enum class COMPARE_STATE { IDENTICAL, AHEAD, BEHIND, DIVERGED };
+
   bool updater_opened_ = false;
   Updater* updater_ = nullptr;
   uint32_t update_response_code_ = 0;
@@ -110,8 +112,9 @@ class UpdaterDialog final : public ui::ImGuiDialog {
   std::string latest_commit_hash_ = "";
   std::string latest_commit_date_ = "";
   std::string stable_release_tag_ = "";
-  std::vector<std::string> commit_messages_ = {};
   std::string changelog_ = "";
+  COMPARE_STATE compare_status_ = COMPARE_STATE::IDENTICAL;
+  std::vector<std::string> commit_messages_ = {};
   EmulatorWindow* emulator_window_;
 };
 
