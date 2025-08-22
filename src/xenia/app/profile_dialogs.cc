@@ -623,7 +623,7 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
 
   ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
 
-#ifdef DEBUG
+#ifndef DEBUG
   if (changelog_.empty() || (checked_for_updates_ && !update_available_)) {
     ImGui::SetNextWindowSizeConstraints(ImVec2(300, -1), ImVec2(300, -1));
   } else {
@@ -638,7 +638,7 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
           ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove)) {
     ImGui::SetWindowFontScale(1.05f);
 
-#ifndef DEBUG
+#ifdef DEBUG
     ImGui::Text("This is a debug build, therefore updates are unavailable.");
 
     ImGui::SetWindowFontScale(1.0f);
@@ -748,6 +748,7 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
       download_response_code_ = 0;
       checked_for_updates_ = false;
       update_available_ = false;
+      replace_file_ = false;
       compare_status_ = COMPARE_STATE::IDENTICAL;
       latest_commit_hash_ = "";
       latest_commit_date_ = "";
