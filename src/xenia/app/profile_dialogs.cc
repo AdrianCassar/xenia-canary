@@ -805,6 +805,18 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
                            IM_COL32(50, 96, 168, 200), 0.0f, 0, 3.0f);
       }
 
+      if (stable_toggle_) {
+        if (!changelog_.empty()) {
+          ImGui::Spacing();
+        }
+
+        ImGui::TextLinkOpenURL(
+            fmt::format("Release {} details", stable_release_tag_).c_str(),
+            "https://github.com/AdrianCassar/xenia-canary/releases/latest");
+
+        ImGui::Spacing();
+      }
+
       if (!latest_commit_date_.empty()) {
         ImGui::Text(fmt::format("Build Date: {}", latest_commit_date_).c_str());
       }
@@ -812,9 +824,7 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
       ImGui::Spacing();
 
       if (downloading_) {
-        if (!changelog_.empty()) {
-          ImGui::Separator();
-        }
+        ImGui::Separator();
 
         ImGui::ProgressBar(download_progress_, ImVec2(-1.0f, 0.0f));
         ImGui::Spacing();
@@ -850,9 +860,7 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
       }
 
       if (!hide_download_button_) {
-        if (!changelog_.empty()) {
-          ImGui::Separator();
-        }
+        ImGui::Separator();
 
         std::string dl_lbl =
             stable_toggle_ ? fmt::format("Download {}", stable_release_tag_)
@@ -967,9 +975,7 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
       }
 
       if (downloaded_) {
-        if (!changelog_.empty()) {
-          ImGui::Separator();
-        }
+        ImGui::Separator();
 
         std::string apply_lbl = "Apply Update and Restart";
         ImVec2 apply_lbl_size = ImGui::CalcTextSize(apply_lbl.c_str());
