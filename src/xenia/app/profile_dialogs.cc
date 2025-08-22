@@ -623,7 +623,7 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
 
   ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
 
-#ifndef DEBUG
+#ifdef DEBUG
   if (changelog_.empty() || (checked_for_updates_ && !update_available_)) {
     ImGui::SetNextWindowSizeConstraints(ImVec2(300, -1), ImVec2(300, -1));
   } else {
@@ -638,7 +638,7 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
           ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove)) {
     ImGui::SetWindowFontScale(1.05f);
 
-#ifdef DEBUG
+#ifndef DEBUG
     ImGui::Text("This is a debug build, therefore updates are unavailable.");
 
     ImGui::SetWindowFontScale(1.0f);
@@ -753,6 +753,15 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
       latest_commit_date_ = "";
       stable_release_tag_ = "";
       changelog_.clear();
+
+      // Download state reset
+      downloaded_ = false;
+      downloaded_failed_ = false;
+      downloading_ = false;
+      applying_update_failed_ = false;
+      hide_download_button_ = false;
+      download_progress_ = 0.0f;
+      downloaded_file_path_.clear();
     }
 
     ImGui::SetCursorPosX(cursor_x);
