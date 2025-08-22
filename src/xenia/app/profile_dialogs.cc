@@ -806,6 +806,9 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
           ImGui::Separator();
         }
 
+        ImGui::ProgressBar(download_progress_, ImVec2(-1.0f, 0.0f));
+        ImGui::Spacing();
+
         std::string downloading_lbl = "Downloading...";
 
         ImVec2 dl_lbl_size = ImGui::CalcTextSize(downloading_lbl.c_str());
@@ -865,16 +868,22 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
 
           if (!show_replace_dialog_) {
             auto run = [this]() {
+              auto callback = [this](double now, double total) {
+                if (total > 0.0) {
+                  download_progress_ = static_cast<float>(now / total);
+                }
+              };
+
               if (stable_toggle_) {
                 download_response_code_ = updater_->DownloadLatestRelease(
                     std::string(windows_artifact_name_),
-                    downloaded_file_path_.string());
+                    downloaded_file_path_.string(), callback);
               } else {
                 download_response_code_ =
                     updater_->DownloadLatestNightlyArtifact(
                         "Windows_build", XE_BUILD_BRANCH,
                         std::string(windows_artifact_name_),
-                        downloaded_file_path_.string());
+                        downloaded_file_path_.string(), callback);
               }
 
               if (download_response_code_ == HTTP_STATUS_CODE::HTTP_OK) {
@@ -888,6 +897,7 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
               }
 
               downloading_ = false;
+              download_progress_ = 0.0f;
             };
 
             std::thread download = std::thread(run);

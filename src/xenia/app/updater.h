@@ -11,6 +11,7 @@
 #define XENIA_APP_UPDATER_H_
 
 #include <filesystem>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -40,16 +41,21 @@ class Updater {
 
   std::string FormatDate(const std::string& iso_date) const;
 
-  uint32_t DownloadLatestNightlyArtifact(const std::string& workflowFile,
-                                         const std::string& branch,
-                                         const std::string& artifact_name,
-                                         const std::string& outputPath) const;
+  uint32_t DownloadLatestNightlyArtifact(
+      const std::string& workflow_file, const std::string& branch,
+      const std::string& artifact_name, const std::string& output_path,
+      std::function<void(double, double)> progress_callback) const;
 
-  uint32_t DownloadLatestRelease(const std::string& asset_name,
-                                 const std::string& output_path) const;
+  uint32_t DownloadLatestRelease(
+      const std::string& asset_name, const std::string& output_path,
+      std::function<void(double, double)> progress_callback) const;
 
   uint32_t DownloadFile(const std::string& file_endpoint,
                         const std::string& output_path) const;
+
+  uint32_t DownloadFile(
+      const std::string& file_endpoint, const std::string& output_path,
+      std::function<void(double, double)> progress_callback) const;
 
   uint32_t GetRecentCommitMessages(const std::string& branch,
                                    std::vector<std::string>& messages,

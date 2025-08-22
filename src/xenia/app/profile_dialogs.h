@@ -100,6 +100,7 @@ class UpdaterDialog final : public ui::ImGuiDialog {
   bool update_available_ = false;
   bool checked_for_updates_ = false;
   bool downloading_ = false;
+  float download_progress_ = 0.0f;
   bool downloaded_ = false;
   bool downloaded_failed_ = false;
   bool applying_update_failed_ = false;
