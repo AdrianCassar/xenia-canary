@@ -843,19 +843,26 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
       }
 
       if (downloaded_failed_) {
+        ImGui::Separator();
+
         std::string dl_failed_desc = "Downloading update failed, try again!";
 
         ImVec2 dl_lbl_size = ImGui::CalcTextSize(dl_failed_desc.c_str());
-        ImGui::SetCursorPosX((ImGui::GetWindowWidth() - dl_lbl_size.x) * 0.5f);
         ImGui::Text(dl_failed_desc.c_str());
 
-        if (download_response_code_ != HTTP_STATUS_CODE::HTTP_OK) {
-          std::string error_code = fmt::format(
-              "Error Code: {}", static_cast<int32_t>(download_response_code_));
+        switch (download_response_code_) {
+          case HTTP_STATUS_CODE::HTTP_FORBIDDEN: {
+            ImGui::Spacing();
+            ImGui::Text("You're rate limited from GitHub, try again later.");
+            ImGui::Spacing();
+          } break;
+          default: {
+            std::string error_code =
+                fmt::format("Error Code: {}",
+                            static_cast<int32_t>(download_response_code_));
 
-          ImGui::SetCursorPosX((ImGui::GetWindowWidth() - dl_lbl_size.x) *
-                               0.5f);
-          ImGui::Text(error_code.c_str());
+            ImGui::Text(error_code.c_str());
+          } break;
         }
       }
 
