@@ -77,6 +77,7 @@ class GDBStub : public cpu::DebugListener {
   struct GDBClient {
     std::unique_ptr<Socket> socket;
     bool no_ack_mode = false;
+    bool has_resumed = false;
     std::string receive_buffer;
   };
 
@@ -136,10 +137,10 @@ class GDBStub : public cpu::DebugListener {
         notify_exception_access_violation;
     std::optional<Exception::Code> notify_exception_code;
 
+    bool log_debug_prints = false;
     std::queue<std::string> notify_debug_prints;
 
     bool is_stopped = false;
-    bool has_resumed = false;
     std::vector<kernel::object_ref<kernel::XModule>> modules;
     std::vector<cpu::ThreadDebugInfo*> thread_debug_infos;
 
