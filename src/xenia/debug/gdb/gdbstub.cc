@@ -692,6 +692,10 @@ std::string GDBStub::ExecutionContinue() {
 #ifdef DEBUG
   debugging::DebugPrint("GDBStub: ExecutionContinue\n");
 #endif
+  {
+    std::unique_lock<std::mutex> lock(mtx_);
+    cache_.has_resumed = true;
+  }
   processor_->Continue();
   return "";
 }
@@ -1000,12 +1004,14 @@ void GDBStub::OnStepCompleted(cpu::ThreadDebugInfo* thread_info) {
 #ifdef DEBUG
   debugging::DebugPrint("GDBStub: OnStepCompleted\n");
 #endif
-  std::unique_lock<std::mutex> lock(mtx_);
+  {
+    std::unique_lock<std::mutex> lock(mtx_);
 
-  // Some debuggers like IDA will remove the current breakpoint & step into next
-  // instruction, only re-adding BP after it's told about the step
-  cache_.notify_thread_id = thread_info->thread_id;
-  cache_.last_bp_thread_id = thread_info->thread_id;
+    // Some debuggers like IDA will remove the current breakpoint & step into
+    // next instruction, only re-adding BP after it's told about the step
+    cache_.notify_thread_id = thread_info->thread_id;
+    cache_.last_bp_thread_id = thread_info->thread_id;
+  }
 
   UpdateCache();
 }
@@ -1017,17 +1023,24 @@ void GDBStub::OnBreakpointHit(Breakpoint* breakpoint,
                         breakpoint->address(), thread_info->thread_id);
 #endif
 
-  std::unique_lock<std::mutex> lock(mtx_);
+  {
+    std::unique_lock<std::mutex> lock(mtx_);
 
-  cache_.notify_bp_guest_address = breakpoint->address();
-  cache_.notify_thread_id = thread_info->thread_id;
-  cache_.last_bp_thread_id = thread_info->thread_id;
+    cache_.notify_bp_guest_address = breakpoint->address();
+    cache_.notify_thread_id = thread_info->thread_id;
+    cache_.last_bp_thread_id = thread_info->thread_id;
+  }
 
   UpdateCache();
 }
 
 void GDBStub::OnDebugPrint(const std::string_view message) {
   std::unique_lock<std::mutex> lock(mtx_);
+  // Wait until debugger has resumed at least once before we start logging debug
+  // prints, to prevent spamming debug messages during start of debug attach.
+  if (!cache_.has_resumed) {
+    return;
+  }
   cache_.notify_debug_prints.push(std::string(message));
 }
 
