@@ -273,7 +273,9 @@ class EmulatorApp final : public xe::ui::WindowedApp {
 
   // Created on demand, used by the emulator.
   std::unique_ptr<xe::debug::ui::DebugWindow> debug_window_;
+#if XE_PLATFORM_WIN32
   std::unique_ptr<xe::debug::gdb::GDBStub> debug_gdbstub_;
+#endif
 
   // Refreshing the emulator - placed after its dependencies.
   std::atomic<bool> emulator_thread_quit_requested_;
@@ -692,6 +694,7 @@ void EmulatorApp::EmulatorThread() {
   // This will respond to debugging requests so we can open the debug UI.
   if (cvars::debug) {
     if (cvars::gdbport > 0) {
+#if XE_PLATFORM_WIN32
       emulator_->processor()->set_debug_listener_request_handler(
           [this](xe::cpu::Processor* processor) {
             if (debug_gdbstub_) {
@@ -702,6 +705,7 @@ void EmulatorApp::EmulatorThread() {
             return debug_gdbstub_.get();
           });
       emulator_->processor()->ShowDebugger();
+#endif
     } else {
       emulator_->processor()->set_debug_listener_request_handler(
           [this](xe::cpu::Processor* processor) {
