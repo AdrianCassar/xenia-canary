@@ -229,7 +229,7 @@ void GDBStub::Listen(GDBClient& client) {
         break;
       }
       // No data available, can do other work or sleep
-      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      std::this_thread::sleep_for(std::chrono::milliseconds(250));
 
       // Check if we need to notify client about anything
       {
@@ -256,10 +256,15 @@ void GDBStub::Listen(GDBClient& client) {
                      GetThreadStateReply(cache_.notify_thread_id, signal));
           cache_.notify_thread_id = -1;
           cache_.notify_stopped = false;
-        } else if (cache_.notify_debug_prints.size()) {
+        } else if (cache_.notify_debug_prints.size() && client.has_resumed) {
           // Send the oldest message in our queue, only send 1 per loop to
           // reduce spamming the client & process any incoming packets
           std::string& message = cache_.notify_debug_prints.front();
+
+#ifdef DEBUG
+          debugging::DebugPrint("GDBStub: Sending debug print\n");
+#endif
+
           SendPacket(client,
                      "O" + to_hex_string(message.c_str(), message.length()));
           cache_.notify_debug_prints.pop();
@@ -267,6 +272,9 @@ void GDBStub::Listen(GDBClient& client) {
       }
     }
   }
+
+  // Client disconnected.
+  // TODO: Disable `cache_.log_debug_prints` if no other clients connected.
 }
 
 void GDBStub::SendPacket(GDBClient& client, const std::string& data) {
@@ -694,7 +702,7 @@ std::string GDBStub::ExecutionContinue() {
 #endif
   {
     std::unique_lock<std::mutex> lock(mtx_);
-    cache_.has_resumed = true;
+    cache_.log_debug_prints = true;
   }
   processor_->Continue();
   return "";
@@ -952,16 +960,18 @@ void GDBStub::OnFocus() {}
 void GDBStub::OnDetached() {
   UpdateCache();
 
-  std::unique_lock<std::mutex> lock(mtx_);
-  // Delete all breakpoints
-  auto& state = cache_.breakpoints;
+  {
+    std::unique_lock<std::mutex> lock(mtx_);
+    // Delete all breakpoints
+    auto& state = cache_.breakpoints;
 
-  for (auto& breakpoint : state.all_breakpoints) {
-    processor_->RemoveBreakpoint(breakpoint.get());
+    for (auto& breakpoint : state.all_breakpoints) {
+      processor_->RemoveBreakpoint(breakpoint.get());
+    }
+
+    state.code_breakpoints_by_guest_address.clear();
+    state.all_breakpoints.clear();
   }
-
-  state.code_breakpoints_by_guest_address.clear();
-  state.all_breakpoints.clear();
 
   if (processor_->execution_state() == cpu::ExecutionState::kPaused) {
     ExecutionContinue();
@@ -1038,7 +1048,7 @@ void GDBStub::OnDebugPrint(const std::string_view message) {
   std::unique_lock<std::mutex> lock(mtx_);
   // Wait until debugger has resumed at least once before we start logging debug
   // prints, to prevent spamming debug messages during start of debug attach.
-  if (!cache_.has_resumed) {
+  if (!cache_.log_debug_prints) {
     return;
   }
   cache_.notify_debug_prints.push(std::string(message));
@@ -1074,9 +1084,17 @@ std::string GDBStub::HandleGDBCommand(GDBClient& client,
           {"!", [&](const GDBCommand& cmd) { return kGdbReplyOK; }},
 
           // Execution continue
-          {"C", [&](const GDBCommand& cmd) { return ExecutionContinue(); }},
+          {"C",
+           [&](const GDBCommand& cmd) {
+             client.has_resumed = true;
+             return ExecutionContinue();
+           }},
           // Execution continue
-          {"c", [&](const GDBCommand& cmd) { return ExecutionContinue(); }},
+          {"c",
+           [&](const GDBCommand& cmd) {
+             client.has_resumed = true;
+             return ExecutionContinue();
+           }},
           // Execution step
           {"s", [&](const GDBCommand& cmd) { return ExecutionStep(); }},
           // Execution interrupt
