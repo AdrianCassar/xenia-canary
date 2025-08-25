@@ -97,7 +97,6 @@ project("xenia-app")
       "xenia-app-discord",
       "xenia-apu-sdl",
       -- TODO(Triang3l): CPU debugger on Android.
-      "xenia-debug-gdb",
       "xenia-debug-ui",
       "xenia-helper-sdl",
       "xenia-hid-sdl",
@@ -114,6 +113,7 @@ project("xenia-app")
   filter("platforms:Windows")
     links({
       "xenia-apu-xaudio2",
+      "xenia-debug-gdb",
       "xenia-gpu-d3d12",
       "xenia-hid-winkey",
       "xenia-hid-xinput",
