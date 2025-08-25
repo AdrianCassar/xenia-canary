@@ -139,6 +139,7 @@ class GDBStub : public cpu::DebugListener {
     std::queue<std::string> notify_debug_prints;
 
     bool is_stopped = false;
+    bool has_resumed = false;
     std::vector<kernel::object_ref<kernel::XModule>> modules;
     std::vector<cpu::ThreadDebugInfo*> thread_debug_infos;
 
