@@ -58,6 +58,9 @@ X_RESULT XSession::CreateSession(uint32_t user_index, uint8_t public_slots,
     return X_ONLINE_E_SESSION_REQUIRES_ARBITRATION;
   }
 
+  // Set early so utility functions can check flags
+  local_details_.Flags = flags;
+
   // 58410889
   // If a session requires online features but we're offline then we must fail.
   // e.g. Trying to create a SINGLEPLAYER_WITH_STATS session while not connected
@@ -78,9 +81,6 @@ X_RESULT XSession::CreateSession(uint32_t user_index, uint8_t public_slots,
       kernel_state_->memory()->TranslateVirtual<uint64_t*>(nonce_ptr);
 
   local_details_.UserIndexHost = XUserIndexNone;
-
-  // Set early so utility functions can check flags
-  local_details_.Flags = flags;
 
   // CSGO only uses STATS flag to create a session to POST stats pre round.
   // Minecraft and Portal 2 use flags HOST + STATS.
