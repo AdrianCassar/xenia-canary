@@ -355,7 +355,8 @@ uint32_t Updater::DownloadFile(
   curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, nullptr);
 
   // Download progress tracking
-  curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L); // Must be set to 0 for XFERINFOFUNCTION
+  curl_easy_setopt(curl, CURLOPT_NOPROGRESS,
+                   0L);  // Must be set to 0 for XFERINFOFUNCTION
   curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, CurlProgressCallback);
   curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &progress_callback);
 
