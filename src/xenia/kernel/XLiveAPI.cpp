@@ -60,6 +60,11 @@ DEFINE_int32(discord_presence_user_index, 0,
              "User profile index used for Discord rich presence [0, 3].",
              "Live");
 
+DEFINE_bool(use_local_interface_ip, false,
+            "Use IP of network interface instead of resolving remote IP address. "
+            "Set to true when playing with others on the same local network.",
+            "Live");
+
 DECLARE_string(upnp_root);
 
 DECLARE_bool(upnp);
@@ -374,7 +379,11 @@ void XLiveAPI::Init() {
   DiscoverNetworkInterfaces();
   SelectNetworkInterface();
 
-  online_ip_ = Getwhoami();
+  if (cvars::use_local_interface_ip) {
+    online_ip_ = WinsockGetLocalIP();
+  } else {
+    online_ip_ = Getwhoami();
+  }
 
   if (!IsConnectedToServer()) {
     // Assign online ip as local ip to ensure XNADDR is not 0 for systemlink
