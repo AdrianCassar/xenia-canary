@@ -84,6 +84,7 @@ class UpdaterDialog final : public ui::ImGuiDialog {
       : ui::ImGuiDialog(imgui_drawer), emulator_window_(emulator_window) {
     updater_ = updater;
   }
+  bool trigger_update_button = false;
 
  protected:
   void OnDraw(ImGuiIO& io) override;

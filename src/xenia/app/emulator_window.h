@@ -263,7 +263,8 @@ class EmulatorWindow {
   void ShowCompatibility();
   void ShowFAQ();
   void ShowBuildCommit();
-
+  void ShowUpdateAvailableDialog(const std::string& commit,
+                                 const std::string& date);
   EmulatorWindow::ControllerHotKey ProcessControllerHotkey(int buttons);
   void VibrateController(xe::hid::InputSystem* input_sys, uint32_t user_index,
                          bool vibrate = true);
@@ -300,6 +301,7 @@ class EmulatorWindow {
   bool initializing_shader_storage_ = false;
 
   Updater* updater_;
+  bool update_found_ = false;
 
   std::unique_ptr<DisplayConfigDialog> display_config_dialog_;
 

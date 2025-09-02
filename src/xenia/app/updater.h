@@ -27,6 +27,9 @@ class Updater {
   uint32_t GetRequest(const std::string& endpoint,
                       std::vector<uint8_t>& response_buffer) const;
 
+  bool StartupUpdateCheck(std::string* commit_hash, std::string* commit_date,
+                          uint32_t* response_code);
+
   bool CheckForUpdates(bool stable, const std::string& branch,
                        std::string* commit_hash, std::string* date,
                        std::string* tag, uint32_t* response_code);

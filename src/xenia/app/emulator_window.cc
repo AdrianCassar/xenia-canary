@@ -71,6 +71,11 @@ DEFINE_bool(fullscreen, false, "Whether to launch the emulator in fullscreen.",
 DEFINE_bool(controller_hotkeys, false, "Hotkeys for Xbox and PS controllers.",
             "General");
 
+DEFINE_bool(auto_check_updates, true,
+            "Automatically check for updates on startup and notify if any are "
+            "available",
+            "General");
+
 DEFINE_string(
     postprocess_antialiasing, "",
     "Post-processing anti-aliasing effect to apply to the image output of the "
@@ -291,6 +296,37 @@ void EmulatorWindow::OnEmulatorInitialized() {
   Gamepad_HotKeys_Listener =
       threading::Thread::Create({}, [&] { GamepadHotKeys(); });
   Gamepad_HotKeys_Listener->set_name("Gamepad HotKeys Listener");
+
+// Check for updates
+#ifndef DEBUG
+  if (cvars::auto_check_updates) {
+    std::thread([this] {
+      std::string commit, date, tag;
+      uint32_t response = 0;
+
+      update_found_ = updater_->StartupUpdateCheck(&commit, &date, &response);
+
+      if (update_found_) {
+        app_context_.CallInUIThread([this, commit, date]() {
+          ShowUpdateAvailableDialog(commit, date);
+        });
+      }
+    }).detach();
+  }
+#endif
+}
+
+void EmulatorWindow::ShowUpdateAvailableDialog(const std::string& commit,
+                                               const std::string& date) {
+  std::string title_text = "Update Available";
+  std::string short_commit = commit.substr(0, 9);
+  std::string message = fmt::format(
+      "Date: {} ({})\n\n"
+      "You can update via the Netplay -> Update Checker menu",
+      date, short_commit);
+
+  new xe::ui::HostNotificationWindow(imgui_drawer_.get(), title_text, message,
+                                     0, 9);
 }
 
 void EmulatorWindow::EmulatorWindowListener::OnClosing(ui::UIEvent& e) {
@@ -863,6 +899,19 @@ bool EmulatorWindow::Initialize() {
     Netplay_menu->AddChild(MenuItem::Create(
         MenuItem::Type::kString, "&Update Checker",
         std::bind(&EmulatorWindow::ToggleUpdaterDialog, this)));
+
+    Netplay_menu->AddChild(MenuItem::Create(
+        MenuItem::Type::kString, "&Check for Updates on Startup", [this]() {
+          OVERRIDE_bool(auto_check_updates, !cvars::auto_check_updates);
+          std::string title_text = "Startup Update Check";
+          std::string message = cvars::auto_check_updates
+                                    ? "Auto-check for updates enabled."
+                                    : "Auto-check for updates disabled.";
+
+          // Show notification
+          new xe::ui::HostNotificationWindow(imgui_drawer_.get(), title_text,
+                                             message, 0, 9);
+        }));
   }
   main_menu->AddChild(std::move(Netplay_menu));
 
@@ -1689,6 +1738,7 @@ void EmulatorWindow::ToggleUpdaterDialog() {
     emulator_->kernel_state()->BroadcastNotification(kXNotificationSystemUI, 1);
     updater_dialog_ =
         std::make_unique<UpdaterDialog>(updater_, imgui_drawer_.get(), this);
+    updater_dialog_->trigger_update_button = update_found_;
     kernel::xam::xam_dialogs_shown_++;
   } else {
     disable_hotkeys_ = false;

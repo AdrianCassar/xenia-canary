@@ -66,6 +66,84 @@ uint32_t Updater::GetRequest(const std::string& endpoint,
   return response_code;
 }
 
+bool Updater::StartupUpdateCheck(std::string* commit_hash,
+                                 std::string* commit_date,
+                                 uint32_t* response_code) {
+  const std::string endpoint =
+      "https://xenia-manager.github.io/database/data/version.json";
+
+  auto fallback = [&](const char* reason) {
+    XELOGW("StartupUpdateCheck: {}, falling back to GitHub API", reason);
+    std::string tag;
+    return CheckForUpdates(false, XE_BUILD_BRANCH, commit_hash, commit_date,
+                           &tag, response_code);
+  };
+
+  // Perform HTTP GET
+  std::vector<uint8_t> response_buffer;
+  uint32_t result = GetRequest(endpoint, response_buffer);
+
+  if (response_code) {
+    *response_code = result;
+  }
+  if (result != HTTP_STATUS_CODE::HTTP_OK) {
+    return fallback(
+        fmt::format("endpoint request failed with HTTP {}", result).c_str());
+  }
+
+  // Parse JSON
+  const std::string response_data(response_buffer.begin(),
+                                  response_buffer.end());
+  rapidjson::Document document;
+  document.Parse(response_data.c_str());
+
+  if (document.HasParseError() || !document.IsObject()) {
+    return fallback("JSON parse error or invalid root");
+  }
+
+  // Navigate JSON
+  auto get_object = [&](const rapidjson::Value& parent,
+                        const char* name) -> const rapidjson::Value* {
+    return (parent.HasMember(name) && parent[name].IsObject()) ? &parent[name]
+                                                               : nullptr;
+  };
+
+  const rapidjson::Value* xenia = get_object(document, "xenia");
+  const rapidjson::Value* netplay =
+      xenia ? get_object(*xenia, "netplay") : nullptr;
+  const rapidjson::Value* nightly =
+      netplay ? get_object(*netplay, "nightly") : nullptr;
+
+  if (!nightly) {
+    return fallback("missing 'xenia.netplay.nightly' object");
+  }
+
+  if (!nightly->HasMember("commit_sha") ||
+      !(*nightly)["commit_sha"].IsString()) {
+    return fallback("missing 'commit_sha'");
+  }
+
+  // Extract values
+  const std::string latest_commit = (*nightly)["commit_sha"].GetString();
+  const std::string latest_date =
+      (nightly->HasMember("date") && (*nightly)["date"].IsString())
+          ? FormatDate((*nightly)["date"].GetString())
+          : "";
+
+  if (commit_hash) {
+    *commit_hash = latest_commit;
+  }
+  if (commit_date) {
+    *commit_date = latest_date;
+  }
+
+  bool update_available = latest_commit != XE_BUILD_COMMIT;
+  XELOGI("StartupUpdateCheck (endpoint): current={}, latest={}, date={}",
+         XE_BUILD_COMMIT, latest_commit, latest_date);
+
+  return update_available;
+}
+
 bool Updater::CheckForUpdates(bool stable, const std::string& branch,
                               std::string* commit_hash, std::string* date,
                               std::string* tag, uint32_t* response_code) {
