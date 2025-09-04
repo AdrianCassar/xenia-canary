@@ -79,12 +79,12 @@ class ManagerDialog final : public ui::ImGuiDialog {
 
 class UpdaterDialog final : public ui::ImGuiDialog {
  public:
-  UpdaterDialog(Updater* updater, ui::ImGuiDrawer* imgui_drawer,
-                EmulatorWindow* emulator_window)
+  UpdaterDialog(Updater* updater, bool auto_check_update,
+                ui::ImGuiDrawer* imgui_drawer, EmulatorWindow* emulator_window)
       : ui::ImGuiDialog(imgui_drawer), emulator_window_(emulator_window) {
     updater_ = updater;
+    auto_check_update_ = auto_check_update;
   }
-  bool trigger_update_button = false;
 
  protected:
   void OnDraw(ImGuiIO& io) override;
@@ -95,6 +95,7 @@ class UpdaterDialog final : public ui::ImGuiDialog {
   enum class COMPARE_STATE { IDENTICAL, AHEAD, BEHIND, DIVERGED };
 
   bool updater_opened_ = false;
+  bool auto_check_update_ = false;
   Updater* updater_ = nullptr;
   uint32_t update_response_code_ = 0;
   uint32_t download_response_code_ = 0;

@@ -656,9 +656,9 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
     ImVec2 update_btn_size = ImVec2(update_lbl_size.x + btn_width_padding,
                                     update_lbl_size.y + btn_height_padding);
 
-    if (trigger_update_button ||
+    if (auto_check_update_ ||
         ImGui::Button(update_desc.c_str(), update_btn_size)) {
-      trigger_update_button = false;  // Only trigger once
+      auto_check_update_ = false;  // Check once
       checked_for_updates_ = true;
 
       update_available_ = updater_->CheckForUpdates(

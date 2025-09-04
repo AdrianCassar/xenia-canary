@@ -73,7 +73,7 @@ DEFINE_bool(controller_hotkeys, false, "Hotkeys for Xbox and PS controllers.",
 
 DEFINE_bool(auto_check_updates, true,
             "Automatically check for updates on startup and notify if any are "
-            "available",
+            "available.",
             "General");
 
 DEFINE_string(
@@ -300,7 +300,7 @@ void EmulatorWindow::OnEmulatorInitialized() {
 // Check for updates
 #ifndef DEBUG
   if (cvars::auto_check_updates) {
-    std::thread([this] {
+    auto run = [=]() {
       std::string commit, date, tag;
       uint32_t response = 0;
 
@@ -311,7 +311,11 @@ void EmulatorWindow::OnEmulatorInitialized() {
           ShowUpdateAvailableDialog(commit, date);
         });
       }
-    }).detach();
+    };
+
+    std::thread check_for_updates = std::thread(run);
+
+    check_for_updates.detach();
   }
 #endif
 }
@@ -908,7 +912,6 @@ bool EmulatorWindow::Initialize() {
                                     ? "Auto-check for updates enabled."
                                     : "Auto-check for updates disabled.";
 
-          // Show notification
           new xe::ui::HostNotificationWindow(imgui_drawer_.get(), title_text,
                                              message, 0, 9);
         }));
@@ -1736,9 +1739,8 @@ void EmulatorWindow::ToggleUpdaterDialog() {
   if (!updater_dialog_) {
     disable_hotkeys_ = true;
     emulator_->kernel_state()->BroadcastNotification(kXNotificationSystemUI, 1);
-    updater_dialog_ =
-        std::make_unique<UpdaterDialog>(updater_, imgui_drawer_.get(), this);
-    updater_dialog_->trigger_update_button = update_found_;
+    updater_dialog_ = std::make_unique<UpdaterDialog>(
+        updater_, update_found_, imgui_drawer_.get(), this);
     kernel::xam::xam_dialogs_shown_++;
   } else {
     disable_hotkeys_ = false;

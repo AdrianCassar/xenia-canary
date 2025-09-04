@@ -72,8 +72,9 @@ bool Updater::StartupUpdateCheck(std::string* commit_hash,
   const std::string endpoint =
       "https://xenia-manager.github.io/database/data/version.json";
 
-  auto fallback = [&](const char* reason) {
-    XELOGW("StartupUpdateCheck: {}, falling back to GitHub API", reason);
+  const std::string _func_ = __func__;
+  auto fallback = [&, _func_](const char* reason) {
+    XELOGW("{}: {}, falling back to GitHub API", _func_, reason);
     std::string tag;
     return CheckForUpdates(false, XE_BUILD_BRANCH, commit_hash, commit_date,
                            &tag, response_code);
@@ -138,8 +139,8 @@ bool Updater::StartupUpdateCheck(std::string* commit_hash,
   }
 
   bool update_available = latest_commit != XE_BUILD_COMMIT;
-  XELOGI("StartupUpdateCheck (endpoint): current={}, latest={}, date={}",
-         XE_BUILD_COMMIT, latest_commit, latest_date);
+  XELOGI("{}: current={}, latest={}, date={}", __func__, XE_BUILD_COMMIT,
+         latest_commit, latest_date);
 
   return update_available;
 }
