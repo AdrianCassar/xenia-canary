@@ -17,7 +17,7 @@
 namespace xe {
 namespace app {
 
-class EmulatorWindow;
+class EmulatorWindow;  // Forward declaration due to circular dependency
 
 class UpdaterDialog final : public ui::ImGuiDialog {
  public:

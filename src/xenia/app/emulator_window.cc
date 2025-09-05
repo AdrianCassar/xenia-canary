@@ -299,20 +299,22 @@ void EmulatorWindow::OnEmulatorInitialized() {
 
 // Check for updates
 #ifndef DEBUG
-  if (cvars::auto_check_updates) {
-    auto run = [=]() {
-      std::string commit, date, tag;
-      uint32_t response = 0;
+  bool should_update = cvars::auto_check_updates &&
+                       !(cvar::updated_arg_present && cvar::updated);
 
-      update_found_ = updater_->StartupUpdateCheck(&commit, &date, &response);
+  auto run = [=]() {
+    std::string commit, date, tag;
+    uint32_t response = 0;
 
-      if (update_found_) {
-        app_context_.CallInUIThread([this, commit, date]() {
-          ShowUpdateAvailableDialog(commit, date);
-        });
-      }
-    };
+    update_found_ = updater_->StartupUpdateCheck(&commit, &date, &response);
 
+    if (update_found_) {
+      app_context_.CallInUIThread(
+          [this, commit, date]() { ShowUpdateAvailableDialog(commit, date); });
+    }
+  };
+
+  if (should_update) {
     std::thread check_for_updates = std::thread(run);
 
     check_for_updates.detach();
@@ -1686,14 +1688,19 @@ void EmulatorWindow::SetNetworkMode(uint32_t mode) {
                                        mode_desc, 0);
   });
 
-  XELOGI("Swtiched Network Mode: {}", mode_desc);
+  XELOGI("Switched Network Mode: {}", mode_desc);
 
   xe::kernel::XLiveAPI::SetNetworkMode(mode);
 }
 
 void EmulatorWindow::UpdateCompletionNotification() {
-  new xe::ui::HostNotificationWindow(imgui_drawer(), "Updater",
-                                     "Successfully Updated", 0);
+  app_context_.CallInUIThread([&]() {
+    std::string message = fmt::format("Build Date: {} ({})", XE_BUILD_DATE,
+                                      XE_BUILD_COMMIT_SHORT);
+
+    new xe::ui::HostNotificationWindow(imgui_drawer(), "Update Completed",
+                                       message.c_str(), 0, 9);
+  });
 }
 
 void EmulatorWindow::ToggleDisplayConfigDialog() {

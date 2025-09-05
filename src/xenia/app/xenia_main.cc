@@ -728,8 +728,7 @@ void EmulatorApp::EmulatorThread() {
 
   if (cvar::updated_arg_present) {
     if (cvar::updated) {
-      app_context().CallInUIThread(
-          [&]() { emulator_window_->UpdateCompletionNotification(); });
+      emulator_window_->UpdateCompletionNotification();
     } else {
       emulator_window_->ToggleCompletionDialog();
     }
