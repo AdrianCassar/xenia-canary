@@ -10,7 +10,6 @@
 #ifndef XENIA_APP_PROFILE_DIALOGS_H_
 #define XENIA_APP_PROFILE_DIALOGS_H_
 
-#include "xenia/app/updater.h"
 #include "xenia/kernel/json/friend_presence_object_json.h"
 #include "xenia/kernel/json/session_object_json.h"
 #include "xenia/kernel/xam/ui/netplay_manager_util.h"
@@ -74,69 +73,6 @@ class ManagerDialog final : public ui::ImGuiDialog {
   std::vector<xe::kernel::FriendPresenceObjectJSON> presences;
   std::vector<std::unique_ptr<xe::kernel::SessionObjectJSON>> sessions;
   std::map<uint64_t, std::string> deleted_profiles;
-  EmulatorWindow* emulator_window_;
-};
-
-class UpdaterDialog final : public ui::ImGuiDialog {
- public:
-  UpdaterDialog(Updater* updater, bool auto_check_update,
-                ui::ImGuiDrawer* imgui_drawer, EmulatorWindow* emulator_window)
-      : ui::ImGuiDialog(imgui_drawer), emulator_window_(emulator_window) {
-    updater_ = updater;
-    auto_check_update_ = auto_check_update;
-  }
-
- protected:
-  void OnDraw(ImGuiIO& io) override;
-
- private:
-  bool ToggleButton(const char* str_id, bool* v);
-
-  enum class COMPARE_STATE { IDENTICAL, AHEAD, BEHIND, DIVERGED };
-
-  bool updater_opened_ = false;
-  bool auto_check_update_ = false;
-  Updater* updater_ = nullptr;
-  uint32_t update_response_code_ = 0;
-  uint32_t download_response_code_ = 0;
-  bool update_available_ = false;
-  bool checked_for_updates_ = false;
-  bool downloading_ = false;
-  float download_progress_ = 0.0f;
-  bool downloaded_ = false;
-  bool downloaded_failed_ = false;
-  bool applying_update_failed_ = false;
-  bool hide_download_button_ = false;
-  bool show_replace_dialog_ = false;
-  bool replace_file_ = false;
-  bool stable_toggle_ = false;
-  std::filesystem::path downloaded_file_path_;
-  std::string_view windows_artifact_name_ = "xenia_canary_netplay_windows.zip";
-  std::string latest_commit_hash_ = "";
-  std::string latest_commit_date_ = "";
-  std::string stable_release_tag_ = "";
-  std::string changelog_ = "";
-  COMPARE_STATE compare_status_ = COMPARE_STATE::IDENTICAL;
-  std::vector<std::string> commit_messages_ = {};
-  EmulatorWindow* emulator_window_;
-};
-
-class UpdaterCompletionDialog final : public ui::ImGuiDialog {
- public:
-  UpdaterCompletionDialog(ui::ImGuiDrawer* imgui_drawer,
-                          EmulatorWindow* emulator_window, bool updated)
-      : ui::ImGuiDialog(imgui_drawer), emulator_window_(emulator_window) {
-    updated_ = updated;
-  }
-
- protected:
-  bool CopyFilePathToClipboard(const std::wstring& file_path);
-  void OnDraw(ImGuiIO& io) override;
-  bool updater_completion_opened_ = false;
-  bool show_update_log_ = false;
-  bool updated_ = false;
-  std::string_view windows_artifact_name_ = "xenia_canary_netplay_windows.zip";
-  std::string_view update_log_filename_ = "xenia_canary_update.log";
   EmulatorWindow* emulator_window_;
 };
 

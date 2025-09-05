@@ -15,6 +15,7 @@
 
 #include "xenia/app/profile_dialogs.h"
 #include "xenia/app/updater.h"
+#include "xenia/app/updater_dialog.h"
 #include "xenia/emulator.h"
 #include "xenia/gpu/command_processor.h"
 #include "xenia/ui/imgui_dialog.h"
