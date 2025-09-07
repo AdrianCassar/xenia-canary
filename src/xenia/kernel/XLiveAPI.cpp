@@ -7,6 +7,7 @@
  ******************************************************************************
  */
 
+#include <span>
 #include <random>
 
 #include "third_party/rapidcsv/src/rapidcsv.h"
@@ -1876,18 +1877,18 @@ const uint8_t* XLiveAPI::GetMACaddress() {
 #endif  // XE_PLATFORM_WIN32
 }
 
-std::string XLiveAPI::GetNetworkFriendlyName(IP_ADAPTER_ADDRESSES adapter) {
-  char interface_name[MAX_ADAPTER_NAME_LENGTH];
-  size_t bytes_out =
-      wcstombs(interface_name, adapter.FriendlyName, sizeof(interface_name));
+// std::string XLiveAPI::GetNetworkFriendlyName(IP_ADAPTER_ADDRESSES adapter) {
+//   char interface_name[MAX_ADAPTER_NAME_LENGTH];
+//   size_t bytes_out =
+//       wcstombs(interface_name, adapter.FriendlyName, sizeof(interface_name));
 
-  // Fallback to adapater GUID if name failed to convert
-  if (bytes_out == -1) {
-    strcpy(interface_name, adapter.AdapterName);
-  }
+//   // Fallback to adapater GUID if name failed to convert
+//   if (bytes_out == -1) {
+//     strcpy(interface_name, adapter.AdapterName);
+//   }
 
-  return interface_name;
-}
+//   return interface_name;
+// }
 
 void XLiveAPI::DiscoverNetworkInterfaces() {
   XELOGI("Discovering network interfaces...");
@@ -1960,107 +1961,108 @@ void XLiveAPI::DiscoverNetworkInterfaces() {
 #endif  // XE_PLATFORM_WIN32
 }
 
-bool XLiveAPI::UpdateNetworkInterface(sockaddr_in local_ip,
-                                      IP_ADAPTER_ADDRESSES adapter) {
-  for (PIP_ADAPTER_UNICAST_ADDRESS_LH address = adapter.FirstUnicastAddress;
-       address != NULL; address = address->Next) {
-    sockaddr_in adapter_addr =
-        *reinterpret_cast<sockaddr_in*>(address->Address.lpSockaddr);
+// bool XLiveAPI::UpdateNetworkInterface(sockaddr_in local_ip,
+//                                       IP_ADAPTER_ADDRESSES adapter) {
+//   for (PIP_ADAPTER_UNICAST_ADDRESS_LH address = adapter.FirstUnicastAddress;
+//        address != NULL; address = address->Next) {
+//     sockaddr_in adapter_addr =
+//         *reinterpret_cast<sockaddr_in*>(address->Address.lpSockaddr);
 
-    if (adapter_addr.sin_family == AF_INET) {
-      if (cvars::network_guid.empty()) {
-        if (local_ip.sin_addr.s_addr == adapter_addr.sin_addr.s_addr ||
-            local_ip.sin_addr.s_addr == 0) {
-          adapter_has_wan_routing =
-              (local_ip.sin_addr.s_addr == adapter_addr.sin_addr.s_addr);
-          local_ip_ = adapter_addr;
-          OVERRIDE_string(network_guid, adapter.AdapterName);
-          return true;
-        }
-      } else {
-        adapter_has_wan_routing =
-            local_ip.sin_addr.s_addr == adapter_addr.sin_addr.s_addr;
-        local_ip_ = adapter_addr;
-        OVERRIDE_string(network_guid, adapter.AdapterName);
-        return true;
-      }
-    }
-  }
+//     if (adapter_addr.sin_family == AF_INET) {
+//       if (cvars::network_guid.empty()) {
+//         if (local_ip.sin_addr.s_addr == adapter_addr.sin_addr.s_addr ||
+//             local_ip.sin_addr.s_addr == 0) {
+//           adapter_has_wan_routing =
+//               (local_ip.sin_addr.s_addr == adapter_addr.sin_addr.s_addr);
+//           local_ip_ = adapter_addr;
+//           OVERRIDE_string(network_guid, adapter.AdapterName);
+//           return true;
+//         }
+//       } else {
+//         adapter_has_wan_routing =
+//             local_ip.sin_addr.s_addr == adapter_addr.sin_addr.s_addr;
+//         local_ip_ = adapter_addr;
+//         OVERRIDE_string(network_guid, adapter.AdapterName);
+//         return true;
+//       }
+//     }
+//   }
 
-  return false;
-}
+//   return false;
+// }
 
 void XLiveAPI::SelectNetworkInterface() {
-  sockaddr_in local_ip{};
+//   sockaddr_in local_ip{};
 
-  // If upnp is disabled or upnp_root is empty fallback to winsock
-  if (cvars::upnp && !cvars::upnp_root.empty()) {
-    local_ip = ip_to_sockaddr(UPnP::GetLocalIP());
-  } else {
-    local_ip = WinsockGetLocalIP();
-  }
+//   // If upnp is disabled or upnp_root is empty fallback to winsock
+//   if (cvars::upnp && !cvars::upnp_root.empty()) {
+//     local_ip = ip_to_sockaddr(UPnP::GetLocalIP());
+//   } else {
+//     local_ip = WinsockGetLocalIP();
+//   }
 
-  XELOGI("Checking for interface: {}", cvars::network_guid);
+//   XELOGI("Checking for interface: {}", cvars::network_guid);
 
-  bool updated = false;
+//   bool updated = false;
 
-  // If existing network GUID exists use it
-  for (auto const& adapter : adapter_addresses) {
-    if (cvars::network_guid == adapter.AdapterName) {
-      if (UpdateNetworkInterface(local_ip, adapter)) {
-        interface_name = GetNetworkFriendlyName(adapter);
-        updated = true;
-        break;
-      }
-    }
-  }
+//   // If existing network GUID exists use it
+//   for (auto const& adapter : adapter_addresses) {
+//     if (cvars::network_guid == adapter.AdapterName) {
+//       if (UpdateNetworkInterface(local_ip, adapter)) {
+//         interface_name = GetNetworkFriendlyName(adapter);
+//         updated = true;
+//         break;
+//       }
+//     }
+//   }
 
-  // Find interface that has local_ip
-  if (!updated) {
-    XELOGI("Network Interface GUID: {} not found!",
-           cvars::network_guid.empty() ? "N\\A" : cvars::network_guid);
+//   // Find interface that has local_ip
+//   if (!updated) {
+//     XELOGI("Network Interface GUID: {} not found!",
+//            cvars::network_guid.empty() ? "N\\A" : cvars::network_guid);
 
-    for (auto const& adapter : adapter_addresses) {
-      if (UpdateNetworkInterface(local_ip, adapter)) {
-        interface_name = GetNetworkFriendlyName(adapter);
-        updated = true;
-        break;
-      }
-    }
-  }
+//     for (auto const& adapter : adapter_addresses) {
+//       if (UpdateNetworkInterface(local_ip, adapter)) {
+//         interface_name = GetNetworkFriendlyName(adapter);
+//         updated = true;
+//         break;
+//       }
+//     }
+//   }
 
-  // Use first interface from adapter_addresses, otherwise unspecified network
-  if (!updated) {
-    // Reset the GUID
-    OVERRIDE_string(network_guid, "");
+//   // Use first interface from adapter_addresses, otherwise unspecified network
+//   if (!updated) {
+//     // Reset the GUID
+//     OVERRIDE_string(network_guid, "");
 
-    XELOGI("Interface GUID: {} not found!",
-           cvars::network_guid.empty() ? "N\\A" : cvars::network_guid);
+//     XELOGI("Interface GUID: {} not found!",
+//            cvars::network_guid.empty() ? "N\\A" : cvars::network_guid);
 
-    if (cvars::network_guid.empty()) {
-      if (!adapter_addresses.empty()) {
-        auto& adapter = adapter_addresses.front();
+//     if (cvars::network_guid.empty()) {
+//       if (!adapter_addresses.empty()) {
+//         auto& adapter = adapter_addresses.front();
 
-        if (UpdateNetworkInterface(local_ip, adapter)) {
-          interface_name = GetNetworkFriendlyName(adapter);
-        }
-      } else {
-        local_ip_ = local_ip;
-        interface_name = "Unspecified Network";
-      }
-    } else {
-      interface_name = "Unspecified Network";
-    }
-  }
+//         if (UpdateNetworkInterface(local_ip, adapter)) {
+//           interface_name = GetNetworkFriendlyName(adapter);
+//         }
+//       } else {
+//         local_ip_ = local_ip;
+//         interface_name = "Unspecified Network";
+//       }
+//     } else {
+//       interface_name = "Unspecified Network";
+//     }
+//   }
 
-  std::string WAN_interface = xe::kernel::XLiveAPI::adapter_has_wan_routing
-                                  ? "(Default)"
-                                  : "(Non Default)";
+//   std::string WAN_interface = xe::kernel::XLiveAPI::adapter_has_wan_routing
+//                                   ? "(Default)"
+//                                   : "(Non Default)";
 
-  XELOGI("Set network interface: {} {} {} {}", interface_name,
-         cvars::network_guid, LocalIP_str(), WAN_interface);
+//   XELOGI("Set network interface: {} {} {} {}", interface_name,
+//          cvars::network_guid, LocalIP_str(), WAN_interface);
 
-  assert_false(cvars::network_guid == "");
+//   assert_false(cvars::network_guid == "");
 }
+
 }  // namespace kernel
 }  // namespace xe

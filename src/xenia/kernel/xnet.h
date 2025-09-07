@@ -23,6 +23,8 @@
 // clang-format on
 #include <inaddr.h>
 #include <winapifamily.h>
+#elif XE_PLATFORM_LINUX
+#include <netinet/ip.h>
 #endif
 
 namespace xe {
@@ -532,7 +534,7 @@ struct X_USER_STATS_ROW {
   xe::be<uint64_t> xuid;
   xe::be<uint32_t> Rank;
   xe::be<uint64_t> i64Rating;
-  CHAR szGamertag[16];
+  char szGamertag[16];
   xe::be<uint32_t> NumColumns;
   xe::be<uint32_t> pColumns;
 };
@@ -624,7 +626,7 @@ struct X_ARGUMENT_ENTRY {
 };
 static_assert_size(X_ARGUMENT_ENTRY, 0x10);
 
-struct __declspec(align(8)) X_ARGUMENT_LIST {
+struct X_ARGUMENT_LIST {
   X_ARGUMENT_ENTRY entry[32];
   xe::be<uint32_t> argument_count;
 };

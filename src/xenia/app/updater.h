@@ -10,6 +10,7 @@
 #ifndef XENIA_APP_UPDATER_H_
 #define XENIA_APP_UPDATER_H_
 
+#include <cstdint>
 #include <filesystem>
 #include <functional>
 #include <string>

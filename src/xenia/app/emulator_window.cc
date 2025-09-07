@@ -868,16 +868,16 @@ bool EmulatorWindow::Initialize() {
     Network_interfaces_menu->AddChild(
         MenuItem::Create(MenuItem::Type::kSeparator));
 
-    for (auto& adapter : xe::kernel::XLiveAPI::adapter_addresses) {
-      std::string guid = adapter.AdapterName;
-      std::string interface_name =
-          xe::kernel::XLiveAPI::GetNetworkFriendlyName(adapter);
+    // for (auto& adapter : xe::kernel::XLiveAPI::adapter_addresses) {
+    //   std::string guid = adapter.AdapterName;
+    //   std::string interface_name =
+    //       xe::kernel::XLiveAPI::GetNetworkFriendlyName(adapter);
 
-      Network_interfaces_menu->AddChild(
-          MenuItem::Create(MenuItem::Type::kString, interface_name, "",
-                           std::bind(&EmulatorWindow::SetNetworkInterfaceByGUID,
-                                     this, adapter.AdapterName)));
-    }
+    //   Network_interfaces_menu->AddChild(
+    //       MenuItem::Create(MenuItem::Type::kString, interface_name, "",
+    //                        std::bind(&EmulatorWindow::SetNetworkInterfaceByGUID,
+    //                                  this, adapter.AdapterName)));
+    // }
 
     Network_mode_menu->AddChild(
         MenuItem::Create(MenuItem::Type::kString, "Offline", "",
@@ -1604,29 +1604,29 @@ void EmulatorWindow::SetAPIAddress(std::string api_address) {
 }
 
 void EmulatorWindow::SetNetworkInterfaceByGUID(std::string guid) {
-  if (xe::kernel::XLiveAPI::GetInitState() ==
-      xe::kernel::XLiveAPI::InitState::Pending) {
-    std::string interface_name = "Reset";
+  // if (xe::kernel::XLiveAPI::GetInitState() ==
+  //     xe::kernel::XLiveAPI::InitState::Pending) {
+  //   std::string interface_name = "Reset";
 
-    for (auto& adapter : xe::kernel::XLiveAPI::adapter_addresses) {
-      if (adapter.AdapterName == guid) {
-        interface_name = xe::kernel::XLiveAPI::GetNetworkFriendlyName(adapter);
-        break;
-      }
-    }
+  //   for (auto& adapter : xe::kernel::XLiveAPI::adapter_addresses) {
+  //     if (adapter.AdapterName == guid) {
+  //       interface_name =
+  //       xe::kernel::XLiveAPI::GetNetworkFriendlyName(adapter); break;
+  //     }
+  //   }
 
-    app_context_.CallInUIThread([&]() {
-      new xe::ui::HostNotificationWindow(imgui_drawer(), "Network Interface",
-                                         interface_name, 0);
-    });
-  } else {
-    app_context_.CallInUIThread([&]() {
-      new xe::ui::HostNotificationWindow(imgui_drawer(), "Network Interface",
-                                         "Failed - In-Game", 0);
-    });
-  }
+  //   app_context_.CallInUIThread([&]() {
+  //     new xe::ui::HostNotificationWindow(imgui_drawer(), "Network Interface",
+  //                                        interface_name, 0);
+  //   });
+  // } else {
+  //   app_context_.CallInUIThread([&]() {
+  //     new xe::ui::HostNotificationWindow(imgui_drawer(), "Network Interface",
+  //                                        "Failed - In-Game", 0);
+  //   });
+  // }
 
-  xe::kernel::XLiveAPI::SetNetworkInterfaceByGUID(guid);
+  // xe::kernel::XLiveAPI::SetNetworkInterfaceByGUID(guid);
 }
 
 void EmulatorWindow::SetNetworkMode(uint32_t mode) {

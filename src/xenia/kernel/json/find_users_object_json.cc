@@ -62,7 +62,7 @@ bool FindUsersObjectJSON::Serialize(
       writer->String("");
     }
 
-    if (user.gamertag) {
+    if (strlen(user.gamertag) > 0) {
       writer->String(user.gamertag);
     } else {
       writer->String("");

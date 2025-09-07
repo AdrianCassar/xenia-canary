@@ -17,6 +17,8 @@
 #define _WINSOCK_DEPRECATED_NO_WARNINGS  // inet_addr
 #include <WS2tcpip.h>                    // NOLINT(build/include_order)
 #include <winsock2.h>                    // NOLINT(build/include_order)
+#elif XE_PLATFORM_LINUX
+#include <arpa/inet.h>
 #endif
 
 namespace xe {

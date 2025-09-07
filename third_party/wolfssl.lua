@@ -11,12 +11,18 @@ project("wolfssl")
     "WOLFSSL_USER_SETTINGS"
   })
 
-  filter {}
+  filter { "platforms:Linux" }
+    includedirs({
+      "wolfssl",
+      "wolfssl/IDE/GCC-ARM/Header",
+    })
 
-  includedirs({
-    "wolfssl",
-    "wolfssl/IDE/WIN"
-  })
+  -- filter { "platforms:Windows" }
+  --   includedirs({
+  --     "wolfssl",
+  --     "wolfssl/IDE/WIN",
+  --   })
+
   files({
     "wolfcrypt/src/*.c",
 

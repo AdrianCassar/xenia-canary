@@ -566,8 +566,7 @@ bool UserProfile::BuildPresenceString() {
       xlast->GetPresenceRawString(presence_prop);
 
   const auto presence_string_formatter =
-      util::AttributeStringFormatter::AttributeStringFormatter(raw_presence,
-                                                               xlast, xuid_);
+      util::AttributeStringFormatter(raw_presence, xlast, xuid_);
 
   const auto presence_parsed = presence_string_formatter.GetPresenceString();
 

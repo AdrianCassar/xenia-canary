@@ -2,7 +2,7 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2024 Ben Vanik. All rights reserved.                             *
+ * Copyright 2025 Xenia Canary. All rights reserved.                          *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
@@ -11,6 +11,7 @@
 
 #include "xenia/base/logging.h"
 #include "xenia/kernel/kernel_state.h"
+#include "xenia/kernel/util/net_utils.h"
 #include "xenia/kernel/util/shim_utils.h"
 #include "xenia/kernel/xam/xam_module.h"
 #include "xenia/kernel/xam/xam_net.h"
@@ -31,10 +32,11 @@
 #include <natupnp.h>
 #include <wrl/client.h>
 #elif XE_PLATFORM_LINUX
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <netinet/ip.h>
-#include <sys/socket.h>
+// #include <arpa/inet.h>
+#include <netdb.h>
+// #include <netinet/in.h>
+// #include <netinet/ip.h>
+// #include <sys/socket.h>
 #endif
 
 #include "xenia/kernel/XLiveAPI.h"
@@ -320,12 +322,14 @@ void XNetRandom(unsigned char* buffer_ptr, uint32_t length) {
 
 dword_result_t NetDll_XNetRandom_entry(dword_t caller, lpvoid_t buffer_ptr,
                                        dword_t length) {
+  unsigned char* buffer_data = buffer_ptr;
+
   // XeCryptRandom()
-  if (&buffer_ptr == nullptr || length == 0) {
-    return X_ERROR_SUCCESS;
+  if (buffer_data == nullptr || length == 0) {
+    return X_STATUS_SUCCESS;
   }
 
-  XNetRandom(buffer_ptr, length);
+  XNetRandom(buffer_data, length);
 
   return X_ERROR_SUCCESS;
 }
@@ -441,12 +445,9 @@ dword_result_t NetDll_WSARecvFrom_entry(
   if (ret < 0) {
     XThread::SetLastError(socket->GetLastWSAError());
   } else if (ret >= 0 && !cvars::log_mask_ips && from_ptr) {
-    XELOGI("NetDll_WSARecvFrom: Received {} bytes from: {}.{}.{}.{}",
+    XELOGI("NetDll_WSARecvFrom: Received {} bytes from: {}",
            static_cast<uint32_t>(*num_bytes_recv_ptr),
-           from_ptr->address_ip.S_un.S_un_b.s_b1,
-           from_ptr->address_ip.S_un.S_un_b.s_b2,
-           from_ptr->address_ip.S_un.S_un_b.s_b3,
-           from_ptr->address_ip.S_un.S_un_b.s_b4);
+           ip_to_string(from_ptr->address_ip).c_str());
   }
 
   return ret;
@@ -518,11 +519,8 @@ dword_result_t NetDll_WSASendTo_entry(
     XThread::SetLastError(socket->GetLastWSAError());
     return result;
   } else if (result != -1 && to_ptr && !cvars::log_mask_ips) {
-    XELOGI("NetDll_WSASendTo: Send {} bytes to: {}.{}.{}.{}", result,
-           to_ptr->address_ip.S_un.S_un_b.s_b1,
-           to_ptr->address_ip.S_un.S_un_b.s_b2,
-           to_ptr->address_ip.S_un.S_un_b.s_b3,
-           to_ptr->address_ip.S_un.S_un_b.s_b4);
+    XELOGI("NetDll_WSASendTo: Send {} bytes to: {}", result,
+           ip_to_string(to_ptr->address_ip).c_str());
   }
 
   if (num_bytes_sent && !overlapped) {
@@ -803,20 +801,20 @@ dword_result_t NetDll_XNetInAddrToString_entry(dword_t caller, dword_t ina,
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetInAddrToString, kNetworking, kImplemented);
 
-// This converts a XNet address to an IN_ADDR. The IN_ADDR is used for
+// This converts a XNet address to an in_addr. The in_addr is used for
 // subsequent socket calls (like a handle to a XNet address)
 dword_result_t NetDll_XNetXnAddrToInAddr_entry(dword_t caller,
                                                pointer_t<XNADDR> xn_addr,
                                                pointer_t<XNKID> xid,
                                                pointer_t<in_addr> in_addr) {
   if (in_addr) {
-    in_addr->S_un.S_addr = 0;
+    in_addr->s_addr = 0;
   }
 
   if (memcmp(XLiveAPI::mac_address_, xn_addr->abEnet, sizeof(MacAddress)) ==
       0) {
     XELOGI("Resolving XNetXnAddrToInAddr to LOOPBACK!");
-    in_addr->S_un.S_addr = xe::byte_swap(LOOPBACK);
+    in_addr->s_addr = htonl(LOOPBACK);
 
     return X_ERROR_SUCCESS;
   }
@@ -1153,7 +1151,7 @@ dword_result_t NetDll_XNetQosLookup_entry(
   std::vector<XNADDR> remote_addresses{};
   std::vector<XNKID> session_ids{};
   std::vector<XNKEY> remote_keys{};
-  std::vector<IN_ADDR> security_gateways{};
+  std::vector<in_addr> security_gateways{};
   std::vector<uint32_t> service_ids{};
 
   if (num_remote_consoles) {
@@ -1227,8 +1225,8 @@ dword_result_t NetDll_XNetQosLookup_entry(
         gateways_ptrs, gateways_ptrs + num_gateways);
 
     for (uint32_t i = 0; i < num_gateways; i++) {
-      const IN_ADDR gateway_key =
-          *kernel_memory()->TranslateVirtual<IN_ADDR*>(gateways_ptr_array[i]);
+      const in_addr gateway_key =
+          *kernel_memory()->TranslateVirtual<in_addr*>(gateways_ptr_array[i]);
 
       security_gateways.push_back(gateway_key);
     }
@@ -1397,11 +1395,11 @@ dword_result_t NetDll_XHttpOpenRequest_entry(
   std::string object_name = "";
 
   if (verb) {
-    http_verb = verb;
+    http_verb = *verb;
   }
 
   if (path) {
-    object_name = path;
+    object_name = *path;
   }
 
   XELOGI("OpenRequest: {} {}", http_verb, object_name);
@@ -1427,7 +1425,7 @@ dword_result_t NetDll_XHttpSendRequest_entry(dword_t caller, dword_t hrequest,
   std::string request_headers = "";
 
   if (headers) {
-    request_headers = headers;
+    request_headers = *headers;
   }
 
   XELOGI("Headers {}", request_headers);
@@ -1867,7 +1865,7 @@ dword_result_t NetDll_recvfrom_entry(dword_t caller, dword_t socket_handle,
     return -1;
   }
 
-  uint32_t native_fromlen = fromlen_ptr ? fromlen_ptr.value() : 0;
+  socklen_t native_fromlen = fromlen_ptr ? fromlen_ptr.value() : 0;
   int ret = socket->RecvFrom(buf_ptr, buf_len, flags, from_ptr,
                              fromlen_ptr ? &native_fromlen : nullptr);
   if (fromlen_ptr) {
@@ -1877,11 +1875,8 @@ dword_result_t NetDll_recvfrom_entry(dword_t caller, dword_t socket_handle,
   if (ret == -1) {
     XThread::SetLastError(socket->GetLastWSAError());
   } else if (ret >= 0 && !cvars::log_mask_ips && from_ptr) {
-    XELOGI("NetDll_recvfrom: Received {} bytes from: {}.{}.{}.{}", ret,
-           from_ptr->address_ip.S_un.S_un_b.s_b1,
-           from_ptr->address_ip.S_un.S_un_b.s_b2,
-           from_ptr->address_ip.S_un.S_un_b.s_b3,
-           from_ptr->address_ip.S_un.S_un_b.s_b4);
+    XELOGI("NetDll_recvfrom: Received {} bytes from: {}", ret,
+           ip_to_string(from_ptr->address_ip).c_str());
   }
 
   return ret;
@@ -1922,11 +1917,8 @@ dword_result_t NetDll_sendto_entry(dword_t caller, dword_t socket_handle,
   if (ret < 0) {
     XThread::SetLastError(socket->GetLastWSAError());
   } else if (ret >= 0 && to_ptr && !cvars::log_mask_ips) {
-    XELOGI("NetDll_sendto: Send {} bytes to: {}.{}.{}.{}", ret,
-           to_ptr->address_ip.S_un.S_un_b.s_b1,
-           to_ptr->address_ip.S_un.S_un_b.s_b2,
-           to_ptr->address_ip.S_un.S_un_b.s_b3,
-           to_ptr->address_ip.S_un.S_un_b.s_b4);
+    XELOGI("NetDll_sendto: Send {} bytes to: {}", ret,
+           ip_to_string(to_ptr->address_ip).c_str());
   }
 
   return ret;
