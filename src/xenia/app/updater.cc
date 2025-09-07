@@ -594,8 +594,8 @@ bool Updater::UpdateAndRestart(const std::filesystem::path& zip_path) {
 
   std::string script_content = "";
 
+// Scripts for completing the automatic update process.
 #ifdef XE_PLATFORM_WIN32
-  // Batch script for completing the automatic update process.
   script_content = fmt::format(
       "@echo off\n"
       "set LOG_FILE=\"{1}\\{5}\"\n"
@@ -659,14 +659,83 @@ bool Updater::UpdateAndRestart(const std::filesystem::path& zip_path) {
       backup_folder_name    // {6}
   );
 #elif XE_PLATFORM_LINUX
-  // Restart with updated false for manual update
   script_content = fmt::format(
-      "#! /bin/bash\n"
-      "while pgrep {0} > /dev/null; do sleep 1; done\n"
-      "./{1} --updated=false\n",
-      executable_filename,  // {0}
-      executable_path       // {1}
-  );
+      "#!/bin/bash\n"
+      "\n"
+      "EXECUTABLE_NAME=\"{0}\"                    # final executable "
+      "name\n"
+      "EXECUTABLE_PATH=\"$(dirname \"$(realpath \"$0\")\")/$EXECUTABLE_NAME\"\n"
+      "ARCHIVE_FILE=\"{1}\"          # archive file\n"
+      "INNER_PATH=\"build/bin/Linux/Release/xenia_canary\" # path inside "
+      "archive\n"
+      "LOG_FILE=\"$(dirname \"$(realpath \"$0\")\")/{2}\"\n"
+      "BACKUP_DIR=\"$(dirname \"$(realpath \"$0\")\")/{3}\"\n"
+      "\n"
+      "echo \"[INF] Starting Xenia update script\" > \"$LOG_FILE\"\n"
+      "\n"
+      "cd \"$(dirname \"$(realpath \"$0\")\")\" || exit 1\n"
+      "\n"
+      "echo \"[INF] Waiting for Xenia process to exit\" >> \"$LOG_FILE\"\n"
+      "while pgrep -x \"$EXECUTABLE_NAME\" > /dev/null; do\n"
+      "  sleep 1\n"
+      "done\n"
+      "\n"
+      "echo \"[INF] Xenia process has exited\" >> \"$LOG_FILE\"\n"
+      "\n"
+      "# Check if tar is installed before doing anything else\n"
+      "if ! command -v tar &> /dev/null; then\n"
+      "    echo \"[ERR] tar is not installed\"\n"
+      "    echo \"[INF] Relaunching Xenia with update failed flag\" >> "
+      "\"$LOG_FILE\"\n"
+      "    \"$EXECUTABLE_PATH\" --updated=false &\n"
+      "    rm -- \"$0\"\n"
+      "    exit 1\n"
+      "fi\n"
+      "\n"
+      "echo \"[INF] Cleaning and creating backup folder\" >> \"$LOG_FILE\"\n"
+      "rm -rf \"$BACKUP_DIR\"\n"
+      "mkdir -p \"$BACKUP_DIR\"\n"
+      "\n"
+      "echo \"[INF] Backing up old executable\" >> \"$LOG_FILE\"\n"
+      "if [ -f \"$EXECUTABLE_PATH\" ]; then\n"
+      "  cp \"$EXECUTABLE_PATH\" \"$BACKUP_DIR/$EXECUTABLE_NAME\" >> "
+      "\"$LOG_FILE\" 2>&1\n"
+      "fi\n"
+      "\n"
+      "# Extract only the new executable directly from tar.xz\n"
+      "echo \"[INF] Extracting executable from archive: $ARCHIVE_FILE\" >> "
+      "\"$LOG_FILE\"\n"
+      "if ! tar -xJf \"$ARCHIVE_FILE\" \"$INNER_PATH\" >> \"$LOG_FILE\" 2>&1; "
+      "then\n"
+      "  echo \"[ERR] Failed to extract $INNER_PATH from $ARCHIVE_FILE\" >> "
+      "\"$LOG_FILE\"\n"
+      "  echo \"[INF] Relaunching Xenia with update failed flag\" >> "
+      "\"$LOG_FILE\"\n"
+      "  \"$EXECUTABLE_PATH\" --updated=false &\n"
+      "  rm -- \"$0\"\n"
+      "  exit 1\n"
+      "fi\n"
+      "\n"
+      "# Move the extracted binary into place\n"
+      "echo \"[INF] Installing new executable\" >> \"$LOG_FILE\"\n"
+      "mv -f \"$INNER_PATH\" \"$EXECUTABLE_PATH\" >> \"$LOG_FILE\" 2>&1\n"
+      "chmod +x \"$EXECUTABLE_PATH\"\n"
+      "\n"
+      "# Cleanup extracted folders\n"
+      "rm -rf build\n"
+      "\n"
+      "# Start updated executable\n"
+      "echo \"[INF] Starting updated Xenia executable\" >> \"$LOG_FILE\"\n"
+      "\"$EXECUTABLE_PATH\" --updated=true &\n"
+      "\n"
+      "# Remove archive and self-delete\n"
+      "echo \"[INF] Deleting archive file: $ARCHIVE_FILE\" >> \"$LOG_FILE\"\n"
+      "rm -f \"$ARCHIVE_FILE\" >> \"$LOG_FILE\" 2>&1\n"
+      "\n"
+      "echo \"[INF] Update script completed successfully\" >> \"$LOG_FILE\"\n"
+      "rm -- \"$0\"",
+      executable_filename, zip_filename, update_log_filename,
+      backup_folder_name);
 #endif
 
   std::ofstream update_script_file(update_script_path);
@@ -696,9 +765,9 @@ bool Updater::UpdateAndRestart(const std::filesystem::path& zip_path) {
 
   return ShellExecuteEx(&ShExecInfo);
 #elif XE_PLATFORM_LINUX
-  system(fmt::format("chmod +x {} && ./{}", update_script_filename,
-                     update_script_filename)
-             .c_str());
+  std::string exec = fmt::format("chmod 777 {} && ./{}", update_script_filename,
+                                 update_script_filename);
+  system(exec.c_str());
   return true;
 #endif
 }

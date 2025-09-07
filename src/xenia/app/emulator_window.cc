@@ -907,14 +907,15 @@ bool EmulatorWindow::Initialize() {
         std::bind(&EmulatorWindow::ToggleUpdaterDialog, this)));
 
     Netplay_menu->AddChild(MenuItem::Create(
-        MenuItem::Type::kString, "&Check for Updates on Startup", [this]() {
+        MenuItem::Type::kString,
+        "Check for Updates on Startup (Enable/Disable)", [this]() {
           OVERRIDE_bool(auto_check_updates, !cvars::auto_check_updates);
           std::string title_text = "Startup Update Check";
           std::string message = cvars::auto_check_updates
                                     ? "Auto-check for updates enabled."
                                     : "Auto-check for updates disabled.";
 
-          new xe::ui::HostNotificationWindow(imgui_drawer_.get(), title_text,
+          new xe::ui::HostNotificationWindow(imgui_drawer(), title_text,
                                              message, 0, 9);
         }));
   }
