@@ -2,14 +2,17 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2024 Ben Vanik. All rights reserved.                             *
+ * Copyright 2025 Xenia Canary. All rights reserved.                          *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
 
 #include <random>
 
+#include "xenia/kernel/xsocket.h"
+
 #include "xenia/base/logging.h"
+#include "xenia/kernel/XLiveAPI.h"
 #include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/util/shim_utils.h"
 #include "xenia/kernel/xam/xam_module.h"
@@ -19,9 +22,14 @@
 #include "xenia/kernel/xboxkrnl/xboxkrnl_modules.h"
 #include "xenia/kernel/xboxkrnl/xboxkrnl_threading.h"
 #include "xenia/kernel/xevent.h"
-#include "xenia/kernel/xsocket.h"
 #include "xenia/kernel/xthread.h"
 #include "xenia/xbox.h"
+
+#ifdef XE_PLATFORM_WIN32
+#include "xenia/kernel/xsocket_win.h"
+#elif XE_PLATFORM_LINUX
+#include "xenia/kernel/xsocket_linux.h"
+#endif
 
 #ifdef XE_PLATFORM_WIN32
 // NOTE: must be included last as it expects windows.h to already be included.
@@ -36,8 +44,6 @@
 #include <netinet/ip.h>
 #include <sys/socket.h>
 #endif
-
-#include "xenia/kernel/XLiveAPI.h"
 
 DECLARE_bool(logging);
 

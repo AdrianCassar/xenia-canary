@@ -2,21 +2,19 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2013 Ben Vanik. All rights reserved.                             *
+ * Copyright 2025 Xenia Canary. All rights reserved.                          *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
 
-#include "src/xenia/kernel/xsocket.h"
-
 #include <cstring>
 
+#include "src/xenia/kernel/xsocket_win.h"
 #include "xenia/base/platform.h"
+#include "xenia/kernel/XLiveAPI.h"
 #include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/xam/xam_module.h"
 #include "xenia/kernel/xboxkrnl/xboxkrnl_threading.h"
-
-#include "xenia/kernel/XLiveAPI.h"
 
 using namespace std::chrono_literals;
 
@@ -57,11 +55,8 @@ X_STATUS XSocket::Close() {
   lock.unlock();
 
   std::unique_lock socket_lock(receive_socket_mutex_);
-#if XE_PLATFORM_WIN32
   int ret = closesocket(native_handle_);
-#elif XE_PLATFORM_LINUX
-  int ret = close(native_handle_);
-#endif
+
   socket_lock.unlock();
 
   if (ret != 0) {
@@ -135,7 +130,6 @@ X_STATUS XSocket::SetOption(uint32_t level, uint32_t optname, void* optval_ptr,
 }
 
 X_STATUS XSocket::IOControl(uint32_t cmd, uint8_t* arg_ptr) {
-#ifdef XE_PLATFORM_WIN32
   int ret = ioctlsocket(native_handle_, cmd, (u_long*)arg_ptr);
   if (ret < 0) {
     // TODO: Get last error
@@ -143,9 +137,6 @@ X_STATUS XSocket::IOControl(uint32_t cmd, uint8_t* arg_ptr) {
   }
 
   return X_STATUS_SUCCESS;
-#elif XE_PLATFORM_LINUX
-  return X_STATUS_UNSUCCESSFUL;
-#endif
 }
 
 X_STATUS XSocket::Connect(const XSOCKADDR_IN* name, int name_len) {
@@ -278,11 +269,7 @@ int XSocket::PollWSARecvFrom(bool wait, WSARecvFromData receive_async_data) {
 
   int ret;
   do {
-#ifdef XE_PLATFORM_WIN32
     ret = WSAPoll(fds, 1, wait ? 1000 : 0);
-#else
-    ret = poll(fds, 1, wait ? 1000 : 0);
-#endif
 
     if (receive_async_data.overlapped->offset_high & 2) {
       receive_async_data.overlapped->internal_high =
@@ -304,7 +291,6 @@ int XSocket::PollWSARecvFrom(bool wait, WSARecvFromData receive_async_data) {
     goto threadexit;
   }
 
-#ifdef XE_PLATFORM_WIN32
   for (auto i = 0u; i < receive_async_data.num_buffers; i++) {
     buffers[i].len = receive_async_data.buffers[i].len;
     buffers[i].buf =
@@ -334,42 +320,7 @@ int XSocket::PollWSARecvFrom(bool wait, WSARecvFromData receive_async_data) {
   }
 
   receive_async_data.overlapped->offset = flags;
-#else
-  auto buffers = new iovec[receive_async_data.num_buffers];
-  for (auto i = 0u; i < receive_async_data.num_buffers; i++) {
-    buffers[i].iov_len = receive_async_data.buffers[i].len;
-    buffers[i].iov_base = kernel_state()->memory()->TranslateVirtual(
-        receive_async_data.buffers[i].buf_ptr);
-  }
 
-  msghdr msg;
-  std::memset(&msg, 0, sizeof(msg));
-  msg.msg_name = &n_from;
-  msg.msg_namelen = n_from_len;
-  msg.msg_iov = buffers;
-  msg.msg_iovlen = receive_async_data.num_buffers;
-
-  {
-    std::unique_lock socket_lock(receive_socket_mutex_);
-    ret = recvmsg(native_handle_, &msg, receive_async_data.flags);
-    if (ret < 0) {
-      receive_async_data.overlapped->internal_high = GetLastWSAError();
-    } else {
-      receive_async_data.overlapped->internal = ret;
-    }
-    socket_lock.unlock();
-  }
-
-  flags = 0;
-  if (msg.msg_flags & MSG_TRUNC) flags |= MSG_PARTIAL;
-  if (msg.msg_flags & MSG_OOB) flags |= MSG_OOB;
-  receive_async_data.overlapped->offset = flags;
-
-  if (ret >= 0) {
-    SetLastWSAError((X_WSAError)0);
-    ret = 0;
-  }
-#endif
   delete[] buffers;
 
 threadexit:
@@ -519,22 +470,6 @@ int XSocket::WSAEventSelect(uint64_t socket_handle, uint64_t event_handle,
                           flags);
 }
 
-bool XSocket::QueuePacket(uint32_t src_ip, uint16_t src_port,
-                          const uint8_t* buf, size_t len) {
-  packet* pkt = reinterpret_cast<packet*>(new uint8_t[sizeof(packet) + len]);
-  pkt->src_ip = src_ip;
-  pkt->src_port = src_port;
-
-  pkt->data_len = (uint16_t)len;
-  std::memcpy(pkt->data, buf, len);
-
-  std::lock_guard<std::mutex> lock(incoming_packet_mutex_);
-  incoming_packets_.push((uint8_t*)pkt);
-
-  // TODO: Limit on number of incoming packets?
-  return true;
-}
-
 X_STATUS XSocket::GetPeerName(XSOCKADDR_IN* buf, int* buf_len) {
   sockaddr addr = buf->to_host();
   sockaddr* sa = const_cast<sockaddr*>(&addr);
@@ -564,17 +499,11 @@ X_STATUS XSocket::GetSockName(XSOCKADDR_IN* buf, int* buf_len) {
 uint32_t XSocket::GetLastWSAError() const {
   // Todo(Gliniak): Provide error mapping table
   // Xbox error codes might not match with what we receive from OS
-#ifdef XE_PLATFORM_WIN32
   return WSAGetLastError();
-#endif
-  return errno;
 }
 
 void XSocket::SetLastWSAError(X_WSAError error) const {
-#ifdef XE_PLATFORM_WIN32
   WSASetLastError((int)error);
-#endif
-  errno = (int)error;
 }
 
 }  // namespace kernel
