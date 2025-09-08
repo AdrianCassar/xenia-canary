@@ -662,8 +662,7 @@ bool Updater::UpdateAndRestart(const std::filesystem::path& zip_path) {
   script_content = fmt::format(
       "#!/bin/bash\n"
       "\n"
-      "EXECUTABLE_NAME=\"{0}\"                    # final executable "
-      "name\n"
+      "EXECUTABLE_NAME=\"{0}\"                    # final executable name\n"
       "EXECUTABLE_PATH=\"$(dirname \"$(realpath \"$0\")\")/$EXECUTABLE_NAME\"\n"
       "ARCHIVE_FILE=\"{1}\"          # archive file\n"
       "INNER_PATH=\"build/bin/Linux/Release/xenia_canary\" # path inside "
@@ -676,8 +675,14 @@ bool Updater::UpdateAndRestart(const std::filesystem::path& zip_path) {
       "cd \"$(dirname \"$(realpath \"$0\")\")\" || exit 1\n"
       "\n"
       "echo \"[INF] Waiting for Xenia process to exit\" >> \"$LOG_FILE\"\n"
-      "while pgrep -x \"$EXECUTABLE_NAME\" > /dev/null; do\n"
-      "  sleep 1\n"
+      "\n"
+      "pgrep -f $EXECUTABLE_NAME | while read -r PID; do\n"
+      "  PROCESS_PATH=$(readlink -f \"/proc/$PID/exe\")\n"
+      "  \n"
+      "  if [[ \"$PROCESS_PATH\" == \"$EXECUTABLE_PATH\" ]]; then\n"
+      "    echo \"[INF] Killed Xenia process $($PID)\" >> \"$LOG_FILE\"\n"
+      "    kill -9 $PID\n"
+      "  fi\n"
       "done\n"
       "\n"
       "echo \"[INF] Xenia process has exited\" >> \"$LOG_FILE\"\n"
@@ -765,9 +770,9 @@ bool Updater::UpdateAndRestart(const std::filesystem::path& zip_path) {
 
   return ShellExecuteEx(&ShExecInfo);
 #elif XE_PLATFORM_LINUX
-  std::string exec = fmt::format("chmod 777 {} && ./{}", update_script_filename,
-                                 update_script_filename);
-  system(exec.c_str());
+  std::string exec = fmt::format(
+      "chmod 777 {} && ./{} &", update_script_filename, update_script_filename);
+  system(exec.c_str());  // Blocks this process
   return true;
 #endif
 }

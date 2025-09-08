@@ -505,7 +505,7 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
                           .c_str());
           ImGui::Spacing();
         } break;
-        case -1: {
+        case static_cast<uint32_t>(-1): {
           ImGui::Spacing();
           ImGui::Text("Failed to check for updates!");
           ImGui::Text("Try Again!");
