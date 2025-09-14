@@ -582,7 +582,7 @@ bool Updater::UpdateAndRestart(const std::filesystem::path& zip_path) {
   const auto zip_filename = zip_path.filename().string();
 
   const auto update_log_filename = "xenia_canary_update.log";
-  const auto backup_folder_name = ".old";
+  const auto backup_folder_name = "canary_netplay_old";
 
   if (std::filesystem::exists(update_script_path, ec) && !ec) {
     std::filesystem::remove(update_script_path, ec);
@@ -665,27 +665,14 @@ bool Updater::UpdateAndRestart(const std::filesystem::path& zip_path) {
       "EXECUTABLE_NAME=\"{0}\"                    # final executable name\n"
       "EXECUTABLE_PATH=\"$(dirname \"$(realpath \"$0\")\")/$EXECUTABLE_NAME\"\n"
       "ARCHIVE_FILE=\"{1}\"          # archive file\n"
-      "INNER_PATH=\"build/bin/Linux/Release/xenia_canary\" # path inside "
-      "archive\n"
+      "INNER_PATH=\"build/bin/Linux/Release/xenia_canary_netplay\" # path "
+      "inside archive\n"
       "LOG_FILE=\"$(dirname \"$(realpath \"$0\")\")/{2}\"\n"
       "BACKUP_DIR=\"$(dirname \"$(realpath \"$0\")\")/{3}\"\n"
       "\n"
       "echo \"[INF] Starting Xenia update script\" > \"$LOG_FILE\"\n"
       "\n"
       "cd \"$(dirname \"$(realpath \"$0\")\")\" || exit 1\n"
-      "\n"
-      "echo \"[INF] Waiting for Xenia process to exit\" >> \"$LOG_FILE\"\n"
-      "\n"
-      "pgrep -f $EXECUTABLE_NAME | while read -r PID; do\n"
-      "  PROCESS_PATH=$(readlink -f \"/proc/$PID/exe\")\n"
-      "  \n"
-      "  if [[ \"$PROCESS_PATH\" == \"$EXECUTABLE_PATH\" ]]; then\n"
-      "    echo \"[INF] Killed Xenia process $($PID)\" >> \"$LOG_FILE\"\n"
-      "    kill -9 $PID\n"
-      "  fi\n"
-      "done\n"
-      "\n"
-      "echo \"[INF] Xenia process has exited\" >> \"$LOG_FILE\"\n"
       "\n"
       "# Check if tar is installed before doing anything else\n"
       "if ! command -v tar &> /dev/null; then\n"
@@ -695,16 +682,6 @@ bool Updater::UpdateAndRestart(const std::filesystem::path& zip_path) {
       "    \"$EXECUTABLE_PATH\" --updated=false &\n"
       "    rm -- \"$0\"\n"
       "    exit 1\n"
-      "fi\n"
-      "\n"
-      "echo \"[INF] Cleaning and creating backup folder\" >> \"$LOG_FILE\"\n"
-      "rm -rf \"$BACKUP_DIR\"\n"
-      "mkdir -p \"$BACKUP_DIR\"\n"
-      "\n"
-      "echo \"[INF] Backing up old executable\" >> \"$LOG_FILE\"\n"
-      "if [ -f \"$EXECUTABLE_PATH\" ]; then\n"
-      "  cp \"$EXECUTABLE_PATH\" \"$BACKUP_DIR/$EXECUTABLE_NAME\" >> "
-      "\"$LOG_FILE\" 2>&1\n"
       "fi\n"
       "\n"
       "# Extract only the new executable directly from tar.xz\n"
@@ -721,10 +698,13 @@ bool Updater::UpdateAndRestart(const std::filesystem::path& zip_path) {
       "  exit 1\n"
       "fi\n"
       "\n"
-      "# Move the extracted binary into place\n"
+      "echo \"[INF] Cleaning and creating backup folder\" >> \"$LOG_FILE\"\n"
+      "rm -rf \"$BACKUP_DIR\"\n"
+      "mkdir -p \"$BACKUP_DIR\"\n"
+      "\n"
+      "echo \"[INF] Backing up old executable\" >> \"$LOG_FILE\"\n"
       "echo \"[INF] Installing new executable\" >> \"$LOG_FILE\"\n"
-      "mv -f \"$INNER_PATH\" \"$EXECUTABLE_PATH\" >> \"$LOG_FILE\" 2>&1\n"
-      "chmod +x \"$EXECUTABLE_PATH\"\n"
+      "install \"$INNER_PATH\" \"$EXECUTABLE_PATH\" -b \"$BACKUP_DIR\"\n"
       "\n"
       "# Cleanup extracted folders\n"
       "rm -rf build\n"
@@ -771,8 +751,9 @@ bool Updater::UpdateAndRestart(const std::filesystem::path& zip_path) {
   return ShellExecuteEx(&ShExecInfo);
 #elif XE_PLATFORM_LINUX
   std::string exec = fmt::format(
-      "chmod 777 {} && ./{} &", update_script_filename, update_script_filename);
-  system(exec.c_str());  // Blocks this process
+      "chmod +x {} && ./{} &", update_script_filename, update_script_filename);
+  // Doesn't return
+  execlp("/bin/bash", "/bin/bash", "-c", exec.c_str(), nullptr);
   return true;
 #endif
 }
