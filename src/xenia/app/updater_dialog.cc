@@ -342,7 +342,7 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
 
         if (ImGui::Button(dl_lbl.c_str(), dl_btn_size)) {
           downloaded_file_path_ =
-              xe::filesystem::GetExecutableFolder() / windows_artifact_name_;
+              xe::filesystem::GetExecutableFolder() / artifact_name_;
         }
 
         if (!downloaded_file_path_.empty()) {
@@ -362,13 +362,13 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
 
               if (stable_toggle_) {
                 download_response_code_ = updater_->DownloadLatestRelease(
-                    std::string(windows_artifact_name_),
-                    downloaded_file_path_.string(), callback);
+                    std::string(artifact_name_), downloaded_file_path_.string(),
+                    callback);
               } else {
                 download_response_code_ =
                     updater_->DownloadLatestNightlyArtifact(
                         "Windows_build", XE_BUILD_BRANCH,
-                        std::string(windows_artifact_name_),
+                        std::string(artifact_name_),
                         downloaded_file_path_.string(), callback);
               }
 
@@ -406,7 +406,7 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
                           (ImGui::GetStyle().ItemSpacing.x * 0.5f);
 
         const std::string desc =
-            std::format("Replace existing {}?", windows_artifact_name_);
+            std::format("Replace existing {}?", artifact_name_);
 
         ImVec2 desc_size = ImGui::CalcTextSize(desc.c_str());
 
@@ -730,8 +730,7 @@ void UpdaterCompletionDialog::OnDraw(ImGuiIO& io) {
 
       ImGui::Text("To update Xenia Canary manually:");
       ImGui::Text(
-          fmt::format("1. Extract the zip file: {}", windows_artifact_name_)
-              .c_str());
+          fmt::format("1. Extract the zip file: {}", artifact_name_).c_str());
       ImGui::Text("2. Replace the current Xenia executable with the new one.");
       ImGui::Text("3. Delete the zip file.");
     }

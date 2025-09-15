@@ -19,6 +19,11 @@ namespace app {
 
 class EmulatorWindow;  // Forward declaration due to circular dependency
 
+constexpr std::string_view windows_artifact_name_ =
+    "xenia_canary_netplay_windows.zip";
+constexpr std::string_view linux_artifact_name_ =
+    "xenia_canary_netplay_linux.tar.xz";
+
 class UpdaterDialog final : public ui::ImGuiDialog {
  public:
   UpdaterDialog(Updater* updater, bool auto_check_update,
@@ -26,6 +31,12 @@ class UpdaterDialog final : public ui::ImGuiDialog {
       : ui::ImGuiDialog(imgui_drawer), emulator_window_(emulator_window) {
     updater_ = updater;
     auto_check_update_ = auto_check_update;
+
+#ifdef XE_PLATFORM_WIN32
+    artifact_name_ = windows_artifact_name_;
+#elif XE_PLATFORM_LINUX
+    artifact_name_ = linux_artifact_name_;
+#endif
   }
 
  protected:
@@ -53,7 +64,7 @@ class UpdaterDialog final : public ui::ImGuiDialog {
   bool replace_file_ = false;
   bool stable_toggle_ = false;
   std::filesystem::path downloaded_file_path_;
-  std::string_view windows_artifact_name_ = "xenia_canary_netplay_windows.zip";
+  std::string artifact_name_ = "";
   std::string latest_commit_hash_ = "";
   std::string latest_commit_date_ = "";
   std::string stable_release_tag_ = "";
@@ -69,6 +80,12 @@ class UpdaterCompletionDialog final : public ui::ImGuiDialog {
                           EmulatorWindow* emulator_window, bool updated)
       : ui::ImGuiDialog(imgui_drawer), emulator_window_(emulator_window) {
     updated_ = updated;
+
+#ifdef XE_PLATFORM_WIN32
+    artifact_name_ = windows_artifact_name_;
+#elif XE_PLATFORM_LINUX
+    artifact_name_ = linux_artifact_name_;
+#endif
   }
 
  protected:
@@ -78,7 +95,7 @@ class UpdaterCompletionDialog final : public ui::ImGuiDialog {
   bool updater_completion_opened_ = false;
   bool show_update_log_ = false;
   bool updated_ = false;
-  std::string_view windows_artifact_name_ = "xenia_canary_netplay_windows.zip";
+  std::string artifact_name_ = "";
   std::string_view update_log_filename_ = "xenia_canary_update.log";
   EmulatorWindow* emulator_window_;
 };
