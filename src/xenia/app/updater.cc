@@ -703,8 +703,13 @@ bool Updater::UpdateAndRestart(const std::filesystem::path& zip_path) {
       "mkdir -p \"$BACKUP_DIR\"\n"
       "\n"
       "echo \"[INF] Backing up old executable\" >> \"$LOG_FILE\"\n"
+      "if [ -f \"$EXECUTABLE_PATH\" ]; then\n"
+      "  cp \"$EXECUTABLE_PATH\" \"$BACKUP_DIR/$EXECUTABLE_NAME\" >> "
+      "\"$LOG_FILE\" 2>&1\n"
+      "fi\n"
+      "\n"
       "echo \"[INF] Installing new executable\" >> \"$LOG_FILE\"\n"
-      "install \"$INNER_PATH\" \"$EXECUTABLE_PATH\" -b \"$BACKUP_DIR\"\n"
+      "install \"$INNER_PATH\" \"$EXECUTABLE_PATH\"\n"
       "\n"
       "# Cleanup extracted folders\n"
       "rm -rf build\n"
@@ -759,7 +764,7 @@ bool Updater::UpdateAndRestart(const std::filesystem::path& zip_path) {
   std::string exec = fmt::format("./{}", update_script_filename);
   // Doesn't return
   execlp("/bin/bash", "/bin/bash", "-c", exec.c_str(), nullptr);
-  return true;
+  return false;
 #endif
 }
 
