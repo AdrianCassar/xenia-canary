@@ -34,6 +34,8 @@ class Updater {
                        std::string* commit_hash, std::string* date,
                        std::string* tag, uint32_t* response_code);
 
+  bool IsAnotherInstanceRunning(const std::wstring& process_name);
+
   uint32_t GetLatestCommitHash(const std::string& branch,
                                std::string* commit_hash,
                                std::string* commit_date);

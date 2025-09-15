@@ -1,4 +1,4 @@
-/**
+﻿/**
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
@@ -6,7 +6,6 @@
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
-
 #include <filesystem>
 #include <fstream>
 #include <functional>
@@ -185,6 +184,55 @@ bool Updater::CheckForUpdates(bool stable, const std::string& branch,
   }
 
   return update_available;
+}
+
+#ifdef XE_PLATFORM_WIN32
+std::wstring RunPowershellCommand(const std::wstring& command) {
+  std::wstring result;
+  std::wstring fullCmd = L"powershell -NoProfile -Command \"" + command + L"\"";
+
+  FILE* pipe = _wpopen(fullCmd.c_str(), L"rt, ccs=UNICODE");
+  if (!pipe) {
+    return result;
+  }
+
+  wchar_t buffer[512];  // Could be set to smaller value
+  while (fgetws(buffer, sizeof(buffer) / sizeof(wchar_t), pipe)) {
+    result += buffer;
+  }
+  _pclose(pipe);
+  return result;
+}
+#endif
+
+bool Updater::IsAnotherInstanceRunning(const std::wstring& process_name) {
+#ifdef XE_PLATFORM_WIN32
+  std::wstring psCommand = L"Get-Process -Name '" + process_name +
+                           L"' | Select-Object -ExpandProperty Id";
+
+  std::wstring output = RunPowershellCommand(psCommand);
+
+  DWORD current_pid = GetCurrentProcessId();
+  std::wistringstream ss(output);
+  std::wstring line;
+  int instance_count = 0;
+
+  while (ss >> line) {
+    try {
+      DWORD pid = std::stoul(line);
+      if (pid != current_pid) {
+        instance_count++;
+      }
+    } catch (...) {
+      // Ignoring non id lines (if they appear)
+    }
+  }
+
+  return instance_count > 0;
+#elif XE_PLATFORM_LINUX
+  // TODO: Linux implementation
+  return false;
+#endif
 }
 
 uint32_t Updater::GetLatestCommitHash(const std::string& branch,

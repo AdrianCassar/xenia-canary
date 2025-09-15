@@ -454,13 +454,41 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
                              0.5f);
 
         if (ImGui::Button(apply_lbl.c_str(), apply_btn_size)) {
-          applying_update_failed_ =
-              !updater_->UpdateAndRestart(downloaded_file_path_);
+          if (updater_->IsAnotherInstanceRunning(L"xenia_canary_netplay")) {
+            show_multiple_instance_warning_ = true;
+            ImGui::OpenPopup("Multiple Instances Detected");
+          } else {
+            applying_update_failed_ =
+                !updater_->UpdateAndRestart(downloaded_file_path_);
 
-          if (!applying_update_failed_) {
-            XELOGI("Applying update...");
-            exit(0);
+            if (!applying_update_failed_) {
+              XELOGI("Applying update...");
+              exit(0);
+            }
           }
+        }
+
+        if (show_multiple_instance_warning_) {
+          ImGuiViewport* viewport = ImGui::GetMainViewport();
+          ImVec2 center = viewport->GetCenter();
+          ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+          ImGui::SetNextWindowSizeConstraints(ImVec2(300, 110),
+                                              ImVec2(400, 300));
+        }
+
+        if (ImGui::BeginPopupModal("Multiple Instances Detected", nullptr,
+                                   ImGuiWindowFlags_AlwaysAutoResize)) {
+          ImGui::TextWrapped(
+              "Multiple instances of Xenia are running.\n"
+              "Please close all other instances before applying the update.");
+          ImGui::Spacing();
+
+          if (ImGui::Button("OK", ImVec2(120, 0))) {
+            ImGui::CloseCurrentPopup();
+            show_multiple_instance_warning_ = false;
+          }
+
+          ImGui::EndPopup();
         }
 
         if (ImGui::IsItemHovered()) {
