@@ -750,8 +750,13 @@ bool Updater::UpdateAndRestart(const std::filesystem::path& zip_path) {
 
   return ShellExecuteEx(&ShExecInfo);
 #elif XE_PLATFORM_LINUX
-  std::string exec = fmt::format(
-      "chmod +x {} && ./{} &", update_script_filename, update_script_filename);
+  std::filesystem::permissions(update_script_filename,
+                               std::filesystem::perms::owner_exec |
+                                   std::filesystem::perms::group_exec |
+                                   std::filesystem::perms::others_exec,
+                               std::filesystem::perm_options::add);
+
+  std::string exec = fmt::format("./{}", update_script_filename);
   // Doesn't return
   execlp("/bin/bash", "/bin/bash", "-c", exec.c_str(), nullptr);
   return true;
