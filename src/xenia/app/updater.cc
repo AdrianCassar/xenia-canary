@@ -187,11 +187,14 @@ bool Updater::CheckForUpdates(bool stable, const std::string& branch,
 }
 
 #ifdef XE_PLATFORM_WIN32
-std::wstring RunPowershellCommand(const std::wstring& command) {
+std::wstring Updater::RunPowershellCommand(const std::string& command) const {
   std::wstring result;
-  std::wstring fullCmd = L"powershell -NoProfile -Command \"" + command + L"\"";
+  std::string ps_command =
+      fmt::format("powershell -NoProfile -Command \"{}\"", command);
 
-  FILE* pipe = _wpopen(fullCmd.c_str(), L"rt, ccs=UNICODE");
+  std::wstring ps_commandw = std::wstring(ps_command.begin(), ps_command.end());
+
+  FILE* pipe = _wpopen(ps_commandw.c_str(), L"rt, ccs=UNICODE");
   if (!pipe) {
     return result;
   }
@@ -203,23 +206,30 @@ std::wstring RunPowershellCommand(const std::wstring& command) {
   _pclose(pipe);
   return result;
 }
-#endif
 
-bool Updater::IsAnotherInstanceRunning(const std::wstring& process_name) {
-#ifdef XE_PLATFORM_WIN32
-  std::wstring psCommand = L"Get-Process -Name '" + process_name +
-                           L"' | Select-Object -ExpandProperty Id";
+bool Updater::IsAnotherInstanceRunning() const {
+  const auto executable_path = xe::filesystem::GetExecutablePath();
+  const auto executable_filename =
+      executable_path.filename().replace_extension("").string();
 
-  std::wstring output = RunPowershellCommand(psCommand);
+  // Check if the same executable is running in another instance
+  std::string ps_command = fmt::format(
+      "Get-Process {} | Where-Object Path -EQ {} | Select-Object "
+      "-ExpandProperty Id",
+      executable_filename, executable_path);
 
-  DWORD current_pid = GetCurrentProcessId();
+  std::wstring output = RunPowershellCommand(ps_command);
+
+  uint32_t current_pid = GetCurrentProcessId();
+
   std::wistringstream ss(output);
   std::wstring line;
-  int instance_count = 0;
+  uint32_t instance_count = 0;
 
   while (ss >> line) {
     try {
-      DWORD pid = std::stoul(line);
+      uint32_t pid = std::stoul(line);
+
       if (pid != current_pid) {
         instance_count++;
       }
@@ -229,11 +239,8 @@ bool Updater::IsAnotherInstanceRunning(const std::wstring& process_name) {
   }
 
   return instance_count > 0;
-#elif XE_PLATFORM_LINUX
-  // TODO: Linux implementation
-  return false;
-#endif
 }
+#endif
 
 uint32_t Updater::GetLatestCommitHash(const std::string& branch,
                                       std::string* commit_hash,

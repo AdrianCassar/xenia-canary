@@ -454,7 +454,7 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
                              0.5f);
 
         if (ImGui::Button(apply_lbl.c_str(), apply_btn_size)) {
-          if (updater_->IsAnotherInstanceRunning(L"xenia_canary_netplay")) {
+          if (updater_->IsAnotherInstanceRunning()) {
             show_multiple_instance_warning_ = true;
             ImGui::OpenPopup("Multiple Instances Detected");
           } else {

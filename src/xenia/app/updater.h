@@ -34,7 +34,9 @@ class Updater {
                        std::string* commit_hash, std::string* date,
                        std::string* tag, uint32_t* response_code);
 
-  bool IsAnotherInstanceRunning(const std::wstring& process_name);
+  std::wstring RunPowershellCommand(const std::string& command) const;
+
+  bool IsAnotherInstanceRunning() const;
 
   uint32_t GetLatestCommitHash(const std::string& branch,
                                std::string* commit_hash,
