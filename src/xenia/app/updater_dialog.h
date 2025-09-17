@@ -58,10 +58,10 @@ class UpdaterDialog final : public ui::ImGuiDialog {
   float download_progress_ = 0.0f;
   bool downloaded_ = false;
   bool downloaded_failed_ = false;
-  bool show_multiple_instance_warning_ = true;
   bool applying_update_failed_ = false;
   bool hide_download_button_ = false;
   bool show_replace_dialog_ = false;
+  bool show_in_use_warning_dialog_ = false;
   bool replace_file_ = false;
   bool stable_toggle_ = false;
   std::filesystem::path downloaded_file_path_;

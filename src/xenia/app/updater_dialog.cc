@@ -454,8 +454,14 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
                              0.5f);
 
         if (ImGui::Button(apply_lbl.c_str(), apply_btn_size)) {
-          if (updater_->IsAnotherInstanceRunning()) {
-            show_multiple_instance_warning_ = true;
+          bool try_update = false;
+
+#ifdef XE_PLATFORM_WIN32
+          try_update = updater_->IsAnotherInstanceRunning();
+#endif
+
+          if (try_update) {
+            show_in_use_warning_dialog_ = true;
             ImGui::OpenPopup("Multiple Instances Detected");
           } else {
             applying_update_failed_ =
@@ -468,7 +474,7 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
           }
         }
 
-        if (show_multiple_instance_warning_) {
+        if (show_in_use_warning_dialog_) {
           ImGuiViewport* viewport = ImGui::GetMainViewport();
           ImVec2 center = viewport->GetCenter();
           ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
@@ -476,16 +482,31 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
                                               ImVec2(400, 300));
         }
 
-        if (ImGui::BeginPopupModal("Multiple Instances Detected", nullptr,
-                                   ImGuiWindowFlags_AlwaysAutoResize)) {
+        if (ImGui::BeginPopupModal(
+                "Multiple Instances Detected", &show_in_use_warning_dialog_,
+                ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove |
+                    ImGuiWindowFlags_NoScrollbar)) {
+          float btn_width = (ImGui::GetContentRegionAvail().x * 0.5f) -
+                            (ImGui::GetStyle().ItemSpacing.x * 0.5f);
+
+          ImGui::Text("Multiple instances of Xenia Canary are running.");
+          ImGui::Spacing();
           ImGui::TextWrapped(
-              "Multiple instances of Xenia are running.\n"
               "Please close all other instances before applying the update.");
           ImGui::Spacing();
 
-          if (ImGui::Button("OK", ImVec2(120, 0))) {
+          std::string ok_lbl = "OK";
+
+          ImVec2 ok_lbl_size = ImGui::CalcTextSize(ok_lbl.c_str());
+          ImVec2 ok_btn_size =
+              ImVec2(btn_width, ok_lbl_size.y + btn_height_padding);
+
+          ImGui::SetCursorPosX((ImGui::GetWindowWidth() - ok_btn_size.x) *
+                               0.5f);
+
+          if (ImGui::Button(ok_lbl.c_str(), ok_btn_size)) {
             ImGui::CloseCurrentPopup();
-            show_multiple_instance_warning_ = false;
+            show_in_use_warning_dialog_ = false;
           }
 
           ImGui::EndPopup();
