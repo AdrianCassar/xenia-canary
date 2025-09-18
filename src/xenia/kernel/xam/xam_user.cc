@@ -135,14 +135,21 @@ X_HRESULT_result_t XamUserGetSigninInfo_entry(
     info_ptr->flags |= X_USER_INFO_FLAG_LIVE_ENABLED;
   }
 
-  // 434D0849 expects XUID for XUserReadStats when flags == 0
-  // 415608CB joins systemlink session twice
-  if (flags & X_USER_GET_SIGNIN_INFO_ONLINE_XUID_ONLY) {
-    info_ptr->xuid = user_profile->GetOnlineXUID();
+  // Online XUID if connected to Xbox Live, otherwise offline XUID
+  // 434D0849, 4D5308AB pass XUID to XUserReadStats and XShowGamerCardUI
+  if (!flags) {
+    info_ptr->xuid = user_profile->GetLogonXUID();
   }
 
-  if (!flags || flags & X_USER_GET_SIGNIN_INFO_OFFLINE_XUID_ONLY) {
+  // 415608CB joins systemlink session twice
+  if (flags & X_USER_GET_SIGNIN_INFO_OFFLINE_XUID_ONLY) {
     info_ptr->xuid = user_profile->xuid();
+  }
+
+  // If (X_USER_GET_SIGNIN_INFO_OFFLINE_XUID_ONLY |
+  // X_USER_GET_SIGNIN_INFO_ONLINE_XUID_ONLY) are provided return online XUID
+  if (flags & X_USER_GET_SIGNIN_INFO_ONLINE_XUID_ONLY) {
+    info_ptr->xuid = user_profile->GetOnlineXUID();
   }
 
   info_ptr->signin_state = static_cast<uint32_t>(user_profile->signin_state());
