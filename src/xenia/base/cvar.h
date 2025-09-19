@@ -309,6 +309,9 @@ void ConfigVar<T>::ResetConfigValueToDefault() {
 extern std::map<std::string, ICommandVar*>* CmdVars;
 extern std::map<std::string, IConfigVar*>* ConfigVars;
 
+extern bool updated;
+extern bool updated_arg_present;
+
 inline void AddConfigVar(IConfigVar* cv) {
   if (!ConfigVars) {
     ConfigVars = new std::map<std::string, IConfigVar*>;
