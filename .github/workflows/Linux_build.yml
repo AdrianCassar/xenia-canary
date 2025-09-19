@@ -103,18 +103,18 @@ jobs:
       - name: Prepare artifacts
         id: prepare_artifacts
         run: |
-          binary=build/bin/Linux/Release/xenia_canary
+          binary=build/bin/Linux/Release/xenia_canary_netplay
           if [ $(stat -c%s $binary) -le 100000 ]; then
             echo "::error::Binary is too small."
           fi
           chmod +x $binary
           mkdir -p artifacts
-          XZ_OPT=-e9 tar cJvpf artifacts/xenia_canary_linux.tar.xz $binary LICENSE
+          XZ_OPT=-e9 tar cJvpf artifacts/xenia_canary_netplay_linux.tar.xz $binary LICENSE
       - name: Upload xenia canary artifacts
         if: steps.prepare_artifacts.outcome == 'success'
         uses: actions/upload-artifact@main
         with:
-          name: xenia_canary_linux
+          name: xenia_canary_netplay_linux
           path: artifacts
           if-no-files-found: error
 
