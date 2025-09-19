@@ -10,6 +10,8 @@
 #ifndef XENIA_APP_UPDATER_H_
 #define XENIA_APP_UPDATER_H_
 
+#include <filesystem>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -20,40 +22,61 @@ class Updater {
   Updater(const std::string& owner, const std::string& repo);
 
   ~Updater() {};
+  bool UpdateAndRestart(const std::filesystem::path& zip_path);
 
   uint32_t GetRequest(const std::string& endpoint,
                       std::vector<uint8_t>& response_buffer) const;
 
-  bool CheckForUpdates(const std::string& branch, std::string* commit_hash,
-                       std::string* commit_date, uint32_t* response_code);
+  bool StartupUpdateCheck(std::string* commit_hash, std::string* commit_date,
+                          uint32_t* response_code);
+
+  bool CheckForUpdates(bool stable, const std::string& branch,
+                       std::string* commit_hash, std::string* date,
+                       std::string* tag, uint32_t* response_code);
+
+  std::wstring RunPowershellCommand(const std::string& command) const;
+
+  bool IsAnotherInstanceRunning() const;
 
   uint32_t GetLatestCommitHash(const std::string& branch,
                                std::string* commit_hash,
                                std::string* commit_date);
 
+  uint32_t GetLatestReleaseCommitHash(std::string* commit_hash,
+                                      std::string* tag,
+                                      std::string* published_date);
+
   std::string FormatDate(const std::string& iso_date) const;
 
-  uint32_t DownloadLatestNightlyArtifact(const std::string& workflowFile,
-                                         const std::string& branch,
-                                         const std::string& artifact_name,
-                                         const std::string& outputPath) const;
+  uint32_t DownloadLatestNightlyArtifact(
+      const std::string& workflow_file, const std::string& branch,
+      const std::string& artifact_name, const std::string& output_path,
+      std::function<void(double, double)> progress_callback) const;
 
-  uint32_t DownloadLatestRelease(const std::string& asset_name,
-                                 const std::string& output_path) const;
+  uint32_t DownloadLatestRelease(
+      const std::string& asset_name, const std::string& output_path,
+      std::function<void(double, double)> progress_callback) const;
 
   uint32_t DownloadFile(const std::string& file_endpoint,
                         const std::string& output_path) const;
 
+  uint32_t DownloadFile(
+      const std::string& file_endpoint, const std::string& output_path,
+      std::function<void(double, double)> progress_callback) const;
+
   uint32_t GetRecentCommitMessages(const std::string& branch,
                                    std::vector<std::string>& messages,
+                                   std::string& status,
                                    uint32_t count = 5) const;
 
   uint32_t GetChangelogBetweenCommits(const std::string& base_commit,
                                       const std::string& head_commit,
+                                      std::string& status,
                                       std::vector<std::string>& messages) const;
 
   bool ParseCommitMessages(std::vector<uint8_t>& response_buffer,
-                           std::vector<std::string>& messages) const;
+                           std::vector<std::string>& messages,
+                           std::string& status) const;
 
   const std::string GetOwner() const { return owner_; }
 
