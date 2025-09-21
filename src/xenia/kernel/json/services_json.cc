@@ -47,6 +47,8 @@ bool ServicesObjectJSON::Deserialize(const rapidjson::Value& obj) {
       if (service.HasMember("port")) {
         service_info.port = service["port"].GetInt();
       }
+
+      services_results_.push_back(service_info);
     }
   }
 
