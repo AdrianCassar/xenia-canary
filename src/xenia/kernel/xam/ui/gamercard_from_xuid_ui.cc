@@ -76,7 +76,7 @@ void GamercardFromXUIDUI::OnDraw(ImGuiIO& io) {
   ImGuiViewport* viewport = ImGui::GetMainViewport();
   ImVec2 center = viewport->GetCenter();
 
-  ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+  ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
   if (ImGui::BeginPopupModal(title_.c_str(), &card_opened,
                              ImGuiWindowFlags_AlwaysAutoResize)) {
     if (is_self) {
