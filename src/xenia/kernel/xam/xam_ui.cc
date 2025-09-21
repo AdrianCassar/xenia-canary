@@ -1127,10 +1127,10 @@ bool xeDrawFriendContent(xe::ui::ImGuiDrawer* imgui_drawer,
         ImGui::EndMenu();
       }
       ImGui::EndPopup();
+
+      ImGui::SetCursorPos(drawing_end_position);
     }
   }
-
-  ImGui::SetCursorPos(drawing_end_position);
 
   return true;
 }
