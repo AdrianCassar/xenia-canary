@@ -1146,9 +1146,7 @@ bool xeDrawFriendContent(xe::ui::ImGuiDrawer* imgui_drawer,
     ImGui::PushStyleColor(ImGuiCol_HeaderHovered, IM_COL32(50, 100, 200, 50));
     ImGui::PushStyleColor(ImGuiCol_HeaderActive, IM_COL32(0, 0, 0, 0));
     if (ImGui::Selectable(selectable_label.c_str(), false,
-                          ImGuiSelectableFlags_SpanAllColumns ||
-                              ImGuiSelectableFlags_Disabled,
-                          selectable_area)) {
+                          ImGuiSelectableFlags_None, selectable_area)) {
       *selected_xuid_ = friend_xuid;
     }
     ImGui::PopStyleColor(2);
@@ -1169,9 +1167,9 @@ bool xeDrawFriendContent(xe::ui::ImGuiDrawer* imgui_drawer,
       }
       ImGui::EndPopup();
     }
-  }
 
-  ImGui::SetCursorPos(drawing_end_position);
+    ImGui::SetCursorPos(drawing_end_position);
+  }
 
   return true;
 }
@@ -1280,9 +1278,7 @@ bool xeDrawAddFriend(xe::ui::ImGuiDrawer* imgui_drawer, UserProfile* profile,
     ImGui::PushStyleColor(ImGuiCol_HeaderHovered, IM_COL32(0, 0, 0, 0));
     ImGui::PushStyleColor(ImGuiCol_HeaderActive, IM_COL32(0, 0, 0, 0));
     if (ImGui::Selectable("##SelectableAddFriend", false,
-                          ImGuiSelectableFlags_SpanAllColumns ||
-                              ImGuiSelectableFlags_Disabled,
-                          selectable_area)) {
+                          ImGuiSelectableFlags_None, selectable_area)) {
     }
     ImGui::PopStyleColor(2);
 
@@ -1400,9 +1396,7 @@ bool xeDrawFriendsContent(xe::ui::ImGuiDrawer* imgui_drawer,
     ImGui::PushStyleColor(ImGuiCol_HeaderHovered, IM_COL32(0, 0, 0, 0));
     ImGui::PushStyleColor(ImGuiCol_HeaderActive, IM_COL32(0, 0, 0, 0));
     if (ImGui::Selectable("##SelectableFriends", false,
-                          ImGuiSelectableFlags_SpanAllColumns ||
-                              ImGuiSelectableFlags_Disabled,
-                          selectable_area)) {
+                          ImGuiSelectableFlags_None, selectable_area)) {
     }
     ImGui::PopStyleColor(2);
 
