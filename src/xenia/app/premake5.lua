@@ -37,6 +37,7 @@ project("xenia-app")
     "xxhash",
     "libcurl",
     "miniupnp",
+    "wolfssl",
   })
   defines({
     "XBYAK_NO_OP_NAMES",
