@@ -322,14 +322,12 @@ void XNetRandom(unsigned char* buffer_ptr, uint32_t length) {
 
 dword_result_t NetDll_XNetRandom_entry(dword_t caller, lpvoid_t buffer_ptr,
                                        dword_t length) {
-  unsigned char* buffer_data = buffer_ptr;
-
   // XeCryptRandom()
-  if (buffer_data == nullptr || length == 0) {
+  if (!buffer_ptr || length == 0) {
     return X_STATUS_SUCCESS;
   }
 
-  XNetRandom(buffer_data, length);
+  XNetRandom(buffer_ptr, length);
 
   return X_ERROR_SUCCESS;
 }
@@ -814,7 +812,7 @@ dword_result_t NetDll_XNetXnAddrToInAddr_entry(dword_t caller,
   if (memcmp(XLiveAPI::mac_address_, xn_addr->abEnet, sizeof(MacAddress)) ==
       0) {
     XELOGI("Resolving XNetXnAddrToInAddr to LOOPBACK!");
-    in_addr->s_addr = htonl(LOOPBACK);
+    in_addr->s_addr = xe::byte_swap(LOOPBACK);
 
     return X_ERROR_SUCCESS;
   }
