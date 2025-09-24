@@ -11,7 +11,6 @@ project("xenia-kernel")
     "fmt",
     "zlib-ng",
     "pugixml",
-    "libcurl",
     "miniupnp",
     "xenia-apu",
     "xenia-base",
@@ -19,6 +18,15 @@ project("xenia-kernel")
     "xenia-hid",
     "xenia-vfs",
   })
+  filter { "platforms:Linux" }
+    links({
+      "curl",
+    })
+  filter { "platforms:Windows" }
+    links({
+      "libcurl",
+    })
+  filter {}
   defines({
     "X86_FEATURES",
     "X86_HAVE_XSAVE_INTRIN",
