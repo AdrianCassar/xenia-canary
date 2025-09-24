@@ -9,6 +9,7 @@
 
 #include <span>
 #include <random>
+#include <cstring>
 
 #include "third_party/rapidcsv/src/rapidcsv.h"
 
@@ -19,6 +20,14 @@
 #include "xenia/kernel/XLiveAPI.h"
 #include "xenia/kernel/user_module.h"
 #include "xenia/kernel/util/shim_utils.h"
+
+#ifdef XE_PLATFORM_WIN32
+#elif XE_PLATFORM_LINUX
+#include <ifaddrs.h>
+#include <net/if.h>
+#include <linux/if_packet.h>
+#include <linux/if_arp.h>
+#endif
 
 DEFINE_string(api_address, "192.168.0.1:36000/",
               "Xenia Server Address e.g. IP:PORT", "Live");
@@ -1958,6 +1967,71 @@ void XLiveAPI::DiscoverNetworkInterfaces() {
     XELOGI("{}", xe::string_util::trim(networks));
   }
 #else
+    uint32_t result = 0;
+    ifaddrs *interfaces;
+    
+    if (getifaddrs(&interfaces) == -1) {
+        return;
+    }
+    
+    std::vector<ifaddr> adapaters = {};
+
+    for(ifaddrs *interface = interfaces; interface; interface = interface->ifa_next) {
+      // Use AF_PACKET so we can get lower-level details about the interface and its physical layer
+      if (interface->ifa_addr == NULL || interface->ifa_addr->sa_family != AF_PACKET) {
+        continue;
+      }
+
+      // Check if the interface if up
+      if (!(interface->ifa_flags & IFF_UP)) {
+        continue;
+      }
+
+      if (interface->ifa_addr->sa_family == AF_PACKET) {
+        sockaddr_ll *s = reinterpret_cast<sockaddr_ll*>(interface->ifa_addr);
+
+        if ((interface->ifa_flags & IFF_LOOPBACK) != 0) {
+          XELOGI("Skipping loopback...");
+          continue;
+        }
+
+        if (s->sll_hatype & ARPHRD_IEEE802) {
+          XELOGI("WIFI");
+        }
+
+        if (s->sll_hatype & ARPHRD_ETHER) {
+          XELOGI("Ethernet");
+        }
+
+        // std::string mac_address = "";
+        uint32_t mac_value = 0;
+
+        for (size_t i = 0; i < 6; i++)
+        {
+          uint32_t part = s->sll_addr[i];
+          mac_value += part;
+
+          // mac_address.append(fmt::format("{:02X}", part));
+        }
+
+        if (mac_value == 0) {
+          XELOGI("Skipping interface with no mac...");
+          continue;
+        }
+
+        // XELOGI(mac_address);
+      }
+
+      char* name = interface->ifa_name;
+      XELOGI("Added network interface: {}\n", name);
+
+      ifaddr adapater = ifaddr(*interface->ifa_addr);
+      adapaters.push_back(adapater);
+
+      XELOGI("Found {} network interfaces!\n", adapaters.size());
+    }
+
+    freeifaddrs(interfaces);
 #endif  // XE_PLATFORM_WIN32
 }
 
