@@ -183,9 +183,18 @@ X_STATUS XSocket::SetOption(uint32_t level, uint32_t optname, void* optval_ptr,
   return X_STATUS_SUCCESS;
 }
 
-X_STATUS XSocket::IOControl(uint32_t cmd, uint8_t* arg_ptr) {
+X_STATUS XSocket::IOControl(uint32_t cmd, uint32_t* arg_ptr) {
 #ifdef XE_PLATFORM_WIN32
-  int ret = ioctlsocket(native_handle_, cmd, (u_long*)arg_ptr);
+  const u_long initial_param = xe::load_and_swap<uint32_t>(arg_ptr);
+  u_long param = initial_param;
+
+  int ret = ioctlsocket(native_handle_, cmd, &param);
+
+  // Parameter was written to therefore byte swap output
+  if (initial_param != param) {
+    xe::store_and_swap(arg_ptr, static_cast<uint32_t>(param));
+  }
+
   if (ret < 0) {
     // TODO: Get last error
     return X_STATUS_UNSUCCESSFUL;
