@@ -132,7 +132,7 @@ class XSocket : public XObject {
                      uint32_t* optlen);
   X_STATUS SetOption(uint32_t level, uint32_t optname, void* optval_ptr,
                      uint32_t optlen);
-  X_STATUS IOControl(uint32_t cmd, uint8_t* arg_ptr);
+  X_STATUS IOControl(uint32_t cmd, uint32_t* arg_ptr);
 
   X_STATUS Connect(const XSOCKADDR_IN* name, int name_len);
   X_STATUS Bind(const XSOCKADDR_IN* name, int name_len);
