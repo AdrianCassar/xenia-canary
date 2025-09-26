@@ -337,6 +337,17 @@ dword_result_t NetDll_WSAStartup_entry(dword_t caller, word_t version,
   WSADATA wsaData = {};
 
   ret = WSAStartup(version, &wsaData);
+
+  // 415607E1 provides version 0 which returns WSAVERNOTSUPPORTED on Windows.
+  // However console does not support such error, instead it returns 0.
+  if (ret == WSAVERNOTSUPPORTED) {
+    ret = X_ERROR_SUCCESS;
+  }
+
+  if (ret != X_ERROR_SUCCESS) {
+    assert_always();
+    ret = X_ERROR_SUCCESS;
+  }
 #endif
 
   if (data_ptr) {
