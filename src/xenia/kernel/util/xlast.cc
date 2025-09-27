@@ -296,6 +296,41 @@ std::optional<uint32_t> XLastGameModeQuery::GetGameModeStringID(
 
 #pragma endregion
 
+#pragma region XLastStatsViewQuery
+
+XLastStatsViewQuery::XLastStatsViewQuery() {}
+XLastStatsViewQuery::XLastStatsViewQuery(const pugi::xpath_node query_node) {
+  node_ = query_node;
+}
+
+pugi::xml_node XLastStatsViewQuery::GetStatsViewNode(uint32_t view_id) const {
+  pugi::xml_node stats_view_node;
+
+  std::string xpath = fmt::format("StatsView[@id = \"{}\"]", view_id);
+  stats_view_node = node_.node().select_node(xpath.c_str()).node();
+
+  return stats_view_node;
+}
+
+std::optional<uint32_t> XLastStatsViewQuery::GetStatsViewStringID() const {
+  std::optional<uint32_t> value = std::nullopt;
+
+  value = node_.node().attribute("stringId").as_uint();
+
+  return value;
+}
+
+std::optional<std::string> XLastStatsViewQuery::GetStatsViewFriendlyName()
+    const {
+  std::optional<std::string> value = std::nullopt;
+
+  value = node_.node().attribute("friendlyName").as_string();
+
+  return value;
+}
+
+#pragma endregion
+
 XLast::XLast(const uint8_t* compressed_xml_data,
              const uint32_t compressed_data_size,
              const uint32_t decompressed_data_size) {
@@ -582,6 +617,24 @@ XLastMatchmakingQuery* XLast::GetMatchmakingQuery() const {
   }
 
   return new XLastMatchmakingQuery(node);
+}
+
+XLastStatsViewQuery* XLast::GetStatsViewQuery() const {
+  std::string xpath =
+      fmt::format("/XboxLiveSubmissionProject/GameConfigProject/StatsViews");
+
+  XLastStatsViewQuery* stats_view = nullptr;
+
+  if (!HasXLast()) {
+    return stats_view;
+  }
+
+  pugi::xpath_node node = parsed_xlast_->select_node(xpath.c_str());
+  if (!node) {
+    return stats_view;
+  }
+
+  return new XLastStatsViewQuery(node);
 }
 
 std::vector<uint32_t> XLast::GetAllValuesFromNode(
