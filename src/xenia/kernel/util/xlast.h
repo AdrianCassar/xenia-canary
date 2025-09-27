@@ -122,6 +122,19 @@ class XLastGameModeQuery {
   pugi::xpath_node node_;
 };
 
+class XLastStatsViewQuery {
+ public:
+  XLastStatsViewQuery();
+  XLastStatsViewQuery(const pugi::xpath_node query_node);
+
+  pugi::xml_node GetStatsViewNode(uint32_t view_id) const;
+  std::optional<uint32_t> GetStatsViewStringID() const;
+  std::optional<std::string> GetStatsViewFriendlyName() const;
+
+ private:
+  pugi::xpath_node node_;
+};
+
 class XLast {
  public:
   XLast() = default;
@@ -146,6 +159,7 @@ class XLast {
   XLastContextsQuery* GetContextsQuery() const;
   XLastPropertiesQuery* GetPropertiesQuery() const;
   XLastMatchmakingQuery* GetMatchmakingQuery() const;
+  XLastStatsViewQuery* GetStatsViewQuery() const;
   static std::vector<uint32_t> GetAllValuesFromNode(
       const pugi::xpath_node node, const std::string child_name,
       const std::string attribute_name);
