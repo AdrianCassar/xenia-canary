@@ -1816,6 +1816,13 @@ dword_result_t NetDll_recvfrom_entry(dword_t caller, dword_t socket_handle,
                                      dword_t flags,
                                      pointer_t<XSOCKADDR_IN> from_ptr,
                                      lpdword_t fromlen_ptr) {
+  if (from_ptr) {
+    // 415607D6
+    // Initialize sockaddr to its default state
+    from_ptr.Zero();
+    from_ptr->address_family = XSocket::AddressFamily::X_AF_INET;
+  }
+
   auto socket =
       kernel_state()->object_table()->LookupObject<XSocket>(socket_handle);
   if (!socket) {
