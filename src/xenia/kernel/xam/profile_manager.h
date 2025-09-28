@@ -103,6 +103,8 @@ class ProfileManager {
   uint8_t GetUserIndexAssignedToProfile(const uint64_t xuid) const;
   uint8_t GetUserIndexAssignedToLiveProfile(const uint64_t xuid_online) const;
 
+  std::bitset<XUserMaxUserCount> GetUsedUserSlots() const;
+
   const std::map<uint64_t, X_XAMACCOUNTINFO>* GetAccounts() {
     return &accounts_;
   }
@@ -141,7 +143,6 @@ class ProfileManager {
   std::vector<uint64_t> FindProfiles() const;
 
   uint8_t FindFirstFreeProfileSlot() const;
-  std::bitset<XUserMaxUserCount> GetUsedUserSlots() const;
 
   std::map<uint64_t, X_XAMACCOUNTINFO> accounts_;
   std::map<uint8_t, std::unique_ptr<UserProfile>> logged_profiles_;

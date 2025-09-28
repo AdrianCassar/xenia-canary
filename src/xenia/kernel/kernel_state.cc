@@ -938,9 +938,15 @@ void KernelState::RegisterNotifyListener(XNotifyListener* listener) {
     // XN_SYS_UI (on, off)
     listener->EnqueueNotification(kXNotificationSystemUI, 1);
     listener->EnqueueNotification(kXNotificationSystemUI, 0);
+
+    const auto signed_in_players =
+        xam_state()->profile_manager()->GetUsedUserSlots().to_ulong();
+
     // XN_SYS_SIGNINCHANGED x2
-    listener->EnqueueNotification(kXNotificationSystemSignInChanged, 1);
-    listener->EnqueueNotification(kXNotificationSystemSignInChanged, 1);
+    listener->EnqueueNotification(kXNotificationSystemSignInChanged,
+                                  signed_in_players);
+    listener->EnqueueNotification(kXNotificationSystemSignInChanged,
+                                  signed_in_players);
   }
 
   if (!has_notified_live_startup_ && listener->mask() & kXNotifyLive) {
@@ -958,6 +964,19 @@ void KernelState::RegisterNotifyListener(XNotifyListener* listener) {
                                   live_connection_state);
     listener->EnqueueNotification(kXNotificationLiveLinkStateChanged,
                                   ethernet_link_state);
+  }
+
+  // 4E4D07ED, 58410869. Fixes creating Xbox Live sessions.
+  // Sign in related
+  if (!has_notified_system_and_live_ &&
+      listener->mask() == (kXNotifySystem | kXNotifyLive)) {
+    has_notified_system_and_live_ = true;
+
+    const auto signed_in_players =
+        xam_state()->profile_manager()->GetUsedUserSlots().to_ulong();
+
+    listener->EnqueueNotification(kXNotificationSystemSignInChanged,
+                                  signed_in_players);
   }
 }
 
