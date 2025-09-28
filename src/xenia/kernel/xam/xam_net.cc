@@ -405,6 +405,12 @@ dword_result_t NetDll_WSARecvFrom_entry(
     dword_t num_buffers, lpdword_t num_bytes_recv_ptr, lpdword_t flags_ptr,
     pointer_t<XSOCKADDR_IN> from_ptr, lpdword_t fromlen_ptr,
     pointer_t<XWSAOVERLAPPED> overlapped_ptr, lpvoid_t completion_routine_ptr) {
+  if (from_ptr) {
+    // Initialize sockaddr to its default state
+    from_ptr.Zero();
+    from_ptr->address_family = XSocket::AddressFamily::X_AF_INET;
+  }
+
   auto socket =
       kernel_state()->object_table()->LookupObject<XSocket>(socket_handle);
   if (!socket) {
