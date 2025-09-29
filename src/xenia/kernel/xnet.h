@@ -31,13 +31,12 @@ namespace xe {
 
 // https://github.com/davispuh/XLiveServices/blob/master/lib/xlive_services/hresult.rb
 
-    
 #define X_ONLINE_E_BASE                                     static_cast<X_HRESULT>(0x80150000L)
 
-#define X_ONLINE_E_LOGON_NOT_LOGGED_ON                      static_cast<X_HRESULT>(0x80151802L) // ERROR_SERVICE_NOT_FOUND
-#define X_ONLINE_E_LOGON_SERVICE_TEMPORARILY_UNAVAILABLE    static_cast<X_HRESULT>(0x80151102L) // ERROR_CONNECTION_INVALID
-#define X_ONLINE_E_LOGON_SERVICE_NOT_REQUESTED              static_cast<X_HRESULT>(0x80151100L) // ERROR_SERVICE_SPECIFIC_ERROR
+#define X_ONLINE_E_LOGON_NOT_LOGGED_ON                      static_cast<X_HRESULT>(0x80151802L) // ERROR_CONNECTION_INVALID
+#define X_ONLINE_E_LOGON_SERVICE_NOT_REQUESTED              static_cast<X_HRESULT>(0x80151100L) // ERROR_SERVICE_NOT_FOUND
 #define X_ONLINE_E_LOGON_LOGON_SERVICE_NOT_AUTHORIZED       static_cast<X_HRESULT>(0x80151101L) // ERROR_NOT_AUTHENTICATED
+#define X_ONLINE_E_LOGON_SERVICE_TEMPORARILY_UNAVAILABLE    static_cast<X_HRESULT>(0x80151102L)
 #define X_ONLINE_E_LOGON_NO_NETWORK_CONNECTION              static_cast<X_HRESULT>(0x80151000L)
 #define X_ONLINE_S_LOGON_CONNECTION_ESTABLISHED             static_cast<X_HRESULT>(0x001510F0L)
 #define X_ONLINE_S_LOGON_DISCONNECTED                       static_cast<X_HRESULT>(0x001510F1L)
@@ -348,7 +347,8 @@ struct SGADDR {
   in_addr ina;                                  // IP address of the SG for the client
   xe::be<uint32_t> security_parameter_index;    // Pseudo-random identifier assigned by the SG
   xe::be<uint64_t> xbox_id;                     // Unique identifier of client machine account - machine id?
-  uint8_t reserved[4];
+  uint8_t platform_type;
+  uint8_t reserved[3];
 };
 static_assert_size(SGADDR, 0x14);
 
