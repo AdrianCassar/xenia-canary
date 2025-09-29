@@ -92,9 +92,13 @@ void XLiveAPI::IpGetConsoleXnAddr(XNADDR* XnAddr_ptr) {
       XnAddr_ptr->ina = LocalIP().sin_addr;
       XnAddr_ptr->inaOnline = LocalIP().sin_addr;
     }
+  }
 
+  if (cvars::network_mode == NETWORK_MODE::XBOXLIVE) {
     XnAddr_ptr->wPortOnline = GetPlayerPort();
   }
+
+  XnAddr_ptr->abOnline.platform_type = PLATFORM_TYPE::Xbox360;
 
   memcpy(XnAddr_ptr->abEnet, mac_address_->raw(), sizeof(MacAddress));
 }
