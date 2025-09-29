@@ -102,12 +102,14 @@ X_STATUS XSocket::GetOption(uint32_t level, uint32_t optname, void* optval_ptr,
   }
   return X_STATUS_SUCCESS;
 }
-X_STATUS XSocket::SetOption(uint32_t level, uint32_t optname, void* optval_ptr,
-                            uint32_t optlen) {
-  if (level == 0xFFFF && (optname == 0x5801 || optname == 0x5802)) {
+
+int XSocket::SetOption(uint32_t level, uint32_t optname, void* optval_ptr,
+                       uint32_t optlen) {
+  if (level == SOL_SOCKET &&
+      (optname == SO_MARKINSECURE || optname == SO_PRIVATE)) {
     // Disable socket encryption
     secure_ = false;
-    return X_STATUS_SUCCESS;
+    return X_ERROR_SUCCESS;
   }
 
   void* proper_ptr =
@@ -123,15 +125,14 @@ X_STATUS XSocket::SetOption(uint32_t level, uint32_t optname, void* optval_ptr,
 
   if (ret < 0) {
     // TODO: WSAGetLastError()
-    return X_STATUS_UNSUCCESSFUL;
+    return -1;
   }
 
-  // SO_BROADCAST
-  if (level == 0xFFFF && optname == 0x0020) {
+  if (level == SOL_SOCKET && optname == SO_BROADCAST) {
     broadcast_socket_ = true;
   }
 
-  return X_STATUS_SUCCESS;
+  return X_ERROR_SUCCESS;
 }
 
 X_STATUS XSocket::IOControl(uint32_t cmd, uint32_t* arg_ptr) {
