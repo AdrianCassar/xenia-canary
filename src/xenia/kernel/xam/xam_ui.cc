@@ -40,6 +40,8 @@ DEFINE_bool(storage_selection_dialog, false,
 
 DECLARE_int32(license_mask);
 
+DECLARE_int32(network_mode);
+
 namespace xe {
 namespace kernel {
 namespace xam {
@@ -598,6 +600,10 @@ void XamShowDirtyDiscErrorUI_entry(dword_t user_index) {
 DECLARE_XAM_EXPORT1(XamShowDirtyDiscErrorUI, kUI, kImplemented);
 
 dword_result_t XamShowPartyUI_entry(dword_t user_index) {
+  if (cvars::network_mode != NETWORK_MODE::XBOXLIVE) {
+    return X_ERROR_ACCESS_DENIED;
+  }
+
   return X_ERROR_FUNCTION_FAILED;
 }
 DECLARE_XAM_EXPORT1(XamShowPartyUI, kNone, kStub);
@@ -1942,6 +1948,8 @@ static std::atomic<bool> gamercard_open = false;
 
 dword_result_t XamShowGamerCardUIForXUID_entry(dword_t user_index,
                                                qword_t xuid_player) {
+  uint64_t xuid = xuid_player;
+
   // Prevent 584111F7 from opening gamercard multiple times.
   if (gamercard_open) {
     return X_ERROR_INVALID_PARAMETER;
@@ -1951,7 +1959,7 @@ dword_result_t XamShowGamerCardUIForXUID_entry(dword_t user_index,
     return X_ERROR_INVALID_PARAMETER;
   }
 
-  if (IsGuestXUID(xuid_player)) {
+  if (IsGuestXUID(xuid)) {
     return X_ERROR_INVALID_PARAMETER;
   }
 
@@ -1960,8 +1968,19 @@ dword_result_t XamShowGamerCardUIForXUID_entry(dword_t user_index,
     return X_ERROR_INVALID_PARAMETER;
   }
 
-  if (xuid_player || xuid_player == user->xuid() ||
-      xuid_player == user->GetOnlineXUID()) {
+  if (!xuid) {
+    xuid = user->xuid();
+  }
+
+  if (!IsValidXUID(xuid)) {
+    return X_ERROR_INVALID_PARAMETER;
+  }
+
+  if (IsOnlineXUID(xuid) && cvars::network_mode != NETWORK_MODE::XBOXLIVE) {
+    return X_ERROR_ACCESS_DENIED;
+  }
+
+  if (xuid || xuid == user->xuid() || xuid == user->GetOnlineXUID()) {
     auto close = [](ui::GamercardFromXUIDUI* dialog) -> void {
       gamercard_open = false;
     };
@@ -1972,7 +1991,7 @@ dword_result_t XamShowGamerCardUIForXUID_entry(dword_t user_index,
     gamercard_open = true;
 
     return xeXamDispatchDialogAsync<ui::GamercardFromXUIDUI>(
-        new ui::GamercardFromXUIDUI(imgui_drawer, xuid_player, user), close);
+        new ui::GamercardFromXUIDUI(imgui_drawer, xuid, user), close);
   }
 
   return X_ERROR_INVALID_PARAMETER;
