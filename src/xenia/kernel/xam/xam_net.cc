@@ -1494,8 +1494,8 @@ dword_result_t NetDll_setsockopt_entry(dword_t caller, dword_t socket_handle,
     return -1;
   }
 
-  X_STATUS status = socket->SetOption(level, optname, optval_ptr, optlen);
-  if (XFAILED(status)) {
+  auto ret = socket->SetOption(level, optname, optval_ptr, optlen);
+  if (ret < 0) {
     XThread::SetLastError(socket->GetLastWSAError());
     return -1;
   }
