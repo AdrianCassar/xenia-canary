@@ -85,6 +85,7 @@ struct XGI_XUSER_SET_PROPERTY {
 };
 static_assert_size(XGI_XUSER_SET_PROPERTY, 0x20);
 
+// ANID = Anonymous user id
 struct XGI_XUSER_ANID {
   xe::be<uint32_t> user_index;
   xe::be<uint32_t> AnId_buffer_size;
@@ -774,6 +775,7 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
     case 0x000B0020: {
       assert_true(!buffer_length ||
                   buffer_length == sizeof(XGI_XUSER_STATS_RESET));
+      // 545107D4
       XELOGI("XUserResetStatsView");
 
       XGI_XUSER_STATS_RESET* data =
@@ -815,7 +817,7 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
 
       // Game calls HexDecodeDigit on AnIdBuffer
       for (uint32_t i = 0; i < data->AnId_buffer_size - 1; i++) {
-        AnIdBuffer[i] = i % 10;
+        AnIdBuffer[i] = i % 16;
       }
 
       return X_E_SUCCESS;

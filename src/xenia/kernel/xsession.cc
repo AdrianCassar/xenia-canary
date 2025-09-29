@@ -61,6 +61,10 @@ X_RESULT XSession::CreateSession(uint32_t user_index, uint8_t public_slots,
   // Set early so utility functions can check flags
   local_details_.Flags = flags;
 
+  // Check we have privileges to create sessions.
+  // XPRIVILEGE_MULTIPLAYER_SESSIONS = 254
+  // XPRIVILEGE_SESSIONS = 189
+
   // 58410889
   // If a session requires online features but we're offline then we must fail.
   // e.g. Trying to create a SINGLEPLAYER_WITH_STATS session while not connected
@@ -90,7 +94,7 @@ X_RESULT XSession::CreateSession(uint32_t user_index, uint8_t public_slots,
   //
   // Create presence sessions?
   // - Create when joining a session
-  // - Explicitly create a presence session (Frogger without HOST bit)
+  // - Explicitly create a presence session (Frogger & TRON without HOST bit)
   // Based on Presence flag set?
 
   // 584107FB expects offline session creation by specifying 0 (a session
@@ -508,6 +512,9 @@ X_RESULT XSession::ModifySession(XGI_SESSION_MODIFY* data) {
   XELOGI("Modifying session {:016X}", session_id_);
 
   XGI_SESSION_MODIFY modify = *data;
+
+  PrintSessionType(
+      static_cast<SessionFlags>(static_cast<uint32_t>(data->flags)));
 
   if (IsValidModifyFlags(data->flags)) {
     PrintSessionType(static_cast<SessionFlags>((uint32_t)data->flags));
