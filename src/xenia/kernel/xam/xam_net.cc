@@ -333,8 +333,8 @@ dword_result_t NetDll_WSAStartup_entry(dword_t caller, word_t version,
 
 // TODO(benvanik): abstraction layer needed.
 #ifdef XE_PLATFORM_WIN32
-  WSADATA wsaData;
-  ZeroMemory(&wsaData, sizeof(WSADATA));
+  WSADATA wsaData = {};
+
   int ret = WSAStartup(version, &wsaData);
 
   // 415607E1 provides version 0 which returns WSAVERNOTSUPPORTED on Windows.
@@ -955,6 +955,8 @@ DECLARE_XAM_EXPORT1(NetDll_XNetGetEthernetLinkStatus, kNetworking,
 dword_result_t NetDll_XNetDnsLookup_entry(dword_t caller, lpstring_t host,
                                           dword_t event_handle,
                                           lpdword_t pdns) {
+  XELOGI("DNS Lookup: {}", std::string(host));
+
   if (pdns) {
     hostent* ent = gethostbyname(host);
 
@@ -962,6 +964,7 @@ dword_result_t NetDll_XNetDnsLookup_entry(dword_t caller, lpstring_t host,
     auto dns = kernel_memory()->TranslateVirtual<XNDNS*>(dns_guest);
 
     if (ent == nullptr) {
+      XELOGI("DNS Lookup: Failed");
 #ifdef XE_PLATFORM_WIN32
       dns->status = WSAGetLastError();
 #else
@@ -970,6 +973,7 @@ dword_result_t NetDll_XNetDnsLookup_entry(dword_t caller, lpstring_t host,
     } else if (ent->h_addrtype != AF_INET) {
       dns->status = (int32_t)X_WSAError::X_WSANO_DATA;
     } else {
+      XELOGI("DNS Lookup: Success");
       dns->status = 0;
       int i = 0;
       while (ent->h_addr_list[i] != nullptr && i < 8) {

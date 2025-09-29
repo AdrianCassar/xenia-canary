@@ -462,6 +462,8 @@ dword_result_t XamUserCheckPrivilege_entry(dword_t user_index, dword_t type,
     }
   }
 
+  // Check Permissions settings in Dashboard GPD?
+
   // If we deny everything, games should hopefully not try to do stuff.
   *out_value = 0;
 
