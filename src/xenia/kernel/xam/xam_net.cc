@@ -652,6 +652,9 @@ DECLARE_XAM_EXPORT1(NetDll_XNetGetDebugXnAddr, kNetworking, kStub);
 dword_result_t NetDll_XNetGetXnAddrPlatform_entry(dword_t caller,
                                                   pointer_t<XNADDR> addr_ptr,
                                                   lpdword_t platform_type) {
+  // 58411457 filters session search based on platform type
+  // *platform_type = addr_ptr->abOnline.platform_type;
+
   *platform_type = PLATFORM_TYPE::Xbox360;
 
   return 0;
@@ -661,8 +664,9 @@ DECLARE_XAM_EXPORT1(NetDll_XNetGetXnAddrPlatform, kNetworking, kStub);
 dword_result_t NetDll_XNetXnAddrToMachineId_entry(dword_t caller,
                                                   pointer_t<XNADDR> addr_ptr,
                                                   lpqword_t id_ptr) {
-  if (!addr_ptr->inaOnline.s_addr) {
-    *id_ptr = 0;
+  id_ptr.Zero();
+
+  if (!addr_ptr->inaOnline.s_addr || !addr_ptr->wPortOnline) {
     return static_cast<uint32_t>(X_WSAError::X_WSAEINVAL);
   }
 
@@ -678,6 +682,8 @@ DECLARE_XAM_EXPORT1(NetDll_XNetXnAddrToMachineId, kNetworking, kImplemented);
 dword_result_t NetDll_XNetUnregisterInAddr_entry(dword_t caller, dword_t addr) {
   XELOGI("NetDll_XNetUnregisterInAddr({:08X})",
          cvars::log_mask_ips ? 0 : addr.value());
+
+  // return static_cast<uint32_t>(X_WSAError::X_WSAEINVAL);
 
   return X_ERROR_SUCCESS;
 }
@@ -894,6 +900,7 @@ DECLARE_XAM_EXPORT1(NetDll_XNetInAddrToXnAddr, kNetworking, kImplemented);
 dword_result_t NetDll_XNetSetSystemLinkPort_entry(dword_t caller, word_t port) {
   if (!xboxkrnl::XexCheckExecutablePrivilege(
           XEX_PRIVILEGE_CROSSPLATFORM_SYSTEM_LINK)) {
+    XELOGW("Title not allowed to set System Link port!");
     return static_cast<uint32_t>(X_WSAError::X_WSAEACCES);
   }
 
@@ -909,7 +916,6 @@ dword_result_t NetDll_XNetGetSystemLinkPort_entry(dword_t caller,
                                                   lpword_t port) {
   if (!xboxkrnl::XexCheckExecutablePrivilege(
           XEX_PRIVILEGE_CROSSPLATFORM_SYSTEM_LINK)) {
-    XELOGW("Title not allowed to set System Link port!");
     return static_cast<uint32_t>(X_WSAError::X_WSAEACCES);
   }
 
@@ -985,7 +991,7 @@ DECLARE_XAM_EXPORT1(NetDll_XNetDnsLookup, kNetworking, kImplemented);
 dword_result_t NetDll_XNetDnsRelease_entry(dword_t caller,
                                            pointer_t<XNDNS> dns) {
   if (!dns) {
-    return X_STATUS_INVALID_PARAMETER;
+    return static_cast<uint32_t>(X_WSAError::X_WSAEINVAL);
   }
 
   kernel_memory()->SystemHeapFree(dns.guest_address());
@@ -1311,6 +1317,10 @@ dword_result_t XampXAuthStartup_entry(pointer_t<XAUTH_SETTINGS> setttings) {
     return 0x80158401;
   }
 
+  if (cvars::network_mode != NETWORK_MODE::XBOXLIVE) {
+    return 0x80158406;
+  }
+
   return X_ERROR_SUCCESS;
 }
 DECLARE_XAM_EXPORT1(XampXAuthStartup, kNetworking, kStub);
@@ -1331,6 +1341,8 @@ DECLARE_XAM_EXPORT1(XampXAuthGetTitleBuffer, kNetworking, kStub);
 
 dword_result_t NetDll_XHttpStartup_entry(dword_t caller, dword_t reserved,
                                          dword_t reserved_ptr) {
+  // Console returns 1 even without network access
+
   if (kernel_state()->emulator()->title_id() == kDashboardID) {
     return 1;
   }
