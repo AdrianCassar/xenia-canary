@@ -31,6 +31,9 @@ namespace xe {
 
 // https://github.com/davispuh/XLiveServices/blob/master/lib/xlive_services/hresult.rb
 
+    
+#define X_ONLINE_E_BASE                                     static_cast<X_HRESULT>(0x80150000L)
+
 #define X_ONLINE_E_LOGON_NOT_LOGGED_ON                      static_cast<X_HRESULT>(0x80151802L) // ERROR_SERVICE_NOT_FOUND
 #define X_ONLINE_E_LOGON_SERVICE_TEMPORARILY_UNAVAILABLE    static_cast<X_HRESULT>(0x80151102L) // ERROR_CONNECTION_INVALID
 #define X_ONLINE_E_LOGON_SERVICE_NOT_REQUESTED              static_cast<X_HRESULT>(0x80151100L) // ERROR_SERVICE_SPECIFIC_ERROR
@@ -81,7 +84,17 @@ namespace xe {
 #define X_ONLINE_FRIENDSTATE_FLAG_NONE                      0x00000000
 #define X_ONLINE_FRIENDSTATE_FLAG_ONLINE                    0x00000001
 #define X_ONLINE_FRIENDSTATE_FLAG_PLAYING                   0x00000002
+#define X_ONLINE_FRIENDSTATE_FLAG_VOICE                     0x00000008
 #define X_ONLINE_FRIENDSTATE_FLAG_JOINABLE                  0x00000010
+#define X_ONLINE_FRIENDSTATE_MASK_GUESTS                    0x00000060
+#define X_ONLINE_FRIENDSTATE_FLAG_RESERVED0                 0x00000080
+#define X_ONLINE_FRIENDSTATE_FLAG_JOINABLE_FRIENDS_ONLY     0x00000100
+#define X_ONLINE_FRIENDSTATE_FLAG_SENTINVITE                0x04000000
+#define X_ONLINE_FRIENDSTATE_FLAG_RECEIVEDINVITE            0x08000000
+#define X_ONLINE_FRIENDSTATE_FLAG_INVITEACCEPTED            0x10000000
+#define X_ONLINE_FRIENDSTATE_FLAG_INVITEREJECTED            0x20000000
+#define X_ONLINE_FRIENDSTATE_FLAG_SENTREQUEST               0x40000000
+#define X_ONLINE_FRIENDSTATE_FLAG_RECEIVEDREQUEST           0x80000000
 
 #define X_ONLINE_FRIENDSTATE_FLAG_INVITEACCEPTED            0x10000000
 #define X_ONLINE_FRIENDSTATE_FLAG_SENTINVITE                0x04000000
@@ -90,6 +103,11 @@ namespace xe {
 #define X_ONLINE_FRIENDSTATE_ENUM_AWAY                      0x00010000
 #define X_ONLINE_FRIENDSTATE_ENUM_BUSY                      0x00020000
 #define X_ONLINE_FRIENDSTATE_MASK_USER_STATE                0x000F0000
+#define X_ONLINE_FRIENDSTATE_ENUM_CONSOLE_XBOX1             0x00000000
+#define X_ONLINE_FRIENDSTATE_ENUM_CONSOLE_XBOX360           0x00001000
+#define X_ONLINE_FRIENDSTATE_ENUM_CONSOLE_WINPC             0x00002000
+#define X_ONLINE_FRIENDSTATE_ENUM_CONSOLE_DURANGO           0x00003000
+#define X_ONLINE_FRIENDSTATE_MASK_CONSOLE_TYPE              0x00007000
 
 #define X_ONLINE_MAX_FRIENDS                                100
 #define X_ONLINE_PEER_SUBSCRIPTIONS                         400
@@ -143,6 +161,10 @@ namespace xe {
 #define X_ONLINE_LSP_ATTRIBUTE_PARAM_USER                   0x02100004
 
 #define X_ONLINE_LSP_DEFAULT_DATASET_ID                     0xAAAA
+
+constexpr bool IsOnlineError(uint32_t error) {
+  return (error & 0xFFFF0000) == X_ONLINE_E_BASE;
+}
 
 constexpr uint32_t PropertyID(bool system_property,
                               kernel::xam::X_USER_DATA_TYPE type, uint16_t id) {

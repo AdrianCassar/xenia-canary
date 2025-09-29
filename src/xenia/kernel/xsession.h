@@ -20,6 +20,9 @@
 namespace xe {
 namespace kernel {
 
+#define X_SESSION_CREATE_USES_MASK 0x0000003F
+#define X_SESSION_CREATE_MODIFIERS_MASK 0x00000F80
+
 enum SessionFlags {
   HOST = 0x01,
   PRESENCE = 0x02,
