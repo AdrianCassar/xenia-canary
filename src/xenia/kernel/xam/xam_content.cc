@@ -46,7 +46,7 @@ dword_result_t XamContentGetLicenseMask_entry(lpdword_t mask_ptr,
   }
 
   auto run = [mask_ptr](uint32_t& extended_error, uint32_t& length) {
-    X_RESULT result = X_ERROR_FUNCTION_FAILED;
+    X_RESULT result = X_E_FAIL;
 
     // Remark: This cannot be reflected as on console. Xenia can boot games
     // directly and XBLA games can be repacked to ZAR. For these titles we must
