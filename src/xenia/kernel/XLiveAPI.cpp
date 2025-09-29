@@ -380,10 +380,6 @@ void XLiveAPI::Init() {
     // Assign online ip as local ip to ensure XNADDR is not 0 for systemlink
     // online_ip_ = local_ip_;
 
-    // Fixes 4D53085F from crashing when joining via systemlink.
-    // kernel_state()->BroadcastNotification(kXNotificationIDLiveConnectionChanged,
-    //                                      X_ONLINE_S_LOGON_DISCONNECTED);
-
     XELOGE("XLiveAPI:: Cannot reach API server.");
     initialized_ = InitState::Failed;
     return;
@@ -1026,7 +1022,7 @@ std::unique_ptr<SessionObjectJSON> XLiveAPI::XSessionMigration(
 
   session = response->Deserialize<SessionObjectJSON>();
 
-  XELOGI("Send XSessionMigration data.");
+  XELOGI("Sent XSessionMigration data.");
 
   return session;
 }
@@ -1696,7 +1692,8 @@ void XLiveAPI::SetPresence() {
     const auto user_profile = kernel_state()->xam_state()->GetUserProfile(i);
 
     if (user_profile) {
-      FriendPresenceObjectJSON* profile_presence = new FriendPresenceObjectJSON();
+      FriendPresenceObjectJSON* profile_presence =
+          new FriendPresenceObjectJSON();
 
       if (user_profile->IsLiveEnabled()) {
         profile_presence->XUID(user_profile->GetOnlineXUID());
