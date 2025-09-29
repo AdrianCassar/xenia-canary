@@ -54,6 +54,12 @@ enum class X_WSAError : uint32_t {
   X_WSAEADDRINUSE = 0x2740,
 };
 
+/*
+ * Option flags per-socket.
+ */
+#define SO_MARKINSECURE 0x5801  // bool TRUE for insecure
+#define SO_PRIVATE 0x5802       // bool TRUE for private
+
 struct XSOCKADDR {
   xe::be<uint16_t> address_family;
   char sa_data[14];
@@ -130,8 +136,8 @@ class XSocket : public XObject {
 
   X_STATUS GetOption(uint32_t level, uint32_t optname, void* optval_ptr,
                      uint32_t* optlen);
-  X_STATUS SetOption(uint32_t level, uint32_t optname, void* optval_ptr,
-                     uint32_t optlen);
+  int SetOption(uint32_t level, uint32_t optname, void* optval_ptr,
+                uint32_t optlen);
   X_STATUS IOControl(uint32_t cmd, uint32_t* arg_ptr);
 
   X_STATUS Connect(const XSOCKADDR_IN* name, int name_len);
