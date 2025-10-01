@@ -982,6 +982,10 @@ void XSession::GetXnAddrFromSessionObject(SessionObjectJSON* session,
   memcpy(&XnAddr_ptr->abEnet, mac.raw(), sizeof(MacAddress));
 
   XnAddr_ptr->wPortOnline = session->Port();
+
+  // 545407F2 will fail to join session if platform type does not match host's
+  // platform type
+  XnAddr_ptr->abOnline.platform_type = PLATFORM_TYPE::Xbox360;
 }
 
 void XSession::FillSessionSearchResult(
