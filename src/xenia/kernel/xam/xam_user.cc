@@ -880,6 +880,8 @@ dword_result_t XamParseGamerTileKey_entry(pointer_t<X_USER_DATA> key_ptr,
       std::all_of(tile_key.cbegin(), tile_key.cend(),
                   [](unsigned char c) { return std::isxdigit(c); });
 
+  // If there's no valid key then set a default one?
+
   if (!is_valid_hex_string) {
     return X_ERROR_INVALID_PARAMETER;
   }
@@ -907,72 +909,132 @@ dword_result_t XamParseGamerTileKey_entry(pointer_t<X_USER_DATA> key_ptr,
     is_from_dash = IsGamerPictureFromDash(*title_id_ptr);
     is_avatar = IsGamerPictureAvatar(*title_id_ptr);
     is_custom = IsGamerPictureCustom(*title_id_ptr);
+
+    if (IsGamerPictureKeySet(*title_id_ptr)) {
+      // Set default gamer picture key?
+    }
   }
 
   return X_ERROR_SUCCESS;
 }
 DECLARE_XAM_EXPORT1(XamParseGamerTileKey, kUserProfiles, kImplemented);
 
+dword_result_t XamReadTileToTextureEx_entry(
+    dword_t tile_type, dword_t title_id, qword_t tile_id, dword_t user_index,
+    dword_t fsmall, pointer_t<X_USER_DATA> key_ptr, lpvoid_t buffer_ptr,
+    dword_t stride, dword_t tile_height, dword_t overlapped_ptr) {
+  if (!buffer_ptr) {
+    return X_ERROR_INVALID_PARAMETER;
+  }
+
+  auto run = [=](uint32_t& extended_error, uint32_t& length) {
+    extended_error = X_ERROR_SUCCESS;
+    length = 0;
+
+    // How do we know if tile lookup is local or remote?
+    // What does XUserIndexNone mean here?
+    if (static_cast<XTileType>(tile_type.value()) ==
+        xe::kernel::xam::XTileType::kGamerTileByKey) {
+      if (IsGamerPictureAvatar(title_id)) {
+        // ...
+      } else if (IsGamerPictureCustom(title_id)) {
+        // GetPersonalID...
+      } else {
+        // GetId...
+      }
+    }
+
+    XTileType xtile_type = static_cast<XTileType>(tile_type.value());
+
+    size_t buffer_size = size_t(stride) * size_t(tile_height);
+
+    auto user = kernel_state()->xam_state()->GetUserProfile(user_index);
+    if (!user) {
+      extended_error = X_E_NO_SUCH_USER;
+      return X_ERROR_FUNCTION_FAILED;
+    }
+
+    // 434D0849
+    if (fsmall) {
+      xtile_type = XTileType::kGamerTileSmall;
+    }
+
+    std::span<const uint8_t> tile =
+        kernel_state()->xam_state()->user_tracker()->GetIcon(
+            user->xuid(), title_id, xtile_type, tile_id);
+
+    if (tile.empty()) {
+      extended_error = X_E_FAIL;
+      return X_ERROR_FUNCTION_FAILED;
+    }
+
+    int width, height, channels;
+    unsigned char* imageData =
+        stbi_load_from_memory(tile.data(), static_cast<int>(tile.size()),
+                              &width, &height, &channels, STBI_rgb_alpha);
+
+    size_t icon_dimmension_size = width * height;
+    std::fill_n(reinterpret_cast<uint8_t*>(buffer_ptr.host_address()),
+                icon_dimmension_size * sizeof(uint32_t), 0);
+
+    for (int i = 0; i < icon_dimmension_size; i++) {
+      unsigned char* pixel = &imageData[i * sizeof(uint32_t)];
+
+      // RGBA to ARGB. TODO: Find faster method!
+      // RGBA->AGBR
+      std::swap(pixel[0], pixel[3]);
+      // AGBR->ARBG
+      std::swap(pixel[1], pixel[3]);
+      // ARBG->ARGB
+      std::swap(pixel[2], pixel[3]);
+    }
+
+    const size_t row_size_bytes = width * sizeof(uint32_t);
+    std::vector<uint8_t> final_tile(buffer_size, 0);
+
+    /*
+     Process image rows to include stride padding
+
+     Row (32px) = 128 Bytes
+     Stride = 256 Bytes
+     Padding Bytes = Stride - Row
+    */
+    for (int y = 0; y < height; ++y) {
+      const unsigned char* src_row_start = &imageData[y * row_size_bytes];
+      uint8_t* dest_row_start = final_tile.data() + (y * stride);
+
+      memcpy(dest_row_start, src_row_start, row_size_bytes);
+    }
+
+    memcpy(buffer_ptr, final_tile.data(), buffer_size);
+
+    stbi_image_free(imageData);
+
+    return X_ERROR_SUCCESS;
+  };
+
+  if (!overlapped_ptr) {
+    uint32_t extended_error, length;
+    X_RESULT result = run(extended_error, length);
+
+    return result;
+  }
+
+  kernel_state()->CompleteOverlappedDeferredEx(run, overlapped_ptr);
+  return X_ERROR_IO_PENDING;
+}
+DECLARE_XAM_EXPORT1(XamReadTileToTextureEx, kUserProfiles, kSketchy);
+
 dword_result_t XamReadTileToTexture_entry(dword_t tile_type, dword_t title_id,
                                           qword_t tile_id, dword_t user_index,
                                           lpvoid_t buffer_ptr, dword_t stride,
                                           dword_t tile_height,
                                           dword_t overlapped_ptr) {
-  if (!buffer_ptr) {
-    return X_ERROR_INVALID_PARAMETER;
-  }
-
-  size_t buffer_size = size_t(stride) * size_t(tile_height);
-
-  auto user = kernel_state()->xam_state()->GetUserProfile(user_index);
-  if (!user) {
-    return X_ERROR_INVALID_PARAMETER;
-  }
-
-  std::span<const uint8_t> tile =
-      kernel_state()->xam_state()->user_tracker()->GetIcon(
-          user->xuid(), title_id, static_cast<XTileType>(tile_type.value()),
-          tile_id);
-
-  if (tile.empty()) {
-    return X_ERROR_SUCCESS;
-  }
-
-  int width, height, channels;
-  unsigned char* imageData =
-      stbi_load_from_memory(tile.data(), static_cast<int>(tile.size()), &width,
-                            &height, &channels, STBI_rgb_alpha);
-
-  size_t icon_dimmension_size = width * height;
-  std::fill_n(reinterpret_cast<uint8_t*>(buffer_ptr.host_address()),
-              icon_dimmension_size * sizeof(uint32_t), 0);
-
-  for (int i = 0; i < icon_dimmension_size; i++) {
-    unsigned char* pixel = &imageData[i * sizeof(uint32_t)];
-
-    // RGBA to ARGB. TODO: Find faster method!
-    // RGBA->AGBR
-    std::swap(pixel[0], pixel[3]);
-    // AGBR->ARBG
-    std::swap(pixel[1], pixel[3]);
-    // ARBG->ARGB
-    std::swap(pixel[2], pixel[3]);
-  }
-
-  memcpy(buffer_ptr, imageData,
-         std::min(buffer_size, static_cast<size_t>(icon_dimmension_size *
-                                                   sizeof(uint32_t))));
-
-  stbi_image_free(imageData);
-
-  if (overlapped_ptr) {
-    kernel_state()->CompleteOverlappedImmediate(overlapped_ptr,
-                                                X_ERROR_SUCCESS);
-    return X_ERROR_IO_PENDING;
-  }
-  return X_ERROR_SUCCESS;
+  return XamReadTileToTextureEx_entry(tile_type, title_id, tile_id, user_index,
+                                      false, nullptr, buffer_ptr, stride,
+                                      tile_height, overlapped_ptr);
 }
-DECLARE_XAM_EXPORT1(XamReadTileToTexture, kUserProfiles, kStub);
+DECLARE_XAM_EXPORT1(XamReadTileToTexture, kUserProfiles, kSketchy);
 
 dword_result_t XamWriteGamerTile_entry(dword_t user_index, dword_t title_id,
                                        dword_t small_tile_id,
