@@ -653,9 +653,8 @@ dword_result_t NetDll_XNetGetXnAddrPlatform_entry(dword_t caller,
                                                   pointer_t<XNADDR> addr_ptr,
                                                   lpdword_t platform_type) {
   // 58411457 filters session search based on platform type
-  // *platform_type = addr_ptr->abOnline.platform_type;
 
-  *platform_type = PLATFORM_TYPE::Xbox360;
+  *platform_type = addr_ptr->abOnline.platform_type;
 
   return 0;
 }
