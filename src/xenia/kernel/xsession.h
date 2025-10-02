@@ -20,9 +20,6 @@
 namespace xe {
 namespace kernel {
 
-#define X_SESSION_CREATE_USES_MASK 0x0000003F
-#define X_SESSION_CREATE_MODIFIERS_MASK 0x00000F80
-
 enum SessionFlags {
   HOST = 0x01,
   PRESENCE = 0x02,
@@ -318,6 +315,14 @@ class XSession : public XObject {
         static_cast<SessionFlags>(local_details_.Flags.get()));
   }
 
+  static bool HasUsesFlags(uint32_t flags) {
+    return flags & X_SESSION_CREATE_USES_MASK;
+  }
+
+  static bool HasModifersFlags(uint32_t flags) {
+    return flags & X_SESSION_CREATE_MODIFIERS_MASK;
+  }
+
   const uint32_t GetMembersCount() const {
     const uint32_t max_slots =
         local_details_.MaxPrivateSlots + local_details_.MaxPublicSlots;
@@ -374,16 +379,6 @@ class XSession : public XObject {
 
   const bool IsDeleted() const {
     return (state_ & STATE_FLAGS_DELETED) == STATE_FLAGS_DELETED;
-  }
-
-  const bool IsValidModifyFlags(uint32_t flags) const {
-    const uint32_t allowed_modify_flags =
-        JOIN_IN_PROGRESS_DISABLED | JOIN_VIA_PRESENCE_FRIENDS_ONLY |
-        JOIN_VIA_PRESENCE_DISABLED | INVITES_DISABLED | ARBITRATION;
-
-    const uint32_t changed_flags = local_details_.Flags ^ flags;
-
-    return (changed_flags & ~allowed_modify_flags) == 0;
   }
 
  private:
