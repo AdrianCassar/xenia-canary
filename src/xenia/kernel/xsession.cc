@@ -52,6 +52,17 @@ X_RESULT XSession::CreateSession(uint32_t user_index, uint8_t public_slots,
     return X_ERROR_FUNCTION_FAILED;
   }
 
+  // Mutually exclusive
+  if (flags & JOIN_VIA_PRESENCE_DISABLED &&
+      flags & JOIN_VIA_PRESENCE_FRIENDS_ONLY) {
+    return X_ERROR_INVALID_PARAMETER;
+  }
+
+  // ARBITRATION requires stats and peer network flags to be set.
+  if (flags & ARBITRATION && !(flags & STATS || flags & PEER_NETWORK)) {
+    return X_ERROR_INVALID_PARAMETER;
+  }
+
   // Session type is ranked but ARBITRATION flag isn't set
   if (GetGameTypeValue(user_profile->xuid()) == X_CONTEXT_GAME_TYPE_RANKED &&
       !(flags & ARBITRATION)) {
@@ -513,17 +524,34 @@ X_RESULT XSession::ModifySession(XGI_SESSION_MODIFY* data) {
 
   XGI_SESSION_MODIFY modify = *data;
 
-  PrintSessionType(
-      static_cast<SessionFlags>(static_cast<uint32_t>(data->flags)));
-
-  if (IsValidModifyFlags(data->flags)) {
-    PrintSessionType(static_cast<SessionFlags>((uint32_t)data->flags));
-
-    local_details_.Flags = data->flags;
-  } else {
-    modify.flags = local_details_.Flags;
-    XELOGI("{}: Invalid Flags!", __func__);
+  // Mutually exclusive
+  if (data->flags & JOIN_VIA_PRESENCE_DISABLED &&
+      data->flags & JOIN_VIA_PRESENCE_FRIENDS_ONLY) {
+    return X_ERROR_INVALID_PARAMETER;
   }
+
+  const uint32_t modifiable = X_SESSION_CREATE_MODIFIERS_MASK | ARBITRATION;
+  uint32_t modifiers = data->flags & modifiable;
+
+  // If RegisterArbitration is already completed then arbitration flag cannot be
+  // removed.
+  bool is_arbitration_registered =
+      static_cast<uint32_t>(local_details_.eState) &
+      static_cast<uint32_t>(XSESSION_STATE::REGISTRATION);
+
+  // If session is ranked then modify cannot remove arbitration flag, otherwise
+  // standard/unranked sessions can modify this flag before RegisterArbitration.
+  if (!(modifiers & ARBITRATION) &&
+      (!local_details_.GameType || is_arbitration_registered)) {
+    modifiers |= ARBITRATION;
+  }
+
+  local_details_.Flags &= ~modifiable;
+  local_details_.Flags |= modifiers;
+
+  modify.flags = local_details_.Flags;
+
+  PrintSessionType(static_cast<SessionFlags>(local_details_.Flags.get()));
 
   const uint32_t num_private_slots = std::max<int32_t>(
       0, local_details_.MaxPrivateSlots - local_details_.AvailablePrivateSlots);
@@ -1153,7 +1181,8 @@ void XSession::PrintSessionType(SessionFlags flags) {
       {INVITES_DISABLED, "No invites"},
       {JOIN_VIA_PRESENCE_DISABLED, "Presence Join Disabled"},
       {JOIN_IN_PROGRESS_DISABLED, "In-Progress Join Disabled"},
-      {JOIN_VIA_PRESENCE_FRIENDS_ONLY, "Friends Only"}};
+      {JOIN_VIA_PRESENCE_FRIENDS_ONLY, "Friends Only"},
+      {UNKNOWN, "Unknown Flag 0x1000"}};
 
   const std::map<SessionFlags, std::string> extended = {
       {SINGLEPLAYER_WITH_STATS, "Singleplayer with Stats"},
