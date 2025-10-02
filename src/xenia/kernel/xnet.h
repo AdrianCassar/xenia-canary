@@ -132,6 +132,9 @@ namespace xe {
 #define X_CONTEXT_GAME_TYPE_RANKED                          0x0
 #define X_CONTEXT_GAME_TYPE_STANDARD                        0x1
 
+#define X_SESSION_CREATE_USES_MASK                          0x0000003F
+#define X_SESSION_CREATE_MODIFIERS_MASK                     0x00000F80  // Including SOCIAL_MATCHMAKING_ALLOWED
+
 #define MAX_FIRSTNAME_SIZE                                  64
 #define MAX_LASTNAME_SIZE                                   64
 #define MAX_EMAIL_SIZE                                      129
