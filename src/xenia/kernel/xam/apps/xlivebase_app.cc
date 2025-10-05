@@ -1285,6 +1285,7 @@ X_HRESULT XLiveBaseApp::XAccountGetUserInfo(uint32_t buffer_ptr) {
   // Example usage
   std::u16string first_name = u"First Name";
   std::u16string last_name = u"Last Name";
+  std::u16string email = u"example@email.com";
 
   char16_t* first_name_ptr =
       reinterpret_cast<char16_t*>(user_info_response_ptr + 1);
@@ -1295,6 +1296,11 @@ X_HRESULT XLiveBaseApp::XAccountGetUserInfo(uint32_t buffer_ptr) {
       reinterpret_cast<char16_t*>(first_name_ptr + MAX_FIRSTNAME_SIZE);
   string_util::copy_and_swap_truncating(last_name_ptr, last_name.data(),
                                         MAX_LASTNAME_SIZE);
+
+  char16_t* email_ptr =
+      reinterpret_cast<char16_t*>(last_name_ptr + MAX_LASTNAME_SIZE);
+  string_util::copy_and_swap_truncating(email_ptr, email.data(),
+                                        MAX_EMAIL_SIZE);
 
   user_info_response_ptr->first_name_length =
       static_cast<uint32_t>(first_name.size());
@@ -1307,6 +1313,11 @@ X_HRESULT XLiveBaseApp::XAccountGetUserInfo(uint32_t buffer_ptr) {
   user_info_response_ptr->last_name =
       kernel_state()->memory()->HostToGuestVirtual(
           std::to_address(last_name_ptr));
+
+  // 4D530AA5 wants an email
+  user_info_response_ptr->email_length = static_cast<uint32_t>(email.size());
+  user_info_response_ptr->email =
+      kernel_state()->memory()->HostToGuestVirtual(std::to_address(email_ptr));
 
   return X_E_SUCCESS;
 }
