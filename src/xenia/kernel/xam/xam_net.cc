@@ -524,24 +524,32 @@ dword_result_t NetDll_WSAWaitForMultipleEvents_entry(dword_t num_events,
                                                      dword_t alertable) {
   if (num_events > 64) {
     XThread::SetLastError(uint32_t(X_WSAError::X_WSA_INVALID_PARAMETER));
-    return ~0u;
+    return -1;
   }
 
-  uint64_t timeout_wait = (uint64_t)timeout;
+  uint64_t timeout_wait = 0;
+  const bool wait_all_ = !static_cast<bool>(wait_all);
+
+  if (timeout != -1) {
+    timeout_wait = -10000LL * static_cast<uint64_t>(timeout);
+  }
 
   X_STATUS result = 0;
-  do {
-    result = xboxkrnl::xeNtWaitForMultipleObjectsEx(
-        num_events, events, wait_all, 1, alertable,
-        timeout != -1 ? &timeout_wait : nullptr);
-  } while (result == X_STATUS_ALERTED);
 
-  if (XFAILED(result)) {
-    uint32_t error = xboxkrnl::xeRtlNtStatusToDosError(result);
-    XThread::SetLastError(error);
-    return ~0u;
+  while (true) {
+    result = xboxkrnl::xeNtWaitForMultipleObjectsEx(
+        num_events, events, wait_all_, 1, alertable, &timeout_wait);
+
+    if (XFAILED(result)) {
+      uint32_t error = xboxkrnl::xeRtlNtStatusToDosError(result);
+      XThread::SetLastError(error);
+      return -1;
+    }
+
+    if (!alertable || result != X_STATUS_ALERTED) {
+      return result;
+    }
   }
-  return 0;
 }
 DECLARE_XAM_EXPORT2(NetDll_WSAWaitForMultipleEvents, kNetworking, kImplemented,
                     kBlocking);
