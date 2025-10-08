@@ -1349,6 +1349,8 @@ std::unique_ptr<ServicesObjectJSON> XLiveAPI::GetServices() {
   if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_OK) {
     XELOGE("GetServices error message: {}", response->Message());
     assert_always();
+
+    return services;
   }
 
   services = response->Deserialize<ServicesObjectJSON>();
