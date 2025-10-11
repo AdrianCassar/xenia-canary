@@ -108,6 +108,13 @@ bool UserTracker::UnlockAchievement(uint64_t xuid, uint32_t achievement_id) {
 
   gpd_achievement->flags = gpd_achievement->flags |
                            static_cast<uint32_t>(AchievementFlags::kAchieved);
+
+  if (user->signin_state() == X_USER_SIGNIN_STATE::SignedInToLive) {
+    gpd_achievement->flags =
+        gpd_achievement->flags |
+        static_cast<uint32_t>(AchievementFlags::kAchievedOnline);
+  }
+
   gpd_achievement->unlock_time = Clock::QueryGuestSystemTime();
 
   UpdateSettingValue(xuid, kDashboardID, UserSettingId::XPROFILE_GAMERCARD_CRED,
