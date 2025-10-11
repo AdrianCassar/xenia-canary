@@ -564,7 +564,7 @@ dword_result_t XamUserGetMembershipTier_entry(dword_t user_index) {
 DECLARE_XAM_EXPORT1(XamUserGetMembershipTier, kUserProfiles, kImplemented);
 
 dword_result_t XamUserGetMembershipTierFromXUID_entry(qword_t xuid) {
-  const auto profile = kernel_state()->xam_state()->GetUserProfile(xuid);
+  const auto profile = kernel_state()->xam_state()->GetUserProfileAny(xuid);
   if (!profile) {
     return X_XAMACCOUNTINFO::AccountSubscriptionTier::kSubscriptionTierNone;
   }
@@ -698,7 +698,9 @@ dword_result_t XamUserCreateAchievementEnumerator_entry(
   }
 
   uint64_t requester_xuid = user->xuid();
-  if (xuid) {
+
+  // 58410B63 uses online XUID for local signed-in user
+  if (xuid && user->GetOnlineXUID() != xuid) {
     requester_xuid = xuid;
   }
 
@@ -1166,7 +1168,7 @@ dword_result_t XamUserGetUserFlagsFromXUID_entry(qword_t xuid) {
 DECLARE_XAM_EXPORT1(XamUserGetUserFlagsFromXUID, kUserProfiles, kImplemented);
 
 dword_result_t XamUserGetOnlineLanguageFromXUID_entry(qword_t xuid) {
-  const auto& user = kernel_state()->xam_state()->GetUserProfile(xuid);
+  const auto& user = kernel_state()->xam_state()->GetUserProfileAny(xuid);
   if (!user) {
     return kernel_state()->xconfig()->ReadSetting<uint32_t>(
         XCONFIG_USER_CATEGORY, XCONFIG_USER_LANGUAGE);
@@ -1177,7 +1179,7 @@ DECLARE_XAM_EXPORT1(XamUserGetOnlineLanguageFromXUID, kUserProfiles,
                     kImplemented);
 
 dword_result_t XamUserGetOnlineCountryFromXUID_entry(qword_t xuid) {
-  const auto& user = kernel_state()->xam_state()->GetUserProfile(xuid);
+  const auto& user = kernel_state()->xam_state()->GetUserProfileAny(xuid);
   if (!user) {
     return kernel_state()->xconfig()->ReadSetting<uint8_t>(
         XCONFIG_USER_CATEGORY, XCONFIG_USER_COUNTRY);
