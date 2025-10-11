@@ -8,6 +8,7 @@
  */
 
 #include "xenia/kernel/xam/xam_state.h"
+#include "xenia/base/logging.h"
 #include "xenia/emulator.h"
 
 namespace xe {
@@ -42,6 +43,11 @@ UserProfile* XamState::GetUserProfile(uint32_t user_index) const {
 }
 
 UserProfile* XamState::GetUserProfile(uint64_t xuid) const {
+  if (IsOnlineXUID(xuid)) {
+    assert_always();
+    XELOGI("{}: Using online XUID {:016X}", __func__, xuid);
+  }
+
   return profile_manager_->GetProfile(xuid);
 }
 
