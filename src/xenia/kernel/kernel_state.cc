@@ -981,6 +981,11 @@ void KernelState::RegisterNotifyListener(XNotifyListener* listener) {
     listener->EnqueueNotification(kXNotificationSystemSignInChanged,
                                   signed_in_players);
   }
+
+  if (!has_notified_xparty_ && listener->mask() & kXNotifyParty) {
+    has_notified_xparty_ = true;
+    listener->EnqueueNotification(kXNotificationPartyMembersChanged, 0);
+  }
 }
 
 void KernelState::UnregisterNotifyListener(XNotifyListener* listener) {
