@@ -2,7 +2,7 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2022 Ben Vanik. All rights reserved.                             *
+ * Copyright 2025 Xenia Canary. All rights reserved.                          *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
@@ -10,26 +10,23 @@
 #include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/util/shim_utils.h"
 #include "xenia/kernel/xam/xam_private.h"
-#include "xenia/xbox.h"
 
 namespace xe {
 namespace kernel {
 namespace xam {
 
 dword_result_t XamPartyGetUserList_entry(
-    dword_t player_count, pointer_t<X_PARTY_USER_LIST> party_list_ptr) {
+    dword_t caller, pointer_t<X_PARTY_USER_LIST> party_list_ptr) {
   if (party_list_ptr) {
     party_list_ptr.Zero();
   }
 
-  // 5345085D wants specifically this code to skip loading party data.
-  // This code is not documented in NT_STATUS code list
+  // 5345085D, 45410923
   return X_PARTY_E_NOT_IN_PARTY;
 }
 DECLARE_XAM_EXPORT1(XamPartyGetUserList, kNone, kStub);
 
-// Shares same function as XamPartyAddLocalUsers, XamPartyKickUser,
-// XamPartyGetJoinable, XamPartySetJoinable, & XamPartyGetInfoEx
+// Show UI to invite party members to a multiplayer session?
 dword_result_t XamPartySendGameInvites_entry(
     dword_t caller, dword_t user_index, dword_t unknown,
     pointer_t<XAM_OVERLAPPED> overlapped_ptr) {
@@ -52,14 +49,10 @@ dword_result_t XamPartySendGameInvites_entry(
 }
 DECLARE_XAM_EXPORT1(XamPartySendGameInvites, kNone, kStub);
 
-dword_result_t XamPartySetCustomData_entry(dword_t caller, dword_t user_index,
-                                           lpvoid_t custom_data_ptr) {
-  if (caller != 1) {
-    return X_E_NOT_IMPLEMENTED;
-  } else if (user_index >= XUserMaxUserCount) {
-    return 0x807D0002;
-  }
-  return 0x807D0003;  // X_PARTY_E_NOT_IN_PARTY
+dword_result_t XamPartySetCustomData_entry(
+    dword_t caller, dword_t user_index,
+    pointer_t<X_PARTY_CUSTOM_DATA> custom_data_ptr) {
+  return X_ERROR_SUCCESS;
 }
 DECLARE_XAM_EXPORT1(XamPartySetCustomData, kNone, kStub);
 
@@ -77,7 +70,7 @@ dword_result_t XamPartyGetUserListInternal_entry(
     party_list_ptr.Zero();
   }
 
-  return X_ERROR_SUCCESS;
+  return X_PARTY_E_NOT_IN_PARTY;
 }
 DECLARE_XAM_EXPORT1(XamPartyGetUserListInternal, kNone, kStub);
 

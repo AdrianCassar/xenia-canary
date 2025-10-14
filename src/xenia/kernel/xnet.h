@@ -121,6 +121,10 @@ namespace xe {
 #define X_ONLINE_MAX_STATS_ESTIMATE_RATING_COUNT            101
 
 #define X_PARTY_MAX_USERS                                   32
+#define X_PARTY_USER_ISLOCAL                                0x00000001
+#define X_PARTY_USER_ISINPARTYVOICE                         0x00000002
+#define X_PARTY_USER_ISTALKING                              0x00000004
+#define X_PARTY_USER_ISINGAMESESSION                        0x00000008
 
 #define X_MARKETPLACE_CONTENT_ID_LEN                        20
 #define X_MARKETPLACE_ASSET_SIGNATURE_SIZE                  256
