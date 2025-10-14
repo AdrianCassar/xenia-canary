@@ -1210,6 +1210,8 @@ dword_result_t XamUserCreateStatsEnumerator_entry(
     lpdword_t handle_ptr) {
   assert_false(enumerator_type > X_STATS_ENUMERATOR_TYPE::BY_RATING);
 
+  *handle_ptr = X_INVALID_HANDLE_VALUE;
+
   if (!pivot_user || !stats_ptr || !buffer_size_ptr || !handle_ptr) {
     return X_ERROR_INVALID_PARAMETER;
   }
@@ -1260,7 +1262,7 @@ dword_result_t XamUserCreateStatsEnumerator_entry(
       break;
   }
 
-  uint32_t views = 0;  // 1
+  const uint32_t views = 1;
 
   uint32_t view_address =
       kernel_state()->memory()->SystemHeapAlloc(sizeof(X_USER_STATS_VIEW));
@@ -1271,6 +1273,8 @@ dword_result_t XamUserCreateStatsEnumerator_entry(
 
   X_USER_STATS_READ_RESULTS* results = e->AppendItem();
 
+  // Games expect 1 view, 0 causes issues.
+  // 58410A70, 58411259, 425607D9, 434D0838
   results->num_views = views;
   results->views_ptr = view_address;
 
