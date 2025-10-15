@@ -1133,7 +1133,7 @@ dword_result_t XamUserCreateStatsEnumerator_entry(
     lpdword_t handle_ptr) {
   assert_false(enumerator_type > X_STATS_ENUMERATOR_TYPE::BY_RATING);
 
-  *handle_ptr = X_INVALID_HANDLE_VALUE;
+  *handle_ptr = 0;
 
   if (!pivot_user || !stats_ptr || !buffer_size_ptr || !handle_ptr) {
     return X_ERROR_INVALID_PARAMETER;
