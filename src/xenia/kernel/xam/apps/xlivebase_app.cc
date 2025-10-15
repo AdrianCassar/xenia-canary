@@ -585,7 +585,13 @@ X_HRESULT XLiveBaseApp::XPresenceCreateEnumerator(uint32_t buffer_ptr,
     return X_E_INVALIDARG;
   }
 
-  *handle_ptr = X_INVALID_HANDLE_VALUE;
+  *handle_ptr = 0;
+
+  if (!buffer_address) {
+    return X_E_INVALIDARG;
+  }
+
+  *buffer_size_ptr = 0;
 
   if (!kernel_state()->xam_state()->IsUserSignedIn(user_index)) {
     return X_E_INVALIDARG;
@@ -606,12 +612,6 @@ X_HRESULT XLiveBaseApp::XPresenceCreateEnumerator(uint32_t buffer_ptr,
   if (!xuid_address) {
     return X_E_INVALIDARG;
   }
-
-  if (!buffer_address) {
-    return X_E_INVALIDARG;
-  }
-
-  *buffer_size_ptr = 0;
 
   if (!kernel_state()->xam_state()->IsUserSignedIn(user_index)) {
     return X_E_NO_SUCH_USER;
@@ -897,9 +897,9 @@ X_HRESULT XLiveBaseApp::XFriendsCreateEnumerator(uint32_t buffer_ptr,
     return X_E_INVALIDARG;
   }
 
-  // 41560834 expects invalid handle for failure instead of checking returned
-  // error, therefore set as soon as possible.
-  *handle_ptr = X_INVALID_HANDLE_VALUE;
+  // 41560834 and 45410923 expect invalid handle of 0 (not -1) for failure,
+  // therefore set as soon as possible.
+  *handle_ptr = 0;
 
   if (!buffer_address) {
     return X_E_INVALIDARG;
