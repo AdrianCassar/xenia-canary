@@ -703,7 +703,7 @@ dword_result_t XamUserCreateAchievementEnumerator_entry(
 
   uint64_t requester_xuid = user->xuid();
 
-  // 58410B63 uses online XUID for local signed-in user
+  // 58410B63 and 4D530860 use online XUID for local signed-in user
   if (xuid && user->GetOnlineXUID() != xuid) {
     requester_xuid = xuid;
   }
