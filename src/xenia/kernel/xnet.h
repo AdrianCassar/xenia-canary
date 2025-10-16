@@ -862,28 +862,28 @@ static_assert_size(FIND_USERS_RESPONSE, 0x8);
 
 struct X_ADDRESS_INFO {
   xe::be<uint16_t> street_1_length;
-  xe::be<uint32_t> street_1;  // uint16_t*
+  xe::be<uint32_t> street_1;  // char16_t*
   xe::be<uint16_t> street_2_length;
-  xe::be<uint32_t> street_2;  // uint16_t*
+  xe::be<uint32_t> street_2;  // char16_t*
   xe::be<uint16_t> city_length;
-  xe::be<uint32_t> city;  // uint16_t*
+  xe::be<uint32_t> city;  // char16_t*
   xe::be<uint16_t> district_length;
-  xe::be<uint32_t> district;  // uint16_t*
+  xe::be<uint32_t> district;  // char16_t*
   xe::be<uint16_t> state_length;
-  xe::be<uint32_t> state;  // uint16_t*
+  xe::be<uint32_t> state;  // char16_t*
   xe::be<uint16_t> postal_code_length;
-  xe::be<uint32_t> postal_code;  // uint16_t*
+  xe::be<uint32_t> postal_code;  // char16_t*
 };
 static_assert_size(X_ADDRESS_INFO, 0x24);
 
 struct X_GET_USER_INFO_RESPONSE {
   xe::be<uint16_t> first_name_length;
-  xe::be<uint32_t> first_name;  // uint16_t*
+  xe::be<uint32_t> first_name;  // char16_t*
   xe::be<uint16_t> last_name_length;
-  xe::be<uint32_t> last_name;  // uint16_t*
+  xe::be<uint32_t> last_name;  // char16_t*
   X_ADDRESS_INFO address_info;
   xe::be<uint16_t> email_length;
-  xe::be<uint32_t> email;  // uint16_t*
+  xe::be<uint32_t> email;  // char16_t*
   xe::be<uint16_t> language_id;
   xe::be<uint8_t> country_id;
   xe::be<uint8_t> msft_optin;
