@@ -474,6 +474,13 @@ struct XSESSION_MEMBER {
 };
 static_assert_size(XSESSION_MEMBER, 0x10);
 
+struct XAM_RELYING_PARTY_TOKEN {
+  uint32_t reserved;
+  uint32_t length;
+  uint32_t token_data_ptr;  // uint8_t*
+};
+static_assert_size(XAM_RELYING_PARTY_TOKEN, 0xC);
+
 struct X_PARTY_CUSTOM_DATA {
   xe::be<uint64_t> first;
   xe::be<uint64_t> second;
