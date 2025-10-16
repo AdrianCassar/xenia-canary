@@ -17,12 +17,49 @@ namespace xam {
 
 dword_result_t XamPartyGetUserList_entry(
     dword_t caller, pointer_t<X_PARTY_USER_LIST> party_list_ptr) {
+  if (!party_list_ptr) {
+    return X_PARTY_E_NOT_IN_PARTY;
+  }
+
   if (party_list_ptr) {
     party_list_ptr.Zero();
   }
 
-  // 5345085D, 45410923
-  return X_PARTY_E_NOT_IN_PARTY;
+  // 513107D9 wants user_count >= 2
+  party_list_ptr->user_count = 2;
+
+  {
+    auto profile = kernel_state()->xam_state()->GetUserProfile((uint32_t)0);
+
+    if (profile) {
+      party_list_ptr->users[0].xuid = profile->xuid();
+
+      memcpy(party_list_ptr->users[0].gamertag, profile->name().c_str(),
+             sizeof(party_list_ptr->users[0].gamertag));
+
+      party_list_ptr->users[0].user_index = 0;
+      party_list_ptr->users[0].nat_type = 1;  // Toggles join sessions
+      party_list_ptr->users[0].title_id = kernel_state()->title_id();
+      party_list_ptr->users[0].flags =
+          X_PARTY_USER_ISLOCAL | X_PARTY_USER_ISINGAMESESSION;
+    }
+  }
+
+  for (uint32_t i = 1; i <= (party_list_ptr->user_count - 1); i++) {
+    party_list_ptr->users[i].xuid = i;
+
+    memcpy(party_list_ptr->users[i].gamertag,
+           fmt::format("Party Member {}", i).c_str(),
+           sizeof(party_list_ptr->users[i].gamertag));
+
+    party_list_ptr->users[i].user_index = XUserIndexNone;
+    party_list_ptr->users[i].nat_type = 1;  // Toggles join sessions
+    party_list_ptr->users[i].title_id = kernel_state()->title_id();
+    party_list_ptr->users[i].flags =
+        X_PARTY_USER_ISLOCAL | X_PARTY_USER_ISINGAMESESSION;
+  }
+
+  return X_ERROR_SUCCESS;
 }
 DECLARE_XAM_EXPORT1(XamPartyGetUserList, kNone, kStub);
 

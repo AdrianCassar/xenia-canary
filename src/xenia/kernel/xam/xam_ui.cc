@@ -609,7 +609,7 @@ dword_result_t XamShowPartyUI_entry(dword_t user_index) {
     return X_ERROR_ACCESS_DENIED;
   }
 
-  return X_ERROR_FUNCTION_FAILED;
+  return X_ERROR_SUCCESS;
 }
 DECLARE_XAM_EXPORT1(XamShowPartyUI, kNone, kStub);
 
