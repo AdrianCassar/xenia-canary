@@ -291,6 +291,48 @@ dword_result_t NetDll_XnpLogonGetStatus_entry(
 }
 DECLARE_XAM_EXPORT1(NetDll_XnpLogonGetStatus, kNetworking, kStub);
 
+dword_result_t XamGetToken_entry(dword_t user_index, lpstring_t url_ptr,
+                                 dword_t url_size,
+                                 pointer_t<XAM_RELYING_PARTY_TOKEN> token_ptr,
+                                 pointer_t<XAM_OVERLAPPED> overlapped_ptr) {
+  if (token_ptr) {
+    token_ptr.Zero();
+  }
+
+  if (user_index >= XUserMaxUserCount) {
+    return X_ERROR_INVALID_PARAMETER;
+  }
+
+  auto run = [=](uint32_t& extended_error, uint32_t& length) {
+    extended_error = X_ERROR_SUCCESS;
+    length = 0;
+
+    // Failing causes the least crashes.
+    extended_error = X_E_FAIL;
+
+    XThread::SetLastError(X_ERROR_FUNCTION_FAILED);
+    return X_ERROR_FUNCTION_FAILED;
+  };
+
+  if (!overlapped_ptr) {
+    uint32_t extended_error, length;
+    X_RESULT result = run(extended_error, length);
+
+    return result;
+  }
+
+  kernel_state()->CompleteOverlappedDeferredEx(run, overlapped_ptr);
+  return X_ERROR_IO_PENDING;
+}
+DECLARE_XAM_EXPORT1(XamGetToken, kNetworking, kStub);
+
+void XamFreeToken_entry(pointer_t<XAM_RELYING_PARTY_TOKEN> token_ptr) {
+  if (token_ptr) {
+    kernel_memory()->SystemHeapFree(token_ptr.guest_address());
+  }
+}
+DECLARE_XAM_EXPORT1(XamFreeToken, kNetworking, kImplemented);
+
 dword_result_t NetDll_XNetGetOpt_entry(dword_t caller, dword_t option_id,
                                        lpvoid_t buffer_ptr,
                                        lpdword_t buffer_size) {
