@@ -1124,6 +1124,10 @@ void KernelState::CompleteOverlappedDeferredEx(
      55530848 and 55530816 fail to create Xbox Live session with high delay e.g.
      100ms.
      Small delay fixes it e.g. 25ms.
+
+     555307EE quickly disconnects from session with high delay e.g.
+     100ms.
+     Small delay fixes it e.g. 25ms.
     */
     xe::threading::Sleep(kDeferredOverlappedDelayMillis);
     uint32_t extended_error, length;
