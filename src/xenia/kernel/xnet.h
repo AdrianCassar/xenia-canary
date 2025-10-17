@@ -559,39 +559,39 @@ struct X_PARTY_USER_LIST_INTERNAL {
 static_assert_size(X_PARTY_USER_LIST_INTERNAL, 0x1008);
 
 struct X_USER_STATS_VIEW {
-  xe::be<uint32_t> ViewId;
-  xe::be<uint32_t> TotalViewRows;
-  xe::be<uint32_t> NumRows;
-  xe::be<uint32_t> pRows;
+  xe::be<uint32_t> view_id;
+  xe::be<uint32_t> total_view_rows;
+  xe::be<uint32_t> num_rows;
+  xe::be<uint32_t> rows_ptr;  // X_USER_STATS_ROW*
 };
 static_assert_size(X_USER_STATS_VIEW, 0x10);
 
 struct X_USER_STATS_COLUMN {
-  xe::be<uint16_t> ColumnId;
-  xam::X_USER_DATA Value;
+  xe::be<uint16_t> column_id;  // Column ordinal
+  xam::X_USER_DATA value;
 };
 static_assert_size(X_USER_STATS_COLUMN, 0x18);
 
 struct X_USER_STATS_ROW {
   xe::be<uint64_t> xuid;
-  xe::be<uint32_t> Rank;
+  xe::be<uint32_t> rank;
   xe::be<uint64_t> i64Rating;
-  CHAR szGamertag[16];
-  xe::be<uint32_t> NumColumns;
-  xe::be<uint32_t> pColumns;
+  char gamertag[16];
+  xe::be<uint32_t> num_columns;
+  xe::be<uint32_t> columns_ptr;  // X_USER_STATS_COLUMN*
 };
 static_assert_size(X_USER_STATS_ROW, 0x30);
 
 struct X_USER_STATS_READ_RESULTS {
   xe::be<uint32_t> num_views;
-  xe::be<uint32_t> views_ptr;
+  xe::be<uint32_t> views_ptr;  // X_USER_STATS_VIEW*
 };
 static_assert_size(X_USER_STATS_READ_RESULTS, 0x8);
 
 struct X_USER_STATS_SPEC {
   xe::be<uint32_t> view_id;
   xe::be<uint32_t> num_column_ids;
-  xe::be<uint16_t> column_Ids[kXUserMaxStatsAttributes];
+  xe::be<uint16_t> column_ids[kXUserMaxStatsAttributes];
 };
 static_assert_size(X_USER_STATS_SPEC, 8 + kXUserMaxStatsAttributes * 2);
 

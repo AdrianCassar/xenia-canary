@@ -274,7 +274,7 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
         Value statIdsArray(kArrayType);
         for (uint32_t stat_id_index = 0; stat_id_index < num_column_ids;
              stat_id_index++) {
-          statIdsArray.PushBack(queries[queryIndex].column_Ids[stat_id_index],
+          statIdsArray.PushBack(queries[queryIndex].column_ids[stat_id_index],
                                 doc.GetAllocator());
         }
         queryObject.AddMember("statisticIds", statIdsArray, doc.GetAllocator());
@@ -315,16 +315,16 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
                leaderboardsArray.Begin();
            leaderboardObjectPtr != leaderboardsArray.End();
            ++leaderboardObjectPtr) {
-        leaderboard[leaderboardIndex].ViewId =
+        leaderboard[leaderboardIndex].view_id =
             (*leaderboardObjectPtr)["id"].GetUint();
         auto playersArray = (*leaderboardObjectPtr)["players"].GetArray();
-        leaderboard[leaderboardIndex].NumRows = playersArray.Size();
-        leaderboard[leaderboardIndex].TotalViewRows = playersArray.Size();
+        leaderboard[leaderboardIndex].num_rows = playersArray.Size();
+        leaderboard[leaderboardIndex].total_view_rows = playersArray.Size();
         auto players_guest_address = memory_->SystemHeapAlloc(
             sizeof(X_USER_STATS_ROW) * playersArray.Size());
         auto player =
             memory_->TranslateVirtual<X_USER_STATS_ROW*>(players_guest_address);
-        leaderboard[leaderboardIndex].pRows = players_guest_address;
+        leaderboard[leaderboardIndex].rows_ptr = players_guest_address;
 
         uint32_t playerIndex = 0;
         for (Value::ConstValueIterator playerObjectPtr = playersArray.Begin();
@@ -332,7 +332,7 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
           auto gamertag = (*playerObjectPtr)["gamertag"].GetString();
           auto gamertagLength =
               (*playerObjectPtr)["gamertag"].GetStringLength();
-          memcpy(player[playerIndex].szGamertag, gamertag, gamertagLength);
+          memcpy(player[playerIndex].gamertag, gamertag, gamertagLength);
 
           std::vector<uint8_t> xuid;
           string_util::hex_string_to_array(
@@ -340,23 +340,23 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
           memcpy(&player[playerIndex].xuid, xuid.data(), 8);
 
           auto statisticsArray = (*playerObjectPtr)["stats"].GetArray();
-          player[playerIndex].NumColumns = statisticsArray.Size();
+          player[playerIndex].num_columns = statisticsArray.Size();
           auto stats_guest_address = memory_->SystemHeapAlloc(
               sizeof(X_USER_STATS_COLUMN) * statisticsArray.Size());
           auto stat = memory_->TranslateVirtual<X_USER_STATS_COLUMN*>(
               stats_guest_address);
-          player[playerIndex].pColumns = stats_guest_address;
+          player[playerIndex].columns_ptr = stats_guest_address;
 
           uint32_t statIndex = 0;
           for (Value::ConstValueIterator statObjectPtr =
                    statisticsArray.Begin();
                statObjectPtr != statisticsArray.End(); ++statObjectPtr) {
-            stat[statIndex].ColumnId = (*statObjectPtr)["id"].GetUint();
+            stat[statIndex].column_id = (*statObjectPtr)["id"].GetUint();
 
-            stat[statIndex].Value.type = static_cast<X_USER_DATA_TYPE>(
+            stat[statIndex].value.type = static_cast<X_USER_DATA_TYPE>(
                 (*statObjectPtr)["type"].GetUint());
 
-            X_USER_DATA_TYPE stat_type = stat[statIndex].Value.type;
+            X_USER_DATA_TYPE stat_type = stat[statIndex].value.type;
 
             switch (stat_type) {
               case X_USER_DATA_TYPE::CONTEXT: {
@@ -394,15 +394,15 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
 
             switch (stat_type) {
               case X_USER_DATA_TYPE::CONTEXT:
-                stat[statIndex].Value.data.u32 =
+                stat[statIndex].value.data.u32 =
                     (*statObjectPtr)["value"].GetUint();
                 break;
               case X_USER_DATA_TYPE::INT32:
-                stat[statIndex].Value.data.s32 =
+                stat[statIndex].value.data.s32 =
                     (*statObjectPtr)["value"].GetInt();
                 break;
               case X_USER_DATA_TYPE::INT64:
-                stat[statIndex].Value.data.s64 =
+                stat[statIndex].value.data.s64 =
                     (*statObjectPtr)["value"].GetInt64();
                 break;
               case X_USER_DATA_TYPE::UNSET: {
@@ -410,14 +410,14 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
               } break;
               default:
                 XELOGW("Unimplemented stat type for read, will attempt anyway.",
-                       static_cast<uint32_t>(stat[statIndex].Value.type));
+                       static_cast<uint32_t>(stat[statIndex].value.type));
                 if ((*statObjectPtr)["value"].IsNumber()) {
-                  stat[statIndex].Value.data.s64 =
+                  stat[statIndex].value.data.s64 =
                       (*statObjectPtr)["value"].GetUint64();
                 }
             }
 
-            player[playerIndex].Rank = 1;
+            player[playerIndex].rank = 1;
 
             if ((*statObjectPtr)["value"].IsNumber()) {
               // 41560901 uses i64Rating for ranking friends scores
