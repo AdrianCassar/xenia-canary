@@ -1212,9 +1212,22 @@ dword_result_t XamUserCreateStatsEnumerator_entry(
     lpdword_t handle_ptr) {
   assert_false(enumerator_type > X_STATS_ENUMERATOR_TYPE::BY_RATING);
 
+  const uint32_t title_id_ =
+      title_id ? title_id.value() : kernel_state()->title_id();
+
+  if (!handle_ptr) {
+    return X_ERROR_INVALID_PARAMETER;
+  }
+
   *handle_ptr = 0;
 
-  if (!pivot_user || !stats_ptr || !buffer_size_ptr || !handle_ptr) {
+  if (!buffer_size_ptr) {
+    return X_ERROR_INVALID_PARAMETER;
+  }
+
+  *buffer_size_ptr = 0;
+
+  if (!pivot_user || !stats_ptr) {
     return X_ERROR_INVALID_PARAMETER;
   }
 
@@ -1257,31 +1270,91 @@ dword_result_t XamUserCreateStatsEnumerator_entry(
     case X_STATS_ENUMERATOR_TYPE::BY_RATING: {
       xuid = pivot_user;
       XELOGI("XamUserCreateStatsEnumeratorByRating: {:016X}", xuid);
-      // auto e = new XStaticEnumerator<X_USER_ESTIMATE_RANK_RESULTS>(
-      //     kernel_state(), 1);
     } break;
     default:
       break;
   }
 
-  const uint32_t views = 1;
+  const uint32_t page_size =
+      kernel_state()->memory()->GetPhysicalHeap()->page_size();
 
-  uint32_t view_address =
-      kernel_state()->memory()->SystemHeapAlloc(sizeof(X_USER_STATS_VIEW));
+  // sizeof(X_USER_STATS_VIEW) becomes page_size of 4096.
+  const uint32_t view_address =
+      kernel_state()->memory()->SystemHeapAlloc(page_size);
 
-  X_USER_STATS_VIEW* view_ptr =
+  X_USER_STATS_VIEW* views_ptr =
       kernel_state()->memory()->TranslateVirtual<X_USER_STATS_VIEW*>(
           view_address);
 
+  uint32_t rows = num_rows.value();
+
+  uint32_t total_rows_size = 0;
+  uint32_t total_columns_size = 0;
+
+  // Tell game we have no rows to display
+  rows = 0;
+
+  const X_USER_STATS_SPEC* stat_specs_ptr = stats_ptr;
+
+  for (size_t view_index = 0; view_index < num_stats_specs; view_index++) {
+    const X_USER_STATS_SPEC* stat_spec_ptr = stat_specs_ptr + view_index;
+    X_USER_STATS_VIEW* view_ptr = views_ptr + view_index;
+
+    // 4B5607E8 expects view id otherwise crashes.
+    view_ptr->view_id = stat_spec_ptr->view_id;
+    view_ptr->total_view_rows = rows;
+    view_ptr->num_rows = rows;
+
+    total_rows_size += rows * sizeof(X_USER_STATS_ROW);
+
+    const uint32_t rows_address =
+        kernel_state()->memory()->SystemHeapAlloc(sizeof(X_USER_STATS_ROW));
+
+    X_USER_STATS_ROW* rows_ptr =
+        kernel_state()->memory()->TranslateVirtual<X_USER_STATS_ROW*>(
+            rows_address);
+
+    // 584111FA and 5841089F want rows pointer even if row count is 0 to prevent
+    // crashing.
+    view_ptr->rows_ptr = rows_address;
+
+    for (size_t row_index = 0; row_index < rows; row_index++) {
+      X_USER_STATS_ROW* row_ptr = rows_ptr + row_index;
+
+      const uint32_t columns_address =
+          kernel_state()->memory()->SystemHeapAlloc(
+              sizeof(X_USER_STATS_COLUMN));
+
+      X_USER_STATS_COLUMN* columns_ptr =
+          kernel_state()->memory()->TranslateVirtual<X_USER_STATS_COLUMN*>(
+              columns_address);
+
+      total_columns_size +=
+          stat_spec_ptr->num_column_ids * sizeof(X_USER_STATS_COLUMN);
+
+      row_ptr->num_columns = stat_spec_ptr->num_column_ids;
+      row_ptr->columns_ptr = columns_address;
+
+      for (size_t column_index = 0;
+           column_index < stat_spec_ptr->num_column_ids; column_index++) {
+        X_USER_STATS_COLUMN* column_ptr = columns_ptr + column_index;
+
+        column_ptr->column_id = stat_spec_ptr->column_ids[column_index];
+
+        column_ptr->value.type = X_USER_DATA_TYPE::INT32;
+        column_ptr->value.data.u32 = 0;
+      }
+    }
+  }
+
   X_USER_STATS_READ_RESULTS* results = e->AppendItem();
 
-  // Games expect 1 view, 0 causes issues.
-  // 58410A70, 58411259, 425607D9, 434D0838
-  results->num_views = views;
+  results->num_views = num_stats_specs.value();
   results->views_ptr = view_address;
 
-  *buffer_size_ptr =
-      sizeof(X_USER_STATS_READ_RESULTS) + (views * sizeof(X_USER_STATS_VIEW));
+  *buffer_size_ptr = sizeof(X_USER_STATS_READ_RESULTS) +
+                     (num_stats_specs * sizeof(X_USER_STATS_VIEW)) +
+                     total_rows_size + total_columns_size;
 
   assert_false(*buffer_size_ptr == 0);
 
