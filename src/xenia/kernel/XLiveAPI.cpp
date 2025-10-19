@@ -927,18 +927,32 @@ void XLiveAPI::SessionWriteStats(uint64_t sessionId, XGI_STATS_WRITE stats) {
   }
 }
 
-std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::LeaderboardsFind(
-    const uint8_t* data) {
+std::unique_ptr<LeaderboardObjectJSON> XLiveAPI::LeaderboardsFind(
+    const XGI_XUSER_READ_STATS stats) {
   std::string endpoint = fmt::format("leaderboards/find");
 
-  std::unique_ptr<HTTPResponseObjectJSON> response = Post(endpoint, data);
+  auto read_stats = ReadUserStatsObjectJSON(stats);
+
+  std::string read_user_stats_json = "";
+  bool valid = read_stats.Serialize(read_user_stats_json);
+  assert_true(valid);
+
+  std::unique_ptr<LeaderboardObjectJSON> leaderboards =
+      std::make_unique<LeaderboardObjectJSON>();
+
+  std::unique_ptr<HTTPResponseObjectJSON> response =
+      Post(endpoint, reinterpret_cast<uint8_t*>(read_user_stats_json.data()));
 
   if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_CREATED) {
     XELOGE("LeaderboardsFind error message: {}", response->Message());
     assert_always();
+
+    return leaderboards;
   }
 
-  return response;
+  leaderboards = response->Deserialize<LeaderboardObjectJSON>();
+
+  return leaderboards;
 }
 
 void XLiveAPI::DeleteSession(uint64_t sessionId) {
