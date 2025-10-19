@@ -11,6 +11,7 @@
 #include "xenia/base/logging.h"
 #include "xenia/emulator.h"
 #include "xenia/kernel/XLiveAPI.h"
+#include "xenia/kernel/json/read_user_stats_object_json.h"
 #include "xenia/kernel/util/shim_utils.h"
 #include "xenia/kernel/xsession.h"
 
@@ -93,17 +94,6 @@ struct XGI_XUSER_ANID {
   xe::be<uint32_t> block;            // 1
 };
 static_assert_size(XGI_XUSER_ANID, 0x10);
-
-struct XGI_XUSER_READ_STATS {
-  xe::be<uint32_t> titleId;
-  xe::be<uint32_t> xuids_count;
-  xe::be<uint32_t> xuids_ptr;
-  xe::be<uint32_t> specs_count;
-  xe::be<uint32_t> specs_ptr;
-  xe::be<uint32_t> results_size;
-  xe::be<uint32_t> results_ptr;
-};
-static_assert_size(XGI_XUSER_READ_STATS, 0x1C);
 
 struct XGI_XUSER_STATS_RESET {
   xe::be<uint32_t> user_index;
@@ -220,220 +210,70 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
           reinterpret_cast<XGI_XUSER_READ_STATS*>(buffer);
 
       if (!data->results_ptr) {
-        return 1;
+        return X_E_INVALIDARG;
       }
 
-#pragma region Curl
-      Document doc;
-      doc.SetObject();
+      // 584107D7 caches results
+      X_USER_STATS_READ_RESULTS* results =
+          kernel_state()
+              ->memory()
+              ->TranslateVirtual<X_USER_STATS_READ_RESULTS*>(data->results_ptr);
 
-      Value xuidsJsonArray(kArrayType);
-      auto xuids =
-          memory_->TranslateVirtual<xe::be<uint64_t>*>(data->xuids_ptr);
+      std::memset(results, 0, sizeof(X_USER_STATS_READ_RESULTS));
 
-      for (uint32_t player_index = 0; player_index < data->xuids_count;
-           player_index++) {
-        const xe::be<uint64_t> xuid = xuids[player_index];
-
-        assert_true(IsValidXUID(xuid));
-
-        if (xuid) {
-          std::string xuid_str = string_util::to_hex_string(xuid);
-
-          Value value;
-          value.SetString(xuid_str.c_str(), 16, doc.GetAllocator());
-          xuidsJsonArray.PushBack(value, doc.GetAllocator());
-        }
+      // Max friends plus yourself
+      if (data->xuids_count > X_ONLINE_MAX_FRIENDS + 1) {
+        return X_E_INVALIDARG;
       }
 
-      if (xuidsJsonArray.Empty()) {
+      // 4D5307EA uses 6 leaderboards?
+      assert_false(data->specs_count > kXUserMaxReadStatsViews + 1);
+
+      std::unique_ptr<LeaderboardObjectJSON> leaderboards =
+          XLiveAPI::LeaderboardsFind(*data);
+
+      const X_USER_STATS_READ_RESULTS& read_results =
+          leaderboards->GetReadStatsResults();
+
+      results->views_ptr = read_results.views_ptr;
+      results->num_views = read_results.num_views;
+
+      // Provide pointer regardless
+      if (!results->views_ptr) {
+        results->views_ptr = kernel_state()->memory()->SystemHeapAlloc(
+            sizeof(X_USER_STATS_VIEW));
+
+        // 4D5307EA expects views_ptr but not 1 count.
+        results->num_views = 0;
+
         return X_E_SUCCESS;
       }
 
-      doc.AddMember("players", xuidsJsonArray, doc.GetAllocator());
+      // Validation
 
-      std::string title_id = fmt::format("{:08x}", kernel_state()->title_id());
-      doc.AddMember("titleId", title_id, doc.GetAllocator());
+      assert_false(results->num_views != data->specs_count);
 
-      Value leaderboardQueryJsonArray(kArrayType);
-      auto queries =
-          memory_->TranslateVirtual<X_USER_STATS_SPEC*>(data->specs_ptr);
+      const X_USER_STATS_SPEC* stats_specs =
+          kernel_state()->memory()->TranslateVirtual<X_USER_STATS_SPEC*>(
+              data->specs_ptr);
 
-      for (unsigned int queryIndex = 0; queryIndex < data->specs_count;
-           queryIndex++) {
-        Value queryObject(kObjectType);
-        queryObject.AddMember("id", queries[queryIndex].view_id,
-                              doc.GetAllocator());
+      const X_USER_STATS_VIEW* views_ptr =
+          kernel_state()->memory()->TranslateVirtual<X_USER_STATS_VIEW*>(
+              results->views_ptr);
 
-        assert_false(queries[queryIndex].num_column_ids >
-                     kXUserMaxStatsAttributes);
+      // 545107D4 uses same view id twice?
+      for (uint32_t spec_index = 0; spec_index < data->specs_count;
+           spec_index++) {
+        const X_USER_STATS_SPEC* stat_spec_ptr = stats_specs + spec_index;
+        const X_USER_STATS_VIEW* view_ptr = views_ptr + spec_index;
 
-        const uint32_t num_column_ids = std::min<uint32_t>(
-            queries[queryIndex].num_column_ids, kXUserMaxStatsAttributes);
+        assert_false(stat_spec_ptr->view_id == kTrueSkillViewId);
 
-        Value statIdsArray(kArrayType);
-        for (uint32_t stat_id_index = 0; stat_id_index < num_column_ids;
-             stat_id_index++) {
-          statIdsArray.PushBack(queries[queryIndex].column_ids[stat_id_index],
-                                doc.GetAllocator());
-        }
-        queryObject.AddMember("statisticIds", statIdsArray, doc.GetAllocator());
-        leaderboardQueryJsonArray.PushBack(queryObject, doc.GetAllocator());
+        // 545107FC, 454108D4, 58410A57, 584108FF, 41560834 doesn't use columns.
+        assert_false(stat_spec_ptr->num_column_ids < 1 ||
+                     stat_spec_ptr->num_column_ids > kXUserMaxStatsAttributes);
       }
 
-      doc.AddMember("queries", leaderboardQueryJsonArray, doc.GetAllocator());
-
-      rapidjson::StringBuffer buffer;
-      PrettyWriter<rapidjson::StringBuffer> writer(buffer);
-      doc.Accept(writer);
-
-      std::unique_ptr<HTTPResponseObjectJSON> chunk =
-          XLiveAPI::LeaderboardsFind((uint8_t*)buffer.GetString());
-
-      if (chunk->RawResponse().response == nullptr ||
-          chunk->StatusCode() != HTTP_STATUS_CODE::HTTP_CREATED) {
-        // FM2 crashes with X_ERROR_FUNCTION_FAILED
-        return X_ERROR_SUCCESS;
-      }
-
-      Document leaderboards;
-      leaderboards.Parse(chunk->RawResponse().response);
-      const Value& leaderboardsArray = leaderboards.GetArray();
-
-      auto leaderboards_guest_address = memory_->SystemHeapAlloc(
-          sizeof(X_USER_STATS_VIEW) * leaderboardsArray.Size());
-      auto leaderboard = memory_->TranslateVirtual<X_USER_STATS_VIEW*>(
-          leaderboards_guest_address);
-      auto resultsHeader =
-          memory_->TranslateVirtual<X_USER_STATS_READ_RESULTS*>(
-              data->results_ptr);
-      resultsHeader->num_views = leaderboardsArray.Size();
-      resultsHeader->views_ptr = leaderboards_guest_address;
-
-      uint32_t leaderboardIndex = 0;
-      for (Value::ConstValueIterator leaderboardObjectPtr =
-               leaderboardsArray.Begin();
-           leaderboardObjectPtr != leaderboardsArray.End();
-           ++leaderboardObjectPtr) {
-        leaderboard[leaderboardIndex].view_id =
-            (*leaderboardObjectPtr)["id"].GetUint();
-        auto playersArray = (*leaderboardObjectPtr)["players"].GetArray();
-        leaderboard[leaderboardIndex].num_rows = playersArray.Size();
-        leaderboard[leaderboardIndex].total_view_rows = playersArray.Size();
-        auto players_guest_address = memory_->SystemHeapAlloc(
-            sizeof(X_USER_STATS_ROW) * playersArray.Size());
-        auto player =
-            memory_->TranslateVirtual<X_USER_STATS_ROW*>(players_guest_address);
-        leaderboard[leaderboardIndex].rows_ptr = players_guest_address;
-
-        uint32_t playerIndex = 0;
-        for (Value::ConstValueIterator playerObjectPtr = playersArray.Begin();
-             playerObjectPtr != playersArray.End(); ++playerObjectPtr) {
-          auto gamertag = (*playerObjectPtr)["gamertag"].GetString();
-          auto gamertagLength =
-              (*playerObjectPtr)["gamertag"].GetStringLength();
-          memcpy(player[playerIndex].gamertag, gamertag, gamertagLength);
-
-          std::vector<uint8_t> xuid;
-          string_util::hex_string_to_array(
-              xuid, (*playerObjectPtr)["xuid"].GetString());
-          memcpy(&player[playerIndex].xuid, xuid.data(), 8);
-
-          auto statisticsArray = (*playerObjectPtr)["stats"].GetArray();
-          player[playerIndex].num_columns = statisticsArray.Size();
-          auto stats_guest_address = memory_->SystemHeapAlloc(
-              sizeof(X_USER_STATS_COLUMN) * statisticsArray.Size());
-          auto stat = memory_->TranslateVirtual<X_USER_STATS_COLUMN*>(
-              stats_guest_address);
-          player[playerIndex].columns_ptr = stats_guest_address;
-
-          uint32_t statIndex = 0;
-          for (Value::ConstValueIterator statObjectPtr =
-                   statisticsArray.Begin();
-               statObjectPtr != statisticsArray.End(); ++statObjectPtr) {
-            stat[statIndex].column_id = (*statObjectPtr)["id"].GetUint();
-
-            stat[statIndex].value.type = static_cast<X_USER_DATA_TYPE>(
-                (*statObjectPtr)["type"].GetUint());
-
-            X_USER_DATA_TYPE stat_type = stat[statIndex].value.type;
-
-            switch (stat_type) {
-              case X_USER_DATA_TYPE::CONTEXT: {
-                XELOGW("Statistic type: CONTEXT");
-              } break;
-              case X_USER_DATA_TYPE::INT32: {
-                XELOGW("Statistic type: INT32");
-              } break;
-              case X_USER_DATA_TYPE::INT64: {
-                XELOGW("Statistic type: INT64");
-              } break;
-              case X_USER_DATA_TYPE::DOUBLE: {
-                XELOGW("Statistic type: DOUBLE");
-              } break;
-              case X_USER_DATA_TYPE::FLOAT: {
-                XELOGW("Statistic type: FLOAT");
-              } break;
-              case X_USER_DATA_TYPE::DATETIME: {
-                XELOGW("Statistic type: DATETIME");
-              } break;
-              case X_USER_DATA_TYPE::UNSET: {
-                // Backend returns placeholder stats for display
-                XELOGW(
-                    "Row Index: {} - Placeholder stat missing stat ID in "
-                    "stats.json",
-                    playerIndex);
-              } break;
-              case X_USER_DATA_TYPE::WSTRING:
-              case X_USER_DATA_TYPE::BINARY:
-              default: {
-                XELOGW("Unsupported statistic type.",
-                       static_cast<uint32_t>(stat_type));
-              } break;
-            }
-
-            switch (stat_type) {
-              case X_USER_DATA_TYPE::CONTEXT:
-                stat[statIndex].value.data.u32 =
-                    (*statObjectPtr)["value"].GetUint();
-                break;
-              case X_USER_DATA_TYPE::INT32:
-                stat[statIndex].value.data.s32 =
-                    (*statObjectPtr)["value"].GetInt();
-                break;
-              case X_USER_DATA_TYPE::INT64:
-                stat[statIndex].value.data.s64 =
-                    (*statObjectPtr)["value"].GetInt64();
-                break;
-              case X_USER_DATA_TYPE::UNSET: {
-                // Ignore don't read missing/placeholder stat
-              } break;
-              default:
-                XELOGW("Unimplemented stat type for read, will attempt anyway.",
-                       static_cast<uint32_t>(stat[statIndex].value.type));
-                if ((*statObjectPtr)["value"].IsNumber()) {
-                  stat[statIndex].value.data.s64 =
-                      (*statObjectPtr)["value"].GetUint64();
-                }
-            }
-
-            player[playerIndex].rank = 1;
-
-            if ((*statObjectPtr)["value"].IsNumber()) {
-              // 41560901 uses i64Rating for ranking friends scores
-              player[playerIndex].i64Rating =
-                  (*statObjectPtr)["value"].GetUint64();
-            }
-
-            statIndex++;
-          }
-
-          playerIndex++;
-        }
-
-        leaderboardIndex++;
-      }
-#pragma endregion
       return X_E_SUCCESS;
     }
     case 0x000B001A: {
