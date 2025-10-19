@@ -29,6 +29,7 @@
 #include "xenia/kernel/json/player_object_json.h"
 #include "xenia/kernel/json/presence_object_json.h"
 #include "xenia/kernel/json/properties_object_json.h"
+#include "xenia/kernel/json/read_user_stats_object_json.h"
 #include "xenia/kernel/json/services_json.h"
 #include "xenia/kernel/json/session_object_json.h"
 #include "xenia/kernel/json/xstorage_file_info_object_json.h"
@@ -112,8 +113,8 @@ class XLiveAPI {
 
   static void SessionWriteStats(uint64_t sessionId, XGI_STATS_WRITE stats);
 
-  static std::unique_ptr<HTTPResponseObjectJSON> LeaderboardsFind(
-      const uint8_t* data);
+  static std::unique_ptr<LeaderboardObjectJSON> LeaderboardsFind(
+      const XGI_XUSER_READ_STATS stats);
 
   static void DeleteSession(uint64_t sessionId);
 

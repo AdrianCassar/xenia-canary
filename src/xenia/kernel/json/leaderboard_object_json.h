@@ -20,6 +20,8 @@ class LeaderboardObjectJSON : public BaseObjectJSON {
   using BaseObjectJSON::Deserialize;
   using BaseObjectJSON::Serialize;
 
+  LeaderboardObjectJSON();
+
   LeaderboardObjectJSON(XGI_STATS_WRITE stats,
                         std::vector<XSESSION_VIEW_PROPERTIES> view_properties);
 
@@ -40,9 +42,15 @@ class LeaderboardObjectJSON : public BaseObjectJSON {
   const XGI_STATS_WRITE& Stats() const { return stats_; }
   void Stats(const XGI_STATS_WRITE& stats) { stats_ = stats; }
 
+  const X_USER_STATS_READ_RESULTS& GetReadStatsResults() const {
+    return read_results_;
+  }
+
  private:
   XGI_STATS_WRITE stats_;
   std::vector<XSESSION_VIEW_PROPERTIES> view_properties_;
+
+  X_USER_STATS_READ_RESULTS read_results_;
 };
 }  // namespace kernel
 }  // namespace xe
