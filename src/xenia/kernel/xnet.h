@@ -287,9 +287,12 @@ constexpr uint16_t XNET_SYSTEMLINK_PORT = 3074;
 constexpr uint32_t XEX_PRIVILEGE_PII_ACCESS = 13;
 constexpr uint32_t XEX_PRIVILEGE_CROSSPLATFORM_SYSTEM_LINK = 14;
 
-constexpr uint8_t kXUserMaxStatsRows = 100;
+// 4D5307EA, 5841089F, 5841089F
+constexpr uint32_t kTrueSkillViewId = 0xFFFF0000;
 
+constexpr uint8_t kXUserMaxStatsRows = 100;
 constexpr uint8_t kXUserMaxStatsAttributes = 64;
+constexpr uint32_t kXUserMaxReadStatsViews = 5;
 
 constexpr uint32_t kTMSUserMaxSize = 8192;          // 8 KB
 constexpr uint32_t kTMSTitleMaxSize = 1048576 * 5;  // 5 MB
@@ -557,6 +560,17 @@ struct X_PARTY_USER_LIST_INTERNAL {
   X_PARTY_USER_INFO_INTERNAL users[X_PARTY_MAX_USERS];
 };
 static_assert_size(X_PARTY_USER_LIST_INTERNAL, 0x1008);
+
+struct XGI_XUSER_READ_STATS {
+  xe::be<uint32_t> titleId;
+  xe::be<uint32_t> xuids_count;
+  xe::be<uint32_t> xuids_ptr;
+  xe::be<uint32_t> specs_count;
+  xe::be<uint32_t> specs_ptr;
+  xe::be<uint32_t> results_size;
+  xe::be<uint32_t> results_ptr;
+};
+static_assert_size(XGI_XUSER_READ_STATS, 0x1C);
 
 struct X_USER_STATS_VIEW {
   xe::be<uint32_t> view_id;
