@@ -1300,6 +1300,8 @@ dword_result_t XamUserCreateStatsEnumerator_entry(
     const X_USER_STATS_SPEC* stat_spec_ptr = stat_specs_ptr + view_index;
     X_USER_STATS_VIEW* view_ptr = views_ptr + view_index;
 
+    assert_false(stat_spec_ptr->view_id == kTrueSkillViewId);
+
     // 4B5607E8 expects view id otherwise crashes.
     view_ptr->view_id = stat_spec_ptr->view_id;
     view_ptr->total_view_rows = rows;
