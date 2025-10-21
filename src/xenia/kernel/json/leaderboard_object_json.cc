@@ -9,20 +9,14 @@
 
 #include "xenia/kernel/json/leaderboard_object_json.h"
 #include "xenia/kernel/util/shim_utils.h"
-#include "xenia/kernel/xam/user_data.h"
 
 namespace xe {
 namespace kernel {
-LeaderboardObjectJSON::LeaderboardObjectJSON()
-    : stats_({}), view_properties_({}), read_results_({}) {}
+LeaderboardObjectJSON::LeaderboardObjectJSON() : read_results_({}) {}
 
 LeaderboardObjectJSON::LeaderboardObjectJSON(
-    XGI_STATS_WRITE stats,
-    std::vector<XSESSION_VIEW_PROPERTIES> view_properties)
-    : stats_({}), view_properties_({}), read_results_({}) {
-  stats_ = stats;
-  view_properties_ = view_properties;
-}
+    view_properties_unordered_map stats)
+    : stats_(stats), read_results_({}) {}
 
 LeaderboardObjectJSON::~LeaderboardObjectJSON() {}
 
@@ -131,6 +125,7 @@ bool LeaderboardObjectJSON::Deserialize(const rapidjson::Value& obj) {
               break;
             case xam::X_USER_DATA_TYPE::UNSET:
               // Ignore don't read missing/placeholder stat
+              break;
             default:
               XELOGW("Unimplemented stat type for read: {}",
                      static_cast<uint32_t>(type));
@@ -152,87 +147,96 @@ bool LeaderboardObjectJSON::Deserialize(const rapidjson::Value& obj) {
 
 bool LeaderboardObjectJSON::Serialize(
     rapidjson::PrettyWriter<rapidjson::StringBuffer>* writer) const {
-  const std::string xuid = fmt::format("{:016X}", stats_.xuid.get());
+  if (stats_.empty()) {
+    return false;
+  }
 
-  writer->StartObject();
+  // TODO: Support multiple local players in a session
 
-  writer->Key("leaderboards");
-  writer->StartObject();
+  for (uint32_t view_index = 0; const auto& [xuid, views] : stats_) {
+    const std::string xuid_str = fmt::format("{:016X}", xuid);
 
-  for (auto& user_property : view_properties_) {
-    const std::string leaderboard_id = std::to_string(user_property.view_id);
+    if (view_index >= 1) {
+      // Sending multiple players stats is unsupported
+      assert_always();
+      continue;
+    }
 
-    assert_false(user_property.view_id == kTrueSkillViewId);
-
-    writer->Key(leaderboard_id);
     writer->StartObject();
 
-    writer->Key("stats");
+    writer->String("leaderboards");
     writer->StartObject();
 
-    for (uint32_t i = 0; i < user_property.properties_count; i++) {
-      const xam::XUSER_PROPERTY* statistics_ptr =
-          kernel_state()->memory()->TranslateVirtual<xam::XUSER_PROPERTY*>(
-              user_property.properties_ptr);
+    for (const auto& [view_id, properties] : views) {
+      const std::string leaderboard_id = std::to_string(view_id);
 
-      const xam::XUSER_PROPERTY& stat = statistics_ptr[i];
+      assert_false(view_id == kTrueSkillViewId);
 
-      const std::string property_id =
-          fmt::format("{:08X}", stat.property_id.get());
-
-      // 41560901 doesn't set property type
-      xam::X_USER_DATA_TYPE property_type =
-          xam::UserData::get_type(stat.property_id);
-
-      // Write each stat ID
-      writer->Key(property_id);
+      writer->String(leaderboard_id);
       writer->StartObject();
 
-      writer->Key("type");
-      writer->Int(static_cast<uint32_t>(property_type));
+      writer->String("stats");
+      writer->StartObject();
 
-      switch (property_type) {
-        case xam::X_USER_DATA_TYPE::CONTEXT: {
-          writer->String("value");
-          writer->Uint(stat.data.data.u32);
-        } break;
-        case xam::X_USER_DATA_TYPE::INT32: {
-          writer->String("value");
-          writer->Int(stat.data.data.s32);
-        } break;
-        case xam::X_USER_DATA_TYPE::DATETIME:
-        case xam::X_USER_DATA_TYPE::INT64: {
-          writer->String("value");
-          writer->Uint64(stat.data.data.s64);
-        } break;
-        case xam::X_USER_DATA_TYPE::FLOAT:
-        case xam::X_USER_DATA_TYPE::DOUBLE: {
-          writer->String("value");
-          writer->Double(stat.data.data.f64);
-        } break;
-        case xam::X_USER_DATA_TYPE::UNSET:
-        case xam::X_USER_DATA_TYPE::WSTRING:
-        case xam::X_USER_DATA_TYPE::BINARY:
-        default:
-          XELOGW("Unsupported statistic type for write {}",
-                 static_cast<uint32_t>(stat.data.type));
-          break;
+      for (const auto& [property_id, property] : properties) {
+        const std::string property_id_str = fmt::format("{:08X}", property_id);
+
+        // 41560901 doesn't set property type
+        xam::X_USER_DATA_TYPE property_type =
+            xam::UserData::get_type(property_id);
+
+        // Write each stat ID
+        writer->String(property_id_str);
+        writer->StartObject();
+
+        writer->String("type");
+        writer->Int(static_cast<uint32_t>(property_type));
+
+        switch (property_type) {
+          case xam::X_USER_DATA_TYPE::CONTEXT: {
+            writer->String("value");
+            writer->Uint(property.get_data()->data.u32);
+          } break;
+          case xam::X_USER_DATA_TYPE::INT32: {
+            writer->String("value");
+            writer->Int(property.get_data()->data.s32);
+          } break;
+          case xam::X_USER_DATA_TYPE::DATETIME:
+          case xam::X_USER_DATA_TYPE::INT64: {
+            writer->String("value");
+            writer->Uint64(property.get_data()->data.s64);
+          } break;
+          case xam::X_USER_DATA_TYPE::FLOAT:
+          case xam::X_USER_DATA_TYPE::DOUBLE: {
+            writer->String("value");
+            writer->Double(property.get_data()->data.f64);
+          } break;
+          case xam::X_USER_DATA_TYPE::UNSET:
+          case xam::X_USER_DATA_TYPE::WSTRING:
+          case xam::X_USER_DATA_TYPE::BINARY:
+          default:
+            XELOGW("Unsupported stat type for write {}",
+                   static_cast<uint32_t>(property.get_data()->type));
+            break;
+        }
+
+        writer->EndObject();
       }
+
+      writer->EndObject();
 
       writer->EndObject();
     }
 
     writer->EndObject();
 
+    writer->String("xuid");
+    writer->String(xuid_str);
+
     writer->EndObject();
+
+    view_index++;
   }
-
-  writer->EndObject();
-
-  writer->Key("xuid");
-  writer->String(xuid);
-
-  writer->EndObject();
 
   return true;
 }

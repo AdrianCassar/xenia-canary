@@ -14,7 +14,7 @@
 
 #include "xenia/base/byte_order.h"
 #include "xenia/kernel/util/xfiletime.h"
-#include "xenia/kernel/xam/user_data.h"
+#include "xenia/kernel/xam/user_property.h"
 
 #ifdef XE_PLATFORM_WIN32
 #define _WINSOCK_DEPRECATED_NO_WARNINGS  // inet_addr
@@ -290,9 +290,14 @@ constexpr uint32_t XEX_PRIVILEGE_CROSSPLATFORM_SYSTEM_LINK = 14;
 // 4D5307EA, 5841089F, 5841089F
 constexpr uint32_t kTrueSkillViewId = 0xFFFF0000;
 
-constexpr uint8_t kXUserMaxStatsRows = 100;
-constexpr uint8_t kXUserMaxStatsAttributes = 64;
+constexpr uint32_t kXUserMaxStatsRows = 100;
+constexpr uint32_t kXUserMaxStatsAttributes = 64;
 constexpr uint32_t kXUserMaxReadStatsViews = 5;
+
+// XUIDs -> Views -> Property IDs -> Property
+using view_properties_unordered_map = std::unordered_map<
+    uint64_t,
+    std::unordered_map<uint32_t, std::unordered_map<uint32_t, xam::Property>>>;
 
 constexpr uint32_t kTMSUserMaxSize = 8192;          // 8 KB
 constexpr uint32_t kTMSTitleMaxSize = 1048576 * 5;  // 5 MB
