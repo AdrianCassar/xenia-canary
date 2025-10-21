@@ -266,6 +266,7 @@ class XSession : public XObject {
   X_RESULT RegisterArbitration(XGI_SESSION_ARBITRATION* data);
   X_RESULT ModifySkill(XGI_SESSION_MODIFYSKILL* data);
   X_RESULT WriteStats(XGI_STATS_WRITE* data);
+  X_RESULT FlushStats();
 
   X_RESULT StartSession(XGI_SESSION_STATE* state);
   X_RESULT EndSession(XGI_SESSION_STATE* state);
@@ -413,8 +414,8 @@ class XSession : public XObject {
   std::map<uint64_t, XSESSION_MEMBER> local_members_{};
   std::map<uint64_t, XSESSION_MEMBER> remote_members_{};
 
-  // TODO!
-  std::vector<uint8_t> stats_;
+  // Cached stats
+  view_properties_unordered_map stats_properties_ = {};
 };
 }  // namespace kernel
 }  // namespace xe

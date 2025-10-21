@@ -894,33 +894,31 @@ std::unique_ptr<ArbitrationObjectJSON> XLiveAPI::XSessionArbitration(
   return arbitration;
 }
 
-void XLiveAPI::SessionWriteStats(uint64_t sessionId, XGI_STATS_WRITE stats) {
+void XLiveAPI::SessionFlushStats(uint64_t sessionId,
+                                 view_properties_unordered_map stats) {
   std::string endpoint =
       fmt::format("title/{:08X}/sessions/{:016x}/leaderboards",
                   kernel_state()->title_id(), sessionId);
 
-  XSESSION_VIEW_PROPERTIES* view_properties =
-      kernel_state()->memory()->TranslateVirtual<XSESSION_VIEW_PROPERTIES*>(
-          stats.views_ptr);
+  if (stats.empty()) {
+    return;
+  }
 
-  std::vector<XSESSION_VIEW_PROPERTIES> properties(
-      view_properties, view_properties + stats.num_views);
-
-  LeaderboardObjectJSON leaderboard = LeaderboardObjectJSON(stats, properties);
+  LeaderboardObjectJSON leaderboard = LeaderboardObjectJSON(stats);
 
   std::string output;
   bool valid = leaderboard.Serialize(output);
   assert_true(valid);
 
   if (cvars::logging) {
-    XELOGI("SessionWriteStats:\n\n{}", output);
+    XELOGI("{}:\n\n{}", __func__, output);
   }
 
   std::unique_ptr<HTTPResponseObjectJSON> response =
       Post(endpoint, (uint8_t*)output.c_str());
 
   if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_CREATED) {
-    XELOGE("SessionWriteStats error message: {}", response->Message());
+    XELOGE("{} error message: {}", __func__, response->Message());
     // assert_always();
 
     return;
