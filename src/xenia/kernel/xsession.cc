@@ -756,7 +756,78 @@ X_RESULT XSession::WriteStats(XGI_STATS_WRITE* data) {
     return X_ERROR_SUCCESS;
   }
 
-  XLiveAPI::SessionWriteStats(session_id_, *data);
+  const uint64_t xuid = data->xuid;
+
+  const XSESSION_VIEW_PROPERTIES* views_properties_ptr =
+      kernel_state()->memory()->TranslateVirtual<XSESSION_VIEW_PROPERTIES*>(
+          data->views_ptr);
+
+  std::vector<XSESSION_VIEW_PROPERTIES> views_properties(
+      views_properties_ptr, views_properties_ptr + data->num_views);
+
+  for (uint32_t view_index = 0; const auto& view : views_properties) {
+    const uint32_t view_id = view.view_id;
+
+    const xam::XUSER_PROPERTY* properties_ptr =
+        kernel_state()->memory()->TranslateVirtual<xam::XUSER_PROPERTY*>(
+            view.properties_ptr);
+
+    const size_t properties_count =
+        std::min<uint32_t>(view.properties_count, kXUserMaxStatsAttributes);
+
+    for (uint32_t property_index = 0; property_index < properties_count;
+         property_index++) {
+      const xam::XUSER_PROPERTY& property_guest =
+          properties_ptr[property_index];
+
+      const uint32_t property_id = property_guest.property_id;
+
+      auto& cached_properties = stats_properties_[xuid][view_id];
+
+      uint8_t* data_ptr = new uint8_t[sizeof(xam::X_USER_DATA_UNION)];
+      memcpy(data_ptr, &property_guest.data.data,
+             sizeof(xam::X_USER_DATA_UNION));
+
+      // Get size
+      const uint32_t property_data_size =
+          xam::UserData::get_valid_data_size(property_id, 0);
+
+      const xam::Property property_host =
+          xam::Property(property_id, property_data_size, data_ptr);
+
+      cached_properties[property_id] = property_host;
+    }
+
+    view_index++;
+  }
+
+  return X_ERROR_SUCCESS;
+}
+
+// Write leaderboard stats to the backend server
+// Flushes only non-skill leaderboards
+// What are non-arbitrated, arbitrated and skill leaderboards?
+X_RESULT XSession::FlushStats() {
+  if (!HasSessionFlag(static_cast<SessionFlags>((uint32_t)local_details_.Flags),
+                      STATS)) {
+    XELOGW("Session does not support stats.");
+    return X_ERROR_FUNCTION_FAILED;
+  }
+
+  if (local_details_.eState != XSESSION_STATE::INGAME) {
+    XELOGW("Writing stats outside of gameplay.");
+    return X_ERROR_FUNCTION_FAILED;
+  }
+
+  if (HasSessionFlag(static_cast<SessionFlags>((uint32_t)local_details_.Flags),
+                     ARBITRATION)) {
+    // Flushes only the session's non-arbitrated leaderboards
+  }
+
+  XLiveAPI::SessionFlushStats(session_id_, stats_properties_);
+
+  // TODO: Determine which view ids to not clear.
+  stats_properties_.clear();
 
   return X_ERROR_SUCCESS;
 }
@@ -768,6 +839,8 @@ X_RESULT XSession::StartSession(XGI_SESSION_STATE* state) {
 }
 
 X_RESULT XSession::EndSession(XGI_SESSION_STATE* state) {
+  FlushStats();
+
   local_details_.eState = XSESSION_STATE::REPORTING;
 
   return X_ERROR_SUCCESS;
