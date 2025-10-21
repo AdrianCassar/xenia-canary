@@ -580,7 +580,15 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
              data->obj_ptr.get(), data->xuid.get(), data->num_views.get(),
              data->views_ptr.get());
 
-      return X_E_SUCCESS;
+      uint8_t* obj_ptr = memory_->TranslateVirtual<uint8_t*>(data->obj_ptr);
+
+      auto session =
+          XObject::GetNativeObject<XSession>(kernel_state(), obj_ptr);
+      if (!session) {
+        return X_STATUS_INVALID_HANDLE;
+      }
+
+      return session->FlushStats();
     }
     case 0x000B001F: {
       assert_true(!buffer_length ||
