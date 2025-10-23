@@ -624,7 +624,7 @@ dword_result_t XamUserAreUsersFriends_entry(
         result == X_ERROR_SUCCESS ? X_ERROR_SUCCESS : X_ERROR_FUNCTION_FAILED,
         X_HRESULT_FROM_WIN32(result), are_friends);
 
-    return X_ERROR_SUCCESS;
+    return X_ERROR_IO_PENDING;
   }
 
   if (!overlapped_ptr && are_friends_ptr) {
@@ -793,7 +793,7 @@ dword_result_t XamReadTile_entry(dword_t tile_type, dword_t title_id,
                                  lpvoid_t overlapped_ptr) {
   auto user = kernel_state()->xam_state()->GetUserProfile(user_index);
   if (!user) {
-    user = kernel_state()->xam_state()->GetUserProfile(item_id);
+    user = kernel_state()->xam_state()->GetUserProfileAny(item_id);
     if (!user) {
       return X_ERROR_INVALID_PARAMETER;
     }
