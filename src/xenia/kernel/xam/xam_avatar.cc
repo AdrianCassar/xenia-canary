@@ -2,7 +2,7 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2024 Ben Vanik. All rights reserved.                             *
+ * Copyright 2025 Xenia Canary. All rights reserved.                          *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
@@ -23,14 +23,18 @@ namespace xe {
 namespace kernel {
 namespace xam {
 
+struct X_AVATAR_METADATA {
+  uint8_t metadata[kMaxUserDataSize];
+};
+
 // Start/End
 dword_result_t XamAvatarInitialize_entry(
-    dword_t unk1,              // 1, 2, 4, etc
-    dword_t unk2,              // 0 or 1
-    dword_t processor_number,  // for thread creation?
-    lpdword_t function_ptrs,   // 20b, 5 pointers
-    lpunknown_t unk5,          // ptr in data segment
-    dword_t unk6               // flags - 0x00300000, 0x30, etc
+    dword_t coordinate_system,  // 1, 2, 4, etc
+    dword_t unk2,               // 0 or 1
+    dword_t processor_number,   // for thread creation?
+    lpdword_t function_ptrs,    // 20b, 5 pointers
+    lpunknown_t unk5,           // ptr in data segment
+    dword_t unk6                // flags - 0x00300000, 0x30, etc
 ) {
   if (kernel_state()->title_id() == kAvatarEditorID) {
     return X_STATUS_SUCCESS;
@@ -45,13 +49,59 @@ void XamAvatarShutdown_entry() {
 }
 DECLARE_XAM_EXPORT1(XamAvatarShutdown, kAvatars, kStub);
 
-// Get & Set
-dword_result_t XamAvatarGetManifestLocalUser_entry(dword_t user_index,
-                                                   lpdword_t avatar_metadata,
-                                                   qword_t unk3) {
-  // XMsgStartIORequestEx(0xf3, 0x600003, unk3, stack1, 8, 0)
+dword_result_t XamAvatarGetManifestLocalUser_entry(
+    dword_t user_index, pointer_t<X_AVATAR_METADATA> avatar_metadata_ptr,
+    pointer_t<XAM_OVERLAPPED> overlapped_ptr) {
+  auto run = [=](uint32_t& extended_error, uint32_t& length) {
+    extended_error = X_ERROR_SUCCESS;
+    length = 0;
 
-  return X_STATUS_SUCCESS;
+    if (user_index >= XUserMaxUserCount) {
+      extended_error = X_E_INVALIDARG;
+      return X_ERROR_INVALID_PARAMETER;
+    }
+
+    if (!avatar_metadata_ptr) {
+      extended_error = X_E_INVALIDARG;
+      return X_ERROR_INVALID_PARAMETER;
+    }
+
+    const auto user_profile =
+        kernel_state()->xam_state()->GetUserProfile(user_index);
+
+    if (!user_profile) {
+      extended_error = X_E_NO_SUCH_USER;
+      return X_ERROR_FUNCTION_FAILED;
+    }
+
+    const uint32_t avatar_info_id =
+        static_cast<uint32_t>(UserSettingId::XPROFILE_GAMERCARD_AVATAR_INFO_1);
+
+    auto avatar_info = kernel_state()->xam_state()->user_tracker()->GetSetting(
+        user_profile, kDashboardID, avatar_info_id);
+
+    if (!avatar_info.has_value()) {
+      extended_error = X_E_NO_SUCH_USER;
+      return X_ERROR_FUNCTION_FAILED;
+    }
+
+    if (avatar_info->get_data()->data.binary.ptr) {
+      memcpy(avatar_metadata_ptr, avatar_info->get_extended_data().data(),
+             avatar_info->get_data_size());
+    }
+
+    return X_ERROR_SUCCESS;
+  };
+
+  if (!overlapped_ptr) {
+    uint32_t extended_error, length;
+    X_RESULT result = run(extended_error, length);
+
+    return result == X_ERROR_SUCCESS ? result : extended_error;
+  }
+
+  kernel_state()->CompleteOverlappedDeferredEx(run, overlapped_ptr);
+  return X_ERROR_IO_PENDING;
 }
 DECLARE_XAM_EXPORT1(XamAvatarGetManifestLocalUser, kAvatars, kStub);
 
@@ -64,26 +114,37 @@ dword_result_t XamAvatarGetManifestsByXuid_entry(dword_t unk1, qword_t unk2,
 }
 DECLARE_XAM_EXPORT1(XamAvatarGetManifestsByXuid, kAvatars, kStub)
 
-dword_result_t XamAvatarGetAssetsResultSize_entry(qword_t unk1, qword_t unk2,
-                                                  dword_t unk3) {
-  // return XMsgInProcessCall(0xf3,0x600005,local_20,0);
+dword_result_t XamAvatarGetAssetsResultSize_entry(
+    dword_t avatar_component_mask, lpdword_t result_buffer_size_ptr,
+    lpdword_t gpu_resource_buffer_size_ptr) {
+  *result_buffer_size_ptr = 0;
+  *gpu_resource_buffer_size_ptr = 0;
 
   return X_STATUS_SUCCESS;
 }
 DECLARE_XAM_EXPORT1(XamAvatarGetAssetsResultSize, kAvatars, kStub);
 
-dword_result_t XamAvatarGetAssets_entry(qword_t unk1, word_t unk2, dword_t unk3,
-                                        dword_t unk4, dword_t unk5,
-                                        qword_t unk6) {
+dword_result_t XamAvatarGetAssets_entry(
+    pointer_t<X_AVATAR_METADATA> avatar_metadata_ptr,
+    dword_t avatar_component_mask, dword_t flags, lpdword_t result_buffer_ptr,
+    lpdword_t gpu_resource_buffer_ptr,
+    pointer_t<XAM_OVERLAPPED> overlapped_ptr) {
+  // 58410907 doesn't crash if we return failure.
+  if (overlapped_ptr) {
+    kernel_state()->CompleteOverlappedImmediateEx(
+        overlapped_ptr, X_ERROR_FUNCTION_FAILED, X_E_FAIL, 0);
+
+    return X_ERROR_IO_PENDING;
+  }
+
   return X_STATUS_SUCCESS;
 }
 DECLARE_XAM_EXPORT1(XamAvatarGetAssets, kAvatars, kStub);
 
-dword_result_t XamAvatarSetCustomAsset_entry(qword_t unk1, qword_t unk2,
-                                             dword_t unk3, dword_t unk4,
-                                             dword_t unk5, dword_t unk6) {
-  // XMsgInProcessCall(0xf3,0x60000a,local_30,0);
-
+dword_result_t XamAvatarSetCustomAsset_entry(
+    dword_t buffer_size, lpdword_t asset_data_ptr, dword_t custom_color_count,
+    lpdword_t custom_colors_ptr,
+    pointer_t<X_AVATAR_METADATA> avatar_metadata_ptr) {
   return X_STATUS_SUCCESS;
 }
 DECLARE_XAM_EXPORT1(XamAvatarSetCustomAsset, kAvatars, kStub)
@@ -96,40 +157,43 @@ dword_result_t XamAvatarSetManifest_entry(qword_t unk1, qword_t unk2,
 }
 DECLARE_XAM_EXPORT1(XamAvatarSetManifest, kAvatars, kStub);
 
-dword_result_t XamAvatarGetMetadataRandom_entry(word_t body_type, word_t unk2,
-                                                lpdword_t avatar_metadata,
-                                                qword_t unk4) {
-  // some_function(0x600010,param_4,local_28,0xc,local_30)
+dword_result_t XamAvatarGetMetadataRandom_entry(
+    dword_t body_type, dword_t avatars_count,
+    pointer_t<X_AVATAR_METADATA> avatar_metadata_ptr,
+    pointer_t<XAM_OVERLAPPED> overlapped_ptr) {
+  if (overlapped_ptr) {
+    kernel_state()->CompleteOverlappedImmediate(overlapped_ptr,
+                                                X_ERROR_SUCCESS);
+    return X_ERROR_IO_PENDING;
+  }
 
   return X_STATUS_SUCCESS;
 }
 DECLARE_XAM_EXPORT1(XamAvatarGetMetadataRandom, kAvatars, kStub);
 
-dword_result_t XamAvatarGetMetadataSignedOutProfileCount_entry(dword_t unk1,
-                                                               qword_t unk2) {
-  // Function_818D1738(0x600013,param_2,local_10,4,0);
+dword_result_t XamAvatarGetMetadataSignedOutProfileCount_entry() {
+  const uint32_t profile_count = 0;
 
-  return X_STATUS_SUCCESS;
+  return profile_count;
 }
 DECLARE_XAM_EXPORT1(XamAvatarGetMetadataSignedOutProfileCount, kAvatars, kStub);
 
-dword_result_t XamAvatarGetMetadataSignedOutProfile_entry(dword_t unk1,
-                                                          dword_t unk2,
-                                                          qword_t unk3) {
-  // Function_818D1738(0x600014,param_3,local_10,8,0);
+dword_result_t XamAvatarGetMetadataSignedOutProfile_entry(
+    dword_t profile_index, pointer_t<X_AVATAR_METADATA> avatar_metadata_ptr,
+    pointer_t<XAM_OVERLAPPED> overlapped_ptr) {
+  if (overlapped_ptr) {
+    kernel_state()->CompleteOverlappedImmediate(overlapped_ptr,
+                                                X_ERROR_SUCCESS);
+    return X_ERROR_IO_PENDING;
+  }
 
   return X_STATUS_SUCCESS;
 }
 DECLARE_XAM_EXPORT1(XamAvatarGetMetadataSignedOutProfile, kAvatars, kStub);
 
-dword_result_t XamAvatarManifestGetBodyType_entry(qword_t body_type) {
-  /* Notes:
-      - Calls XMsgStartIORequestEx(0xf3, 0x60000F, unk4, stack1, 0x18,
-     0x10000000)
-      - return either char of 1 - male, 2 - female, else - unknown
-  */
-
-  return '1';
+dword_result_t XamAvatarManifestGetBodyType_entry(
+    pointer_t<X_AVATAR_METADATA> avatar_metadata_ptr) {
+  return 1;
 }
 DECLARE_XAM_EXPORT1(XamAvatarManifestGetBodyType, kAvatars, kStub);
 
@@ -191,10 +255,8 @@ const static std::map<uint64_t, std::string> XAnimationTypeMap = {
     {0x00400000000C0002, "Animation Female Idle Fixes Shoe"},
 };
 
-// https://github.com/xenia-canary/xenia-canary/commit/212c99eee2724de15f471148d10197d89794ff32
 dword_result_t XamAvatarLoadAnimation_entry(lpqword_t asset_id_ptr,
-                                            dword_t flags, dword_t output,
-                                            dword_t unk1) {
+                                            dword_t flags, dword_t output) {
   /* Notes:
       - Calls XMsgStartIORequestEx(0xf3, 0x60000F, unk4, stack1, 0x18,
      0x10000000)
@@ -215,6 +277,19 @@ dword_result_t XamAvatarLoadAnimation_entry(lpqword_t asset_id_ptr,
   return X_STATUS_SUCCESS;
 }
 DECLARE_XAM_EXPORT1(XamAvatarLoadAnimation, kAvatars, kStub);
+
+dword_result_t XamAvatarGenerateMipMaps_entry(
+    qword_t unk1, qword_t unk2, dword_t unk3, dword_t unk4,
+    pointer_t<XAM_OVERLAPPED> overlapped_ptr) {
+  if (overlapped_ptr) {
+    kernel_state()->CompleteOverlappedImmediate(overlapped_ptr,
+                                                X_ERROR_SUCCESS);
+    return X_ERROR_IO_PENDING;
+  }
+
+  return X_STATUS_SUCCESS;
+}
+DECLARE_XAM_EXPORT1(XamAvatarGenerateMipMaps, kAvatars, kStub);
 
 // Enum
 dword_result_t XamAvatarBeginEnumAssets_entry(qword_t unk1, word_t unk2,
@@ -240,16 +315,6 @@ dword_result_t XamAvatarEndEnumAssets_entry(qword_t unk1) {
   return X_STATUS_SUCCESS;
 }
 DECLARE_XAM_EXPORT1(XamAvatarEndEnumAssets, kAvatars, kStub);
-
-// Other
-dword_result_t XamAvatarGenerateMipMaps_entry(qword_t unk1, qword_t unk2,
-                                              dword_t unk3, dword_t unk4,
-                                              qword_t unk5) {
-  // Function_818D1738(0x600007,param_5,local_30,0x10,local_40);
-
-  return X_STATUS_SUCCESS;
-}
-DECLARE_XAM_EXPORT1(XamAvatarGenerateMipMaps, kAvatars, kStub);
 
 dword_result_t XamAvatarWearNow_entry(qword_t unk1, lpdword_t unk2,
                                       qword_t unk3) {
