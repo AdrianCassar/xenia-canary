@@ -535,7 +535,8 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
 
           ImGui::Spacing();
           ImGui::Text("Build Details:");
-          ImGui::Text(fmt::format("Branch: {}", XE_BUILD_BRANCH).c_str());
+          ImGui::TextWrapped(
+              fmt::format("Branch: {}", XE_BUILD_BRANCH).c_str());
           ImGui::Text(fmt::format("Date: {}", XE_BUILD_DATE).c_str());
           ImGui::Text(fmt::format("Commit: {}", XE_BUILD_COMMIT_SHORT).c_str());
 
