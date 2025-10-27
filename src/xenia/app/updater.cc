@@ -653,6 +653,8 @@ bool Updater::UpdateAndRestart(const std::filesystem::path& zip_path) {
 
 // Scripts for completing the automatic update process.
 #ifdef XE_PLATFORM_WIN32
+  const DWORD current_process_id = GetCurrentProcessId();
+
   script_content = fmt::format(
       "@echo off\n"
       "set LOG_FILE=\"{1}\\{5}\"\n"
@@ -660,12 +662,11 @@ bool Updater::UpdateAndRestart(const std::filesystem::path& zip_path) {
       "echo [INF] Changed to extract directory >> %LOG_FILE%\n"
       "cd \"{1}\"\n"
       "echo [INF] Waiting for Xenia process to exit >> %LOG_FILE%\n"
-      ":loop\n"
-      "tasklist | findstr /I \"{0}\" > nul\n"
-      "if not errorlevel 1 (\n"
-      "  timeout /t 1 > nul\n"
-      "  goto loop\n"
-      ")\n"
+      "set ps_stop_instances=powershell -ExecutionPolicy RemoteSigned -Command "
+      "\"Get-Process (Get-Item '{2}').Basename | Where-Object Path -eq '{2}' | "
+      "ForEach-Object {{ if ($_.Id -eq {7}) {{ Wait-Process -id {7} }} else {{ "
+      "Stop-Process -id $_.Id; Wait-Process -id $_.Id }}}}\"\n"
+      "call %ps_stop_instances%\n"
       "echo [INF] Xenia process has exited >> %LOG_FILE%\n"
       "echo [INF] Cleaning and creating backup folder >> %LOG_FILE%\n"
       "if exist \"{1}\\{6}\" rd /s /q \"{1}\\{6}\"\n"
@@ -713,7 +714,8 @@ bool Updater::UpdateAndRestart(const std::filesystem::path& zip_path) {
       zip_filename,         // {3}
       zip_path,             // {4}
       update_log_filename,  // {5}
-      backup_folder_name    // {6}
+      backup_folder_name,   // {6}
+      current_process_id    // {7}
   );
 #elif XE_PLATFORM_LINUX
   script_content = fmt::format(
