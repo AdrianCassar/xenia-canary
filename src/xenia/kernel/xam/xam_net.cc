@@ -40,6 +40,8 @@
 
 #include "xenia/kernel/XLiveAPI.h"
 
+DEFINE_bool(xhttp, false, "Toggles XHTTP.", "Live");
+
 DECLARE_bool(logging);
 
 DECLARE_bool(log_mask_ips);
@@ -1403,7 +1405,7 @@ dword_result_t NetDll_XHttpStartup_entry(dword_t caller, dword_t reserved,
   // 584111F7 - Prevents Minecraft from loading
   // We're suppose to set error code if we fail function
   // XThread::SetLastError(XHTTP_ERROR_CONNECTION_ERROR);
-  return 0;
+  return cvars::xhttp;
 }
 DECLARE_XAM_EXPORT1(NetDll_XHttpStartup, kNetworking, kStub);
 
