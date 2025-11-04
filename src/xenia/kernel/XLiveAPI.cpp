@@ -1822,7 +1822,7 @@ std::map<uint64_t, FriendPresenceObjectJSON> XLiveAPI::GetOnlineFriendsPresence(
 
   std::map<uint64_t, FriendPresenceObjectJSON> peer_presences = {};
 
-  const auto& friends_presence =
+  const std::vector<FriendPresenceObjectJSON> friends_presence =
       XLiveAPI::GetFriendsPresence(profile->GetFriendsXUIDs())
           ->PlayersPresence();
 
