@@ -68,6 +68,29 @@ bool UpdaterDialog::ToggleButton(const char* str_id, bool* v) {
   return clicked;
 }
 
+void UpdaterDialog::ToggleStableState() {
+  // Reset current data if toggled
+  update_response_code_ = 0;
+  download_response_code_ = 0;
+  checked_for_updates_ = false;
+  update_available_ = false;
+  replace_file_ = false;
+  compare_status_ = COMPARE_STATE::IDENTICAL;
+  latest_commit_hash_ = "";
+  latest_commit_date_ = "";
+  stable_release_tag_ = "";
+  changelog_.clear();
+
+  // Download state reset
+  downloaded_ = false;
+  downloaded_failed_ = false;
+  downloading_ = false;
+  applying_update_failed_ = false;
+  hide_download_button_ = false;
+  download_progress_ = 0.0f;
+  downloaded_file_path_.clear();
+}
+
 void UpdaterDialog::OnDraw(ImGuiIO& io) {
   if (!updater_opened_) {
     updater_opened_ = true;
@@ -105,8 +128,6 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
     ImGui::EndPopup();
   }
 #else
-    float cursor_x = ImGui::GetCursorPosX();
-
     ImGui::BeginGroup();
 
     std::string update_desc = stable_toggle_ ? "Check for Stable Updates"
@@ -201,35 +222,29 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
 
     ImGui::SameLine();
 
+    auto btn_toggle_start_cursor = ImGui::GetCursorPos();
+
     ImGui::BeginGroup();
-
     if (ToggleButton("ToggleStable", &stable_toggle_)) {
-      // Reset current data if toggled
-      update_response_code_ = 0;
-      download_response_code_ = 0;
-      checked_for_updates_ = false;
-      update_available_ = false;
-      replace_file_ = false;
-      compare_status_ = COMPARE_STATE::IDENTICAL;
-      latest_commit_hash_ = "";
-      latest_commit_date_ = "";
-      stable_release_tag_ = "";
-      changelog_.clear();
-
-      // Download state reset
-      downloaded_ = false;
-      downloaded_failed_ = false;
-      downloading_ = false;
-      applying_update_failed_ = false;
-      hide_download_button_ = false;
-      download_progress_ = 0.0f;
-      downloaded_file_path_.clear();
+      ToggleStableState();
     }
-
-    ImGui::SetCursorPosX(cursor_x);
-    ImGui::Dummy(ImVec2(0, 0));
-
     ImGui::EndGroup();
+
+    auto btn_toggle_end_cursor = ImGui::GetCursorPos();
+
+    ImGui::SetCursorPos(btn_toggle_start_cursor);
+
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, IM_COL32(50, 100, 200, 50));
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, IM_COL32(0, 0, 0, 0));
+    if (ImGui::Selectable("##ToggleStableState", false,
+                          ImGuiSelectableFlags_NoAutoClosePopups,
+                          ImGui::GetItemRectSize())) {
+      stable_toggle_ = !stable_toggle_;
+      ToggleStableState();
+    }
+    ImGui::PopStyleColor(2);
+
+    ImGui::SetCursorPos(btn_toggle_end_cursor);
 
     ImGui::Spacing();
     ImGui::Separator();

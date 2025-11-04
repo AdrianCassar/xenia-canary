@@ -504,6 +504,10 @@ void ManagerDialog::OnDraw(ImGuiIO& io) {
     ImGui::SetNextWindowSizeConstraints(ImVec2(225, -1), ImVec2(225, -1));
     if (ImGui::BeginPopupModal("Delete Profiles", nullptr,
                                ImGuiWindowFlags_AlwaysAutoResize)) {
+      if (ImGui::IsKeyPressed(ImGuiKey::ImGuiKey_GamepadFaceRight, false)) {
+        ImGui::CloseCurrentPopup();
+      }
+
       float btn_width = (ImGui::GetContentRegionAvail().x * 0.5f) -
                         (ImGui::GetStyle().ItemSpacing.x * 0.5f);
       ImVec2 btn_size = ImVec2(btn_width, btn_height);

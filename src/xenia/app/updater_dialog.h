@@ -45,6 +45,8 @@ class UpdaterDialog final : public ui::ImGuiDialog {
  private:
   bool ToggleButton(const char* str_id, bool* v);
 
+  void ToggleStableState();
+
   enum class COMPARE_STATE { IDENTICAL, AHEAD, BEHIND, DIVERGED };
 
   bool updater_opened_ = false;
