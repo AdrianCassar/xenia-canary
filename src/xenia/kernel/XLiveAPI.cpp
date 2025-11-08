@@ -1468,6 +1468,11 @@ std::unique_ptr<FriendsPresenceObjectJSON> XLiveAPI::GetFriendsPresence(
   std::unique_ptr<FriendsPresenceObjectJSON> friends =
       std::make_unique<FriendsPresenceObjectJSON>();
 
+  if (xuids.empty()) {
+    XELOGI("Skipping friends presence check.");
+    return friends;
+  }
+
   friends->XUIDs(xuids);
 
   std::string xuids_list;
