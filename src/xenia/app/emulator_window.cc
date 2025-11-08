@@ -301,7 +301,7 @@ void EmulatorWindow::OnEmulatorInitialized() {
   }
 
 // Check for updates
-#ifndef DEBUG
+#if !defined(DEBUG) && !defined(XE_BUILD_IS_PR)
   bool should_update = cvars::auto_check_updates &&
                        !(cvar::updated_arg_present && cvar::updated);
 
