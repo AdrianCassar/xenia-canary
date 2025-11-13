@@ -17,6 +17,7 @@
 #include "xenia/hid/input_system.h"
 #include "xenia/kernel/XLiveAPI.h"
 #include "xenia/kernel/kernel_state.h"
+#include "xenia/kernel/xam/friends_util.h"
 #include "xenia/kernel/xboxkrnl/xboxkrnl_crypt.h"
 #include "xenia/vfs/devices/host_path_device.h"
 
@@ -372,8 +373,7 @@ void ProfileManager::Login(const uint64_t xuid, const uint8_t user_index,
     std::unique_ptr<HTTPResponseObjectJSON> reg_result =
         XLiveAPI::RegisterPlayer();
 
-    logged_profiles_[assigned_user_slot]->AddDummyFriends(
-        XLiveAPI::dummy_friends_count);
+    logged_profiles_[assigned_user_slot]->AddDummyFriends(dummy_friends_count_);
   }
 }
 

@@ -2,7 +2,7 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2024 Xenia Emulator. All rights reserved.                        *
+ * Copyright 2025 Xenia Canary. All rights reserved.                          *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
@@ -18,6 +18,7 @@
 #include "xenia/kernel/XLiveAPI.h"
 #include "xenia/kernel/user_module.h"
 #include "xenia/kernel/util/shim_utils.h"
+#include "xenia/kernel/xam/friends_util.h"
 
 DEFINE_string(api_address, "192.168.0.1:36000/",
               "Xenia Server Address e.g. IP:PORT", "Live");
@@ -41,11 +42,6 @@ DEFINE_bool(xlink_kai_systemlink_hack, false,
             "https://www.teamxlink.co.uk/wiki/Xenia_Support",
             "Live");
 
-DEFINE_string(network_guid, "", "Network Interface GUID", "Live");
-
-DEFINE_string(friends_xuids, "", "Comma delimited list of XUIDs. (Max 100)",
-              "Live");
-
 DEFINE_bool(xstorage_backend, true,
             "Request XStorage content from backend and fallback locally, "
             "otherwise only use local content.",
@@ -60,10 +56,6 @@ DEFINE_int32(discord_presence_user_index, 0,
              "User profile index used for Discord rich presence [0, 3].",
              "Live");
 
-DECLARE_string(upnp_root);
-
-DECLARE_bool(upnp);
-
 using namespace rapidjson;
 
 // TODO:
@@ -74,8 +66,6 @@ using namespace rapidjson;
 // Asynchronous UPnP
 // Use the overlapped task for asynchronous curl requests.
 // API endpoint lookup table
-//
-// Extract stat descriptions from XDBF.
 
 // https://patents.google.com/patent/US20060287099A1
 namespace xe {
@@ -84,13 +74,19 @@ namespace kernel {
 void XLiveAPI::IpGetConsoleXnAddr(XNADDR* XnAddr_ptr) {
   memset(XnAddr_ptr, 0, sizeof(XNADDR));
 
+  const auto adapter_manager =
+      kernel_state()->emulator()->GetNetworkAdapterManager();
+
+  const bool is_WAN_routing = adapter_manager->IsSelectedAdapterWANRouting();
+  const auto adapter_local_ip = adapter_manager->GetSelectedAdapterLocalIP();
+
   if (cvars::network_mode != NETWORK_MODE::OFFLINE) {
-    if (IsConnectedToServer() && adapter_has_wan_routing) {
+    if (IsConnectedToServer() && is_WAN_routing) {
       XnAddr_ptr->ina = OnlineIP().sin_addr;
       XnAddr_ptr->inaOnline = OnlineIP().sin_addr;
     } else {
-      XnAddr_ptr->ina = LocalIP().sin_addr;
-      XnAddr_ptr->inaOnline = LocalIP().sin_addr;
+      XnAddr_ptr->ina = adapter_local_ip.sin_addr;
+      XnAddr_ptr->inaOnline = adapter_local_ip.sin_addr;
     }
   }
 
@@ -101,76 +97,6 @@ void XLiveAPI::IpGetConsoleXnAddr(XNADDR* XnAddr_ptr) {
   XnAddr_ptr->abOnline.platform_type = PLATFORM_TYPE::Xbox360;
 
   memcpy(XnAddr_ptr->abEnet, mac_address_->raw(), sizeof(MacAddress));
-}
-
-const uint64_t XLiveAPI::GetMachineId(const uint64_t mac_address) {
-  const uint64_t machine_id_mask = 0xFA00000000000000;
-
-  return machine_id_mask | mac_address;
-}
-
-const uint64_t XLiveAPI::GetLocalMachineId() {
-  if (!mac_address_) {
-    XELOGE("Mac Address not initialized!");
-    assert_always();
-  }
-
-  return GetMachineId(mac_address_->to_uint64());
-}
-
-XLiveAPI::InitState XLiveAPI::GetInitState() { return initialized_; }
-
-std::vector<std::string> XLiveAPI::ParseDelimitedList(std::string_view csv,
-                                                      uint32_t count) {
-  std::vector<std::string> parsed_list;
-
-  std::stringstream sstream(csv.data());
-
-  rapidcsv::Document delimiter(
-      sstream, rapidcsv::LabelParams(-1, -1),
-      rapidcsv::SeparatorParams(',', true), rapidcsv::ConverterParams(),
-      rapidcsv::LineReaderParams(true /* pSkipCommentLines */,
-                                 '#' /* pCommentPrefix */,
-                                 true /* pSkipEmptyLines */));
-
-  if (!delimiter.GetRowCount()) {
-    return parsed_list;
-  }
-
-  parsed_list = delimiter.GetRow<std::string>(0);
-
-  parsed_list.erase(std::remove_if(parsed_list.begin(), parsed_list.end(),
-                                   [](const std::string& element) {
-                                     return element.empty();
-                                   }),
-                    parsed_list.end());
-
-  if (count != 0 && parsed_list.size() > count) {
-    parsed_list.resize(count);
-  }
-
-  return parsed_list;
-}
-
-std::string XLiveAPI::BuildCSVFromVector(std::vector<std::string>& data,
-                                         uint32_t count) {
-  rapidcsv::Document doc(
-      "", rapidcsv::LabelParams(-1, -1), rapidcsv::SeparatorParams(',', true),
-      rapidcsv::ConverterParams(),
-      rapidcsv::LineReaderParams(true /* pSkipCommentLines */,
-                                 '#' /* pCommentPrefix */,
-                                 true /* pSkipEmptyLines */));
-
-  std::ostringstream csv;
-
-  if (count != 0 && data.size() > count) {
-    data.resize(count);
-  }
-
-  doc.InsertRow(0, data);
-  doc.Save(csv);
-
-  return xe::string_util::trim(csv.str());
 }
 
 std::vector<std::string> XLiveAPI::ParseAPIList() {
@@ -202,86 +128,9 @@ std::vector<std::string> XLiveAPI::ParseAPIList() {
   return api_addresses;
 }
 
-std::vector<std::uint64_t> XLiveAPI::ParseFriendsXUIDs() {
-  const auto& xuids = cvars::friends_xuids;
-
-  const std::vector<std::string> friends_xuids =
-      ParseDelimitedList(xuids, X_ONLINE_MAX_FRIENDS);
-
-  std::vector<std::uint64_t> xuids_parsed;
-
-  uint32_t index = 0;
-  for (const auto& friend_xuid : friends_xuids) {
-    const uint64_t xuid = string_util::from_string<uint64_t>(
-        xe::string_util::trim(friend_xuid), true);
-
-    if (xuid == 0) {
-      XELOGI("{}: Skip adding invalid friend XUID!", __func__);
-      continue;
-    }
-
-    if (index == 0 && xuid <= X_ONLINE_MAX_FRIENDS) {
-      dummy_friends_count = static_cast<uint32_t>(xuid);
-
-      index++;
-      continue;
-    }
-
-    xuids_parsed.push_back(xuid);
-
-    index++;
-  }
-
-  return xuids_parsed;
-}
-
-void XLiveAPI::AddFriend(uint64_t xuid) {
-  const auto delimeter = cvars::friends_xuids.empty() ? "" : ",";
-  const auto& xuids =
-      cvars::friends_xuids + fmt::format("{}{:016X}", delimeter, xuid);
-
-  std::vector<std::string> friend_xuids =
-      ParseDelimitedList(xuids, X_ONLINE_MAX_FRIENDS);
-
-  // Remove duplicate xuids
-  std::sort(friend_xuids.begin(), friend_xuids.end());
-  friend_xuids.erase(std::unique(friend_xuids.begin(), friend_xuids.end()),
-                     friend_xuids.end());
-
-  const std::string friends_list =
-      BuildCSVFromVector(friend_xuids, X_ONLINE_MAX_FRIENDS);
-
-  OVERRIDE_string(friends_xuids, friends_list);
-}
-
-void XLiveAPI::RemoveFriend(uint64_t xuid) {
-  auto xuid_str = fmt::format("{:016X}", xuid);
-
-  std::vector<std::string> friend_xuids =
-      ParseDelimitedList(cvars::friends_xuids, X_ONLINE_MAX_FRIENDS);
-
-  friend_xuids.erase(
-      std::remove(friend_xuids.begin(), friend_xuids.end(), xuid_str),
-      friend_xuids.end());
-
-  const std::string friends_list =
-      BuildCSVFromVector(friend_xuids, X_ONLINE_MAX_FRIENDS);
-
-  OVERRIDE_string(friends_xuids, friends_list);
-}
-
 void XLiveAPI::SetAPIAddress(std::string address) {
   if (initialized_ == InitState::Pending) {
     OVERRIDE_string(api_address, address);
-  }
-}
-
-void XLiveAPI::SetNetworkInterfaceByGUID(std::string guid) {
-  if (initialized_ == InitState::Pending) {
-    OVERRIDE_string(network_guid, guid);
-
-    DiscoverNetworkInterfaces();
-    SelectNetworkInterface();
   }
 }
 
@@ -312,22 +161,11 @@ std::string XLiveAPI::GetApiAddress() {
 
   // Add forward slash if not already added
   if (cvars::api_address.back() != '/') {
-    cvars::api_address = cvars::api_address + '/';
+    cvars::api_address.push_back('/');
   }
 
   return cvars::api_address;
 }
-
-// If online NAT open, otherwise strict.
-uint32_t XLiveAPI::GetNatType() { return IsConnectedToServer() ? 1 : 3; }
-
-bool XLiveAPI::IsConnectedToServer() { return OnlineIP().sin_addr.s_addr != 0; }
-
-bool XLiveAPI::IsConnectedToLAN() { return LocalIP().sin_addr.s_addr != 0; }
-
-uint16_t XLiveAPI::GetPlayerPort() { return 36000; }
-
-int8_t XLiveAPI::GetVersionStatus() { return version_status; }
 
 void XLiveAPI::Init() {
   if (GetInitState() != InitState::Pending) {
@@ -357,12 +195,8 @@ void XLiveAPI::Init() {
     }
   }
 
-  if (!upnp_handler) {
-    upnp_handler = new UPnP();
-  }
-
   if (!mac_address_) {
-    mac_address_ = new MacAddress(GetMACaddress());
+    mac_address_ = GenerateMacAddress();
   }
 
   if (cvars::network_mode == NETWORK_MODE::OFFLINE) {
@@ -370,13 +204,6 @@ void XLiveAPI::Init() {
     initialized_ = InitState::Failed;
     return;
   }
-
-  if (cvars::upnp) {
-    upnp_handler->Initialize();
-  }
-
-  DiscoverNetworkInterfaces();
-  SelectNetworkInterface();
 
   online_ip_ = Getwhoami();
 
@@ -399,8 +226,8 @@ void XLiveAPI::Init() {
     const uint32_t index = 0;
     const auto profile = kernel_state()->xam_state()->GetUserProfile(index);
 
-    if (profile->GetFriends().size() < dummy_friends_count) {
-      profile->AddDummyFriends(dummy_friends_count);
+    if (profile->GetFriends().size() < dummy_friends_count_) {
+      profile->AddDummyFriends(dummy_friends_count_);
     }
   }
 
@@ -409,6 +236,19 @@ void XLiveAPI::Init() {
   // Delete sessions on start-up.
   DeleteAllSessions();
 }
+
+XLiveAPI::InitState XLiveAPI::GetInitState() { return initialized_; }
+
+// If online NAT open, otherwise strict.
+uint32_t XLiveAPI::GetNatType() {
+  return IsConnectedToServer() ? X_NAT_TYPE::NAT_OPEN : X_NAT_TYPE::NAT_STRICT;
+}
+
+bool XLiveAPI::IsConnectedToServer() { return OnlineIP().sin_addr.s_addr != 0; }
+
+uint16_t XLiveAPI::GetPlayerPort() { return 36000; }
+
+int8_t XLiveAPI::GetVersionStatus() { return version_status; }
 
 void XLiveAPI::clearXnaddrCache() {
   sessionIdCache.clear();
@@ -648,17 +488,19 @@ void XLiveAPI::DownloadPortMappings() {
   Document doc;
   doc.Parse(response->RawResponse().response);
 
+  const auto upnp = kernel_state()->emulator()->GetUPnP();
+
   if (doc.HasMember("connect")) {
     for (const auto& port : doc["connect"].GetArray()) {
-      upnp_handler->AddMappedConnectPort(port["port"].GetInt(),
-                                         port["mappedTo"].GetInt());
+      upnp->AddMappedConnectPort(port["port"].GetInt(),
+                                 port["mappedTo"].GetInt());
     }
   }
 
   if (doc.HasMember("bind")) {
     for (const auto& port : doc["bind"].GetArray()) {
-      upnp_handler->AddMappedBindPort(port["port"].GetInt(),
-                                      port["mappedTo"].GetInt());
+      const auto upnp = kernel_state()->emulator()->GetUPnP();
+      upnp->AddMappedBindPort(port["port"].GetInt(), port["mappedTo"].GetInt());
     }
   }
 
@@ -709,7 +551,7 @@ std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::RegisterPlayer() {
 
   player.XUID(xuid);
   player.Gamertag(user_profile->name());
-  player.MachineID(GetLocalMachineId());
+  player.MachineID(GetLocalMachineId(*mac_address_));
   player.HostAddress(OnlineIP_str());
   player.MacAddress(mac_address_->to_uint64());
 
@@ -756,8 +598,6 @@ const std::map<uint64_t, std::string> XLiveAPI::DeleteMyProfiles() {
 }
 
 // Request clients player info via IP address
-// This should only be called once on startup no need to request our information
-// more than once.
 std::unique_ptr<PlayerObjectJSON> XLiveAPI::FindPlayer(std::string ip) {
   std::unique_ptr<PlayerObjectJSON> player =
       std::make_unique<PlayerObjectJSON>();
@@ -1066,11 +906,10 @@ void XLiveAPI::SessionWriteStats(uint64_t sessionId, XGI_STATS_WRITE stats) {
   std::vector<XSESSION_VIEW_PROPERTIES> properties(
       view_properties, view_properties + stats.num_views);
 
-  LeaderboardObjectJSON* leaderboard =
-      new LeaderboardObjectJSON(stats, properties);
+  LeaderboardObjectJSON leaderboard = LeaderboardObjectJSON(stats, properties);
 
   std::string output;
-  bool valid = leaderboard->Serialize(output);
+  bool valid = leaderboard.Serialize(output);
   assert_true(valid);
 
   if (cvars::logging) {
@@ -1703,15 +1542,14 @@ void XLiveAPI::SetPresence() {
     const auto user_profile = kernel_state()->xam_state()->GetUserProfile(i);
 
     if (user_profile) {
-      FriendPresenceObjectJSON* profile_presence =
-          new FriendPresenceObjectJSON();
+      FriendPresenceObjectJSON profile_presence = FriendPresenceObjectJSON();
 
       if (user_profile->IsLiveEnabled()) {
-        profile_presence->XUID(user_profile->GetOnlineXUID());
-        profile_presence->RichPresence(user_profile->GetPresenceString());
+        profile_presence.XUID(user_profile->GetOnlineXUID());
+        profile_presence.RichPresence(user_profile->GetPresenceString());
       }
 
-      presence->AddPresence(*profile_presence);
+      presence->AddPresence(profile_presence);
     }
   }
 
@@ -1839,236 +1677,5 @@ std::map<uint64_t, FriendPresenceObjectJSON> XLiveAPI::GetOnlineFriendsPresence(
   return peer_presences;
 }
 
-const uint8_t* XLiveAPI::GenerateMacAddress() {
-  uint8_t* mac_address = new uint8_t[6];
-  // MAC OUI part for MS devices.
-  mac_address[0] = 0x00;
-  mac_address[1] = 0x22;
-  mac_address[2] = 0x48;
-
-  std::random_device rnd;
-  std::mt19937_64 gen(rnd());
-  std::uniform_int_distribution<uint16_t> dist(0, 0xFF);
-
-  for (int i = 3; i < 6; i++) {
-    mac_address[i] = (uint8_t)dist(rnd);
-  }
-
-  return mac_address;
-}
-
-const uint8_t* XLiveAPI::GetMACaddress() {
-  return GenerateMacAddress();
-
-  XELOGI("Resolving system mac address.");
-
-#ifdef XE_PLATFORM_WIN32
-  // Select MAC based on network adapter
-  for (auto& adapter : adapter_addresses) {
-    if (cvars::network_guid == adapter.AdapterName) {
-      if (adapter.PhysicalAddressLength != NULL &&
-          adapter.PhysicalAddressLength == 6) {
-        uint8_t* adapter_mac_ptr = new uint8_t[MAX_ADAPTER_ADDRESS_LENGTH - 2];
-
-        memcpy(adapter_mac_ptr, adapter.PhysicalAddress,
-               sizeof(adapter_mac_ptr));
-
-        return adapter_mac_ptr;
-      }
-    }
-  }
-
-  return GenerateMacAddress();
-#else
-  return GenerateMacAddress();
-#endif  // XE_PLATFORM_WIN32
-}
-
-std::string XLiveAPI::GetNetworkFriendlyName(IP_ADAPTER_ADDRESSES adapter) {
-  char interface_name[MAX_ADAPTER_NAME_LENGTH];
-  size_t bytes_out =
-      wcstombs(interface_name, adapter.FriendlyName, sizeof(interface_name));
-
-  // Fallback to adapater GUID if name failed to convert
-  if (bytes_out == -1) {
-    strcpy(interface_name, adapter.AdapterName);
-  }
-
-  return interface_name;
-}
-
-void XLiveAPI::DiscoverNetworkInterfaces() {
-  XELOGI("Discovering network interfaces...");
-
-#ifdef XE_PLATFORM_WIN32
-  uint32_t dwRetval = 0;
-  ULONG outBufLen = 0;
-
-  IP_ADAPTER_ADDRESSES* adapters_ptr = nullptr;
-
-  adapter_addresses.clear();
-  adapter_addresses_buf.clear();
-
-  dwRetval = GetAdaptersAddresses(AF_INET, 0, 0, 0, &outBufLen);
-
-  adapter_addresses_buf.resize(outBufLen);
-
-  if (dwRetval == ERROR_BUFFER_OVERFLOW) {
-    adapters_ptr =
-        reinterpret_cast<IP_ADAPTER_ADDRESSES*>(adapter_addresses_buf.data());
-  }
-
-  dwRetval = GetAdaptersAddresses(AF_INET, 0, 0, adapters_ptr, &outBufLen);
-
-  std::string networks = "Network Interfaces:\n";
-
-  for (IP_ADAPTER_ADDRESSES* adapter_ptr = adapters_ptr; adapter_ptr != nullptr;
-       adapter_ptr = adapter_ptr->Next) {
-    if (adapter_ptr->OperStatus == IfOperStatusUp &&
-        (adapter_ptr->IfType == IF_TYPE_IEEE80211 ||
-         adapter_ptr->IfType == IF_TYPE_ETHERNET_CSMACD)) {
-      if (adapter_ptr->PhysicalAddress != nullptr) {
-        for (PIP_ADAPTER_UNICAST_ADDRESS_LH adapater_address =
-                 adapter_ptr->FirstUnicastAddress;
-             adapater_address != nullptr;
-             adapater_address = adapater_address->Next) {
-          sockaddr_in addr_ptr = *reinterpret_cast<sockaddr_in*>(
-              adapater_address->Address.lpSockaddr);
-
-          if (addr_ptr.sin_family == AF_INET) {
-            std::string friendlyName = GetNetworkFriendlyName(*adapter_ptr);
-            std::string guid = adapter_ptr->AdapterName;
-
-            IP_ADAPTER_ADDRESSES adapter = IP_ADAPTER_ADDRESSES(*adapter_ptr);
-
-            adapter_addresses.push_back(adapter);
-
-            if (guid == cvars::network_guid) {
-              interface_name = friendlyName;
-            }
-
-            networks += fmt::format("{} {}: {}\n", friendlyName, guid,
-                                    ip_to_string(addr_ptr));
-          }
-        }
-      }
-    }
-  }
-
-  if (adapter_addresses.empty()) {
-    XELOGI("No network interfaces detected!\n");
-  } else {
-    XELOGI("Found {} network interfaces!\n", adapter_addresses.size());
-  }
-
-  if (cvars::logging) {
-    XELOGI("{}", xe::string_util::trim(networks));
-  }
-#else
-#endif  // XE_PLATFORM_WIN32
-}
-
-bool XLiveAPI::UpdateNetworkInterface(sockaddr_in local_ip,
-                                      IP_ADAPTER_ADDRESSES adapter) {
-  for (PIP_ADAPTER_UNICAST_ADDRESS_LH address = adapter.FirstUnicastAddress;
-       address != NULL; address = address->Next) {
-    sockaddr_in adapter_addr =
-        *reinterpret_cast<sockaddr_in*>(address->Address.lpSockaddr);
-
-    if (adapter_addr.sin_family == AF_INET) {
-      if (cvars::network_guid.empty()) {
-        if (local_ip.sin_addr.s_addr == adapter_addr.sin_addr.s_addr ||
-            local_ip.sin_addr.s_addr == 0) {
-          adapter_has_wan_routing =
-              (local_ip.sin_addr.s_addr == adapter_addr.sin_addr.s_addr);
-          local_ip_ = adapter_addr;
-          OVERRIDE_string(network_guid, adapter.AdapterName);
-          return true;
-        }
-      } else {
-        adapter_has_wan_routing =
-            local_ip.sin_addr.s_addr == adapter_addr.sin_addr.s_addr;
-        local_ip_ = adapter_addr;
-        OVERRIDE_string(network_guid, adapter.AdapterName);
-        return true;
-      }
-    }
-  }
-
-  return false;
-}
-
-void XLiveAPI::SelectNetworkInterface() {
-  sockaddr_in local_ip{};
-
-  // If upnp is disabled or upnp_root is empty fallback to winsock
-  if (cvars::upnp && !cvars::upnp_root.empty()) {
-    local_ip = ip_to_sockaddr(UPnP::GetLocalIP());
-  } else {
-    local_ip = WinsockGetLocalIP();
-  }
-
-  XELOGI("Checking for interface: {}", cvars::network_guid);
-
-  bool updated = false;
-
-  // If existing network GUID exists use it
-  for (auto const& adapter : adapter_addresses) {
-    if (cvars::network_guid == adapter.AdapterName) {
-      if (UpdateNetworkInterface(local_ip, adapter)) {
-        interface_name = GetNetworkFriendlyName(adapter);
-        updated = true;
-        break;
-      }
-    }
-  }
-
-  // Find interface that has local_ip
-  if (!updated) {
-    XELOGI("Network Interface GUID: {} not found!",
-           cvars::network_guid.empty() ? "N\\A" : cvars::network_guid);
-
-    for (auto const& adapter : adapter_addresses) {
-      if (UpdateNetworkInterface(local_ip, adapter)) {
-        interface_name = GetNetworkFriendlyName(adapter);
-        updated = true;
-        break;
-      }
-    }
-  }
-
-  // Use first interface from adapter_addresses, otherwise unspecified network
-  if (!updated) {
-    // Reset the GUID
-    OVERRIDE_string(network_guid, "");
-
-    XELOGI("Interface GUID: {} not found!",
-           cvars::network_guid.empty() ? "N\\A" : cvars::network_guid);
-
-    if (cvars::network_guid.empty()) {
-      if (!adapter_addresses.empty()) {
-        auto& adapter = adapter_addresses.front();
-
-        if (UpdateNetworkInterface(local_ip, adapter)) {
-          interface_name = GetNetworkFriendlyName(adapter);
-        }
-      } else {
-        local_ip_ = local_ip;
-        interface_name = "Unspecified Network";
-      }
-    } else {
-      interface_name = "Unspecified Network";
-    }
-  }
-
-  std::string WAN_interface = xe::kernel::XLiveAPI::adapter_has_wan_routing
-                                  ? "(Default)"
-                                  : "(Non Default)";
-
-  XELOGI("Set network interface: {} {} {} {}", interface_name,
-         cvars::network_guid, LocalIP_str(), WAN_interface);
-
-  assert_false(cvars::network_guid == "");
-}
 }  // namespace kernel
 }  // namespace xe
