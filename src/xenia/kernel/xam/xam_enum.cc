@@ -149,6 +149,74 @@ static uint32_t XMarketplaceCreateOfferEnumerator(
 
   std::vector<X_MARKETPLACE_CONTENTOFFER_INFO> content_offers = {};
 
+  X_MARKETPLACE_CONTENTOFFER_INFO content = {};
+
+  content.is_unrestricted_license = true;
+  content.title_id = kernel_state()->title_id();
+
+  const uint32_t page_size =
+      kernel_state()->memory()->GetPhysicalHeap()->page_size();
+
+  uint32_t content_info = kernel_state()->memory()->SystemHeapAlloc(page_size);
+
+  const auto& name = kernel_state()->emulator()->title_name();
+
+  const std::u16string title_name = std::u16string(name.cbegin(), name.cend());
+  size_t title_name_length = title_name.size() + 1;
+
+  const std::u16string sell_name = u"Sell Text";
+  size_t sell_name_length = sell_name.size() + 1;
+
+  const std::u16string offer_name = u"Offer Text";
+  size_t offer_name_length = offer_name.size() + 1;
+
+  char16_t* title_name_ptr =
+      kernel_state()->memory()->TranslateVirtual<char16_t*>(content_info);
+
+  char16_t* sell_name_ptr =
+      kernel_state()->memory()->TranslateVirtual<char16_t*>(
+          static_cast<uint32_t>(content_info +
+                                string_util::size_in_bytes(title_name)));
+
+  char16_t* offer_name_ptr =
+      kernel_state()->memory()->TranslateVirtual<char16_t*>(
+          content_info +
+          static_cast<uint32_t>(title_name_length +
+                                string_util::size_in_bytes(title_name) +
+                                string_util::size_in_bytes(sell_name)));
+
+  string_util::copy_and_swap_truncating(title_name_ptr, title_name,
+                                        title_name_length);
+
+  string_util::copy_and_swap_truncating(sell_name_ptr, sell_name,
+                                        sell_name_length);
+
+  string_util::copy_and_swap_truncating(offer_name_ptr, offer_name,
+                                        offer_name_length);
+
+  content.title_name_ptr = content_info;
+  content.title_name_length = static_cast<uint32_t>(title_name_length);
+
+  content.offer_name_ptr =
+      kernel_state()->memory()->HostToGuestVirtual(sell_name_ptr);
+  content.offer_name_length = static_cast<uint32_t>(sell_name_length);
+
+  content.sell_text_ptr =
+      kernel_state()->memory()->HostToGuestVirtual(offer_name_ptr);
+  content.sell_text_length = static_cast<uint32_t>(offer_name_length);
+
+  content.purchase_quantity = 1;
+  content.offer_id = 0xFF;
+  // content.user_has_purchased = true;
+  content.points_price = 100;
+
+  content_offers.push_back(content);
+  content_offers.push_back(content);
+  content_offers.push_back(content);
+  content_offers.push_back(content);
+  content_offers.push_back(content);
+  content_offers.push_back(content);
+
   for (const auto& content : content_offers) {
     X_MARKETPLACE_CONTENTOFFER_INFO* item = e->AppendItem();
 
