@@ -7,6 +7,9 @@
  ******************************************************************************
  */
 
+#ifndef XENIA_KERNEL_UPNP_H_
+#define XENIA_KERNEL_UPNP_H_
+
 #include <map>
 #include <shared_mutex>
 
@@ -92,5 +95,8 @@ class UPnP {
   port_binding mapped_connect_ports_;
   port_binding mapped_bind_ports_;
 };
+
 }  // namespace kernel
 }  // namespace xe
+
+#endif  // XENIA_KERNEL_UPNP_H_

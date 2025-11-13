@@ -225,7 +225,8 @@ X_STATUS XSocket::Connect(const XSOCKADDR_IN* name, int name_len) {
   memcpy(&sa_in, name, sizeof(XSOCKADDR_IN));
 
   sa_in.address_port =
-      XLiveAPI::upnp_handler->GetMappedConnectPort(name->address_port);
+      kernel_state()->emulator()->GetUPnP()->GetMappedConnectPort(
+          name->address_port);
 
   sockaddr addr = sa_in.to_host();
 
@@ -241,8 +242,8 @@ X_STATUS XSocket::Bind(const XSOCKADDR_IN* name, int name_len) {
   XSOCKADDR_IN sa_in = XSOCKADDR_IN();
   memcpy(&sa_in, name, sizeof(XSOCKADDR_IN));
 
-  sa_in.address_port =
-      XLiveAPI::upnp_handler->GetMappedBindPort(name->address_port);
+  sa_in.address_port = kernel_state()->emulator()->GetUPnP()->GetMappedBindPort(
+      name->address_port);
 
   sockaddr addr = sa_in.to_host();
 
@@ -580,8 +581,8 @@ int XSocket::Send(const uint8_t* buf, uint32_t buf_len, uint32_t flags) {
 
 int XSocket::SendTo(uint8_t* buf, uint32_t buf_len, uint32_t flags,
                     XSOCKADDR_IN* to, uint32_t to_len) {
-  to->address_port =
-      XLiveAPI::upnp_handler->GetMappedBindPort(to->address_port);
+  to->address_port = kernel_state()->emulator()->GetUPnP()->GetMappedBindPort(
+      to->address_port);
 
   sockaddr addr = to->to_host();
 

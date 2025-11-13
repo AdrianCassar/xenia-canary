@@ -563,9 +563,6 @@ bool EmulatorApp::OnInitialize() {
   emulator_ =
       std::make_unique<Emulator>("", storage_root, content_root, cache_root);
 
-  // Discover network interfaces so they can be displayed in toolbar.
-  xe::kernel::XLiveAPI::DiscoverNetworkInterfaces();
-
   // Main emulator display window.
   emulator_window_ =
       EmulatorWindow::Create(emulator_.get(), app_context(),
@@ -596,11 +593,6 @@ void EmulatorApp::OnDestroy() {
   Profiler::Shutdown();
 
 #pragma region NetplayCleanup
-  // UPnP Shutdown
-  if (cvars::upnp) {
-    delete xe::kernel::XLiveAPI::upnp_handler;
-  }
-
   // Delete sessions on shutdown.
   xe::kernel::XLiveAPI::DeleteAllSessionsByMac();
 

@@ -2,7 +2,7 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2024 Xenia Emulator. All rights reserved.                        *
+ * Copyright 2025 Xenia Canary. All rights reserved.                          *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
@@ -620,7 +620,7 @@ X_RESULT XSession::MigrateHost(XGI_SESSION_MIGRATE* data) {
       kernel_state_->memory()->TranslateVirtual<XSESSION_INFO*>(
           data->session_info_ptr);
 
-  if (!XLiveAPI::upnp_handler->is_active()) {
+  if (!kernel_state()->emulator()->GetUPnP()->is_active()) {
     XELOGI("Migrating without UPnP");
     // return X_E_FAIL;
   }
