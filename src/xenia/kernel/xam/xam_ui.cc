@@ -16,6 +16,7 @@
 #include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/user_module.h"
 #include "xenia/kernel/util/shim_utils.h"
+#include "xenia/kernel/xam/friends_util.h"
 #include "xenia/kernel/xam/xam_content_device.h"
 #include "xenia/kernel/xam/xam_private.h"
 #include "xenia/ui/file_picker.h"
@@ -1030,7 +1031,7 @@ bool xeDrawFriendContent(xe::ui::ImGuiDrawer* imgui_drawer,
           *removed_xuid_ = friend_xuid;
         }
 
-        XLiveAPI::RemoveFriend(friend_xuid);
+        RemoveFriendFromConfig(friend_xuid);
         kernel_state()->BroadcastNotification(
             kXNotificationFriendsFriendRemoved, user_index);
 
@@ -1057,7 +1058,7 @@ bool xeDrawFriendContent(xe::ui::ImGuiDrawer* imgui_drawer,
       bool added = profile->AddFriendFromXUID(friend_xuid);
 
       if (added) {
-        XLiveAPI::AddFriend(friend_xuid);
+        AddFriendToConfig(friend_xuid);
 
         kernel_state()->BroadcastNotification(kXNotificationFriendsFriendAdded,
                                               user_index);
@@ -1255,7 +1256,7 @@ bool xeDrawAddFriend(xe::ui::ImGuiDrawer* imgui_drawer, UserProfile* profile,
       bool added = profile->AddFriendFromXUID(xuid);
 
       if (added) {
-        XLiveAPI::AddFriend(xuid);
+        AddFriendToConfig(xuid);
         args.added_friend = true;
 
         kernel_state()->BroadcastNotification(kXNotificationFriendsFriendAdded,

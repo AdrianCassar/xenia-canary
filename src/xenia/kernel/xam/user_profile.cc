@@ -14,6 +14,7 @@
 #include "xenia/kernel/util/presence_string_builder.h"
 #include "xenia/kernel/util/shim_utils.h"
 #include "xenia/kernel/util/xlast.h"
+#include "xenia/kernel/xam/friends_util.h"
 #include "xenia/kernel/xam/xdbf/gpd_info.h"
 
 #include "xenia/kernel/XLiveAPI.h"
@@ -39,7 +40,7 @@ UserProfile::UserProfile(const uint64_t xuid,
   subscriptions_ = std::map<uint64_t, X_ONLINE_PRESENCE>();
   self_invite = {};
 
-  for (const auto& friend_xuid : XLiveAPI::ParseFriendsXUIDs()) {
+  for (const auto& friend_xuid : ParseFriendsXUIDs()) {
     AddFriendFromXUID(friend_xuid);
   }
 }
@@ -354,7 +355,7 @@ bool UserProfile::RemoveFriend(const uint64_t xuid) {
 void UserProfile::RemoveAllFriends() {
   for (const auto& friend_ : GetFriends()) {
     RemoveFriend(friend_.xuid);
-    kernel::XLiveAPI::RemoveFriend(friend_.xuid);
+    RemoveFriendFromConfig(friend_.xuid);
   }
 }
 
