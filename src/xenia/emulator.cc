@@ -96,6 +96,8 @@ DEFINE_int32(priority_class, 0,
 
 DECLARE_int32(console_type);
 
+DECLARE_bool(upnp);
+
 namespace xe {
 using namespace xe::literals;
 
@@ -144,6 +146,13 @@ Emulator::Emulator(const std::filesystem::path& command_line,
     }
   }
 
+  network_adapter_manager_ = std::make_unique<kernel::NetworkAdapterManager>();
+  upnp_ = std::make_unique<kernel::UPnP>();
+
+  if (cvars::upnp) {
+    upnp_->Initialize();
+  }
+
 #if XE_PLATFORM_WIN32 == 1
   // Show a disclaimer that links to the quickstart
   // guide the first time they ever open the emulator
@@ -190,6 +199,9 @@ Emulator::~Emulator() {
   processor_.reset();
 
   export_resolver_.reset();
+
+  upnp_.reset();
+  network_adapter_manager_.reset();
 
   ExceptionHandler::Uninstall(Emulator::ExceptionCallbackThunk, this);
 }

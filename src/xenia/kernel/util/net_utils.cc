@@ -2,13 +2,17 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2024 Xenia Emulator. All rights reserved.                        *
+ * Copyright 2025 Xenia Canary. All rights reserved.                          *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
 
 #include "xenia/kernel/util/net_utils.h"
 #include "xenia/base/logging.h"
+
+DECLARE_string(network_guid);
+
+DECLARE_bool(logging);
 
 namespace xe {
 namespace kernel {
@@ -102,7 +106,7 @@ sockaddr_in WinsockGetLocalIP() {
 #endif  // XE_PLATFORM_WIN32
 }
 
-const std::string ip_to_string(in_addr addr) {
+std::string ip_to_string(in_addr addr) {
   char ip_str[INET_ADDRSTRLEN]{};
   const char* result =
       inet_ntop(AF_INET, &addr.s_addr, ip_str, INET_ADDRSTRLEN);
@@ -110,7 +114,7 @@ const std::string ip_to_string(in_addr addr) {
   return ip_str;
 }
 
-const std::string ip_to_string(sockaddr_in sockaddr) {
+std::string ip_to_string(sockaddr_in sockaddr) {
   char ip_str[INET_ADDRSTRLEN]{};
   const char* result =
       inet_ntop(AF_INET, &sockaddr.sin_addr, ip_str, INET_ADDRSTRLEN);
@@ -118,14 +122,14 @@ const std::string ip_to_string(sockaddr_in sockaddr) {
   return ip_str;
 }
 
-const sockaddr_in ip_to_sockaddr(std::string ip_str) {
+sockaddr_in ip_to_sockaddr(std::string ip_str) {
   sockaddr_in addr{};
   int32_t result = inet_pton(AF_INET, ip_str.c_str(), &addr.sin_addr);
 
   return addr;
 }
 
-const in_addr ip_to_in_addr(std::string ip_str) {
+in_addr ip_to_in_addr(std::string ip_str) {
   in_addr addr{};
   int32_t result = inet_pton(AF_INET, ip_str.c_str(), &addr.s_addr);
 
@@ -171,6 +175,35 @@ void* GetOptValueWithProperEndianness(void* ptr, uint32_t optValue,
   }
 
   return optval_ptr_le;
+}
+
+uint64_t GetMachineId(const uint64_t mac_address) {
+  const uint64_t machine_id_mask = 0xFA00000000000000;
+
+  return machine_id_mask | mac_address;
+}
+
+uint64_t GetLocalMachineId(const MacAddress mac_address) {
+  return GetMachineId(mac_address.to_uint64());
+}
+
+std::unique_ptr<MacAddress> GenerateMacAddress() {
+  uint8_t* mac_address = new uint8_t[6];
+
+  // MAC OUI part for MS devices.
+  mac_address[0] = 0x00;
+  mac_address[1] = 0x22;
+  mac_address[2] = 0x48;
+
+  std::random_device rnd;
+  std::mt19937_64 gen(rnd());
+  std::uniform_int_distribution<uint16_t> dist(0, -1);
+
+  for (int i = 3; i < MacAddress::MacAddressSize; i++) {
+    mac_address[i] = static_cast<uint8_t>(dist(rnd));
+  }
+
+  return std::make_unique<MacAddress>(mac_address);
 }
 
 }  // namespace kernel
