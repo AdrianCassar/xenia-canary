@@ -11,6 +11,8 @@
 
 #include "xenia/base/logging.h"
 #include "xenia/kernel/kernel_state.h"
+#include "xenia/kernel/util/net_utils.h"
+#include "xenia/kernel/util/network_adapter_manager.h"
 #include "xenia/kernel/util/shim_utils.h"
 #include "xenia/kernel/xam/xam_module.h"
 #include "xenia/kernel/xam/xam_net.h"
@@ -28,7 +30,6 @@
 #define _WINSOCK_DEPRECATED_NO_WARNINGS  // inet_addr
 #include <WS2tcpip.h>                    // NOLINT(build/include_order)
 #include <comutil.h>
-#include <natupnp.h>
 #include <wrl/client.h>
 #else
 #include <arpa/inet.h>
@@ -203,7 +204,6 @@ dword_result_t NetDll_XNetStartup_entry(dword_t caller,
     return 0;
   }
 
-  // Must initialize XLiveAPI inside kernel to guarantee timing/race conditions.
   XLiveAPI::Init();
 
   if (params) {
@@ -267,7 +267,7 @@ dword_result_t NetDll_XNetCleanup_entry(dword_t caller, lpvoid_t params) {
 DECLARE_XAM_EXPORT1(NetDll_XNetCleanup, kNetworking, kImplemented);
 
 dword_result_t XNetLogonGetMachineID_entry(lpqword_t machine_id_ptr) {
-  *machine_id_ptr = XLiveAPI::GetLocalMachineId();
+  *machine_id_ptr = GetLocalMachineId(*XLiveAPI::mac_address_);
 
   // if (XLiveAPI::GetInitState() != XLiveAPI::InitState::Success) {
   //   *machine_id_ptr = 0;
@@ -379,7 +379,6 @@ dword_result_t NetDll_WSAStartup_entry(dword_t caller, word_t version,
   // NetDll_WSAStartup is called multiple times?
   XELOGI("NetDll_WSAStartup");
 
-  // Must initialize XLiveAPI inside kernel to guarantee timing/race conditions.
   XLiveAPI::Init();
 
   // TODO(benvanik): abstraction layer needed.
@@ -726,7 +725,7 @@ dword_result_t NetDll_XNetXnAddrToMachineId_entry(dword_t caller,
   }
 
   const MacAddress mac = MacAddress(addr_ptr->abEnet);
-  const uint64_t machine_id = XLiveAPI::GetMachineId(mac.to_uint64());
+  const uint64_t machine_id = GetMachineId(mac.to_uint64());
 
   *id_ptr = machine_id;
 
@@ -844,15 +843,18 @@ dword_result_t NetDll_XNetXnAddrToInAddr_entry(dword_t caller,
     in_addr->S_un.S_addr = 0;
   }
 
-  if (memcmp(XLiveAPI::mac_address_, xn_addr->abEnet, sizeof(MacAddress)) ==
-      0) {
+  if (memcmp(XLiveAPI::mac_address_.get(), xn_addr->abEnet,
+             sizeof(MacAddress)) == 0) {
     XELOGI("Resolving XNetXnAddrToInAddr to LOOPBACK!");
     in_addr->S_un.S_addr = xe::byte_swap(LOOPBACK);
 
     return X_ERROR_SUCCESS;
   }
 
-  if (XLiveAPI::IsConnectedToLAN()) {
+  if (kernel_state()
+          ->emulator()
+          ->GetNetworkAdapterManager()
+          ->IsConnectedToLAN()) {
     in_addr->s_addr = xn_addr->ina.s_addr;
   }
 
@@ -1524,7 +1526,8 @@ dword_result_t NetDll_closesocket_entry(dword_t caller, dword_t socket_handle) {
   }
 
   // Remove port if socket closes
-  // XLiveAPI::upnp_handler->RemovePort(socket.get()->bound_port(), "UDP");
+  // kernel_state()->emulator()->GetUPnP()->RemovePort(socket.get()->bound_port(),
+  //                                                  "UDP");
 
   // TODO: Absolutely delete this object. It is no longer valid after calling
   // closesocket.
@@ -1624,9 +1627,15 @@ dword_result_t NetDll_bind_entry(dword_t caller, dword_t socket_handle,
     return -1;
   }
 
-  if (!XLiveAPI::adapter_has_wan_routing && cvars::xlink_kai_systemlink_hack) {
+  const auto network_adapter =
+      kernel_state()->emulator()->GetNetworkAdapterManager();
+
+  const std::string local_ip = network_adapter->GetSelectedAdapterLocalIP_Str();
+
+  if (!network_adapter->IsSelectedAdapterWANRouting() &&
+      cvars::xlink_kai_systemlink_hack) {
     // Force socket to bind to the IP of the selected interface
-    name->address_ip = XLiveAPI::LocalIP().sin_addr;
+    name->address_ip = network_adapter->GetSelectedAdapterLocalIP().sin_addr;
   }
 
   X_STATUS status = socket->Bind(name, namelen);
@@ -1636,9 +1645,11 @@ dword_result_t NetDll_bind_entry(dword_t caller, dword_t socket_handle,
     return -1;
   }
 
-  auto upnp_internal_port = name->address_port;
+  const auto upnp = kernel_state()->emulator()->GetUPnP();
+
+  auto& upnp_internal_port = name->address_port;
   const uint16_t mapped_internal_port =
-      XLiveAPI::upnp_handler->GetMappedBindPort(name->address_port);
+      upnp->GetMappedBindPort(name->address_port);
 
   // Support wildcard port
   if (!upnp_internal_port || !mapped_internal_port) {
@@ -1650,18 +1661,13 @@ dword_result_t NetDll_bind_entry(dword_t caller, dword_t socket_handle,
   }
 
   // Can be called multiple times.
-  const uint32_t result = XLiveAPI::upnp_handler->AddPort(
-      XLiveAPI::LocalIP_str(), upnp_internal_port, "UDP");
+  const uint32_t result = upnp->AddPort(local_ip, upnp_internal_port, "UDP");
 
   // Only scan once
-  if (result == HTTP_UNAUTHORIZED &&
-      !XLiveAPI::upnp_handler->GetRefreshedUnauthorized()) {
-    XLiveAPI::upnp_handler->SearchUPnP();
-
-    XLiveAPI::upnp_handler->SetRefreshedUnauthorized(true);
-
-    XLiveAPI::upnp_handler->AddPort(XLiveAPI::LocalIP_str(), upnp_internal_port,
-                                    "UDP");
+  if (result == HTTP_UNAUTHORIZED && !upnp->GetRefreshedUnauthorized()) {
+    upnp->SearchUPnP();
+    upnp->SetRefreshedUnauthorized(true);
+    upnp->AddPort(local_ip, upnp_internal_port, "UDP");
   }
 
   return 0;

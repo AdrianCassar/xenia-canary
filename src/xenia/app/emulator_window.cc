@@ -964,15 +964,16 @@ bool EmulatorWindow::Initialize() {
     Network_interfaces_menu->AddChild(
         MenuItem::Create(MenuItem::Type::kSeparator));
 
-    for (auto& adapter : xe::kernel::XLiveAPI::adapter_addresses) {
-      std::string guid = adapter.AdapterName;
-      std::string interface_name =
-          xe::kernel::XLiveAPI::GetNetworkFriendlyName(adapter);
+    const auto adapter_manager = emulator_->GetNetworkAdapterManager();
 
-      Network_interfaces_menu->AddChild(
-          MenuItem::Create(MenuItem::Type::kString, interface_name, "",
-                           std::bind(&EmulatorWindow::SetNetworkInterfaceByGUID,
-                                     this, adapter.AdapterName)));
+    for (const auto& adapter : adapter_manager->GetAdapters()) {
+      const std::string guid = adapter.AdapterName;
+      const std::string interface_name =
+          adapter_manager->GetAdapterFriendlyName(adapter);
+
+      Network_interfaces_menu->AddChild(MenuItem::Create(
+          MenuItem::Type::kString, interface_name, "",
+          std::bind(&EmulatorWindow::SetNetworkInterfaceByGUID, this, guid)));
     }
 
     Network_mode_menu->AddChild(
@@ -1710,14 +1711,18 @@ void EmulatorWindow::SetAPIAddress(std::string api_address) {
 }
 
 void EmulatorWindow::SetNetworkInterfaceByGUID(std::string guid) {
+  auto adapter_manager = emulator_->GetNetworkAdapterManager();
+
   if (xe::kernel::XLiveAPI::GetInitState() ==
       xe::kernel::XLiveAPI::InitState::Pending) {
     std::string interface_name = "Reset";
 
-    for (auto& adapter : xe::kernel::XLiveAPI::adapter_addresses) {
-      if (adapter.AdapterName == guid) {
-        interface_name = xe::kernel::XLiveAPI::GetNetworkFriendlyName(adapter);
-        break;
+    if (!guid.empty()) {
+      const auto adapter = adapter_manager->GetAdapterFromGUID(guid);
+
+      if (adapter.has_value()) {
+        interface_name =
+            adapter_manager->GetAdapterFriendlyName(adapter.value());
       }
     }
 
@@ -1732,7 +1737,11 @@ void EmulatorWindow::SetNetworkInterfaceByGUID(std::string guid) {
     });
   }
 
-  xe::kernel::XLiveAPI::SetNetworkInterfaceByGUID(guid);
+  adapter_manager->SetSelectedAdapterGUID(guid);
+
+  if (guid.empty()) {
+    adapter_manager->RefreshNetworkAdapters();
+  }
 }
 
 void EmulatorWindow::SetNetworkMode(uint32_t mode) {
@@ -2384,25 +2393,28 @@ void EmulatorWindow::NetplayStatus() {
   msg += "API Address: " + cvars::api_address;
   msg += "\n";
 
-  if (xe::kernel::XLiveAPI::interface_name.empty()) {
+  const auto adapter_manager = emulator_->GetNetworkAdapterManager();
+
+  const std::string adapter_name = adapter_manager->GetSelectedAdapterName();
+
+  if (adapter_name.empty()) {
     if (cvars::network_guid.empty()) {
       msg += fmt::format("Network Interface: Unspecified Network");
     } else {
       msg += fmt::format("Network Interface GUID: {}", cvars::network_guid);
     }
   } else {
-    std::string WAN_interface = xe::kernel::XLiveAPI::adapter_has_wan_routing
+    std::string WAN_interface = adapter_manager->IsSelectedAdapterWANRouting()
                                     ? "(Default)"
                                     : "(Non Default)";
 
     if (xe::kernel::XLiveAPI::GetInitState() !=
             xe::kernel::XLiveAPI::InitState::Pending &&
         cvars::network_mode != xe::kernel::NETWORK_MODE::OFFLINE) {
-      msg += fmt::format("Network Interface: {} - {}",
-                         xe::kernel::XLiveAPI::interface_name, WAN_interface);
+      msg += fmt::format("Network Interface: {} - {}", adapter_name,
+                         WAN_interface);
     } else {
-      msg += fmt::format("Network Interface: {}",
-                         xe::kernel::XLiveAPI::interface_name);
+      msg += fmt::format("Network Interface: {}", adapter_name);
     }
   }
 
@@ -2434,7 +2446,7 @@ void EmulatorWindow::NetplayStatus() {
   if (xe::kernel::XLiveAPI::GetInitState() !=
           xe::kernel::XLiveAPI::InitState::Pending &&
       cvars::upnp) {
-    if (xe::kernel::XLiveAPI::upnp_handler->is_active()) {
+    if (emulator()->GetUPnP()->is_active()) {
       msg += "UPnP: Device found";
     } else {
       msg += "UPnP: Device search failed";
@@ -2465,8 +2477,7 @@ void EmulatorWindow::NetplayStatus() {
     }
 
     msg += "\n\n";
-    const auto& port_results =
-        *xe::kernel::XLiveAPI::upnp_handler->port_binding_results();
+    const auto& port_results = *emulator()->GetUPnP()->port_binding_results();
 
     for (const auto& [protocol, m_port_bindings] : port_results) {
       for (const auto& [port, error] : m_port_bindings) {

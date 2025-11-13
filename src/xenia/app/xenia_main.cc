@@ -550,9 +550,6 @@ bool EmulatorApp::OnInitialize() {
   // Determine window size based on user setting.
   auto res = xe::gpu::GraphicsSystem::GetInternalDisplayResolution();
 
-  // Discover network interfaces so they can be displayed in toolbar.
-  xe::kernel::XLiveAPI::DiscoverNetworkInterfaces();
-
   // Main emulator display window.
   emulator_window_ = EmulatorWindow::Create(emulator_.get(), app_context(),
                                             res.first, res.second);
@@ -582,11 +579,6 @@ void EmulatorApp::OnDestroy() {
   Profiler::Shutdown();
 
 #pragma region NetplayCleanup
-  // UPnP Shutdown
-  if (cvars::upnp) {
-    delete xe::kernel::XLiveAPI::upnp_handler;
-  }
-
   // Delete sessions on shutdown.
   xe::kernel::XLiveAPI::DeleteAllSessionsByMac();
 

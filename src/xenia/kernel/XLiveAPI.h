@@ -2,7 +2,7 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2024 Xenia Emulator. All rights reserved.                        *
+ * Copyright 2025 Xenia Canary. All rights reserved.                          *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
@@ -46,21 +46,7 @@ class XLiveAPI {
 
   static void IpGetConsoleXnAddr(XNADDR* XnAddr_ptr);
 
-  static InitState GetInitState();
-
-  static std::vector<std::string> ParseDelimitedList(std::string_view csv,
-                                                     uint32_t count = 0);
-
-  static std::string BuildCSVFromVector(std::vector<std::string>& data,
-                                        uint32_t count = 0);
-
   static std::vector<std::string> ParseAPIList();
-
-  static std::vector<std::uint64_t> ParseFriendsXUIDs();
-
-  static void AddFriend(uint64_t xuid);
-
-  static void RemoveFriend(uint64_t xuid);
 
   static void SetAPIAddress(std::string address);
 
@@ -70,27 +56,23 @@ class XLiveAPI {
 
   static std::string GetApiAddress();
 
+  static void Init();
+
+  static InitState GetInitState();
+
   static uint32_t GetNatType();
 
   static bool IsConnectedToServer();
 
-  static bool IsConnectedToLAN();
-
   static uint16_t GetPlayerPort();
 
   static int8_t GetVersionStatus();
-
-  static void Init();
 
   static void clearXnaddrCache();
 
   static sockaddr_in Getwhoami();
 
   static void DownloadPortMappings();
-
-  static const uint64_t GetMachineId(const uint64_t macAddress);
-
-  static const uint64_t GetLocalMachineId();
 
   static std::unique_ptr<HTTPResponseObjectJSON> RegisterPlayer();
 
@@ -112,12 +94,6 @@ class XLiveAPI {
 
   static const std::vector<std::unique_ptr<SessionObjectJSON>> SessionSearch(
       XGI_SESSION_SEARCH* data, uint32_t num_users);
-
-  static void SessionContextSet(uint64_t session_id,
-                                std::map<uint32_t, uint32_t> contexts);
-
-  static const std::map<uint32_t, uint32_t> SessionContextGet(
-      uint64_t session_id);
 
   static void SessionPropertiesSet(uint64_t session_id, uint32_t user_index);
 
@@ -194,49 +170,22 @@ class XLiveAPI {
   static std::map<uint64_t, FriendPresenceObjectJSON> GetOnlineFriendsPresence(
       const uint32_t user_index);
 
-  static const uint8_t* GenerateMacAddress();
-
-  static const uint8_t* GetMACaddress();
-
-  static std::string GetNetworkFriendlyName(IP_ADAPTER_ADDRESSES adapter);
-
-  static void DiscoverNetworkInterfaces();
-
-  static bool UpdateNetworkInterface(sockaddr_in local_ip,
-                                     IP_ADAPTER_ADDRESSES adapter);
-
-  static void SelectNetworkInterface();
-
-  static const sockaddr_in LocalIP() { return local_ip_; };
   static const sockaddr_in OnlineIP() { return online_ip_; };
 
-  static const std::string LocalIP_str() { return ip_to_string(local_ip_); };
   static const std::string OnlineIP_str() { return ip_to_string(online_ip_); };
 
-  inline static UPnP* upnp_handler = nullptr;
-
-  inline static MacAddress* mac_address_ = nullptr;
+  inline static std::unique_ptr<MacAddress> mac_address_ = nullptr;
 
   inline static bool xlsp_servers_cached = false;
-  inline static std::vector<X_TITLE_SERVER> xlsp_servers{};
+  inline static std::vector<X_TITLE_SERVER> xlsp_servers = {};
 
-  inline static std::string interface_name;
-
-  inline static std::vector<uint8_t> adapter_addresses_buf{};
-
-  inline static std::vector<IP_ADAPTER_ADDRESSES> adapter_addresses{};
-
-  inline static bool adapter_has_wan_routing = false;
-
-  inline static std::map<uint32_t, uint64_t> sessionIdCache{};
-  inline static std::map<uint32_t, uint64_t> macAddressCache{};
-  inline static std::map<uint64_t, std::vector<uint8_t>> qos_payload_cache{};
+  inline static std::map<uint32_t, uint64_t> sessionIdCache = {};
+  inline static std::map<uint32_t, uint64_t> macAddressCache = {};
+  inline static std::map<uint64_t, std::vector<uint8_t>> qos_payload_cache = {};
 
   inline static xe::be<uint64_t> systemlink_id = 0;
 
   inline static bool xuid_mismatch = false;
-
-  inline static uint32_t dummy_friends_count = 0;
 
   inline static int8_t version_status;
 
@@ -245,6 +194,8 @@ class XLiveAPI {
 
   inline static const std::string default_public_server_ =
       "https://xenia-netplay-2a0298c0e3f4.herokuapp.com/";
+
+  inline static sockaddr_in online_ip_ = {};
 
   inline static InitState initialized_ = InitState::Pending;
 
@@ -272,10 +223,6 @@ class XLiveAPI {
 
     return realsize;
   };
-
-  inline static sockaddr_in online_ip_{};
-
-  inline static sockaddr_in local_ip_{};
 };
 }  // namespace kernel
 }  // namespace xe

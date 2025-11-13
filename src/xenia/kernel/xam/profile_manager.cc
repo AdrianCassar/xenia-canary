@@ -17,6 +17,7 @@
 #include "xenia/kernel/XLiveAPI.h"
 #include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/util/crypto_utils.h"
+#include "xenia/kernel/xam/friends_util.h"
 #include "xenia/vfs/devices/host_path_device.h"
 
 DEFINE_string(logged_profile_slot_0_xuid, "",
@@ -325,8 +326,7 @@ void ProfileManager::Login(const uint64_t xuid, const uint8_t user_index,
     std::unique_ptr<HTTPResponseObjectJSON> reg_result =
         XLiveAPI::RegisterPlayer();
 
-    logged_profiles_[assigned_user_slot]->AddDummyFriends(
-        XLiveAPI::dummy_friends_count);
+    logged_profiles_[assigned_user_slot]->AddDummyFriends(dummy_friends_count_);
   }
 }
 

@@ -2,7 +2,7 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2024 Xenia Emulator. All rights reserved.                        *
+ * Copyright 2025 Xenia Canary. All rights reserved.                          *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
@@ -13,10 +13,14 @@
 #include "xenia/kernel/kernel_state.h"
 
 #ifdef XE_PLATFORM_WIN32
+// clang-format off
 // NOTE: must be included last as it expects windows.h to already be included.
 #define _WINSOCK_DEPRECATED_NO_WARNINGS  // inet_addr
 #include <WS2tcpip.h>                    // NOLINT(build/include_order)
 #include <winsock2.h>                    // NOLINT(build/include_order)
+
+#include <Iphlpapi.h>
+// clang-format on
 #endif
 
 namespace xe {
@@ -54,13 +58,19 @@ class MacAddress {
 
 sockaddr_in WinsockGetLocalIP();
 
-const std::string ip_to_string(in_addr addr);
-const std::string ip_to_string(sockaddr_in sockaddr);
-const sockaddr_in ip_to_sockaddr(std::string ip_str);
-const in_addr ip_to_in_addr(std::string ip_str);
+std::string ip_to_string(in_addr addr);
+std::string ip_to_string(sockaddr_in sockaddr);
+sockaddr_in ip_to_sockaddr(std::string ip_str);
+in_addr ip_to_in_addr(std::string ip_str);
 
 void* GetOptValueWithProperEndianness(void* ptr, uint32_t optValue,
                                       uint32_t length);
+
+uint64_t GetMachineId(const uint64_t mac_address);
+
+uint64_t GetLocalMachineId(const MacAddress mac_address);
+
+std::unique_ptr<MacAddress> GenerateMacAddress();
 
 }  // namespace kernel
 }  // namespace xe
