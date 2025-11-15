@@ -1474,6 +1474,269 @@ DECLARE_XAM_EXPORT1(NetDll_XHttpStartup, kNetworking, kStub);
 void NetDll_XHttpShutdown_entry(dword_t caller) {}
 DECLARE_XAM_EXPORT1(NetDll_XHttpShutdown, kNetworking, kStub);
 
+dword_result_t NetDll_XHttpCrackUrl_entry(
+    dword_t caller, lpstring_t url_ptr, dword_t url_length, dword_t flags,
+    pointer_t<XHTTP_URL_COMPONENTS> url_components_ptr) {
+  if (!url_ptr || !url_components_ptr ||
+      url_components_ptr->struct_size != sizeof(XHTTP_URL_COMPONENTS)) {
+    XThread::SetLastError(X_ERROR_INVALID_PARAMETER);
+    return false;
+  }
+
+  const bool insufficient_buffer =
+      url_components_ptr->scheme_ptr && !url_components_ptr->scheme_length ||
+      url_components_ptr->host_name_ptr &&
+          !url_components_ptr->host_name_length ||
+      url_components_ptr->user_name_ptr &&
+          !url_components_ptr->user_name_length ||
+      url_components_ptr->password_ptr &&
+          !url_components_ptr->password_length ||
+      url_components_ptr->url_path_ptr &&
+          !url_components_ptr->url_path_length ||
+      url_components_ptr->extra_info_ptr &&
+          !url_components_ptr->extra_info_length;
+
+  // ICU decode is only supported with user provided buffers
+  if (flags & X_ICU_DECODE) {
+    const bool invalid_paramater =
+        !url_components_ptr->scheme_ptr && url_components_ptr->scheme_length ||
+        !url_components_ptr->host_name_ptr &&
+            url_components_ptr->host_name_length ||
+        !url_components_ptr->user_name_ptr &&
+            url_components_ptr->user_name_length ||
+        !url_components_ptr->password_ptr &&
+            url_components_ptr->password_length ||
+        !url_components_ptr->url_path_ptr &&
+            url_components_ptr->url_path_length ||
+        !url_components_ptr->extra_info_ptr &&
+            url_components_ptr->extra_info_length;
+
+    // Invalid or provided buffer is insufficient
+    if (invalid_paramater || insufficient_buffer) {
+      XThread::SetLastError(X_ERROR_INVALID_PARAMETER);
+      return false;
+    }
+  }
+
+  std::string url_to_process = url_ptr.value();
+
+  if (url_length) {
+    url_to_process = url_ptr.value().substr(0, url_length);
+  }
+
+  CURLU* url = curl_url();
+  CURLUcode rc = curl_url_set(url, CURLUPART_URL, url_to_process.c_str(), 0);
+
+  // Assert if URL is bad format
+  assert_zero(rc);
+
+  if (rc) {
+    url_components_ptr->scheme = -1;
+  }
+
+  if (flags & X_ICU_DECODE) {
+    CURL* curl = curl_easy_init();
+    int output_length = 0;
+
+    char* decoded_output = curl_easy_unescape(curl, url_to_process.c_str(),
+                                              url_length, &output_length);
+
+    url_to_process = std::string(decoded_output, output_length);
+
+    curl_free(decoded_output);
+    curl_easy_cleanup(curl);
+  }
+
+  std::regex url_regex(
+      R"(^([a-zA-Z]+)://(?:([^:@]+)(?::([^:@]*))?@)?([^/:]+)(?::(\d+))?((/[^?#]*)(\?[^#]*)?(#[^ ]*)?)?$)",
+      std::regex_constants::icase);
+
+  const char* component_names[] = {"Full Match", "Protocol", "Username",
+                                   "Password",   "Host",     "Port",
+                                   "Path",       "Query"};
+
+  std::smatch matches;
+
+  auto ProcessComponent = [kernel_state = kernel_state()](
+                              const uint32_t component_result_ptr,
+                              uint32_t& component_ptr,
+                              uint32_t& component_length_ptr, uint32_t size) {
+    if (component_ptr) {
+      if (!component_length_ptr || component_length_ptr < size + 1) {
+        component_length_ptr = size + 1;  // Null Terminator
+        return false;
+      }
+
+      char* result_dst_ptr =
+          kernel_state->memory()->TranslateVirtual<char*>(component_ptr);
+
+      char* result_src_ptr =
+          kernel_state->memory()->TranslateVirtual<char*>(component_result_ptr);
+
+      std::memcpy(result_dst_ptr, result_src_ptr, size);
+      component_length_ptr = size;
+    } else if (component_length_ptr) {
+      component_ptr = component_result_ptr;
+      component_length_ptr = size;
+    }
+
+    return true;
+  };
+
+  bool ret = true;
+
+  if (std::regex_match(url_to_process, matches, url_regex)) {
+    for (size_t i = 0; i < matches.size(); ++i) {
+      std::ssub_match sub_match = matches[i];
+
+      if (sub_match.matched) {
+        const uint32_t result_ptr = url_ptr.guest_address() +
+                                    static_cast<uint32_t>(matches.position(i));
+
+        const uint32_t length = static_cast<uint32_t>(sub_match.length());
+
+        const X_URL_COMPONENTS current_component =
+            static_cast<X_URL_COMPONENTS>(i);
+
+        switch (current_component) {
+          case X_URL_COMPONENTS::Full: {
+            // Skip
+            continue;
+          } break;
+          case X_URL_COMPONENTS::Protocal: {
+            uint32_t scheme_ptr_out = url_components_ptr->scheme_ptr;
+            uint32_t scheme_length_out = url_components_ptr->scheme_length;
+
+            const bool component_result = ProcessComponent(
+                result_ptr, scheme_ptr_out, scheme_length_out, length);
+
+            url_components_ptr->scheme_length = scheme_length_out;
+
+            if (component_result && !url_components_ptr->scheme_ptr) {
+              url_components_ptr->scheme_ptr = scheme_ptr_out;
+            } else {
+              ret = false;
+            }
+
+            const char* scheme_data_ptr =
+                kernel_state()->memory()->TranslateVirtual<char*>(result_ptr);
+
+            std::string schema_data = std::string(scheme_data_ptr, length);
+
+            X_INTERNET_SCHEME scheme_type = {};
+
+            // Set default scheme and port
+            if (utf8::equal_case(schema_data.c_str(), "http")) {
+              scheme_type = X_INTERNET_SCHEME::HTTP;
+              url_components_ptr->port = 80;
+            } else if (utf8::equal_case(schema_data.c_str(), "https")) {
+              scheme_type = X_INTERNET_SCHEME::HTTPS;
+              url_components_ptr->port = 443;
+            }
+
+            url_components_ptr->scheme = static_cast<uint32_t>(scheme_type);
+          } break;
+          case X_URL_COMPONENTS::Username: {
+            uint32_t username_ptr_out = url_components_ptr->user_name_ptr;
+            uint32_t username_length_out = url_components_ptr->user_name_length;
+
+            const bool component_result = ProcessComponent(
+                result_ptr, username_ptr_out, username_length_out, length);
+
+            url_components_ptr->user_name_length = username_length_out;
+
+            if (component_result && !url_components_ptr->user_name_ptr) {
+              url_components_ptr->user_name_ptr = username_ptr_out;
+            } else {
+              ret = false;
+            }
+          } break;
+          case X_URL_COMPONENTS::Password: {
+            uint32_t password_ptr_out = url_components_ptr->password_ptr;
+            uint32_t password_length_out = url_components_ptr->password_length;
+
+            const bool component_result = ProcessComponent(
+                result_ptr, password_ptr_out, password_length_out, length);
+
+            url_components_ptr->password_length = password_length_out;
+
+            if (component_result && !url_components_ptr->password_ptr) {
+              url_components_ptr->password_ptr = password_ptr_out;
+            } else {
+              ret = false;
+            }
+          } break;
+          case X_URL_COMPONENTS::Host: {
+            uint32_t host_ptr_out = url_components_ptr->host_name_ptr;
+            uint32_t host_length_out = url_components_ptr->host_name_length;
+
+            const bool component_result = ProcessComponent(
+                result_ptr, host_ptr_out, host_length_out, length);
+
+            url_components_ptr->host_name_length = host_length_out;
+
+            if (component_result && !url_components_ptr->host_name_ptr) {
+              url_components_ptr->host_name_ptr = host_ptr_out;
+            } else {
+              ret = false;
+            }
+          } break;
+          case X_URL_COMPONENTS::Port: {
+            const char* port_str_ptr =
+                kernel_memory()->TranslateVirtual<char*>(result_ptr);
+
+            std::string port_str = std::string(port_str_ptr, length);
+
+            const uint16_t port =
+                xe::string_util::from_string<uint16_t>(port_str);
+
+            url_components_ptr->port = port;
+          } break;
+          case X_URL_COMPONENTS::Path: {
+            uint32_t path_ptr_out = url_components_ptr->url_path_ptr;
+            uint32_t path_length_out = url_components_ptr->url_path_length;
+
+            const bool component_result = ProcessComponent(
+                result_ptr, path_ptr_out, path_length_out, length);
+
+            url_components_ptr->url_path_length = path_length_out;
+
+            if (component_result && !url_components_ptr->url_path_ptr) {
+              url_components_ptr->url_path_ptr = path_ptr_out;
+            } else {
+              ret = false;
+            }
+          } break;
+          case X_URL_COMPONENTS::Query: {
+            uint32_t extra_ptr_out = url_components_ptr->extra_info_ptr;
+            uint32_t extra_length_out = url_components_ptr->extra_info_length;
+
+            const bool component_result = ProcessComponent(
+                result_ptr, extra_ptr_out, extra_length_out, length);
+
+            url_components_ptr->extra_info_length = extra_length_out;
+
+            if (component_result && !url_components_ptr->extra_info_ptr) {
+              url_components_ptr->extra_info_ptr = extra_ptr_out;
+            } else {
+              ret = false;
+            }
+          } break;
+        }
+      }
+    }
+  }
+
+  // Return after processing so the component length is set
+  if (insufficient_buffer) {
+    XThread::SetLastError(X_ERROR_INSUFFICIENT_BUFFER);
+    ret = false;
+  }
+
+  return ret;
+}
+DECLARE_XAM_EXPORT1(NetDll_XHttpCrackUrl, kNetworking, kImplemented);
+
 dword_result_t NetDll_XHttpDoWork_entry(dword_t caller, dword_t handle,
                                         dword_t unk) {
   XThread::SetLastError(X_ERROR_SUCCESS);
