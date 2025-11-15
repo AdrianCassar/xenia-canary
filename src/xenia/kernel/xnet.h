@@ -166,6 +166,9 @@ namespace xe {
 
 #define X_ONLINE_LSP_DEFAULT_DATASET_ID                     0xAAAA
 
+#define X_ICU_DECODE 0x10000000  // Convert %XX escape sequences to characters
+#define X_ICU_ESCAPE 0x80000000  // (un)escape URL characters
+
 constexpr bool IsOnlineError(uint32_t error) {
   return (error & 0xFFFF0000) == X_ONLINE_E_BASE;
 }
@@ -331,6 +334,19 @@ enum DMP_STATUS_TYPE : uint32_t {
   DMP_STATUS_CLOSED = 2
 };
 
+enum class X_INTERNET_SCHEME : uint32_t { HTTP = 1, HTTPS = 2 };
+
+enum class X_URL_COMPONENTS {
+  Full,
+  Protocal,
+  Username,
+  Password,
+  Host,
+  Port,
+  Path,
+  Query
+};
+
 struct XNKID {
   uint8_t ab[8];
   uint64_t as_uint64() { return *reinterpret_cast<uint64_t*>(&ab); }
@@ -471,6 +487,25 @@ struct XSESSION_MEMBER {
   }
 };
 static_assert_size(XSESSION_MEMBER, 0x10);
+
+struct XHTTP_URL_COMPONENTS {
+  xe::be<uint32_t> struct_size;
+  xe::be<uint32_t> scheme_ptr;
+  xe::be<uint32_t> scheme_length;
+  xe::be<uint32_t> scheme;
+  xe::be<uint32_t> host_name_ptr;
+  xe::be<uint32_t> host_name_length;
+  xe::be<uint16_t> port;
+  xe::be<uint32_t> user_name_ptr;
+  xe::be<uint32_t> user_name_length;
+  xe::be<uint32_t> password_ptr;
+  xe::be<uint32_t> password_length;
+  xe::be<uint32_t> url_path_ptr;
+  xe::be<uint32_t> url_path_length;
+  xe::be<uint32_t> extra_info_ptr;
+  xe::be<uint32_t> extra_info_length;
+};
+static_assert_size(XHTTP_URL_COMPONENTS, 0x3C);
 
 struct XAM_RELYING_PARTY_TOKEN {
   uint32_t reserved;
