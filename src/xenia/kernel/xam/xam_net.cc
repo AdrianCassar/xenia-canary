@@ -1370,6 +1370,65 @@ dword_result_t NetDll_XNetQosGetListenStats_entry(
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetQosGetListenStats, kNetworking, kImplemented);
 
+dword_result_t XamGetServiceEndpoint_entry(
+    lpstring_t service_name_ptr, lpstring_t service_endpoint_ptr,
+    dword_t service_endpoint_len, pointer_t<XAM_OVERLAPPED> overlapped_ptr) {
+  if (!service_name_ptr || !service_endpoint_ptr || !service_endpoint_len) {
+    return X_ERROR_INVALID_PARAMETER;
+  }
+
+  const std::string service_name = service_name_ptr.value();
+
+  std::string service_endpoint =
+      fmt::format("{}{}", XLiveAPI::GetApiAddress(), service_name);
+  const std::string fallback_service_endpoint =
+      fmt::format("http://xbox.com/{}", service_name);
+
+  CURLU* url = curl_url();
+  CURLUcode rc = curl_url_set(url, CURLUPART_URL, service_endpoint.c_str(), 0);
+
+  // Check if endpoint has scheme, protocol expected for XHttpCrackUrl.
+  if (rc == CURLUE_BAD_SCHEME) {
+    service_endpoint = fmt::format("http://{}", service_endpoint);
+  }
+
+  curl_url_cleanup(url);
+
+  auto run = [=](uint32_t& extended_error, uint32_t& length) {
+    extended_error = X_ERROR_SUCCESS;
+    length = 0;
+
+    std::memset(service_endpoint_ptr, 0, service_endpoint_len);
+
+    // 41560914 uses endpoint length of 64
+    if (service_endpoint_len < service_endpoint.size() + 1) {
+      if (service_endpoint_len < fallback_service_endpoint.size() + 1) {
+        extended_error = X_ERROR_INSUFFICIENT_BUFFER;
+        return X_ERROR_FUNCTION_FAILED;
+      } else {
+        strcpy(service_endpoint_ptr, fallback_service_endpoint.c_str());
+        XELOGI("XamGetServiceEndpoint: {}", fallback_service_endpoint.c_str());
+      }
+    } else {
+      strcpy(service_endpoint_ptr, service_endpoint.c_str());
+      XELOGI("XamGetServiceEndpoint: {}", service_endpoint.c_str());
+    }
+
+    return X_ERROR_SUCCESS;
+  };
+
+  if (!overlapped_ptr) {
+    uint32_t extended_error, length;
+    X_RESULT result = run(extended_error, length);
+
+    return result == X_ERROR_SUCCESS ? result : extended_error;
+  }
+
+  kernel_state()->CompleteOverlappedDeferredEx(run, overlapped_ptr);
+  return X_ERROR_IO_PENDING;
+}
+DECLARE_XAM_EXPORT1(XamGetServiceEndpoint, kNetworking, kSketchy);
+
 dword_result_t XampXAuthStartup_entry(pointer_t<XAUTH_SETTINGS> setttings) {
   if (setttings->SizeOfStruct != sizeof(XAUTH_SETTINGS)) {
     return 0x80158401;
