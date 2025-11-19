@@ -375,7 +375,7 @@ X_HRESULT XLiveBaseApp::XPresenceInitialize(uint32_t buffer_ptr,
           initialize->max_peer_subscriptions.argument_value_ptr)));
 
   if (max_peer_subscriptions > X_ONLINE_PEER_SUBSCRIPTIONS) {
-    return X_E_INVALIDARG;
+    return X_ONLINE_E_NOTIFICATION_TOO_MANY_SUBS;
   }
 
   MAX_TITLE_SUBSCRIPTIONS = max_peer_subscriptions;
