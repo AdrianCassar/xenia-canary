@@ -38,6 +38,9 @@ DEFINE_bool(allow_incompatible_title_update, true,
 DEFINE_uint32(kernel_build_version, 1888, "Define current kernel version",
               "Kernel");
 
+DEFINE_uint32(kernel_deferred_overlapped_delay_ms, 25,
+              "Deferred Overlapped Delay Milliseconds", "Kernel");
+
 DECLARE_string(cl);
 
 DECLARE_int32(network_mode);
@@ -45,7 +48,8 @@ DECLARE_int32(network_mode);
 namespace xe {
 namespace kernel {
 
-constexpr std::chrono::milliseconds kDeferredOverlappedDelayMillis(25);
+const std::chrono::milliseconds kDeferredOverlappedDelayMillis(
+    cvars::kernel_deferred_overlapped_delay_ms);
 
 // This is a global object initialized with the XboxkrnlModule.
 // It references the current kernel state object that all kernel methods should
