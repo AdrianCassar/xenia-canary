@@ -60,6 +60,7 @@ namespace xe {
 #define X_ONLINE_E_ACCESS_DENIED                            static_cast<X_HRESULT>(0x80150016L)
 #define X_ONLINE_E_ACCOUNTS_USER_OPTED_OUT                  static_cast<X_HRESULT>(0x80154099L)
 #define X_ONLINE_E_ACCOUNTS_USER_GET_ACCOUNT_INFO_ERROR     static_cast<X_HRESULT>(0x80154098L)
+#define X_ONLINE_E_NOTIFICATION_TOO_MANY_SUBS               static_cast<X_HRESULT>(0x8015200EL)
 
 #define X_PARTY_E_NOT_IN_PARTY                              static_cast<X_HRESULT>(0x807D0003L)
 
