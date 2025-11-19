@@ -1125,6 +1125,10 @@ void KernelState::CompleteOverlappedDeferredEx(
      555307EE quickly disconnects from session with high delay e.g.
      100ms.
      Small delay fixes it e.g. 25ms.
+
+     4C4107ED internal log says "timed out connecting" and crashes attempting to
+     join session via custom search with a delay of 25ms.
+     Smaller delay fixes it e.g. 5ms.
     */
     xe::threading::Sleep(kDeferredOverlappedDelayMillis);
     uint32_t extended_error, length;
