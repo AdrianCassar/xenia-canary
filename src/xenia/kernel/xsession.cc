@@ -582,33 +582,39 @@ X_RESULT XSession::ModifySession(XGI_SESSION_MODIFY* data) {
 X_RESULT XSession::GetSessionDetails(XGI_SESSION_DETAILS* data) {
   // 4E4D085C checks ReturnedMemberCount when creating a session
 
-  auto local_details_ptr =
+  XSESSION_LOCAL_DETAILS* local_details_ptr =
       kernel_state_->memory()->TranslateVirtual<XSESSION_LOCAL_DETAILS*>(
           data->session_details_ptr);
 
-  local_details_ptr->SessionMembers_ptr =
-      kernel_state_->memory()->SystemHeapAlloc(sizeof(XSESSION_MEMBER) *
-                                               GetMembersCount());
+  std::memcpy(local_details_ptr, &local_details_,
+              sizeof(XSESSION_LOCAL_DETAILS));
 
-  local_details_.SessionMembers_ptr = local_details_ptr->SessionMembers_ptr;
+  const uint32_t buffer_size =
+      *kernel_state_->memory()->TranslateVirtual<xe::be<uint32_t>*>(
+          data->details_buffer_size);
+
+  const uint32_t members_count =
+      (buffer_size - sizeof(XSESSION_LOCAL_DETAILS)) / sizeof(XSESSION_MEMBER);
 
   XSESSION_MEMBER* members_ptr =
-      kernel_state_->memory()->TranslateVirtual<XSESSION_MEMBER*>(
-          local_details_ptr->SessionMembers_ptr);
+      reinterpret_cast<XSESSION_MEMBER*>(local_details_ptr + 1);
 
-  uint32_t index = 0;
+  std::vector<XSESSION_MEMBER> all_members = {};
 
-  for (auto const& [xuid, member] : local_members_) {
-    members_ptr[index] = member;
-    index++;
+  std::ranges::transform(local_members_, std::back_inserter(all_members),
+                         &std::pair<const uint64_t, XSESSION_MEMBER>::second);
+
+  std::ranges::transform(remote_members_, std::back_inserter(all_members),
+                         &std::pair<const uint64_t, XSESSION_MEMBER>::second);
+
+  const auto members = all_members | std::views::take(members_count);
+
+  for (uint32_t i = 0; const auto& member : members) {
+    members_ptr[i] = member;
+    i++;
   }
 
-  for (auto const& [xuid, member] : remote_members_) {
-    members_ptr[index] = member;
-    index++;
-  }
-
-  memcpy(local_details_ptr, &local_details_, sizeof(XSESSION_LOCAL_DETAILS));
+  assert_false(all_members.size() > members_count);
 
   PrintSessionDetails();
 
