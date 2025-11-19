@@ -1069,7 +1069,7 @@ void UserTracker::UpsertSetting(uint64_t xuid, uint32_t title_id,
     return;
   }
 
-  // Sometimes games like to ignore providing expicitly title_id, so we need to
+  // Sometimes games like to ignore providing explicitly title_id, so we need to
   // check it.
   if (!title_id) {
     title_id = spa_data_ ? spa_data_->title_id() : kernel_state()->title_id();
