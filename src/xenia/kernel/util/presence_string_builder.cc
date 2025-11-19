@@ -33,7 +33,7 @@ AttributeStringFormatter::AttributeStringFormatter(
 
   BuildPresenceString();
 
-  // Check if precebse string is completed
+  // Check if presence string is completed
   attribute_string_ = presence_string_;
 
   const auto specifiers = GetPresenceFormatSpecifiers();
