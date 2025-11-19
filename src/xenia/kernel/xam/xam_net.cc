@@ -1035,12 +1035,8 @@ dword_result_t NetDll_XNetDnsLookup_entry(dword_t caller, lpstring_t host,
 
     *pdns = dns_guest;
   }
-  if (event_handle) {
-    auto ev =
-        kernel_state()->object_table()->LookupObject<XEvent>(event_handle);
-    assert_not_null(ev);
-    ev->Set(0, false);
-  }
+
+  xboxkrnl::xeNtSetEvent(event_handle, nullptr);
   return 0;
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetDnsLookup, kNetworking, kImplemented);
@@ -1066,9 +1062,11 @@ dword_result_t NetDll_XNetQosServiceLookup_entry(dword_t caller, dword_t flags,
     return static_cast<uint32_t>(X_WSAError::X_WSAEINVAL);
   }
 
+  XNQOS* qos = nullptr;
+
   if (qos_ptr) {
     const uint32_t qos_guest = kernel_memory()->SystemHeapAlloc(sizeof(XNQOS));
-    XNQOS* qos = kernel_memory()->TranslateVirtual<XNQOS*>(qos_guest);
+    qos = kernel_memory()->TranslateVirtual<XNQOS*>(qos_guest);
 
     qos->count = 1;
     qos->count_pending = 0;
@@ -1087,11 +1085,10 @@ dword_result_t NetDll_XNetQosServiceLookup_entry(dword_t caller, dword_t flags,
     *qos_ptr = qos_guest;
   }
 
-  if (event_handle) {
-    auto ev =
-        kernel_state()->object_table()->LookupObject<XEvent>(event_handle);
-    assert_not_null(ev);
-    ev->Set(0, false);
+  // If COMPLETE, TARGET_CONTACTED or PARTIAL_COMPLETE flag is set then set
+  // event.
+  if (qos->count > 0) {
+    xboxkrnl::xeNtSetEvent(event_handle, nullptr);
   }
 
   return 0;
@@ -1102,6 +1099,12 @@ dword_result_t NetDll_XNetQosRelease_entry(dword_t caller,
                                            pointer_t<XNQOS> qos_ptr) {
   if (!qos_ptr) {
     return static_cast<uint32_t>(X_WSAError::X_WSAEINVAL);
+  }
+
+  for (uint32_t i = 0; i < qos_ptr->count; i++) {
+    if (qos_ptr[i].info->data_ptr) {
+      kernel_memory()->SystemHeapFree(qos_ptr[i].info->data_ptr);
+    }
   }
 
   kernel_memory()->SystemHeapFree(qos_ptr.guest_address());
@@ -1339,11 +1342,9 @@ dword_result_t NetDll_XNetQosLookup_entry(
     *qos_ptr = qos_guest;
   }
 
-  if (event_handle) {
-    auto ev =
-        kernel_state()->object_table()->LookupObject<XEvent>(event_handle);
-    assert_not_null(ev);
-    ev->Set(0, false);
+  // If COMPLETE or TARGET_CONTACTED flag is then set event.
+  if (qos->count > 0) {
+    xboxkrnl::xeNtSetEvent(event_handle, nullptr);
   }
 
   return X_ERROR_SUCCESS;
