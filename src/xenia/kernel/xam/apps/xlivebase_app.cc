@@ -358,7 +358,7 @@ X_HRESULT XLiveBaseApp::XPresenceInitialize(uint32_t buffer_ptr,
     return X_E_INVALIDARG;
   }
 
-  XLivebaseAsyncTask* async_task = new XLivebaseAsyncTask(buffer_ptr);
+  XLivebaseAsyncTask async_task = XLivebaseAsyncTask(buffer_ptr);
 
   Memory* memory = kernel_state_->memory();
 
@@ -393,7 +393,7 @@ X_HRESULT XLiveBaseApp::XPresenceSubscribe(uint32_t buffer_ptr,
     return X_E_INVALIDARG;
   }
 
-  XLivebaseAsyncTask* async_task = new XLivebaseAsyncTask(buffer_ptr);
+  XLivebaseAsyncTask async_task = XLivebaseAsyncTask(buffer_ptr);
 
   Memory* memory = kernel_state_->memory();
 
@@ -469,7 +469,7 @@ X_HRESULT XLiveBaseApp::XPresenceUnsubscribe(uint32_t buffer_ptr,
     return X_E_INVALIDARG;
   }
 
-  XLivebaseAsyncTask* async_task = new XLivebaseAsyncTask(buffer_ptr);
+  XLivebaseAsyncTask async_task = XLivebaseAsyncTask(buffer_ptr);
 
   Memory* memory = kernel_state_->memory();
 
@@ -542,7 +542,7 @@ X_HRESULT XLiveBaseApp::XPresenceCreateEnumerator(uint32_t buffer_ptr,
     return X_E_INVALIDARG;
   }
 
-  XLivebaseAsyncTask* async_task = new XLivebaseAsyncTask(buffer_ptr);
+  XLivebaseAsyncTask async_task = XLivebaseAsyncTask(buffer_ptr);
 
   Memory* memory = kernel_state_->memory();
 
@@ -668,21 +668,20 @@ X_HRESULT XLiveBaseApp::XOnlineQuerySearch(uint32_t buffer_ptr) {
     return X_E_INVALIDARG;
   }
 
-  XQuerySearchUnmarshaller* unmarshaller =
-      new XQuerySearchUnmarshaller(buffer_ptr);
+  XQuerySearchUnmarshaller unmarshaller = XQuerySearchUnmarshaller(buffer_ptr);
 
-  X_HRESULT deserialize_result = unmarshaller->Deserialize();
+  X_HRESULT deserialize_result = unmarshaller.Deserialize();
 
   if (deserialize_result) {
     return deserialize_result;
   }
 
-  unmarshaller->PrettyPrintAttributesSpec();
+  unmarshaller.PrettyPrintAttributesSpec();
 
-  unmarshaller->ZeroResults();
+  unmarshaller.ZeroResults();
 
   QUERY_SEARCH_RESULT* results_ptr =
-      unmarshaller->Results<QUERY_SEARCH_RESULT>();
+      unmarshaller.Results<QUERY_SEARCH_RESULT>();
 
   const auto services = XLiveAPI::GetServices();
 
@@ -691,7 +690,7 @@ X_HRESULT XLiveBaseApp::XOnlineQuerySearch(uint32_t buffer_ptr) {
   results_ptr->returned_results =
       static_cast<uint32_t>(services->QuerySearchResults().size());
   results_ptr->num_result_attributes = static_cast<uint32_t>(
-      unmarshaller->SpecAttributes().size() * results_ptr->returned_results);
+      unmarshaller.SpecAttributes().size() * results_ptr->returned_results);
 
   X_ONLINE_QUERY_ATTRIBUTE* attributes_ptr =
       reinterpret_cast<X_ONLINE_QUERY_ATTRIBUTE*>(results_ptr + 1);
@@ -704,12 +703,12 @@ X_HRESULT XLiveBaseApp::XOnlineQuerySearch(uint32_t buffer_ptr) {
   for (uint32_t gateway_index = 0;
        const auto& gateway : services->QuerySearchResults()) {
     uint32_t attribute_index = static_cast<uint32_t>(
-        (gateway_index * unmarshaller->SpecAttributes().size()));
+        (gateway_index * unmarshaller.SpecAttributes().size()));
 
     uint8_t* binary_alloc_ptr = reinterpret_cast<uint8_t*>(
         attributes_ptr + results_ptr->num_result_attributes);
 
-    for (auto const& attribute : unmarshaller->SpecAttributes()) {
+    for (auto const& attribute : unmarshaller.SpecAttributes()) {
       switch (attribute.type) {
         case X_ONLINE_LSP_ATTRIBUTE_TSADDR: {
           assert_false(attribute.length != sizeof(TSADDR));
@@ -822,7 +821,7 @@ X_HRESULT XLiveBaseApp::XOnlineQuerySearch(uint32_t buffer_ptr) {
 
   XELOGI("{}: Total Gateways: {}, Returned Gateways: {}, Attributes: {}",
          __func__, results_ptr->total_results.get(),
-         results_ptr->returned_results.get(), unmarshaller->NumAttributes());
+         results_ptr->returned_results.get(), unmarshaller.NumAttributes());
 
   return X_E_SUCCESS;
 }
@@ -861,7 +860,7 @@ X_HRESULT XLiveBaseApp::XFriendsCreateEnumerator(uint32_t buffer_ptr,
     return X_E_INVALIDARG;
   }
 
-  XLivebaseAsyncTask* async_task = new XLivebaseAsyncTask(buffer_ptr);
+  XLivebaseAsyncTask async_task = XLivebaseAsyncTask(buffer_ptr);
 
   Memory* memory = kernel_state_->memory();
 
@@ -1006,10 +1005,9 @@ X_HRESULT XLiveBaseApp::XInviteSend(uint32_t buffer_ptr) {
 
   // Current session must have PRESENCE flag.
 
-  XInviteSendUnmarshaller* unmarshaller =
-      new XInviteSendUnmarshaller(buffer_ptr);
+  XInviteSendUnmarshaller unmarshaller = XInviteSendUnmarshaller(buffer_ptr);
 
-  X_HRESULT deserialize_result = unmarshaller->Deserialize();
+  X_HRESULT deserialize_result = unmarshaller.Deserialize();
 
   if (deserialize_result) {
     return deserialize_result;
@@ -1017,7 +1015,7 @@ X_HRESULT XLiveBaseApp::XInviteSend(uint32_t buffer_ptr) {
 
   new xe::ui::HostNotificationWindow(
       kernel_state()->emulator()->imgui_drawer(), "Invites aren't supported!",
-      xe::to_utf8(unmarshaller->DisplayString()), 0);
+      xe::to_utf8(unmarshaller.DisplayString()), 0);
 
   return X_E_SUCCESS;
 }
@@ -1028,7 +1026,7 @@ X_HRESULT XLiveBaseApp::XInviteGetAcceptedInfo(uint32_t buffer_ptr,
     return X_E_INVALIDARG;
   }
 
-  XLivebaseAsyncTask* async_task = new XLivebaseAsyncTask(buffer_ptr);
+  XLivebaseAsyncTask async_task = XLivebaseAsyncTask(buffer_ptr);
 
   Memory* memory = kernel_state_->memory();
 
@@ -1126,9 +1124,9 @@ X_HRESULT XLiveBaseApp::GenericMarshalled(uint32_t buffer_ptr) {
     return X_E_INVALIDARG;
   }
 
-  GenericUnmarshaller* unmarshaller = new GenericUnmarshaller(buffer_ptr);
+  GenericUnmarshaller unmarshaller = GenericUnmarshaller(buffer_ptr);
 
-  const std::string_view task_url = unmarshaller->GetAsyncTask()->GetTaskUrl();
+  const std::string_view task_url = unmarshaller.GetAsyncTask()->GetTaskUrl();
 
   // Determine function via it's URL, some functions don't have a URL if the url
   // index is 0.
@@ -1152,15 +1150,15 @@ X_HRESULT XLiveBaseApp::GenericMarshalled(uint32_t buffer_ptr) {
 
   XELOGI("{}:: URL: {}", __func__, task_url);
 
-  uint8_t* args_ptr = unmarshaller->DeserializeReinterpret<uint8_t>();
+  uint8_t* args_ptr = unmarshaller.DeserializeReinterpret<uint8_t>();
 
   if (!args_ptr) {
     return X_E_INVALIDARG;
   }
 
-  unmarshaller->ZeroResults();
+  unmarshaller.ZeroResults();
 
-  uint8_t* results_ptr = unmarshaller->Results<uint8_t>();
+  uint8_t* results_ptr = unmarshaller.Results<uint8_t>();
 
   return X_E_SUCCESS;
 }
@@ -1268,19 +1266,19 @@ X_HRESULT XLiveBaseApp::XAccountGetUserInfo(uint32_t buffer_ptr) {
     return X_E_INVALIDARG;
   }
 
-  XAccountGetUserInfoUnmarshaller* unmarshaller =
-      new XAccountGetUserInfoUnmarshaller(buffer_ptr);
+  XAccountGetUserInfoUnmarshaller unmarshaller =
+      XAccountGetUserInfoUnmarshaller(buffer_ptr);
 
-  X_HRESULT deserialize_result = unmarshaller->Deserialize();
+  X_HRESULT deserialize_result = unmarshaller.Deserialize();
 
   if (deserialize_result) {
     return deserialize_result;
   }
 
   X_GET_USER_INFO_RESPONSE* user_info_response_ptr =
-      unmarshaller->Results<X_GET_USER_INFO_RESPONSE>();
+      unmarshaller.Results<X_GET_USER_INFO_RESPONSE>();
 
-  unmarshaller->ZeroResults();
+  unmarshaller.ZeroResults();
 
   // Example usage
   std::u16string first_name = u"First Name";
@@ -1327,29 +1325,29 @@ X_HRESULT XLiveBaseApp::XStorageEnumerate(uint32_t buffer_ptr) {
     return X_E_INVALIDARG;
   }
 
-  XStorageEnumerateUnmarshaller* unmarshaller =
-      new XStorageEnumerateUnmarshaller(buffer_ptr);
+  XStorageEnumerateUnmarshaller unmarshaller =
+      XStorageEnumerateUnmarshaller(buffer_ptr);
 
-  X_HRESULT deserialize_result = unmarshaller->Deserialize();
+  X_HRESULT deserialize_result = unmarshaller.Deserialize();
 
   if (deserialize_result) {
     return deserialize_result;
   }
 
   // Fixed 415607F7 from crashing.
-  unmarshaller->ZeroResults();
+  unmarshaller.ZeroResults();
 
   X_STORAGE_ENUMERATE_RESULTS* results_ptr =
-      unmarshaller->Results<X_STORAGE_ENUMERATE_RESULTS>();
+      unmarshaller.Results<X_STORAGE_ENUMERATE_RESULTS>();
 
   auto user_profle =
-      kernel_state()->xam_state()->GetUserProfile(unmarshaller->UserIndex());
+      kernel_state()->xam_state()->GetUserProfile(unmarshaller.UserIndex());
 
-  const std::string enumeration_path = xe::to_utf8(unmarshaller->ServerPath());
+  const std::string enumeration_path = xe::to_utf8(unmarshaller.ServerPath());
 
   const uint32_t available_to_return_items =
       static_cast<uint32_t>(std::floor<uint32_t>(static_cast<uint32_t>(
-          (unmarshaller->GetAsyncTask()->GetXLiveAsyncTask()->results_size -
+          (unmarshaller.GetAsyncTask()->GetXLiveAsyncTask()->results_size -
            sizeof(X_STORAGE_ENUMERATE_RESULTS)) /
           (sizeof(X_STORAGE_FILE_INFO) +
            (X_ONLINE_MAX_PATHNAME_LENGTH * sizeof(char16_t))))));
@@ -1395,7 +1393,7 @@ X_HRESULT XLiveBaseApp::XStorageEnumerate(uint32_t buffer_ptr) {
 
   if (route_backend) {
     const uint32_t max_items = std::min<uint32_t>(
-        unmarshaller->MaxResultsToReturn(), available_to_return_items);
+        unmarshaller.MaxResultsToReturn(), available_to_return_items);
 
     const auto enumeration_result =
         XLiveAPI::XStorageEnumerate(enumeration_path, max_items);
@@ -1403,7 +1401,7 @@ X_HRESULT XLiveBaseApp::XStorageEnumerate(uint32_t buffer_ptr) {
     const auto& enumerated_files = enumeration_result.first;
     enumerated_backend = enumeration_result.second;
 
-    for (uint32_t item_index = unmarshaller->StartingIndex();
+    for (uint32_t item_index = unmarshaller.StartingIndex();
          const auto& entry : enumerated_files->Items()) {
       std::string filename = utf8::find_name_from_path(entry.FilePath(), '/');
 
@@ -1529,7 +1527,7 @@ X_HRESULT XLiveBaseApp::XStorageEnumerate(uint32_t buffer_ptr) {
                 return entry_1->write_timestamp() > entry_2->write_timestamp();
               });
 
-    for (uint32_t item_index = unmarshaller->StartingIndex();
+    for (uint32_t item_index = unmarshaller.StartingIndex();
          const auto entry : entries) {
       std::string symlink_item_path =
           std::format("{}\\{}", item_parent, entry->name());
@@ -1589,8 +1587,8 @@ X_HRESULT XLiveBaseApp::XStorageEnumerate(uint32_t buffer_ptr) {
       "{}: Available Items Space: {}, Storage Items: {}, Start Index: {}, Max "
       "Items: {}, Server Path: {}",
       __func__, available_to_return_items,
-      results_ptr->num_items_returned.get(), unmarshaller->StartingIndex(),
-      unmarshaller->MaxResultsToReturn(), final_enumeration_path);
+      results_ptr->num_items_returned.get(), unmarshaller.StartingIndex(),
+      unmarshaller.MaxResultsToReturn(), final_enumeration_path);
 
   return result;
 }
@@ -1600,21 +1598,21 @@ X_HRESULT XLiveBaseApp::XStringVerify(uint32_t buffer_ptr) {
     return X_E_INVALIDARG;
   }
 
-  XStringVerifyUnmarshaller* unmarshaller =
-      new XStringVerifyUnmarshaller(buffer_ptr);
+  XStringVerifyUnmarshaller unmarshaller =
+      XStringVerifyUnmarshaller(buffer_ptr);
 
-  X_HRESULT deserialize_result = unmarshaller->Deserialize();
+  X_HRESULT deserialize_result = unmarshaller.Deserialize();
 
   if (deserialize_result) {
     return deserialize_result;
   }
 
-  unmarshaller->ZeroResults();
+  unmarshaller.ZeroResults();
 
   STRING_VERIFY_RESPONSE* responses_ptr =
-      unmarshaller->Results<STRING_VERIFY_RESPONSE>();
+      unmarshaller.Results<STRING_VERIFY_RESPONSE>();
 
-  for (auto const& string_to_verify : unmarshaller->StringToVerify()) {
+  for (auto const& string_to_verify : unmarshaller.StringToVerify()) {
     XELOGI("{}: {}", __func__, string_to_verify);
   }
 
@@ -1626,11 +1624,11 @@ X_HRESULT XLiveBaseApp::XStringVerify(uint32_t buffer_ptr) {
       kernel_state_->memory()->TranslateVirtual<HRESULT*>(
           response_result_address);
 
-  for (uint32_t i = 0; i < unmarshaller->NumStrings(); i++) {
+  for (uint32_t i = 0; i < unmarshaller.NumStrings(); i++) {
     response_results_ptr[i] = X_E_SUCCESS;
   }
 
-  responses_ptr->num_strings = unmarshaller->NumStrings();
+  responses_ptr->num_strings = unmarshaller.NumStrings();
   responses_ptr->string_result_ptr = response_result_address;
 
   return X_E_SUCCESS;
@@ -1641,24 +1639,24 @@ X_HRESULT XLiveBaseApp::XUserEstimateRankForRating(uint32_t buffer_ptr) {
     return X_E_INVALIDARG;
   }
 
-  XUserEstimateRankForRatingUnmarshaller* unmarshaller =
-      new XUserEstimateRankForRatingUnmarshaller(buffer_ptr);
+  XUserEstimateRankForRatingUnmarshaller unmarshaller =
+      XUserEstimateRankForRatingUnmarshaller(buffer_ptr);
 
-  X_HRESULT deserialize_result = unmarshaller->Deserialize();
+  X_HRESULT deserialize_result = unmarshaller.Deserialize();
 
   if (deserialize_result) {
     return deserialize_result;
   }
 
-  unmarshaller->ZeroResults();
+  unmarshaller.ZeroResults();
 
   const uint32_t max_num_ranks_results =
-      (unmarshaller->GetAsyncTask()->GetXLiveAsyncTask()->results_size -
+      (unmarshaller.GetAsyncTask()->GetXLiveAsyncTask()->results_size -
        sizeof(X_USER_ESTIMATE_RANK_RESULTS)) /
       sizeof(uint32_t);
 
   X_USER_ESTIMATE_RANK_RESULTS* estimate_rank_results_ptr =
-      unmarshaller->Results<X_USER_ESTIMATE_RANK_RESULTS>();
+      unmarshaller.Results<X_USER_ESTIMATE_RANK_RESULTS>();
 
   xe::be<uint32_t>* ranks =
       reinterpret_cast<xe::be<uint32_t>*>(estimate_rank_results_ptr + 1);
@@ -1677,16 +1675,16 @@ X_HRESULT XLiveBaseApp::XStorageDelete(uint32_t buffer_ptr) {
     return X_E_INVALIDARG;
   }
 
-  XStorageDeleteUnmarshaller* unmarshaller =
-      new XStorageDeleteUnmarshaller(buffer_ptr);
+  XStorageDeleteUnmarshaller unmarshaller =
+      XStorageDeleteUnmarshaller(buffer_ptr);
 
-  X_HRESULT deserialize_result = unmarshaller->Deserialize();
+  X_HRESULT deserialize_result = unmarshaller.Deserialize();
 
   if (deserialize_result) {
     return deserialize_result;
   }
 
-  std::string item_path = xe::to_utf8(unmarshaller->ServerPath());
+  std::string item_path = xe::to_utf8(unmarshaller.ServerPath());
 
   X_STATUS result = X_E_FAIL;
 
@@ -1734,24 +1732,24 @@ X_HRESULT XLiveBaseApp::XStorageDownloadToMemory(uint32_t buffer_ptr) {
     return X_E_INVALIDARG;
   }
 
-  XStorageDownloadToMemoryUnmarshaller* unmarshaller =
-      new XStorageDownloadToMemoryUnmarshaller(buffer_ptr);
+  XStorageDownloadToMemoryUnmarshaller unmarshaller =
+      XStorageDownloadToMemoryUnmarshaller(buffer_ptr);
 
-  X_HRESULT deserialize_result = unmarshaller->Deserialize();
+  X_HRESULT deserialize_result = unmarshaller.Deserialize();
 
   if (deserialize_result) {
     return deserialize_result;
   }
 
-  unmarshaller->ZeroResults();
+  unmarshaller.ZeroResults();
 
   X_STORAGE_DOWNLOAD_TO_MEMORY_RESULTS* download_results_ptr =
-      unmarshaller->Results<X_STORAGE_DOWNLOAD_TO_MEMORY_RESULTS>();
+      unmarshaller.Results<X_STORAGE_DOWNLOAD_TO_MEMORY_RESULTS>();
 
-  std::span<uint8_t> download_buffer = unmarshaller->GetDownloadBuffer();
+  std::span<uint8_t> download_buffer = unmarshaller.GetDownloadBuffer();
 
   const auto user_profile =
-      kernel_state()->xam_state()->GetUserProfile(unmarshaller->UserIndex());
+      kernel_state()->xam_state()->GetUserProfile(unmarshaller.UserIndex());
 
   uint64_t xuid_owner = 0;
 
@@ -1759,7 +1757,7 @@ X_HRESULT XLiveBaseApp::XStorageDownloadToMemory(uint32_t buffer_ptr) {
     xuid_owner = user_profile->GetOnlineXUID();
   }
 
-  std::string item_to_download = xe::to_utf8(unmarshaller->ServerPath());
+  std::string item_to_download = xe::to_utf8(unmarshaller.ServerPath());
 
   X_STATUS result = X_ONLINE_E_STORAGE_FILE_NOT_FOUND;
 
@@ -1818,9 +1816,9 @@ X_HRESULT XLiveBaseApp::XStorageDownloadToMemory(uint32_t buffer_ptr) {
       output_file->Destroy();
 
       if (!open_result) {
-        if (bytes_read > unmarshaller->BufferSize()) {
+        if (bytes_read > unmarshaller.BufferSize()) {
           XELOGI("{}: Provided file size {}b is larger than expected {}b",
-                 __func__, bytes_read, unmarshaller->BufferSize());
+                 __func__, bytes_read, unmarshaller.BufferSize());
           return X_E_INSUFFICIENT_BUFFER;
         }
 
@@ -1844,7 +1842,7 @@ X_HRESULT XLiveBaseApp::XStorageDownloadToMemory(uint32_t buffer_ptr) {
 
   XELOGI("{}: Downloaded Bytes: {}b, Buffer Size: {}b, Server Path: {}",
          __func__, download_results_ptr->bytes_total.get(),
-         unmarshaller->BufferSize(), item_to_download);
+         unmarshaller.BufferSize(), item_to_download);
 
   return result;
 }
@@ -1854,18 +1852,18 @@ X_HRESULT XLiveBaseApp::XStorageUploadFromMemory(uint32_t buffer_ptr) {
     return X_E_INVALIDARG;
   }
 
-  XStorageUploadToMemoryUnmarshaller* unmarshaller =
-      new XStorageUploadToMemoryUnmarshaller(buffer_ptr);
+  XStorageUploadToMemoryUnmarshaller unmarshaller =
+      XStorageUploadToMemoryUnmarshaller(buffer_ptr);
 
-  X_HRESULT deserialize_result = unmarshaller->Deserialize();
+  X_HRESULT deserialize_result = unmarshaller.Deserialize();
 
   if (deserialize_result) {
     return deserialize_result;
   }
 
-  std::span<uint8_t> upload_buffer = unmarshaller->GetUploadBuffer();
+  std::span<uint8_t> upload_buffer = unmarshaller.GetUploadBuffer();
 
-  std::string upload_file_path = xe::to_utf8(unmarshaller->ServerPath());
+  std::string upload_file_path = xe::to_utf8(unmarshaller.ServerPath());
   std::string filename = utf8::find_name_from_path(upload_file_path, '/');
 
   X_STATUS result = X_E_FAIL;
@@ -1920,7 +1918,7 @@ X_HRESULT XLiveBaseApp::XStorageUploadFromMemory(uint32_t buffer_ptr) {
       if (!result) {
         size_t bytes_written = 0;
         result = upload_file->WriteSync(
-            {upload_buffer.data(), unmarshaller->BufferSize()}, 0,
+            {upload_buffer.data(), unmarshaller.BufferSize()}, 0,
             &bytes_written);
 
         // Update the size of the entry for XStorageDownloadToMemory
@@ -1944,7 +1942,7 @@ X_HRESULT XLiveBaseApp::XStorageUploadFromMemory(uint32_t buffer_ptr) {
       break;
   }
 
-  XELOGI("{}: Size: {}b, Path: {}", __func__, unmarshaller->BufferSize(),
+  XELOGI("{}: Size: {}b, Path: {}", __func__, unmarshaller.BufferSize(),
          upload_file_path);
 
   return result;
@@ -2242,25 +2240,25 @@ X_HRESULT XLiveBaseApp::XUserFindUsers(uint32_t buffer_ptr) {
     return X_E_INVALIDARG;
   }
 
-  XUserFindUsersUnmarshaller* unmarshaller =
-      new XUserFindUsersUnmarshaller(buffer_ptr);
+  XUserFindUsersUnmarshaller unmarshaller =
+      XUserFindUsersUnmarshaller(buffer_ptr);
 
-  X_HRESULT deserialize_result = unmarshaller->Deserialize();
+  X_HRESULT deserialize_result = unmarshaller.Deserialize();
 
   if (deserialize_result) {
     return deserialize_result;
   }
 
   // Fixed 58410B5D
-  unmarshaller->ZeroResults();
+  unmarshaller.ZeroResults();
 
   FIND_USERS_RESPONSE* results_ptr =
-      unmarshaller->Results<FIND_USERS_RESPONSE>();
+      unmarshaller.Results<FIND_USERS_RESPONSE>();
 
   std::vector<FIND_USER_INFO> find_users = {};
   std::vector<FIND_USER_INFO> resolved_users = {};
 
-  for (auto const& user : unmarshaller->Users()) {
+  for (auto const& user : unmarshaller.Users()) {
     const uint64_t xuid = xe::byte_swap(user.xuid);
 
     const auto user_profile =
@@ -2287,7 +2285,7 @@ X_HRESULT XLiveBaseApp::XUserFindUsers(uint32_t buffer_ptr) {
   }
 
   uint32_t results_size = sizeof(FIND_USERS_RESPONSE) +
-                          (unmarshaller->NumUsers() * sizeof(FIND_USER_INFO));
+                          (unmarshaller.NumUsers() * sizeof(FIND_USER_INFO));
 
   uint32_t users_address = kernel_state()->memory()->HostToGuestVirtual(
       std::to_address(results_ptr + 1));
@@ -2409,20 +2407,20 @@ X_HRESULT XLiveBaseApp::XAccountGetPointsBalance(uint32_t buffer_ptr) {
     return X_E_INVALIDARG;
   }
 
-  GenericUnmarshaller* unmarshaller = new GenericUnmarshaller(buffer_ptr);
+  GenericUnmarshaller unmarshaller = GenericUnmarshaller(buffer_ptr);
 
   XACCOUNT_GET_POINTS_BALANCE_REQUEST* points_balance_request_ptr =
       unmarshaller
-          ->DeserializeReinterpret<XACCOUNT_GET_POINTS_BALANCE_REQUEST>();
+          .DeserializeReinterpret<XACCOUNT_GET_POINTS_BALANCE_REQUEST>();
 
   if (!points_balance_request_ptr) {
     return X_E_INVALIDARG;
   }
 
-  unmarshaller->ZeroResults();
+  unmarshaller.ZeroResults();
 
   X_GET_POINTS_BALANCE_RESPONSE* points_balance_results_ptr =
-      unmarshaller->Results<X_GET_POINTS_BALANCE_RESPONSE>();
+      unmarshaller.Results<X_GET_POINTS_BALANCE_RESPONSE>();
 
   points_balance_results_ptr->balance = 1000000000;
   points_balance_results_ptr->dmp_account_status =
@@ -2437,19 +2435,19 @@ X_HRESULT XLiveBaseApp::GetBannerList(uint32_t buffer_ptr) {
   // Called on startup of blades dashboard v1888 to v2858
   // Address: 92433DA8
 
-  GenericUnmarshaller* unmarshaller = new GenericUnmarshaller(buffer_ptr);
+  GenericUnmarshaller unmarshaller = GenericUnmarshaller(buffer_ptr);
 
   GET_BANNER_LIST_REQUEST* banner_list_request_ptr =
-      unmarshaller->DeserializeReinterpret<GET_BANNER_LIST_REQUEST>();
+      unmarshaller.DeserializeReinterpret<GET_BANNER_LIST_REQUEST>();
 
   if (!banner_list_request_ptr) {
     return X_E_INVALIDARG;
   }
 
-  unmarshaller->ZeroResults();
+  unmarshaller.ZeroResults();
 
   GET_BANNER_LIST_RESPONSE* banner_list_results_ptr =
-      unmarshaller->Results<GET_BANNER_LIST_RESPONSE>();
+      unmarshaller.Results<GET_BANNER_LIST_RESPONSE>();
 
   banner_list_results_ptr->banner_count_total = 5;
   banner_list_results_ptr->banner_count = 0;
@@ -2468,19 +2466,19 @@ X_HRESULT XLiveBaseApp::GetBannerListHot(uint32_t buffer_ptr) {
     return X_E_INVALIDARG;
   }
 
-  GenericUnmarshaller* unmarshaller = new GenericUnmarshaller(buffer_ptr);
+  GenericUnmarshaller unmarshaller = GenericUnmarshaller(buffer_ptr);
 
   GET_BANNER_LIST_REQUEST* banner_list_request =
-      unmarshaller->DeserializeReinterpret<GET_BANNER_LIST_REQUEST>();
+      unmarshaller.DeserializeReinterpret<GET_BANNER_LIST_REQUEST>();
 
   if (!banner_list_request) {
     return X_E_INVALIDARG;
   }
 
-  unmarshaller->ZeroResults();
+  unmarshaller.ZeroResults();
 
   GET_BANNER_LIST_RESPONSE* banner_list_results_ptr =
-      unmarshaller->Results<GET_BANNER_LIST_RESPONSE>();
+      unmarshaller.Results<GET_BANNER_LIST_RESPONSE>();
 
   banner_list_results_ptr->banner_count_total = 5;
   banner_list_results_ptr->banner_count = 0xFFFF;
@@ -2497,23 +2495,23 @@ X_HRESULT XLiveBaseApp::ContentEnumerate(uint32_t buffer_ptr) {
   // More Videos and Downloads
   // Address: 92433FA8
 
-  GenericUnmarshaller* unmarshaller = new GenericUnmarshaller(buffer_ptr);
+  GenericUnmarshaller unmarshaller = GenericUnmarshaller(buffer_ptr);
 
   CONTENT_ENUMERATE_REQUEST* content_enumerate_request_ptr =
-      unmarshaller->DeserializeReinterpret<CONTENT_ENUMERATE_REQUEST>();
+      unmarshaller.DeserializeReinterpret<CONTENT_ENUMERATE_REQUEST>();
 
   if (!content_enumerate_request_ptr) {
     return X_E_INVALIDARG;
   }
 
-  unmarshaller->ZeroResults();
+  unmarshaller.ZeroResults();
 
   // Results Layout
   // CONTENT_ENUMERATE_RESPONSE[]
   // CONTENT_INFO[]
   // char16_t[] (Content Names)
   CONTENT_ENUMERATE_RESPONSE* content_enumerate_results_ptr =
-      unmarshaller->Results<CONTENT_ENUMERATE_RESPONSE>();
+      unmarshaller.Results<CONTENT_ENUMERATE_RESPONSE>();
 
   CONTENT_INFO* content_info_ptr =
       reinterpret_cast<CONTENT_INFO*>(content_enumerate_results_ptr + 1);
@@ -2570,22 +2568,22 @@ X_HRESULT XLiveBaseApp::GenresEnumerate(uint32_t buffer_ptr) {
   // sub menu.
   // Address: 92434218
 
-  GenericUnmarshaller* unmarshaller = new GenericUnmarshaller(buffer_ptr);
+  GenericUnmarshaller unmarshaller = GenericUnmarshaller(buffer_ptr);
 
   GENRES_ENUMERATE_REQUEST* genre_enumerate_request_ptr =
-      unmarshaller->DeserializeReinterpret<GENRES_ENUMERATE_REQUEST>();
+      unmarshaller.DeserializeReinterpret<GENRES_ENUMERATE_REQUEST>();
 
   if (!genre_enumerate_request_ptr) {
     return X_E_INVALIDARG;
   }
 
-  unmarshaller->ZeroResults();
+  unmarshaller.ZeroResults();
 
   // Add max string length?
   const uint32_t total_genre_info_size =
       sizeof(GENRE_INFO) * genre_enumerate_request_ptr->max_count;
 
-  assert_true(unmarshaller->GetAsyncTask()->GetXLiveAsyncTask()->results_size >
+  assert_true(unmarshaller.GetAsyncTask()->GetXLiveAsyncTask()->results_size >
               total_genre_info_size);
 
   // Results Layout
@@ -2593,7 +2591,7 @@ X_HRESULT XLiveBaseApp::GenresEnumerate(uint32_t buffer_ptr) {
   // GENRE_INFO[]
   // char16_t[] (Genres Names)
   GENRES_ENUMERATE_RESPONSE* genre_enumerate_results_ptr =
-      unmarshaller->Results<GENRES_ENUMERATE_RESPONSE>();
+      unmarshaller.Results<GENRES_ENUMERATE_RESPONSE>();
 
   GENRE_INFO* genre_info_ptr =
       reinterpret_cast<GENRE_INFO*>(genre_enumerate_results_ptr + 1);
@@ -2653,16 +2651,16 @@ X_HRESULT XLiveBaseApp::EnumerateTitlesByFilter(uint32_t buffer_ptr) {
   // Fixes accessing marketplace Game Downloads.
   // Address: 92434468
 
-  GenericUnmarshaller* unmarshaller = new GenericUnmarshaller(buffer_ptr);
+  GenericUnmarshaller unmarshaller = GenericUnmarshaller(buffer_ptr);
 
   ENUMERATE_TITLES_BY_FILTER* enumerate_titles_request_ptr =
-      unmarshaller->DeserializeReinterpret<ENUMERATE_TITLES_BY_FILTER>();
+      unmarshaller.DeserializeReinterpret<ENUMERATE_TITLES_BY_FILTER>();
 
   if (!enumerate_titles_request_ptr) {
     return X_E_INVALIDARG;
   }
 
-  unmarshaller->ZeroResults();
+  unmarshaller.ZeroResults();
 
   const uint32_t request_type = enumerate_titles_request_ptr->request_flags;
 
@@ -2689,7 +2687,7 @@ X_HRESULT XLiveBaseApp::EnumerateTitlesByFilter(uint32_t buffer_ptr) {
   // ENUMERATE_TITLES_INFO[]
   // char16_t[] (Title Names)
   ENUMERATE_TITLES_BY_FILTER_RESPONSE* enumerate_titles_results_ptr =
-      unmarshaller->Results<ENUMERATE_TITLES_BY_FILTER_RESPONSE>();
+      unmarshaller.Results<ENUMERATE_TITLES_BY_FILTER_RESPONSE>();
 
   ENUMERATE_TITLES_INFO* title_info_ptr =
       reinterpret_cast<ENUMERATE_TITLES_INFO*>(enumerate_titles_results_ptr +
@@ -2699,7 +2697,7 @@ X_HRESULT XLiveBaseApp::EnumerateTitlesByFilter(uint32_t buffer_ptr) {
   const uint32_t enumerate_titles_info_size =
       sizeof(ENUMERATE_TITLES_INFO) * enumerate_titles_request_ptr->max_count;
 
-  assert_true(unmarshaller->GetAsyncTask()->GetXLiveAsyncTask()->results_size >
+  assert_true(unmarshaller.GetAsyncTask()->GetXLiveAsyncTask()->results_size >
               enumerate_titles_info_size);
 
   uint32_t title_info_address = kernel_state_->memory()->HostToGuestVirtual(
@@ -2761,16 +2759,16 @@ X_HRESULT XLiveBaseApp::SubscriptionEnumerate(uint32_t buffer_ptr) {
   // Fixes accessing marketplace Memberships.
   // Address: 924346C0
 
-  GenericUnmarshaller* unmarshaller = new GenericUnmarshaller(buffer_ptr);
+  GenericUnmarshaller unmarshaller = GenericUnmarshaller(buffer_ptr);
 
   SUBSCRIPTION_ENUMERATE_REQUEST* subscription_enumerate_ptr =
-      unmarshaller->DeserializeReinterpret<SUBSCRIPTION_ENUMERATE_REQUEST>();
+      unmarshaller.DeserializeReinterpret<SUBSCRIPTION_ENUMERATE_REQUEST>();
 
   if (!subscription_enumerate_ptr) {
     return X_E_INVALIDARG;
   }
 
-  unmarshaller->ZeroResults();
+  unmarshaller.ZeroResults();
 
   const uint32_t request_type = subscription_enumerate_ptr->request_flags;
 
@@ -2806,11 +2804,11 @@ X_HRESULT XLiveBaseApp::SubscriptionEnumerate(uint32_t buffer_ptr) {
   const uint32_t subscription_info_size =
       sizeof(SUBSCRIPTION_INFO) * subscription_enumerate_ptr->max_results;
 
-  assert_true(unmarshaller->GetAsyncTask()->GetXLiveAsyncTask()->results_size >
+  assert_true(unmarshaller.GetAsyncTask()->GetXLiveAsyncTask()->results_size >
               subscription_info_size);
 
   SUBSCRIPTION_ENUMERATE_RESPONSE* subscription_enumerate_results_ptr =
-      unmarshaller->Results<SUBSCRIPTION_ENUMERATE_RESPONSE>();
+      unmarshaller.Results<SUBSCRIPTION_ENUMERATE_RESPONSE>();
 
   SUBSCRIPTION_INFO* subscriptions_info_ptr =
       reinterpret_cast<SUBSCRIPTION_INFO*>(subscription_enumerate_results_ptr +
@@ -2887,7 +2885,7 @@ X_HRESULT XLiveBaseApp::XMessageEnumerate(uint32_t buffer_ptr,
     return X_E_INVALIDARG;
   }
 
-  XLivebaseAsyncTask* async_task = new XLivebaseAsyncTask(buffer_ptr);
+  XLivebaseAsyncTask async_task = XLivebaseAsyncTask(buffer_ptr);
 
   Memory* memory = kernel_state_->memory();
 
@@ -2927,7 +2925,7 @@ X_HRESULT XLiveBaseApp::XPresenceGetState(uint32_t buffer_ptr,
     return X_E_INVALIDARG;
   }
 
-  XLivebaseAsyncTask* async_task = new XLivebaseAsyncTask(buffer_ptr);
+  XLivebaseAsyncTask async_task = XLivebaseAsyncTask(buffer_ptr);
 
   Memory* memory = kernel_state_->memory();
 
