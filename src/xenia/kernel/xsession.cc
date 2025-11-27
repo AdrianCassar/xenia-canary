@@ -675,8 +675,6 @@ X_RESULT XSession::MigrateHost(XGI_SESSION_MIGRATE* data) {
   return X_ERROR_SUCCESS;
 }
 
-// Server dependancy can be removed if we calculate remote machine id from
-// remote mac address.
 X_RESULT XSession::RegisterArbitration(XGI_SESSION_ARBITRATION* data) {
   XSESSION_REGISTRATION_RESULTS* results_ptr =
       kernel_state_->memory()->TranslateVirtual<XSESSION_REGISTRATION_RESULTS*>(
@@ -730,10 +728,34 @@ X_RESULT XSession::ModifySkill(XGI_SESSION_MODIFYSKILL* data) {
       kernel_state_->memory()->TranslateVirtual<xe::be<uint64_t>*>(
           data->xuid_array_ptr);
 
-  for (uint32_t i = 0; i < data->array_count; i++) {
-    const auto& xuid = xuid_array[i];
+  const bool is_matchmaking_session = HasSessionFlag(
+      static_cast<SessionFlags>((uint32_t)local_details_.Flags), MATCHMAKING);
 
-    XELOGI("ModifySkill XUID: {:016X}", xuid.get());
+  if (!is_matchmaking_session) {
+    return X_ONLINE_E_SESSION_INVALID_FLAGS;
+  }
+
+  const uint32_t game_mode = local_details_.GameMode;
+  const uint32_t game_type = local_details_.GameType;
+  const uint32_t skill_view_id =
+      xam::GetSkillLeaderboardId(game_type, game_mode);
+
+  X_USER_STATS_SPEC spec = {};
+
+  spec.view_id = skill_view_id;
+  spec.num_column_ids = 2;
+  spec.column_ids[0] = X_STATS_COLUMN_SKILL_MU;
+  spec.column_ids[1] = X_STATS_COLUMN_SKILL_SIGMA;
+
+  // XUserReadStats(0, data->array_count, data->xuid_array_ptr, 1, spec,
+  //                results_size, results_ptr, nullptr);
+
+  // TODO: Calculate aggregate skill from skill leaderboard results
+
+  for (uint32_t i = 0; i < data->array_count; i++) {
+    const uint64_t xuid = xuid_array[i];
+
+    XELOGI("ModifySkill XUID: {:016X}", xuid);
   }
 
   return X_ERROR_SUCCESS;
@@ -758,76 +780,142 @@ X_RESULT XSession::WriteStats(XGI_STATS_WRITE* data) {
 
   const uint64_t xuid = data->xuid;
 
+  if (!data->xuid) {
+    // TODO: How does TrueSkill system overrides work?
+    //
+    // XPROPERTY_SESSION_SKILL_DRAW_PROBABILITY
+    // XPROPERTY_SESSION_SKILL_BETA
+    // XPROPERTY_SESSION_SKILL_TAU
+
+    XELOGI("{}: TrueSkill System Overrides", __func__);
+    assert_always();
+    return X_ERROR_SUCCESS;
+  }
+
+  const bool is_arbitrated_session = HasSessionFlag(
+      static_cast<SessionFlags>((uint32_t)local_details_.Flags), ARBITRATION);
+
   const XSESSION_VIEW_PROPERTIES* views_properties_ptr =
       kernel_state()->memory()->TranslateVirtual<XSESSION_VIEW_PROPERTIES*>(
           data->views_ptr);
 
-  std::vector<XSESSION_VIEW_PROPERTIES> views_properties(
-      views_properties_ptr, views_properties_ptr + data->num_views);
+  assert_false(data->num_views > X_STATS_MAX_VIEWS);
 
-  for (uint32_t view_index = 0; const auto& view : views_properties) {
+  const uint32_t view_properties_count =
+      std::min<uint32_t>(data->num_views, X_STATS_MAX_VIEWS);
+
+  const std::vector<XSESSION_VIEW_PROPERTIES> views_properties(
+      views_properties_ptr, views_properties_ptr + view_properties_count);
+
+  for (const auto& view : views_properties) {
     const uint32_t view_id = view.view_id;
+
+    const auto spa_stats_view =
+        emulator()->game_info_database()->GetStatsView(view_id);
+
+    // TrueSkill leaderboards are not defined in SPA?
+    if (!IsTrueSkillViewID(view_id) && !spa_stats_view.has_value()) {
+      XELOGI("{} invalid leaderboard view id {:08X}", __func__);
+      return X_ONLINE_E_STAT_INVALID_TITLE_OR_LEADERBOARD;
+    }
+
+    const bool is_view_arbitrated =
+        spa_stats_view.has_value() && spa_stats_view.value().view.arbitrated;
+
+    // If session attempts to write arbitrated leaderboards from a
+    // non-arbitrated session, then XSessionWriteStats will fail.
+    if (IsTrueSkillViewID(view_id) && !is_arbitrated_session) {
+      XELOGI("{} requires session arbitration", __func__);
+      return X_ONLINE_E_SESSION_REQUIRES_ARBITRATION;
+    } else if (!is_arbitrated_session && is_view_arbitrated) {
+      XELOGI("{} requires session arbitration", __func__);
+      return X_ONLINE_E_SESSION_REQUIRES_ARBITRATION;
+    }
 
     const xam::XUSER_PROPERTY* properties_ptr =
         kernel_state()->memory()->TranslateVirtual<xam::XUSER_PROPERTY*>(
             view.properties_ptr);
 
-    const size_t properties_count =
-        std::min<uint32_t>(view.properties_count, kXUserMaxStatsAttributes);
+    assert_false(view.properties_count > X_STATS_MAX_PROPERTIES_IN_VIEW);
 
-    for (uint32_t property_index = 0; property_index < properties_count;
-         property_index++) {
-      const xam::XUSER_PROPERTY& property_guest =
-          properties_ptr[property_index];
+    const uint32_t properties_count = std::min<uint32_t>(
+        view.properties_count, X_STATS_MAX_PROPERTIES_IN_VIEW);
 
-      const uint32_t property_id = property_guest.property_id;
+    const std::vector<xam::XUSER_PROPERTY> properties(
+        properties_ptr, properties_ptr + properties_count);
 
-      auto& cached_properties = stats_properties_[xuid][view_id];
+    for (const auto& property_info : properties) {
+      const uint32_t property_id = property_info.property_id;
+      const uint8_t* data_ptr =
+          reinterpret_cast<const uint8_t*>(&property_info.data.data);
 
-      uint8_t* data_ptr = new uint8_t[sizeof(xam::X_USER_DATA_UNION)];
-      memcpy(data_ptr, &property_guest.data.data,
-             sizeof(xam::X_USER_DATA_UNION));
-
-      // Get size
       const uint32_t property_data_size =
           xam::UserData::get_valid_data_size(property_id, 0);
 
-      const xam::Property property_host =
-          xam::Property(property_id, property_data_size, data_ptr);
+      const xam::Property property = xam::Property(
+          property_id, property_data_size, const_cast<uint8_t*>(data_ptr));
 
-      cached_properties[property_id] = property_host;
+      cached_stats_properties_[xuid][view_id][property_id] = property;
     }
-
-    view_index++;
   }
 
   return X_ERROR_SUCCESS;
 }
 
-// Write leaderboard stats to the backend server
-// Flushes only non-skill leaderboards
-// What are non-arbitrated, arbitrated and skill leaderboards?
+// Flush cached leaderboard stats to the backend
 X_RESULT XSession::FlushStats() {
   if (!HasSessionFlag(static_cast<SessionFlags>((uint32_t)local_details_.Flags),
                       STATS)) {
     XELOGW("Session does not support stats.");
-    return X_ERROR_FUNCTION_FAILED;
+    return X_ONLINE_E_SESSION_WRONG_STATE;
   }
 
   if (local_details_.eState != XSESSION_STATE::INGAME) {
-    XELOGW("Writing stats outside of gameplay.");
-    return X_ERROR_FUNCTION_FAILED;
+    XELOGW("Flushing stats outside of gameplay.");
+    return X_ONLINE_E_SESSION_WRONG_STATE;
   }
 
-  if (HasSessionFlag(static_cast<SessionFlags>((uint32_t)local_details_.Flags),
-                     ARBITRATION)) {
-    // Flushes only the session's non-arbitrated leaderboards
+  const bool is_arbitrated = HasSessionFlag(
+      static_cast<SessionFlags>((uint32_t)local_details_.Flags), ARBITRATION);
+
+  view_properties_unordered_map stats_to_flush = {};
+
+  for (const auto& [xuid, views] : cached_stats_properties_) {
+    for (const auto& [view_id, view] : views) {
+      const auto spa_stats_view =
+          emulator()->game_info_database()->GetStatsView(view_id);
+
+      if (is_arbitrated) {
+        const bool is_view_arbitrated = spa_stats_view.has_value() &&
+                                        spa_stats_view.value().view.arbitrated;
+
+        // Flush only non-arbitrated and non-skilled leaderboards
+        if (!IsTrueSkillViewID(view_id) && !is_view_arbitrated) {
+          stats_to_flush[xuid][view_id] = view;
+        }
+      } else {
+        // Flush only non-skilled leaderboards
+        if (!IsTrueSkillViewID(view_id)) {
+          stats_to_flush[xuid][view_id] = view;
+        }
+      }
+    }
   }
 
-  XLiveAPI::SessionFlushStats(session_id_, stats_properties_);
+  // TODO: Check who flushes stats each peer or just host?
+  if (IsHost()) {
+    const bool flushed =
+        XLiveAPI::SessionFlushStats(session_id_, stats_to_flush);
 
-  // TODO: Determine which view ids to not clear.
-  stats_properties_.clear();
+    // If flush is successful then remove cached stats
+    if (flushed) {
+      for (const auto& [xuid, views] : stats_to_flush) {
+        for (const auto& [view_id, view] : views) {
+          cached_stats_properties_.erase(xuid);
+        }
+      }
+    }
+  }
 
   return X_ERROR_SUCCESS;
 }
@@ -839,9 +927,22 @@ X_RESULT XSession::StartSession(XGI_SESSION_STATE* state) {
 }
 
 X_RESULT XSession::EndSession(XGI_SESSION_STATE* state) {
-  FlushStats();
-
   local_details_.eState = XSESSION_STATE::REPORTING;
+
+  const bool stats_enabled = HasSessionFlag(
+      static_cast<SessionFlags>((uint32_t)local_details_.Flags), STATS);
+
+  // The host will report TrueSkill statistics for all players in a session?
+
+  // Post the remaining cached stats
+  if (stats_enabled) {
+    const bool flushed =
+        XLiveAPI::SessionFlushStats(session_id_, cached_stats_properties_);
+
+    if (flushed) {
+      cached_stats_properties_.clear();
+    }
+  }
 
   return X_ERROR_SUCCESS;
 }
