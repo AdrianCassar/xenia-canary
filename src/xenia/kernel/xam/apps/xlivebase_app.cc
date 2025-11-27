@@ -1658,6 +1658,15 @@ X_HRESULT XLiveBaseApp::XUserEstimateRankForRating(uint32_t buffer_ptr) {
   X_USER_ESTIMATE_RANK_RESULTS* estimate_rank_results_ptr =
       unmarshaller.Results<X_USER_ESTIMATE_RANK_RESULTS>();
 
+  for (const auto& rank_estimate : unmarshaller.StatsEstimateRanks()) {
+    const auto stats_view =
+        kernel_state()->emulator()->game_info_database()->GetStatsView(
+            rank_estimate.view_id);
+
+    // Read the leaderboard to determine if clip should be uploaded?
+    // XUserReadStats()
+  }
+
   xe::be<uint32_t>* ranks =
       reinterpret_cast<xe::be<uint32_t>*>(estimate_rank_results_ptr + 1);
 
@@ -2006,6 +2015,8 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
     case X_STORAGE_FACILITY::FACILITY_GAME_CLIP: {
       X_STORAGE_FACILITY_INFO_GAME_CLIP game_clip_info_ptr = {};
 
+      assert_not_zero(args->storage_location_info_ptr);
+
       if (args->storage_location_info_ptr) {
         game_clip_info_ptr =
             *kernel_state_->memory()
@@ -2016,12 +2027,15 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
                game_clip_info_ptr.leaderboard_id.get());
       }
 
-      // Validate ID via XLast
-      assert_false(game_clip_info_ptr.leaderboard_id == 0);
+      const uint32_t view_id = game_clip_info_ptr.leaderboard_id;
 
-      const std::string path = fmt::format(
-          "clips/title/{:08X}/{:016X}/{:08X}/{}", kernel_state()->title_id(),
-          xuid, game_clip_info_ptr.leaderboard_id.get(), filename_str);
+      const auto stats_view =
+          kernel_state()->emulator()->game_info_database()->GetStatsView(
+              view_id);
+
+      const std::string path =
+          fmt::format("clips/title/{:08X}/{:016X}/{:08X}/{}",
+                      kernel_state()->title_id(), xuid, view_id, filename_str);
 
       backend_server_path_str =
           fmt::format("{}/{}", backend_domain_prefix, path);

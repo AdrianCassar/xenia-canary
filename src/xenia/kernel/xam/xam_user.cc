@@ -10,6 +10,7 @@
 #include <ranges>
 
 #include "xenia/base/logging.h"
+#include "xenia/emulator.h"
 #include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/util/shim_utils.h"
 #include "xenia/kernel/xam/user_profile.h"
@@ -1231,11 +1232,15 @@ dword_result_t XamUserCreateStatsEnumerator_entry(
     return X_ERROR_INVALID_PARAMETER;
   }
 
-  if (!num_rows || num_rows > kXUserMaxStatsRows) {
+  if (!num_rows || num_rows > X_STATS_MAX_ROW_COUNT) {
     return X_ERROR_INVALID_PARAMETER;
   }
 
   if (!num_stats_specs) {
+    return X_ERROR_INVALID_PARAMETER;
+  }
+
+  if (enumerator_type > X_STATS_ENUMERATOR_TYPE::BY_RATING) {
     return X_ERROR_INVALID_PARAMETER;
   }
 
@@ -1251,28 +1256,29 @@ dword_result_t XamUserCreateStatsEnumerator_entry(
   const X_STATS_ENUMERATOR_TYPE type =
       static_cast<X_STATS_ENUMERATOR_TYPE>(enumerator_type.value());
 
-  // pivot
   uint64_t xuid = 0;
+  uint32_t start_rank = 0;
+  uint64_t start_i64rating = 0;
 
   switch (type) {
     case X_STATS_ENUMERATOR_TYPE::XUID: {
       xuid = pivot_user;
-      XELOGI("XamUserCreateStatsEnumeratorByXuid: {:016X}", xuid);
+      XELOGI("StatsEnumeratorByXUID: {:016X}", xuid);
     } break;
     case X_STATS_ENUMERATOR_TYPE::RANK: {
-      xuid = pivot_user & 0xFFFF;
-      XELOGI("XamUserCreateStatsEnumeratorByRank: {:08X}", xuid);
+      // 58410826 expects row ranks to start at rank_start.
+      start_rank = pivot_user & 0xFFFF;
+      XELOGI("StatsEnumeratorByRank at rank start {}", start_rank);
     } break;
     case X_STATS_ENUMERATOR_TYPE::RANK_PER_SPEC: {
-      xuid = pivot_user;
-      XELOGI("XamUserCreateStatsEnumeratorByRankPreSpec: {:016X}", xuid);
+      start_rank = pivot_user & 0xFFFF;
+      XELOGI("StatsEnumeratorByRankPreSpec");
     } break;
     case X_STATS_ENUMERATOR_TYPE::BY_RATING: {
-      xuid = pivot_user;
-      XELOGI("XamUserCreateStatsEnumeratorByRating: {:016X}", xuid);
+      start_i64rating = pivot_user;
+      XELOGI("StatsEnumeratorByRating at i64Rating of {:016X}",
+             start_i64rating);
     } break;
-    default:
-      break;
   }
 
   const uint32_t page_size =
@@ -1297,20 +1303,32 @@ dword_result_t XamUserCreateStatsEnumerator_entry(
   const X_USER_STATS_SPEC* stat_specs_ptr = stats_ptr;
 
   for (size_t view_index = 0; view_index < num_stats_specs; view_index++) {
-    const X_USER_STATS_SPEC* stat_spec_ptr = stat_specs_ptr + view_index;
-    X_USER_STATS_VIEW* view_ptr = views_ptr + view_index;
+    const X_USER_STATS_SPEC& stat_spec_ptr = stat_specs_ptr[view_index];
+    X_USER_STATS_VIEW& view_ptr = views_ptr[view_index];
+    const uint32_t view_id = stat_spec_ptr.view_id;
 
-    assert_false(stat_spec_ptr->view_id == kTrueSkillViewId);
+    const auto spa_stats_view =
+        kernel_state()->emulator()->game_info_database()->GetStatsView(view_id);
+
+    if (IsTrueSkillViewID(view_id)) {
+      XELOGI("TrueSkill View ID: {:08X}", view_id);
+    }
 
     // 4B5607E8 expects view id otherwise crashes.
-    view_ptr->view_id = stat_spec_ptr->view_id;
-    view_ptr->total_view_rows = rows;
-    view_ptr->num_rows = rows;
+    view_ptr.view_id = view_id;
+    view_ptr.total_view_rows = rows;
+    view_ptr.num_rows = rows;
 
-    total_rows_size += rows * sizeof(X_USER_STATS_ROW);
+    // 545107D1 wants this set to prevent XUserReadStats
+    // from crashing?
+    // view_ptr->num_rows = num_rows.value();
+
+    const uint32_t rows_size = sizeof(X_USER_STATS_ROW) * rows;
+
+    total_rows_size += rows_size;
 
     const uint32_t rows_address =
-        kernel_state()->memory()->SystemHeapAlloc(sizeof(X_USER_STATS_ROW));
+        kernel_state()->memory()->SystemHeapAlloc(rows_size);
 
     X_USER_STATS_ROW* rows_ptr =
         kernel_state()->memory()->TranslateVirtual<X_USER_STATS_ROW*>(
@@ -1318,33 +1336,68 @@ dword_result_t XamUserCreateStatsEnumerator_entry(
 
     // 584111FA and 5841089F want rows pointer even if row count is 0 to prevent
     // crashing.
-    view_ptr->rows_ptr = rows_address;
+    view_ptr.rows_ptr = rows_address;
 
-    for (size_t row_index = 0; row_index < rows; row_index++) {
-      X_USER_STATS_ROW* row_ptr = rows_ptr + row_index;
+    for (uint32_t row_index = 0; row_index < rows; row_index++) {
+      X_USER_STATS_ROW& row_ptr = rows_ptr[row_index];
+
+      const uint32_t entry_count = row_index + 1;
+
+      // Dummy players
+      const std::string gamertag = fmt::format("Xenia User {}", entry_count);
+      xe::string_util::copy_truncating(row_ptr.gamertag, gamertag.c_str(),
+                                       sizeof(row_ptr.gamertag));
+
+      row_ptr.rank = entry_count;
+      row_ptr.i64Rating = entry_count;
+
+      row_ptr.xuid =
+          kernel_state()->xam_state()->profile_manager()->GenerateXuidOnline();
+
+      if (!stat_spec_ptr.num_column_ids) {
+        continue;
+      }
+
+      const uint32_t columns_count = stat_spec_ptr.num_column_ids;
+      const uint32_t columns_size = sizeof(X_USER_STATS_COLUMN) * columns_count;
 
       const uint32_t columns_address =
-          kernel_state()->memory()->SystemHeapAlloc(
-              sizeof(X_USER_STATS_COLUMN));
+          kernel_state()->memory()->SystemHeapAlloc(columns_size);
 
       X_USER_STATS_COLUMN* columns_ptr =
           kernel_state()->memory()->TranslateVirtual<X_USER_STATS_COLUMN*>(
               columns_address);
 
-      total_columns_size +=
-          stat_spec_ptr->num_column_ids * sizeof(X_USER_STATS_COLUMN);
+      total_columns_size += columns_size;
 
-      row_ptr->num_columns = stat_spec_ptr->num_column_ids;
-      row_ptr->columns_ptr = columns_address;
+      row_ptr.num_columns = columns_count;
+      row_ptr.columns_ptr = columns_address;
 
-      for (size_t column_index = 0;
-           column_index < stat_spec_ptr->num_column_ids; column_index++) {
-        X_USER_STATS_COLUMN* column_ptr = columns_ptr + column_index;
+      for (size_t column_index = 0; column_index < columns_count;
+           column_index++) {
+        X_USER_STATS_COLUMN& column_ptr = columns_ptr[column_index];
+        const uint32_t column_id = stat_spec_ptr.column_ids[column_index];
 
-        column_ptr->column_id = stat_spec_ptr->column_ids[column_index];
+        column_ptr.column_id = column_id;
+        column_ptr.value.data = {};
 
-        column_ptr->value.type = X_USER_DATA_TYPE::INT32;
-        column_ptr->value.data.u32 = 0;
+        // Determine the property type
+        if (IsTrueSkillViewID(view_id)) {
+          column_ptr.value.type = GetTrueSkillColumnType(column_ptr.column_id);
+        } else {
+          if (spa_stats_view.has_value()) {
+            for (const auto& column :
+                 spa_stats_view.value().shared_view.column_entries) {
+              if (column.attribute_id == column_id) {
+                column_ptr.value.type =
+                    xam::UserData::get_type(column.property_id);
+              }
+            }
+          } else {
+            column_ptr.value.type = xam::X_USER_DATA_TYPE::INT32;
+            assert_always();
+          }
+        }
       }
     }
   }

@@ -241,8 +241,10 @@ void UserTracker::AddDefaultProperties(uint64_t xuid) {
       Property(XPROPERTY_GAMER_LANGUAGE, cvars::user_language);
   Property PLATFORM_TYPE = Property(
       XPROPERTY_PLATFORM_TYPE, static_cast<int32_t>(PLATFORM_TYPE::Xbox360));
-  Property GAMER_MU = Property(XPROPERTY_GAMER_MU, 0.0);
-  Property GAMER_SIGMA = Property(XPROPERTY_GAMER_SIGMA, 0.0);
+  Property GAMER_MU = Property(XPROPERTY_GAMER_MU,
+                               static_cast<double>(X_STATS_SKILL_MU_DEFAULT));
+  Property GAMER_SIGMA = Property(
+      XPROPERTY_GAMER_SIGMA, static_cast<double>(X_STATS_SKILL_SIGMA_DEFAULT));
 
   AddProperty(xuid, &PUID);  // Required - 58410AC2 sets this manually
   AddProperty(xuid, &GAMER_HOST_NAME);  // Required
