@@ -39,7 +39,7 @@ class LeaderboardObjectJSON : public BaseObjectJSON {
   }
 
  private:
-  view_properties_unordered_map stats_ = {};
+  view_properties_unordered_map stats_;
   X_USER_STATS_READ_RESULTS read_results_;
 };
 }  // namespace kernel

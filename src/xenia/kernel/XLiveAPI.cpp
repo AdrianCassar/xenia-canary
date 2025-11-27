@@ -894,14 +894,14 @@ std::unique_ptr<ArbitrationObjectJSON> XLiveAPI::XSessionArbitration(
   return arbitration;
 }
 
-void XLiveAPI::SessionFlushStats(uint64_t sessionId,
+bool XLiveAPI::SessionFlushStats(uint64_t sessionId,
                                  view_properties_unordered_map stats) {
   std::string endpoint =
       fmt::format("title/{:08X}/sessions/{:016x}/leaderboards",
                   kernel_state()->title_id(), sessionId);
 
   if (stats.empty()) {
-    return;
+    return true;
   }
 
   LeaderboardObjectJSON leaderboard = LeaderboardObjectJSON(stats);
@@ -921,8 +921,10 @@ void XLiveAPI::SessionFlushStats(uint64_t sessionId,
     XELOGE("{} error message: {}", __func__, response->Message());
     // assert_always();
 
-    return;
+    return false;
   }
+
+  return true;
 }
 
 std::unique_ptr<LeaderboardObjectJSON> XLiveAPI::LeaderboardsFind(

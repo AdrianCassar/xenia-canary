@@ -181,13 +181,13 @@ GameInfoDatabase::Field GameInfoDatabase::GetField(
   return field;
 }
 
-GameInfoDatabase::StatsView GameInfoDatabase::GetStatsView(
+std::optional<GameInfoDatabase::StatsView> GameInfoDatabase::GetStatsView(
     const uint32_t id) const {
-  StatsView stats_view = {};
-
   if (!is_valid_) {
-    return stats_view;
+    return std::nullopt;
   }
+
+  StatsView stats_view = {};
 
   const auto xdbf_stats_view = spa_gamedata_->GetStatsView(id);
 
@@ -369,7 +369,11 @@ std::vector<GameInfoDatabase::StatsView> GameInfoDatabase::GetStatsViews()
   const auto xdbf_stats_views = spa_gamedata_->GetStatsViews();
 
   for (const auto& entry : *xdbf_stats_views) {
-    stats_views.push_back(GetStatsView(entry.view_entry.id));
+    auto stats_view = GetStatsView(entry.view_entry.id);
+
+    if (stats_view.has_value()) {
+      stats_views.push_back(stats_view.value());
+    }
   }
 
   return stats_views;
