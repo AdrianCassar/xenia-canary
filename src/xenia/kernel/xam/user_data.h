@@ -67,6 +67,16 @@ static_assert_size(X_USER_DATA_UNION, 8);
 struct alignas(8) X_USER_DATA {
   X_USER_DATA_TYPE type;
   X_USER_DATA_UNION data;
+
+  X_USER_DATA() = default;
+
+  X_USER_DATA(X_USER_DATA& other) : type(other.type) {
+    std::memcpy(&data, &other.data, sizeof(X_USER_DATA_UNION));
+  };
+
+  X_USER_DATA(const X_USER_DATA& other) : type(other.type) {
+    std::memcpy(&data, &other.data, sizeof(X_USER_DATA_UNION));
+  };
 };
 static_assert_size(X_USER_DATA, 16);
 

@@ -77,6 +77,12 @@ enum class ViewFieldEntryFlags : uint32_t {
 
 enum class ViewFieldType : uint8_t { kContextField, kPropertyField };
 
+// System Attribute Ids
+constexpr uint32_t RankAttributeId = 0xFFFF;
+constexpr uint32_t RatingAttributeId = 0xFFFE;
+constexpr uint32_t GamertagAttributeId = 0xFFFD;
+constexpr uint32_t AttachmentSizeAttributeId = 0xFFFA;
+
 constexpr inline std::string GetAggregationTypeName(
     const uint32_t aggregation_type) {
   switch (static_cast<AggregationType>(aggregation_type)) {
@@ -105,15 +111,16 @@ constexpr inline std::string GetViewTypeName(const uint32_t view_type) {
       return "";
   }
 }
+
 constexpr inline std::string AttributeIdToName(const uint16_t id) {
   switch (id) {
-    case std::numeric_limits<uint16_t>::max():
+    case RankAttributeId:
       return "Rank";
-    case 65534:
+    case RatingAttributeId:
       return "Rating";
-    case 65533:
+    case GamertagAttributeId:
       return "Gamertag";
-    case 65530:
+    case AttachmentSizeAttributeId:
       return "Attachment Size";
     default:
       return "";

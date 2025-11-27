@@ -2,7 +2,7 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2025 Xenia Canary. All rights reserved.                          *
+ * Copyright 2026 Xenia Canary. All rights reserved.                          *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
@@ -31,20 +31,25 @@ bool ReadUserStatsObjectJSON::Serialize(
   writer->StartArray();
 
   const xe::be<uint64_t>* xuids_ptr =
-      kernel_state()->memory()->TranslateVirtual<xe::be<uint64_t>*>(
+      kernel_memory()->TranslateVirtual<xe::be<uint64_t>*>(
           read_stats_.xuids_ptr);
 
-  const std::vector<xe::be<uint64_t>> xuids(
-      xuids_ptr, xuids_ptr + read_stats_.xuids_count);
+  const uint32_t xuids_count =
+      std::min<uint32_t>(read_stats_.xuids_count, X_STATS_MAX_USER_COUNT);
+
+  const std::vector<uint64_t> xuids(xuids_ptr, xuids_ptr + xuids_count);
 
   for (const uint64_t& xuid : xuids) {
-    writer->String(fmt::format("{:016X}", xuid).c_str());
+    // 41560817 and 584107F2 provide null XUID therefore skip them.
+    if (xuid) {
+      writer->String(fmt::format("{:016X}", xuid).c_str());
+    }
   }
 
   writer->EndArray();
 
-  const uint32_t title_id = read_stats_.titleId ? read_stats_.titleId.get()
-                                                : kernel_state()->title_id();
+  const uint32_t title_id = read_stats_.title_id ? read_stats_.title_id.get()
+                                                 : kernel_state()->title_id();
 
   writer->String("titleId");
   writer->String(fmt::format("{:08x}", title_id).c_str());
@@ -52,11 +57,11 @@ bool ReadUserStatsObjectJSON::Serialize(
   writer->String("queries");
 
   const X_USER_STATS_SPEC* specs_ptr =
-      kernel_state()->memory()->TranslateVirtual<X_USER_STATS_SPEC*>(
+      kernel_memory()->TranslateVirtual<X_USER_STATS_SPEC*>(
           read_stats_.specs_ptr);
 
-  const std::vector<X_USER_STATS_SPEC> specs(
-      specs_ptr, specs_ptr + read_stats_.specs_count);
+  std::vector<X_USER_STATS_SPEC> specs(specs_ptr,
+                                       specs_ptr + read_stats_.specs_count);
 
   writer->StartArray();
   for (const auto& spec : specs) {
@@ -67,8 +72,8 @@ bool ReadUserStatsObjectJSON::Serialize(
 
     writer->String("statisticIds");
     writer->StartArray();
-    const uint32_t num_column_ids =
-        std::min<uint32_t>(spec.num_column_ids, kXUserMaxStatsAttributes);
+    const uint32_t num_column_ids = std::min<uint32_t>(
+        spec.num_column_ids, X_USER_STATS_ATTRIBUTES_IN_SPEC);
 
     for (uint32_t column_index = 0; column_index < num_column_ids;
          column_index++) {

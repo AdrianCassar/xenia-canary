@@ -45,6 +45,7 @@ namespace xe {
 #define X_ONLINE_E_SESSION_INSUFFICIENT_BUFFER              static_cast<X_HRESULT>(0x80155207L)
 #define X_ONLINE_E_SESSION_JOIN_ILLEGAL                     static_cast<X_HRESULT>(0x8015520AL)
 #define X_ONLINE_E_SESSION_NOT_FOUND                        static_cast<X_HRESULT>(0x80155200L)
+#define X_ONLINE_E_SESSION_INVALID_FLAGS                    static_cast<X_HRESULT>(0x80155204L)
 #define X_ONLINE_E_SESSION_REQUIRES_ARBITRATION             static_cast<X_HRESULT>(0x80155205L)
 #define X_ONLINE_E_SESSION_NOT_LOGGED_ON                    static_cast<X_HRESULT>(0x80155209L)
 #define X_ONLINE_E_SESSION_FULL                             static_cast<X_HRESULT>(0x80155202L)
@@ -61,6 +62,12 @@ namespace xe {
 #define X_ONLINE_E_ACCOUNTS_USER_OPTED_OUT                  static_cast<X_HRESULT>(0x80154099L)
 #define X_ONLINE_E_ACCOUNTS_USER_GET_ACCOUNT_INFO_ERROR     static_cast<X_HRESULT>(0x80154098L)
 #define X_ONLINE_E_NOTIFICATION_TOO_MANY_SUBS               static_cast<X_HRESULT>(0x8015200EL)
+#define X_ONLINE_E_STAT_INVALID_TITLE_OR_LEADERBOARD        static_cast<X_HRESULT>(0x80159002L)
+#define X_ONLINE_E_STAT_USER_NOT_FOUND                      static_cast<X_HRESULT>(0x80159003L)
+#define X_ONLINE_E_STAT_TOO_MANY_SPECS                      static_cast<X_HRESULT>(0x80159004L)
+#define X_ONLINE_E_STAT_TOO_MANY_STATS                      static_cast<X_HRESULT>(0x80159005L)
+#define X_ONLINE_E_STAT_INVALID_ATTACHMENT                  static_cast<X_HRESULT>(0x80159202L)
+#define X_ONLINE_S_STAT_CAN_UPLOAD_ATTACHMENT               static_cast<X_HRESULT>(0x00159203L)
 
 #define X_PARTY_E_NOT_IN_PARTY                              static_cast<X_HRESULT>(0x807D0003L)
 
@@ -123,6 +130,23 @@ namespace xe {
 #define X_PARTY_USER_ISINPARTYVOICE                         0x00000002
 #define X_PARTY_USER_ISTALKING                              0x00000004
 #define X_PARTY_USER_ISINGAMESESSION                        0x00000008
+
+#define X_USER_STATS_ATTRIBUTES_IN_SPEC                     64
+
+#define X_STATS_MAX_VIEWS                                   64
+#define X_STATS_MAX_PROPERTIES_IN_VIEW                      64
+#define X_STATS_MAX_USER_COUNT                              101
+#define X_STATS_MAX_ROW_COUNT                               100
+
+// System defined TrueSkill leaderboard columns
+#define X_STATS_COLUMN_SKILL_SKILL                          61
+#define X_STATS_COLUMN_SKILL_GAMESPLAYED                    62
+#define X_STATS_COLUMN_SKILL_MU                             63
+#define X_STATS_COLUMN_SKILL_SIGMA                          64
+
+#define X_STATS_SKILL_SKILL_DEFAULT                         1
+#define X_STATS_SKILL_MU_DEFAULT                            3.0
+#define X_STATS_SKILL_SIGMA_DEFAULT                         1.0
 
 #define X_MARKETPLACE_CONTENT_ID_LEN                        20
 #define X_MARKETPLACE_ASSET_SIGNATURE_SIZE                  256
@@ -205,7 +229,7 @@ enum PropertyID : uint32_t {
   XPROPERTY_RANK =
       PropertyID(true, kernel::xam::X_USER_DATA_TYPE::INT32, 0x001), // 0x10008001
   XPROPERTY_GAMERNAME =
-      PropertyID(true, kernel::xam::X_USER_DATA_TYPE::WSTRING, 0x002), // 0x40008002
+      PropertyID(true, kernel::xam::X_USER_DATA_TYPE::WSTRING, 0x002), // 0x40008002 (Displayed in XSession Search)
   XPROPERTY_SESSION_ID =
       PropertyID(true, kernel::xam::X_USER_DATA_TYPE::INT64, 0x003), // 0x20008003
   XPROPERTY_GAMER_ZONE =
@@ -225,7 +249,7 @@ enum PropertyID : uint32_t {
   XPROPERTY_AFFILIATE_VALUE =
       PropertyID(true, kernel::xam::X_USER_DATA_TYPE::INT64, 0x108), // 0x20008108
   XPROPERTY_GAMER_HOSTNAME =
-      PropertyID(true, kernel::xam::X_USER_DATA_TYPE::WSTRING, 0x109), // 0x40008109
+      PropertyID(true, kernel::xam::X_USER_DATA_TYPE::WSTRING, 0x109), // 0x40008109 (Displayed in Leaderboards)
   XPROPERTY_PLATFORM_TYPE =
       PropertyID(true, kernel::xam::X_USER_DATA_TYPE::INT32, 0x201), // 0x10008201
   XPROPERTY_PLATFORM_LOCK =
@@ -288,11 +312,39 @@ constexpr uint32_t XEX_PRIVILEGE_PII_ACCESS = 13;
 constexpr uint32_t XEX_PRIVILEGE_CROSSPLATFORM_SYSTEM_LINK = 14;
 
 // 4D5307EA, 5841089F, 5841089F
-constexpr uint32_t kTrueSkillViewId = 0xFFFF0000;
+constexpr uint32_t RankedTrueSkillViewIdMask = 0xFFFF0000;
+constexpr uint32_t StandardTrueSkillViewIdMask = 0xFFFE0000;
 
-constexpr uint32_t kXUserMaxStatsRows = 100;
-constexpr uint32_t kXUserMaxStatsAttributes = 64;
-constexpr uint32_t kXUserMaxReadStatsViews = 5;
+constexpr uint32_t XUserMaxReadStatsViews = 5;
+
+inline bool IsRankedTrueSkillViewID(const uint32_t view_id) {
+  return (view_id & RankedTrueSkillViewIdMask) == RankedTrueSkillViewIdMask;
+}
+
+inline bool IsStandardTrueSkillViewID(const uint32_t view_id) {
+  return (view_id & StandardTrueSkillViewIdMask) == StandardTrueSkillViewIdMask;
+}
+
+inline bool IsTrueSkillViewID(const uint32_t view_id) {
+  return IsRankedTrueSkillViewID(view_id) || IsStandardTrueSkillViewID(view_id);
+}
+
+inline xam::X_USER_DATA_TYPE GetTrueSkillColumnType(const uint32_t column_id) {
+  switch (column_id) {
+    case X_STATS_COLUMN_SKILL_SKILL:
+      // 494707E4, 545107D1 expect INT64
+      return xam::X_USER_DATA_TYPE::INT64;
+    case X_STATS_COLUMN_SKILL_GAMESPLAYED:
+      // or INT32?
+      return xam::X_USER_DATA_TYPE::INT64;
+    case X_STATS_COLUMN_SKILL_MU:
+      return xam::X_USER_DATA_TYPE::DOUBLE;
+    case X_STATS_COLUMN_SKILL_SIGMA:
+      return xam::X_USER_DATA_TYPE::DOUBLE;
+    default:
+      return xam::X_USER_DATA_TYPE::CONTEXT;
+  }
+}
 
 // XUIDs -> Views -> Property IDs -> Property
 using view_properties_unordered_map = std::unordered_map<
@@ -567,7 +619,7 @@ struct X_PARTY_USER_LIST_INTERNAL {
 static_assert_size(X_PARTY_USER_LIST_INTERNAL, 0x1008);
 
 struct XGI_XUSER_READ_STATS {
-  xe::be<uint32_t> titleId;
+  xe::be<uint32_t> title_id;
   xe::be<uint32_t> xuids_count;
   xe::be<uint32_t> xuids_ptr;
   xe::be<uint32_t> specs_count;
@@ -610,9 +662,9 @@ static_assert_size(X_USER_STATS_READ_RESULTS, 0x8);
 struct X_USER_STATS_SPEC {
   xe::be<uint32_t> view_id;
   xe::be<uint32_t> num_column_ids;
-  xe::be<uint16_t> column_ids[kXUserMaxStatsAttributes];
+  xe::be<uint16_t> column_ids[X_USER_STATS_ATTRIBUTES_IN_SPEC];
 };
-static_assert_size(X_USER_STATS_SPEC, 8 + kXUserMaxStatsAttributes * 2);
+static_assert_size(X_USER_STATS_SPEC, 8 + X_USER_STATS_ATTRIBUTES_IN_SPEC * 2);
 
 struct X_USER_ESTIMATE_RANK_RESULTS {
   xe::be<uint32_t> num_ranks;
