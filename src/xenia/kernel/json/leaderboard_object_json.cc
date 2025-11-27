@@ -8,11 +8,13 @@
  */
 
 #include "xenia/kernel/json/leaderboard_object_json.h"
+#include "xenia/emulator.h"
 #include "xenia/kernel/util/shim_utils.h"
 
 namespace xe {
 namespace kernel {
-LeaderboardObjectJSON::LeaderboardObjectJSON() : read_results_({}) {}
+LeaderboardObjectJSON::LeaderboardObjectJSON()
+    : stats_({}), read_results_({}) {}
 
 LeaderboardObjectJSON::LeaderboardObjectJSON(
     view_properties_unordered_map stats)
@@ -25,6 +27,10 @@ bool LeaderboardObjectJSON::Deserialize(const rapidjson::Value& obj) {
     return false;
   }
 
+  if (obj.GetArray().Empty()) {
+    return false;
+  }
+
   if (!obj.GetArray().Begin()->IsObject()) {
     return false;
   }
@@ -32,37 +38,40 @@ bool LeaderboardObjectJSON::Deserialize(const rapidjson::Value& obj) {
   const auto leaderboards = obj.GetArray();
   const uint32_t views_count = leaderboards.Size();
 
-  const uint32_t views_address = kernel_state()->memory()->SystemHeapAlloc(
-      sizeof(X_USER_STATS_VIEW) * views_count);
+  // TODO(Adrian)
+  // Instead of allocating more memory use provided buffer from XGI call.
+  const uint32_t views_address =
+      kernel_memory()->SystemHeapAlloc(sizeof(X_USER_STATS_VIEW) * views_count);
 
   X_USER_STATS_VIEW* views_ptr =
-      kernel_state()->memory()->TranslateVirtual<X_USER_STATS_VIEW*>(
-          views_address);
+      kernel_memory()->TranslateVirtual<X_USER_STATS_VIEW*>(views_address);
 
   read_results_.num_views = views_count;
   read_results_.views_ptr = views_address;
 
   for (uint32_t view_index = 0; const auto& view : leaderboards) {
-    X_USER_STATS_VIEW* view_ptr = views_ptr + view_index;
+    X_USER_STATS_VIEW& view_ptr = views_ptr[view_index];
 
     const uint32_t view_id = view["id"].GetUint();
     const auto players = view["players"].GetArray();
     const uint32_t rows_count = players.Size();
 
-    const uint32_t rows_address = kernel_state()->memory()->SystemHeapAlloc(
-        sizeof(X_USER_STATS_ROW) * rows_count);
+    const auto spa_stats_view =
+        kernel_state()->emulator()->game_info_database()->GetStatsView(view_id);
+
+    const uint32_t rows_address =
+        kernel_memory()->SystemHeapAlloc(sizeof(X_USER_STATS_ROW) * rows_count);
 
     X_USER_STATS_ROW* rows_ptr =
-        kernel_state()->memory()->TranslateVirtual<X_USER_STATS_ROW*>(
-            rows_address);
+        kernel_memory()->TranslateVirtual<X_USER_STATS_ROW*>(rows_address);
 
-    view_ptr->view_id = view_id;
-    view_ptr->rows_ptr = rows_address;
-    view_ptr->total_view_rows = rows_count;
-    view_ptr->num_rows = rows_count;
+    view_ptr.view_id = view_id;
+    view_ptr.rows_ptr = rows_address;
+    view_ptr.total_view_rows = rows_count;
+    view_ptr.num_rows = rows_count;
 
     for (uint32_t row_index = 0; const auto& player : players) {
-      X_USER_STATS_ROW* row_ptr = rows_ptr + row_index;
+      X_USER_STATS_ROW& row_ptr = rows_ptr[row_index];
 
       const uint64_t xuid = xe::string_util::from_string<uint64_t>(
           player["xuid"].GetString(), true);
@@ -72,64 +81,105 @@ bool LeaderboardObjectJSON::Deserialize(const rapidjson::Value& obj) {
 
       assert_true(IsValidXUID(xuid));
 
-      row_ptr->xuid = xuid;
-      std::memcpy(row_ptr->gamertag, gamertag.c_str(),
-                  static_cast<uint32_t>(gamertag.size()));
-      row_ptr->num_columns = columns_count;
+      row_ptr.xuid = xuid;
 
-      // 0 if not in leaderboard
-      row_ptr->rank = static_cast<uint32_t>(row_index) + 1;
-      row_ptr->i64Rating = 0;
+      // 58410968 and 555307DB use gamertags from XFriendsCreateEnumerator.
+      // xam::GamertagAttributeId
+      xe::string_util::copy_truncating(row_ptr.gamertag, gamertag.c_str(),
+                                       sizeof(row_ptr.gamertag));
 
-      uint32_t columns_address = columns_address =
-          kernel_state()->memory()->SystemHeapAlloc(
-              sizeof(X_USER_STATS_COLUMN) * columns_count);
+      row_ptr.num_columns = columns_count;
 
-      X_USER_STATS_COLUMN* columns_ptr = columns_ptr =
-          kernel_state()->memory()->TranslateVirtual<X_USER_STATS_COLUMN*>(
+      // If rank or i64Rating is 0 then gamer is not in leaderboard.
+
+      // xam::RankAttributeId
+      row_ptr.rank = row_index + 1;
+
+      // 58410A3B provides data in a custom format for i64Rating therefore,
+      // placeholder data is interpreted as corrupted.
+
+      // xam::RatingAttributeId
+      row_ptr.i64Rating = 1;
+
+      // In such case request system attributes Rank, i64Rating and Gamertag.
+      // 545107FC, 454108D4, 58410A57, 584108FF, 41560834 do not use columns.
+      // 58410A3B expects no columns to read i64Rating.
+      if (!columns_count) {
+        row_index++;
+        continue;
+      }
+
+      const uint32_t columns_size = sizeof(X_USER_STATS_COLUMN) * columns_count;
+
+      const uint32_t columns_address =
+          kernel_memory()->SystemHeapAlloc(columns_size);
+
+      X_USER_STATS_COLUMN* columns_ptr =
+          kernel_memory()->TranslateVirtual<X_USER_STATS_COLUMN*>(
               columns_address);
 
-      row_ptr->columns_ptr = columns_address;
+      row_ptr.columns_ptr = columns_address;
 
       for (uint32_t column_index = 0; const auto& column_data : columns) {
-        X_USER_STATS_COLUMN* column_ptr = columns_ptr + column_index;
+        X_USER_STATS_COLUMN& column_ptr = columns_ptr[column_index];
 
-        // Ordinal
+        // Attribute ID
         const uint32_t column_id = column_data["id"].GetUint();
-        const xam::X_USER_DATA_TYPE type =
+        xam::X_USER_DATA_TYPE type =
             static_cast<xam::X_USER_DATA_TYPE>(column_data["type"].GetUint());
 
-        if (columns_ptr) {
-          column_ptr->column_id = column_id;
-          column_ptr->value.type = type;
+        if (IsTrueSkillViewID(view_id)) {
+          type = GetTrueSkillColumnType(column_id);
+        }
 
-          // WSTRING and BINARY are unsupported
-          switch (type) {
-            case xam::X_USER_DATA_TYPE::CONTEXT:
-              column_ptr->value.data.u32 = column_data["value"].GetUint();
-              break;
-            case xam::X_USER_DATA_TYPE::INT32:
-              column_ptr->value.data.u32 = column_data["value"].GetInt();
-              break;
-            case xam::X_USER_DATA_TYPE::INT64:
-              column_ptr->value.data.s64 = column_data["value"].GetInt64();
-              break;
-            case xam::X_USER_DATA_TYPE::DOUBLE:
-              column_ptr->value.data.f64 = column_data["value"].GetDouble();
-              break;
-            case xam::X_USER_DATA_TYPE::FLOAT:
-              column_ptr->value.data.f32 = column_data["value"].GetFloat();
-              break;
-            case xam::X_USER_DATA_TYPE::DATETIME:
-              column_ptr->value.data.filetime = column_data["value"].GetInt64();
-              break;
-            case xam::X_USER_DATA_TYPE::UNSET:
-              // Ignore don't read missing/placeholder stat
-              break;
-            default:
-              XELOGW("Unimplemented stat type for read: {}",
-                     static_cast<uint32_t>(type));
+        column_ptr.column_id = column_id;
+        column_ptr.value.type = type;
+
+        // Placeholder data may be interpreted as corrupted.
+        column_ptr.value.data = {};
+
+        // WSTRING and BINARY are unsupported
+        switch (type) {
+          case xam::X_USER_DATA_TYPE::CONTEXT:
+            column_ptr.value.data.u32 = column_data["value"].GetUint();
+            break;
+          case xam::X_USER_DATA_TYPE::INT32:
+            column_ptr.value.data.u32 = column_data["value"].GetInt();
+            break;
+          case xam::X_USER_DATA_TYPE::INT64:
+            column_ptr.value.data.s64 = column_data["value"].GetInt64();
+            break;
+          case xam::X_USER_DATA_TYPE::DOUBLE:
+            column_ptr.value.data.f64 = column_data["value"].GetDouble();
+            break;
+          case xam::X_USER_DATA_TYPE::FLOAT:
+            column_ptr.value.data.f32 = column_data["value"].GetFloat();
+            break;
+          case xam::X_USER_DATA_TYPE::DATETIME:
+            column_ptr.value.data.filetime = column_data["value"].GetInt64();
+            break;
+          case xam::X_USER_DATA_TYPE::UNSET: {
+            // Ignore don't read missing/placeholder stat
+            // Currently we do not store this information on the backend so
+            // instead we can determine the property type locally ourself.
+            // 5454082B expects correct type otherwise stats appear corrupted.
+            if (spa_stats_view.has_value()) {
+              for (const auto& column :
+                   spa_stats_view.value().shared_view.column_entries) {
+                if (column.attribute_id == column_id) {
+                  column_ptr.value.type =
+                      xam::UserData::get_type(column.property_id);
+                }
+              }
+            } else {
+              column_ptr.value.type = xam::X_USER_DATA_TYPE::INT32;
               assert_always();
+            }
+          } break;
+          default: {
+            XELOGW("Unimplemented stat type for read: {}",
+                   static_cast<uint32_t>(type));
+            assert_always();
           }
         }
 
@@ -151,13 +201,19 @@ bool LeaderboardObjectJSON::Serialize(
     return false;
   }
 
-  // TODO: Support multiple local players in a session
+  // TODO(Adrian):
+  // Support multiple local players in a session
+  // Write default system defined columns
+  // Write TrueSkill defined columns
+  //
+  // If columns are not written then we cannot read them.
 
   for (uint32_t view_index = 0; const auto& [xuid, views] : stats_) {
     const std::string xuid_str = fmt::format("{:016X}", xuid);
 
     if (view_index >= 1) {
       // Sending multiple players stats is unsupported
+      XELOGI("Flushing multiple players stats is currently unsupported!");
       assert_always();
       continue;
     }
@@ -170,7 +226,9 @@ bool LeaderboardObjectJSON::Serialize(
     for (const auto& [view_id, properties] : views) {
       const std::string leaderboard_id = std::to_string(view_id);
 
-      assert_false(view_id == kTrueSkillViewId);
+      if (IsTrueSkillViewID(view_id)) {
+        XELOGI("Flush Stats: TrueSkill View ID: {:08X}", view_id);
+      }
 
       writer->String(leaderboard_id);
       writer->StartObject();

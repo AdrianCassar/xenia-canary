@@ -197,19 +197,21 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
 
       // 584107D7 caches results
       X_USER_STATS_READ_RESULTS* results =
-          kernel_state()
-              ->memory()
-              ->TranslateVirtual<X_USER_STATS_READ_RESULTS*>(data->results_ptr);
+          kernel_memory()->TranslateVirtual<X_USER_STATS_READ_RESULTS*>(
+              data->results_ptr);
 
       std::memset(results, 0, sizeof(X_USER_STATS_READ_RESULTS));
 
-      // Max friends plus yourself
-      if (data->xuids_count > X_ONLINE_MAX_FRIENDS + 1) {
+      if (data->xuids_count > X_STATS_MAX_USER_COUNT) {
         return X_E_INVALIDARG;
       }
 
-      // 4D5307EA uses 6 leaderboards?
-      assert_false(data->specs_count > kXUserMaxReadStatsViews + 1);
+      // 4D5307EA reads 6 leaderboards, 5 standard and 1 skill.
+      assert_false(data->specs_count > XUserMaxReadStatsViews + 1);
+
+      if (data->specs_count > XUserMaxReadStatsViews + 1) {
+        return X_E_INVALIDARG;
+      }
 
       std::unique_ptr<LeaderboardObjectJSON> leaderboards =
           XLiveAPI::LeaderboardsFind(*data);
@@ -220,40 +222,39 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
       results->views_ptr = read_results.views_ptr;
       results->num_views = read_results.num_views;
 
-      // Provide pointer regardless
-      if (!results->views_ptr) {
-        results->views_ptr = kernel_state()->memory()->SystemHeapAlloc(
-            sizeof(X_USER_STATS_VIEW));
-
-        // 4D5307EA expects views_ptr but not 1 count.
-        results->num_views = 0;
-
-        return X_E_SUCCESS;
-      }
-
       // Validation
+
+      assert_not_zero(read_results.views_ptr);
+
+      if (!read_results.views_ptr) {
+        return X_ONLINE_E_LOGON_NOT_LOGGED_ON;
+      }
 
       assert_false(results->num_views != data->specs_count);
 
       const X_USER_STATS_SPEC* stats_specs =
-          kernel_state()->memory()->TranslateVirtual<X_USER_STATS_SPEC*>(
+          kernel_memory()->TranslateVirtual<X_USER_STATS_SPEC*>(
               data->specs_ptr);
 
       const X_USER_STATS_VIEW* views_ptr =
-          kernel_state()->memory()->TranslateVirtual<X_USER_STATS_VIEW*>(
+          kernel_memory()->TranslateVirtual<X_USER_STATS_VIEW*>(
               results->views_ptr);
 
       // 545107D4 uses same view id twice?
       for (uint32_t spec_index = 0; spec_index < data->specs_count;
            spec_index++) {
-        const X_USER_STATS_SPEC* stat_spec_ptr = stats_specs + spec_index;
-        const X_USER_STATS_VIEW* view_ptr = views_ptr + spec_index;
+        const X_USER_STATS_SPEC stat_spec_ptr = stats_specs[spec_index];
+        const X_USER_STATS_VIEW view_ptr = views_ptr[spec_index];
+        const uint32_t view_id = stat_spec_ptr.view_id;
 
-        assert_false(stat_spec_ptr->view_id == kTrueSkillViewId);
+        const auto spa_stats_view =
+            kernel_state()->emulator()->game_info_database()->GetStatsView(
+                view_id);
 
-        // 545107FC, 454108D4, 58410A57, 584108FF, 41560834 doesn't use columns.
-        assert_false(stat_spec_ptr->num_column_ids < 1 ||
-                     stat_spec_ptr->num_column_ids > kXUserMaxStatsAttributes);
+        // TrueSkill leaderboards are not defined in SPA?
+        if (IsTrueSkillViewID(view_id)) {
+          XELOGI("TrueSkill View ID: {:08X}", view_id);
+        }
       }
 
       return X_E_SUCCESS;

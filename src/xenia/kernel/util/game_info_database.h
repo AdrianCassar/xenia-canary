@@ -133,7 +133,8 @@ class GameInfoDatabase {
   Achievement GetAchievement(const uint32_t id) const;
   PropertyBag GetPropertyBag(const xam::PropertyBag& property_bag) const;
   Field GetField(const xam::ViewFieldEntry& field_entry) const;
-  StatsView GetStatsView(const uint32_t id) const;
+  std::optional<GameInfoDatabase::StatsView> GetStatsView(
+      const uint32_t id) const;
 
   // TODO: Implement it in the future.
   std::vector<uint32_t> GetMatchmakingAttributes(const uint32_t id) const;
