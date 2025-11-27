@@ -432,7 +432,7 @@ class XSession : public XObject {
   std::map<uint64_t, XSESSION_MEMBER> remote_members_{};
 
   // Cached stats
-  view_properties_unordered_map stats_properties_ = {};
+  view_properties_unordered_map cached_stats_properties_ = {};
 };
 
 }  // namespace kernel

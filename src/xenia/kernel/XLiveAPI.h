@@ -111,7 +111,7 @@ class XLiveAPI {
   static std::unique_ptr<ArbitrationObjectJSON> XSessionArbitration(
       uint64_t sessionId);
 
-  static void SessionFlushStats(uint64_t sessionId,
+  static bool SessionFlushStats(uint64_t sessionId,
                                 view_properties_unordered_map stats);
 
   static std::unique_ptr<LeaderboardObjectJSON> LeaderboardsFind(

@@ -30,6 +30,11 @@ static_assert_size(XUSER_CONTEXT, 0x8);
 struct XUSER_PROPERTY {
   xe::be<uint32_t> property_id;
   X_USER_DATA data;
+
+  XUSER_PROPERTY(XUSER_PROPERTY& other)
+      : property_id(other.property_id), data(other.data) {};
+  XUSER_PROPERTY(const XUSER_PROPERTY& other)
+      : property_id(other.property_id), data(other.data) {};
 };
 static_assert_size(XUSER_PROPERTY, 0x18);
 
