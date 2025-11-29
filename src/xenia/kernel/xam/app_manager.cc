@@ -47,6 +47,10 @@ X_HRESULT AppManager::DispatchMessageSync(uint32_t app_id, uint32_t message,
     return X_E_NOTFOUND;
   }
 
+  // 58410840 wants to sleep for XFriendsCreateEnumerator when accessing
+  // leaderboards.
+  xe::threading::Sleep(15ms);
+
   return it->second->ExecuteDispatchMessage(message, buffer_ptr, buffer_length,
                                             nullptr);
 }
