@@ -599,6 +599,10 @@ X_RESULT XSession::GetSessionDetails(XGI_SESSION_DETAILS* data) {
   XSESSION_MEMBER* members_ptr =
       reinterpret_cast<XSESSION_MEMBER*>(local_details_ptr + 1);
 
+  local_details_ptr->SessionMembers_ptr =
+      kernel_state()->memory()->HostToGuestVirtual(
+          std::to_address(members_ptr));
+
   std::vector<XSESSION_MEMBER> all_members = {};
 
   std::ranges::transform(local_members_, std::back_inserter(all_members),
