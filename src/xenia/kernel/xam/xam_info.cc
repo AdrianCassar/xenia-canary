@@ -226,6 +226,54 @@ dword_result_t XamGetCachedTitleName_entry(dword_t title_id,
 }
 DECLARE_XAM_EXPORT1(XamGetCachedTitleName, kNone, kImplemented);
 
+dword_result_t XamReadString_entry(dword_t title_id, qword_t id,
+                                   dword_t user_index, dword_t string_out_ptr,
+                                   lpdword_t string_size_ptr,
+                                   pointer_t<XAM_OVERLAPPED> overlapped_ptr) {
+  if (!string_out_ptr || id == 0xFFFF) {
+    return X_E_INVALIDARG;
+  }
+
+  if (!string_size_ptr) {
+    return X_E_INSUFFICIENT_BUFFER;
+  }
+
+  auto run = [=](uint32_t& extended_error, uint32_t& length) -> X_RESULT {
+    X_STATUS result = X_ERROR_SUCCESS;
+
+    // 584111F7 reads leaderboard strings
+    const std::u16string localized_string = xe::to_utf16(
+        kernel_state()->emulator()->game_info_database()->GetLocalizedString(
+            static_cast<uint32_t>(id)));
+
+    const size_t str_buffer_size = *string_size_ptr;
+
+    char16_t* str_buffer =
+        kernel_memory()->TranslateVirtual<char16_t*>(string_out_ptr);
+
+    const size_t localized_string_size =
+        string_util::size_in_bytes(localized_string, true);
+
+    xe::string_util::copy_and_swap_truncating(
+        str_buffer, localized_string.c_str(),
+        std::min(localized_string_size, str_buffer_size));
+
+    extended_error = X_HRESULT_FROM_WIN32(result);
+    length = 0;
+
+    return result;
+  };
+
+  if (!overlapped_ptr) {
+    uint32_t extended_error, length = 0;
+    return run(extended_error, length);
+  }
+
+  kernel_state()->CompleteOverlappedDeferredEx(run, overlapped_ptr);
+  return X_ERROR_IO_PENDING;
+}
+DECLARE_XAM_EXPORT1(XamReadString, kNone, kImplemented);
+
 dword_result_t XamGetSystemVersion_entry() {
   // eh, just picking one. If we go too low we may break new games, but
   // this value seems to be used for conditionally loading symbols and if
