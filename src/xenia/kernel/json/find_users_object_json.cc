@@ -28,7 +28,7 @@ bool FindUsersObjectJSON::Deserialize(const rapidjson::Value& obj) {
     FIND_USER_INFO info = {};
 
     if (user_info.HasMember("xuid")) {
-      const auto xuid_str = std::string(user_info["xuid"].GetString());
+      const std::string xuid_str = user_info["xuid"].GetString();
 
       if (!xuid_str.empty()) {
         info.xuid = string_util::from_string<uint64_t>(xuid_str, true);
@@ -36,7 +36,10 @@ bool FindUsersObjectJSON::Deserialize(const rapidjson::Value& obj) {
     }
 
     if (user_info.HasMember("gamertag")) {
-      strcpy(info.gamertag, user_info["gamertag"].GetString());
+      const std::string gamertag = user_info["gamertag"].GetString();
+
+      xe::string_util::copy_truncating(info.gamertag, gamertag.c_str(),
+                                       sizeof(info.gamertag));
     }
 
     resolved_users.push_back(info);
