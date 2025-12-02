@@ -105,8 +105,8 @@ X_ONLINE_FRIEND FriendPresenceObjectJSON::GetFriendPresence() const {
 
   peer.xuid = XUID();
 
-  char* gamertag_ptr = reinterpret_cast<char*>(peer.Gamertag);
-  strcpy(gamertag_ptr, Gamertag().c_str());
+  xe::string_util::copy_truncating(peer.Gamertag, Gamertag().c_str(),
+                                   sizeof(peer.Gamertag));
 
   peer.state = State();
   std::memcpy(&peer.session_id, &SessionID(), sizeof(XNKID));
