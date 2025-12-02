@@ -2270,7 +2270,9 @@ X_HRESULT XLiveBaseApp::XUserFindUsers(uint32_t buffer_ptr) {
       FIND_USER_INFO local_user = user;
 
       local_user.xuid = xuid;
-      strcpy(local_user.gamertag, user_profile->name().c_str());
+      xe::string_util::copy_truncating(local_user.gamertag,
+                                       user_profile->name().c_str(),
+                                       sizeof(local_user.gamertag));
 
       resolved_users.push_back(local_user);
     } else if (xuid != 0) {
