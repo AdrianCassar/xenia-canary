@@ -226,8 +226,8 @@ X_ONLINE_FRIEND UserProfile::GenerateDummyFriend() {
   std::string gamertag = fmt::format("Player {}", dist(gen));
   std::u16string rich_presence = u"Playing on Xenia";
 
-  char* gamertag_ptr = reinterpret_cast<char*>(dummy_friend.Gamertag);
-  strcpy(gamertag_ptr, gamertag.c_str());
+  xe::string_util::copy_truncating(dummy_friend.Gamertag, gamertag.c_str(),
+                                   sizeof(dummy_friend.Gamertag));
 
   char16_t* rich_presence_ptr =
       reinterpret_cast<char16_t*>(dummy_friend.wszRichPresence);
@@ -324,7 +324,8 @@ bool UserProfile::AddFriend(X_ONLINE_FRIEND* peer) {
 
   XELOGI("{}: Added gamertag: {}", __func__, default_gamertag);
 
-  strcpy(peer->Gamertag, default_gamertag.c_str());
+  xe::string_util::copy_truncating(peer->Gamertag, default_gamertag.c_str(),
+                                   sizeof(peer->Gamertag));
 
   friends_.push_back(*peer);
 
