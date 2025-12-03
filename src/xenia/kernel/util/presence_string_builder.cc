@@ -27,6 +27,19 @@ AttributeStringFormatter::AttributeStringFormatter(
 
   presence_string_ = u"";
 
+  // 58410A3B presence string contains a lot of consecutive newlines replace
+  // with a single newline.
+  std::wstring unformated_attribute_string =
+      std::wstring(attribute_string_.begin(), attribute_string_.end());
+
+  if (std::regex_search(unformated_attribute_string, consecutive_newlines_)) {
+    auto formatted_attribute_string = std::regex_replace(
+        unformated_attribute_string, consecutive_newlines_, L"\n");
+
+    attribute_string_ = std::u16string(formatted_attribute_string.begin(),
+                                       formatted_attribute_string.end());
+  }
+
   if (!ParseAttributeString()) {
     return;
   }

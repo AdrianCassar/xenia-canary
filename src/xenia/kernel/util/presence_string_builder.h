@@ -44,6 +44,8 @@ class AttributeStringFormatter {
   const std::wregex format_specifier_replace_fragment_regex_ =
       std::wregex(LR"(\{c\d+\}|\{p0x\d+\})");
 
+  const std::wregex consecutive_newlines_ = std::wregex(LR"(\n+)");
+
   bool ParseAttributeString();
   void BuildPresenceString();
 
