@@ -1056,6 +1056,10 @@ void XLiveAPI::SessionPropertiesSet(uint64_t session_id, uint32_t user_index) {
 
   std::vector<xam::Property> properties = {};
 
+  // TODO(Adrian): Filter by SPA XMAT
+  // This will prevent 4D5307D5 trying to set property XPROPERTY_GAMER_MU and
+  // XPROPERTY_GAMER_SIGMA without data_address in XGIUserSetPropertyEx when
+  // joining a session via custom search.
   for (const auto& property_attribute : propertie_ids) {
     const xam::Property* property =
         kernel_state()->xam_state()->user_tracker()->GetProperty(
@@ -1070,6 +1074,7 @@ void XLiveAPI::SessionPropertiesSet(uint64_t session_id, uint32_t user_index) {
       kernel_state()->xam_state()->user_tracker()->GetUserContextIds(
           user_profile->xuid());
 
+  // TODO(Adrian): Filter by SPA XMAT
   for (const auto& context_attribute : contexts_ids) {
     const xam::Property* property =
         kernel_state()->xam_state()->user_tracker()->GetProperty(

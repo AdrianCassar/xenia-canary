@@ -514,6 +514,17 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
       }
 
       if (user) {
+        // 4D5307D5 will provide null pointer for unexpected property from
+        // XSessionSearch.
+        if (!xgi_property->data_address) {
+          XELOGI(
+              "XGIUserSetPropertyEx setting property {:08X} without "
+              "data_address!",
+              xgi_property->property_id.get());
+          assert_always();
+          return X_E_SUCCESS;
+        }
+
         Property property(
             xgi_property->property_id,
             Property::get_valid_data_size(xgi_property->property_id,
