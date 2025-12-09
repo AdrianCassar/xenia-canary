@@ -251,6 +251,8 @@ void UserTracker::AddDefaultProperties(uint64_t xuid) {
   AddProperty(xuid, &GAMER_COUNTRY);
   AddProperty(xuid, &GAMER_LANGUAGE);
   AddProperty(xuid, &PLATFORM_TYPE);
+
+  // 4D5307D5 does not expect these in XSessionSearch results.
   AddProperty(xuid, &GAMER_MU);
   AddProperty(xuid, &GAMER_SIGMA);
 }
