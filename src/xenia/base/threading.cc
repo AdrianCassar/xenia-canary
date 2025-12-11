@@ -29,5 +29,9 @@ uint32_t current_thread_id() {
 
 void set_current_thread_id(uint32_t id) { current_thread_id_ = id; }
 
+std::stop_source PeriodicCallback::GetStopSource() {
+  return periodic_stop_source_;
+}
+
 }  // namespace threading
 }  // namespace xe

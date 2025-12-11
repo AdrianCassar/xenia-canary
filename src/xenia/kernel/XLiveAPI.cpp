@@ -824,18 +824,18 @@ std::unique_ptr<SessionObjectJSON> XLiveAPI::XSessionMigration(
   Document doc;
   doc.SetObject();
 
-  xe::be<uint64_t> xuid = 0;
+  uint64_t xuid = 0;
 
-  if (kernel_state()->xam_state()->IsUserSignedIn(data->user_index)) {
-    const auto& profile =
-        kernel_state()->xam_state()->GetUserProfile(data->user_index);
+  const auto profile =
+      kernel_state()->xam_state()->GetUserProfile(data->user_index);
 
+  if (profile) {
     xuid = profile->GetOnlineXUID();
   } else {
     XELOGI("New host is remote.");
   }
 
-  const std::string xuid_str = fmt::format("{:016X}", xuid.get());
+  const std::string xuid_str = fmt::format("{:016X}", xuid);
 
   doc.AddMember("xuid", xuid_str, doc.GetAllocator());
   doc.AddMember("hostAddress", OnlineIP_str(), doc.GetAllocator());
@@ -1054,15 +1054,14 @@ void XLiveAPI::XSessionCreate(uint64_t sessionId, XGI_SESSION_CREATE* data) {
   XELOGI("XSessionCreate POST Success");
 }
 
-void XLiveAPI::SessionPropertiesSet(uint64_t session_id, uint32_t user_index) {
+bool XLiveAPI::SessionPropertiesSet(uint64_t session_id, uint64_t xuid) {
   std::string endpoint = fmt::format("title/{:08X}/sessions/{:016x}/properties",
                                      kernel_state()->title_id(), session_id);
 
   std::unique_ptr<PropertiesObjectJSON> properties_json =
       std::make_unique<PropertiesObjectJSON>();
 
-  const auto user_profile =
-      kernel_state()->xam_state()->GetUserProfile(user_index);
+  const auto user_profile = kernel_state()->xam_state()->GetUserProfile(xuid);
 
   const auto propertie_ids =
       kernel_state()->xam_state()->user_tracker()->GetUserPropertyIds(
@@ -1111,7 +1110,10 @@ void XLiveAPI::SessionPropertiesSet(uint64_t session_id, uint32_t user_index) {
   if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_CREATED) {
     XELOGE("SessionPropertiesAdd error message: {}", response->Message());
     assert_always();
+    return false;
   }
+
+  return true;
 }
 
 const std::vector<xam::Property> XLiveAPI::SessionPropertiesGet(
@@ -1320,7 +1322,7 @@ void XLiveAPI::SessionPreJoin(uint64_t sessionId,
 }
 
 std::unique_ptr<FriendsPresenceObjectJSON> XLiveAPI::GetFriendsPresence(
-    const std::vector<uint64_t>& xuids) {
+    const std::set<uint64_t>& xuids) {
   const std::string endpoint = "players/presence";
 
   std::unique_ptr<FriendsPresenceObjectJSON> friends =
@@ -1552,15 +1554,12 @@ std::unique_ptr<FindUsersObjectJSON> XLiveAPI::GetFindUsers(
   return find_users;
 }
 
-void XLiveAPI::SetPresence() {
-  const std::string endpoint = "players/setpresence";
+PresenceObjectJSON XLiveAPI::BuildRichPresenceRequest(
+    std::set<uint64_t> xuids) {
+  PresenceObjectJSON presence = PresenceObjectJSON();
 
-  std::unique_ptr<PresenceObjectJSON> presence =
-      std::make_unique<PresenceObjectJSON>();
-
-  // Update presence for all signed in xbox live enabled profiles
-  for (uint32_t i = 0; i < XUserMaxUserCount; i++) {
-    const auto user_profile = kernel_state()->xam_state()->GetUserProfile(i);
+  for (const auto& xuid : xuids) {
+    const auto user_profile = kernel_state()->xam_state()->GetUserProfile(xuid);
 
     if (user_profile) {
       FriendPresenceObjectJSON profile_presence = FriendPresenceObjectJSON();
@@ -1570,12 +1569,18 @@ void XLiveAPI::SetPresence() {
         profile_presence.RichPresence(user_profile->GetPresenceString());
       }
 
-      presence->AddPresence(profile_presence);
+      presence.AddPresence(profile_presence);
     }
   }
 
+  return presence;
+}
+
+void XLiveAPI::SetPresence(std::set<uint64_t> xuids) {
+  const std::string endpoint = "players/setpresence";
+
   std::string player_presence;
-  bool valid = presence->Serialize(player_presence);
+  bool valid = BuildRichPresenceRequest(xuids).Serialize(player_presence);
   assert_true(valid);
 
   const uint8_t* player_presence_data =

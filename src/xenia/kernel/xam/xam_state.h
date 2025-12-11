@@ -61,6 +61,9 @@ class XamState {
 
   void LoadSpaInfo(const SpaInfo* info);
 
+  void StartPeriodicMaintenance() const;
+  void StopPeriodicMaintenance() const;
+
   void SetContentRegisterCallback(uint32_t callback);
 
   bool IsUIActive() const { return ui_active_.load(); }

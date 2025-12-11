@@ -36,9 +36,6 @@ class XLiveBaseApp : public App {
 
   X_HRESULT XFriendsCreateEnumerator(uint32_t buffer_ptr,
                                      uint32_t buffer_length);
-  void UpdateFriendPresence(const uint32_t user_index);
-  void UpdatePresenceXUIDs(const std::vector<uint64_t>& xuids,
-                           const uint32_t user_index);
   X_HRESULT XInviteSend(uint32_t buffer_ptr);
   X_HRESULT XInviteGetAcceptedInfo(uint32_t buffer_ptr, uint32_t buffer_length);
   X_HRESULT GenericMarshalled(uint32_t buffer_ptr);

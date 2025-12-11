@@ -24,6 +24,7 @@ namespace kernel {
 XSession::XSession(KernelState* kernel_state)
     : XObject(kernel_state, Type::Session) {
   session_id_ = -1;
+  owner_xuid_ = 0;
 }
 
 X_STATUS XSession::Initialize() {
@@ -53,6 +54,12 @@ X_RESULT XSession::CreateSession(uint32_t user_index, uint8_t public_slots,
     return X_ERROR_FUNCTION_FAILED;
   }
 
+  owner_xuid_ = user_profile->xuid();
+
+  const auto user_tracker = kernel_state()->xam_state()->user_tracker();
+
+  user_tracker->AddOwnedSession(user_profile->xuid(), handle());
+
   // Mutually exclusive
   if (flags & JOIN_VIA_PRESENCE_DISABLED &&
       flags & JOIN_VIA_PRESENCE_FRIENDS_ONLY) {
@@ -65,7 +72,8 @@ X_RESULT XSession::CreateSession(uint32_t user_index, uint8_t public_slots,
   }
 
   // Session type is ranked but ARBITRATION flag isn't set
-  if (GetGameTypeValue(user_profile->xuid()) == X_CONTEXT_GAME_TYPE_RANKED &&
+  if (user_tracker->GetGameTypeValue(user_profile->xuid()) ==
+          X_CONTEXT_GAME_TYPE_RANKED &&
       !(flags & ARBITRATION)) {
     return X_ONLINE_E_SESSION_REQUIRES_ARBITRATION;
   }
@@ -126,8 +134,10 @@ X_RESULT XSession::CreateSession(uint32_t user_index, uint8_t public_slots,
     JoinExistingSession(SessionInfo_ptr);
   }
 
-  local_details_.GameType = GetGameTypeValue(user_profile->xuid());
-  local_details_.GameMode = GetGameModeValue(user_profile->xuid());
+  local_details_.GameType =
+      user_tracker->GetGameTypeValue(user_profile->xuid());
+  local_details_.GameMode =
+      user_tracker->GetGameModeValue(user_profile->xuid());
   local_details_.MaxPublicSlots = public_slots;
   local_details_.MaxPrivateSlots = private_slots;
   local_details_.AvailablePublicSlots = public_slots;
@@ -191,11 +201,7 @@ X_RESULT XSession::CreateHostSession(XSESSION_INFO* session_info,
 
     NotifySessionCreationWarning(user_index);
 
-    // 58410821 adds properties after session creation
-    // Properties are ad-hoc therefore should be updated on backend, only
-    // update if value changed to reduce POST requests.
     XLiveAPI::XSessionCreate(session_id_, &session_data);
-    XLiveAPI::SessionPropertiesSet(session_id_, session_data.user_index);
   } else {
     assert_always();
   }
@@ -249,13 +255,20 @@ X_RESULT XSession::JoinExistingSession(XSESSION_INFO* session_info) {
 X_RESULT XSession::DeleteSession(XGI_SESSION_STATE* state) {
   // Begin XNetUnregisterKey?
 
+  if (IsDeleted()) {
+    return X_ERROR_SUCCESS;
+  }
+
   state_ |= STATE_FLAGS_DELETED;
 
   if (IsHost() && IsXboxLiveSession()) {
     XLiveAPI::DeleteSession(session_id_);
   }
 
-  session_id_ = 0;
+  kernel_state()->xam_state()->user_tracker()->RemoveOwnedSession(
+      GetOwnerXUID(), handle());
+
+  session_id_ = -1;
 
   // Multiple sessions cause issues
   // XLiveAPI::systemlink_id = session_id_;
@@ -395,7 +408,7 @@ X_RESULT XSession::JoinSession(XGI_SESSION_MANAGE* data) {
     XLiveAPI::SessionPreJoin(session_id_, xuids);
   }
 
-  // XamUserAddRecentPlayer
+  // XamUserAddRecentPlayer -> XPresenceSubscribe
 
   return X_ERROR_SUCCESS;
 }
@@ -648,12 +661,10 @@ X_RESULT XSession::MigrateHost(XGI_SESSION_MIGRATE* data) {
   }
 
   if (data->user_index == XUserIndexNone) {
-    XELOGI("Session migration we're not host!");
-  }
-
-  if (kernel_state()->xam_state()->IsUserSignedIn(data->user_index)) {
-    // Update properties, what if they're changed after migration?
-    XLiveAPI::SessionPropertiesSet(result->SessionID_UInt(), data->user_index);
+    XELOGI("Session migration we are not host.");
+  } else {
+    XELOGI("Session migration we are new host.");
+    state_ |= STATE_FLAGS_HOST;
   }
 
   memset(SessionInfo_ptr, 0, sizeof(XSESSION_INFO));
@@ -665,7 +676,6 @@ X_RESULT XSession::MigrateHost(XGI_SESSION_MIGRATE* data) {
   // Update session id to migrated session id
   session_id_ = result->SessionID_UInt();
 
-  state_ |= STATE_FLAGS_HOST;
   state_ |= STATE_FLAGS_MIGRATED;
 
   local_details_.UserIndexHost = data->user_index;

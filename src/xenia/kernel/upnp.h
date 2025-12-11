@@ -15,7 +15,9 @@
 
 #include <third_party/miniupnp/miniupnpc/include/miniupnpc.h>
 
-#include "xenia/base/threading_timer_queue.h"
+#include "xenia/base/threading.h"
+
+using namespace std::chrono_literals;
 
 namespace xe {
 namespace kernel {
@@ -87,7 +89,8 @@ class UPnP {
   IGDdatas* igd_data_ = new IGDdatas();
   UPNPUrls* igd_urls_ = new UPNPUrls();
 
-  std::weak_ptr<xe::threading::TimerQueueWaitItem> wait_item_;
+  const std::chrono::minutes refresh_ports_interval_ = 45min;
+  std::unique_ptr<xe::threading::PeriodicCallback> refresh_ports_timer_;
 
   std::map<std::string, port_binding> port_bindings_;
   std::map<std::string, std::map<uint16_t, int32_t>> port_binding_results_;

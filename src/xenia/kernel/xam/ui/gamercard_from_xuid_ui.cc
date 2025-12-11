@@ -54,8 +54,7 @@ GamercardFromXUIDUI::GamercardFromXUIDUI(xe::ui::ImGuiDrawer* imgui_drawer,
       }
     }
   } else {
-    std::vector<uint64_t> player_xuid = {xuid_};
-    const auto presences = XLiveAPI::GetFriendsPresence(player_xuid);
+    const auto presences = XLiveAPI::GetFriendsPresence({xuid_});
 
     if (!presences->PlayersPresence().empty()) {
       presence_ = presences->PlayersPresence().front();
