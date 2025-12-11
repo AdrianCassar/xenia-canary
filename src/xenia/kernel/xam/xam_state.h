@@ -61,6 +61,9 @@ class XamState {
   //
   void LoadSpaInfo(const SpaInfo* info);
 
+  void StartPeriodicMaintenance() const;
+  void StopPeriodicMaintenance() const;
+
   X_DASH_APP_INFO dash_app_info_ = {};
   uint32_t dash_backstack_nodes_count_ = 0;
   X_DASH_BACKSTACK_DATA dash_backstack_data_[2] = {};
