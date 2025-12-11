@@ -1425,7 +1425,7 @@ bool xeDrawFriendsContent(xe::ui::ImGuiDrawer* imgui_drawer,
     if (args.refresh_presence || args.refresh_presence_sync ||
         args.add_friend_args.added_friend) {
       auto run = [presences, user_index]() {
-        *presences = kernel::XLiveAPI::GetAllFriendsPresence(user_index);
+        *presences = XLiveAPI::GetAllFriendsPresence(user_index);
       };
 
       if (args.refresh_presence_sync) {

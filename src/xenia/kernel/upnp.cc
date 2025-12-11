@@ -271,19 +271,16 @@ void UPnP::RefreshPorts(std::string_view addr) {
 }
 
 // Update the UPnP lease time every 45 minutes
-// Not using HighResolutionTimer because it's only used for small tasks.
 void UPnP::RefreshPortsTimer() {
   // Only setup timer once
   if (active_) {
     return;
   }
 
-  const auto interval = std::chrono::minutes(45);
+  auto run = [=]() { RefreshPorts(GetLocalIP()); };
 
-  auto run = [&](void*) { RefreshPorts(GetLocalIP()); };
-
-  wait_item_ = QueueTimerRecurring(run, nullptr,
-                                   TimerQueueWaitItem::clock::now(), interval);
+  refresh_ports_timer_ = PeriodicCallback::CreateRepeating(
+      refresh_ports_interval_, run, "UPnP Refresh Ports");
 }
 
 uint16_t UPnP::GetMappedConnectPort(uint16_t external_port) {

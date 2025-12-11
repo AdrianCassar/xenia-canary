@@ -19,8 +19,6 @@
 
 #include "xenia/kernel/XLiveAPI.h"
 
-DECLARE_int32(discord_presence_user_index);
-
 namespace xe {
 namespace kernel {
 namespace xam {
@@ -400,12 +398,11 @@ bool UserProfile::IsFriend(const uint64_t xuid, X_ONLINE_FRIEND* peer) {
   return true;
 }
 
-const std::vector<uint64_t> UserProfile::GetFriendsXUIDs() const {
-  std::vector<uint64_t> xuids;
-  xuids.reserve(friends_.size());
+const std::set<uint64_t> UserProfile::GetFriendsXUIDs() const {
+  std::set<uint64_t> xuids;
 
   for (const auto& peer : friends_) {
-    xuids.push_back(peer.xuid);
+    xuids.insert(peer.xuid);
   }
 
   return xuids;
@@ -471,11 +468,11 @@ void UserProfile::SetSelfInvite(X_INVITE_INFO* invite_info) {
   memcpy(&self_invite, invite_info, sizeof(X_INVITE_INFO));
 }
 
-const std::vector<uint64_t> UserProfile::GetSubscribedXUIDs() const {
-  std::vector<uint64_t> subscribed_xuids;
+const std::set<uint64_t> UserProfile::GetSubscribedXUIDs() const {
+  std::set<uint64_t> subscribed_xuids;
 
   for (const auto& [key, _] : subscriptions_) {
-    subscribed_xuids.push_back(key);
+    subscribed_xuids.insert(key);
   }
 
   return subscribed_xuids;
@@ -511,41 +508,19 @@ std::u16string UserProfile::GetPresenceString() const {
   return online_presence_desc_;
 }
 
-bool UserProfile::UpdatePresence() {
-  const auto current_presence = GetPresenceString();
+bool UserProfile::IsPresenceStringUpdateAvailable() {
+  const std::u16string current_presence = GetPresenceString();
+  std::u16string updated_presence = u"";
 
-  bool updated = false;
-
-  if (BuildPresenceString()) {
-    const auto updated_presence = GetPresenceString();
-
-    updated = current_presence != updated_presence;
-
-    if (!updated) {
-      return false;
-    }
-
-    XELOGI("{}: {} - {}", __func__, name(), xe::to_utf8(updated_presence));
-
-    const uint32_t user_index =
-        kernel_state()->xam_state()->GetUserIndexAssignedToProfileFromXUID(
-            xuid_);
-
-    if (cvars::discord_presence_user_index == user_index) {
-      kernel_state()->emulator()->on_presence_change(
-          kernel_state()->emulator()->title_name(), updated_presence);
-    }
-
-    auto run = [] { XLiveAPI::SetPresence(); };
-
-    std::thread update_presence(run);
-    update_presence.detach();
+  if (!BuildPresenceString(false, &updated_presence)) {
+    return false;
   }
 
-  return updated;
+  return current_presence != updated_presence;
 }
 
-bool UserProfile::BuildPresenceString() {
+bool UserProfile::BuildPresenceString(bool update,
+                                      std::u16string* presence_string) {
   bool completed = false;
 
   const xam::Property* presence_prop =
@@ -568,16 +543,19 @@ bool UserProfile::BuildPresenceString() {
       xlast->GetPresenceRawString(presence_prop);
 
   const auto presence_string_formatter =
-      util::AttributeStringFormatter::AttributeStringFormatter(raw_presence,
-                                                               xlast, xuid_);
+      util::AttributeStringFormatter(raw_presence, xlast, xuid_);
+
+  completed = presence_string_formatter.IsComplete();
 
   const auto presence_parsed = presence_string_formatter.GetPresenceString();
 
-  if (online_presence_desc_ != presence_parsed) {
+  if (completed && update) {
     online_presence_desc_ = presence_parsed;
   }
 
-  completed = presence_string_formatter.IsComplete();
+  if (completed && presence_string) {
+    *presence_string = presence_parsed;
+  }
 
   return completed;
 }

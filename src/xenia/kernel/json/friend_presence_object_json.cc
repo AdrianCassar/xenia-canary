@@ -128,7 +128,7 @@ X_ONLINE_FRIEND FriendPresenceObjectJSON::GetFriendPresence() const {
   return peer;
 }
 
-FriendsPresenceObjectJSON::FriendsPresenceObjectJSON() : xuids_(0) {}
+FriendsPresenceObjectJSON::FriendsPresenceObjectJSON() : xuids_({}) {}
 
 FriendsPresenceObjectJSON::~FriendsPresenceObjectJSON() {}
 

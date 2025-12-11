@@ -23,6 +23,7 @@
 #include "xenia/kernel/xam/xdbf/gpd_info_profile.h"
 #include "xenia/kernel/xam/xdbf/gpd_info_title.h"
 #include "xenia/kernel/xnet.h"
+#include "xenia/kernel/xsession.h"
 #include "xenia/xbox.h"
 
 DECLARE_int32(network_mode);
@@ -189,7 +190,7 @@ class UserProfile {
   bool IsFriend(const uint64_t xuid, X_ONLINE_FRIEND* peer = nullptr);
 
   const std::vector<X_ONLINE_FRIEND> GetFriends() const { return friends_; }
-  const std::vector<uint64_t> GetFriendsXUIDs() const;
+  const std::set<uint64_t> GetFriendsXUIDs() const;
 
   const uint32_t GetFriendsCount() const;
 
@@ -202,20 +203,62 @@ class UserProfile {
   void SetSelfInvite(X_INVITE_INFO* invite_info);
   X_INVITE_INFO* GetSelfInvite() { return &self_invite; };
 
-  const std::vector<uint64_t> GetSubscribedXUIDs() const;
+  const std::set<uint64_t> GetSubscribedXUIDs() const;
 
   bool MutePlayer(uint64_t xuid);
   bool UnmutePlayer(uint64_t xuid);
   bool IsPlayerMuted(uint64_t xuid) const;
 
   std::u16string GetPresenceString() const;
-  bool UpdatePresence();
-  bool BuildPresenceString();
+  bool IsPresenceStringUpdateAvailable();
+  bool BuildPresenceString(bool update, std::u16string* presence_string);
+
+  void AddOwnedSession(object_ref<XSession> owned_session) {
+    const auto& session_obj_ref =
+        std::find_if(owned_sessions_.cbegin(), owned_sessions_.cend(),
+                     [owned_session](object_ref<XSession> object) {
+                       return object->handle() == owned_session->handle();
+                     });
+
+    if (session_obj_ref != owned_sessions_.cend()) {
+      return;
+    }
+
+    owned_session->RetainHandle();
+    owned_sessions_.push_back(owned_session);
+  };
+
+  void RemoveOwnedSession(object_ref<XSession> owned_session) {
+    const bool erased = std::erase_if(
+        owned_sessions_, [owned_session](object_ref<XSession> object) {
+          return object->handle() == owned_session->handle();
+        });
+
+    if (erased) {
+      owned_session->ReleaseHandle();
+    }
+  };
+
+  std::vector<object_ref<XSession>> GetOwnedSessions() {
+    return owned_sessions_;
+  };
+
+  xe::threading::PeriodicCallback* GetPeriodicMaintenanceTask() const {
+    return periodic_maintenance_task_.get();
+  };
+
+  void SetPeriodicMaintenanceTask(
+      std::unique_ptr<xe::threading::PeriodicCallback> task) {
+    periodic_maintenance_task_ = std::move(task);
+  };
 
  private:
   uint64_t xuid_;
   X_XAMACCOUNTINFO account_info_;
   X_INVITE_INFO self_invite;
+
+  std::vector<object_ref<XSession>> owned_sessions_;
+  std::unique_ptr<xe::threading::PeriodicCallback> periodic_maintenance_task_;
 
   GpdInfoProfile dashboard_gpd_;
   std::map<uint32_t, GpdInfoTitle> games_gpd_;
