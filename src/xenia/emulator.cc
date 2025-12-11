@@ -1598,6 +1598,7 @@ bool Emulator::ExceptionCallback(Exception* ex) {
 
   ShowCrashDialog(std::move(report));
   xe::kernel::XLiveAPI::DeleteAllSessionsByMac();
+  kernel_state()->xam_state()->StopPeriodicMaintenance();
 
   // Now suspend ourself (we should be a guest thread).
   current_thread->Suspend(nullptr);
@@ -1987,6 +1988,8 @@ X_STATUS Emulator::CompleteLaunch(const std::filesystem::path& path,
   // If the debugger has requested a suspend this will just decrement the
   // suspend count without resuming it until the debugger wants.
   main_thread_->Resume();
+
+  kernel_state()->xam_state()->StartPeriodicMaintenance();
 
   return X_STATUS_SUCCESS;
 }

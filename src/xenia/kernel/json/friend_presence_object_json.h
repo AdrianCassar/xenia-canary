@@ -10,6 +10,7 @@
 #ifndef XENIA_KERNEL_FRIEND_PRESENCE_OBJECT_JSON_H_
 #define XENIA_KERNEL_FRIEND_PRESENCE_OBJECT_JSON_H_
 
+#include <set>
 #include <vector>
 
 #include "xenia/base/string_util.h"
@@ -113,17 +114,17 @@ class FriendsPresenceObjectJSON : public BaseObjectJSON {
   virtual bool Serialize(
       rapidjson::PrettyWriter<rapidjson::StringBuffer>* writer) const;
 
-  const void AddXUID(uint64_t xuid) { xuids_.push_back(xuid); }
+  const void AddXUID(uint64_t xuid) { xuids_.insert(xuid); }
 
-  const std::vector<uint64_t>& XUIDs() const { return xuids_; }
-  void XUIDs(const std::vector<uint64_t>& xuids) { xuids_ = xuids; }
+  const std::set<uint64_t>& XUIDs() const { return xuids_; }
+  void XUIDs(const std::set<uint64_t>& xuids) { xuids_ = xuids; }
 
   const std::vector<FriendPresenceObjectJSON>& PlayersPresence() const {
     return players_presence_;
   }
 
  private:
-  std::vector<uint64_t> xuids_;
+  std::set<uint64_t> xuids_;
   std::vector<FriendPresenceObjectJSON> players_presence_;
 };
 

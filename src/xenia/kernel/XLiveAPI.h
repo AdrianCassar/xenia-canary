@@ -97,7 +97,7 @@ class XLiveAPI {
   static const std::vector<std::unique_ptr<SessionObjectJSON>> SessionSearch(
       XGI_SESSION_SEARCH* data, uint32_t num_users);
 
-  static void SessionPropertiesSet(uint64_t session_id, uint32_t user_index);
+  static bool SessionPropertiesSet(uint64_t session_id, const uint64_t xuid);
 
   static const std::vector<xam::Property> SessionPropertiesGet(
       uint64_t session_id);
@@ -141,7 +141,7 @@ class XLiveAPI {
                              const std::set<uint64_t>& xuids);
 
   static std::unique_ptr<FriendsPresenceObjectJSON> GetFriendsPresence(
-      const std::vector<uint64_t>& xuids);
+      const std::set<uint64_t>& xuids);
 
   static X_STORAGE_BUILD_SERVER_PATH_RESULT XStorageBuildServerPath(
       std::string server_path);
@@ -159,7 +159,10 @@ class XLiveAPI {
   static std::unique_ptr<FindUsersObjectJSON> GetFindUsers(
       const std::vector<FIND_USER_INFO>& find_users_info);
 
-  static void SetPresence();
+  static PresenceObjectJSON BuildRichPresenceRequest(
+      const std::set<uint64_t> xuids);
+
+  static void SetPresence(const std::set<uint64_t> xuids);
 
   static std::unique_ptr<HTTPResponseObjectJSON> PraseResponse(
       response_data response);

@@ -66,6 +66,10 @@ class Property : public UserData {
   void WriteToGuest(XUSER_PROPERTY* property) const;
   std::vector<uint8_t> Serialize() const;
 
+  bool operator==(const Property& other) const {
+    return data_ == other.data_ && extended_data_ == other.extended_data_;
+  }
+
  private:
   AttributeKey property_id_ = {};
 };

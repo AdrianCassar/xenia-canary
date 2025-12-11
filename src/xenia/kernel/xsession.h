@@ -12,9 +12,9 @@
 
 #include "xenia/base/byte_order.h"
 #include "xenia/kernel/json/session_object_json.h"
-#include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/util/xlast.h"
 #include "xenia/kernel/xam/user_property.h"
+#include "xenia/kernel/xnet.h"
 #include "xenia/kernel/xobject.h"
 
 namespace xe {
@@ -342,30 +342,6 @@ class XSession : public XObject {
     return members_size;
   }
 
-  const xe::be<uint32_t> GetGameModeValue(uint64_t xuid) {
-    const xam::Property* gamemode =
-        kernel_state()->xam_state()->user_tracker()->GetProperty(
-            xuid, XCONTEXT_GAME_MODE);
-
-    if (gamemode) {
-      return gamemode->get_data()->data.u32;
-    }
-
-    return 0;
-  }
-
-  const xe::be<uint32_t> GetGameTypeValue(uint64_t xuid) {
-    const xam::Property* game_type =
-        kernel_state()->xam_state()->user_tracker()->GetProperty(
-            xuid, XCONTEXT_GAME_TYPE);
-
-    if (game_type) {
-      return game_type->get_data()->data.u32;
-    }
-
-    return 0;
-  }
-
   const bool IsCreated() const {
     return (state_ & STATE_FLAGS_CREATED) == STATE_FLAGS_CREATED;
   }
@@ -381,6 +357,20 @@ class XSession : public XObject {
   const bool IsDeleted() const {
     return (state_ & STATE_FLAGS_DELETED) == STATE_FLAGS_DELETED;
   }
+
+  uint64_t GetSessionID() const { return session_id_; };
+
+  // Gets XUID of the owner managing the local session
+  uint64_t GetOwnerXUID() const { return owner_xuid_; };
+
+  // Cache latest properties sent to backend
+  void CacheLiveProperties(std::vector<xam::Property> properties) {
+    live_properties_ = properties;
+  };
+
+  std::vector<xam::Property> GetCachedLiveProperties() {
+    return live_properties_;
+  };
 
  private:
   void PrintSessionDetails();
@@ -421,6 +411,10 @@ class XSession : public XObject {
       XSESSION_SEARCHRESULT* result);
 
   void NotifySessionCreationWarning(uint32_t user_index) const;
+
+  uint64_t owner_xuid_;
+
+  std::vector<xam::Property> live_properties_;
 
   // uint64_t migrated_session_id_;
   uint64_t session_id_ = 0;
