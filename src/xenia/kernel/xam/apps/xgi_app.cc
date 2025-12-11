@@ -323,8 +323,6 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
             user->xuid(), xgi_context->context.context_id,
             xgi_context->context.value);
 
-        user->UpdatePresence();
-
         std::u16string context_desc =
             kernel_state()->xam_state()->user_tracker()->GetContextDescription(
                 user->xuid(), xgi_context->context.context_id);
@@ -374,8 +372,6 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
 
         kernel_state_->xam_state()->user_tracker()->AddProperty(user->xuid(),
                                                                 &property);
-
-        user->UpdatePresence();
 
         std::u16string property_desc =
             kernel_state_->xam_state()->user_tracker()->GetPropertyDescription(

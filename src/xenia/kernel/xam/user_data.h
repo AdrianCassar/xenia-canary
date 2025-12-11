@@ -77,6 +77,12 @@ struct alignas(8) X_USER_DATA {
   X_USER_DATA(const X_USER_DATA& other) : type(other.type) {
     std::memcpy(&data, &other.data, sizeof(X_USER_DATA_UNION));
   };
+
+  // Does not validate additional data such as binary or unicode.
+  bool operator==(const X_USER_DATA& other) const {
+    return type == other.type &&
+           std::memcmp(&data, &other.data, sizeof(X_USER_DATA_UNION)) == 0;
+  }
 };
 static_assert_size(X_USER_DATA, 16);
 

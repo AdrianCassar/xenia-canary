@@ -16,8 +16,11 @@
 
 #include "xenia/xbox.h"
 
+#include "xenia/kernel/json/friend_presence_object_json.h"
 #include "xenia/kernel/xam/user_profile.h"
 #include "xenia/kernel/xam/user_settings.h"
+
+using namespace std::chrono_literals;
 
 namespace xe {
 namespace kernel {
@@ -44,6 +47,13 @@ struct TitleInfo {
   }
 };
 
+struct PresenceSyncState {
+  bool friends;
+  bool peers;
+
+  bool IsOutOfSync() const { return friends || peers; }
+};
+
 class UserTracker {
  public:
   UserTracker() = default;
@@ -60,9 +70,33 @@ class UserTracker {
   bool UnlockAchievement(uint64_t xuid, uint32_t achievement_id);
   void RefreshTitleSummary(uint64_t xuid, uint32_t title_id);
 
+  PresenceSyncState IsPresenceOutOfSync(
+      const uint64_t xuid,
+      const std::vector<FriendPresenceObjectJSON> presence_info) const;
+
+  // XFriendsCreateEnumerator & XPresenceCreateEnumerator
+  void RefershFriendsAndSubscribersPresence(const uint64_t xuid) const;
+
+  // XSessions
+  void AddOwnedSession(const uint64_t xuid,
+                       const uint32_t session_handle) const;
+  void RemoveOwnedSession(const uint64_t xuid,
+                          const uint32_t session_handle) const;
+  bool HasOwnedSessions(const uint64_t xuid) const;
+  void CleanupOwnedSessions(const uint64_t xuid) const;
+
+  // Periodic Maintenance
+  void PeriodicMaintenance(const uint64_t xuid,
+                           const size_t iteration_count) const;
+  void StartPeriodicMaintenance(const uint64_t xuid) const;
+  void StopPeriodicMaintenance(const uint64_t xuid) const;
+
   // Context
   void UpdateContext(uint64_t xuid, uint32_t id, uint32_t value);
   std::optional<uint32_t> GetUserContext(uint64_t xuid, uint32_t id) const;
+  uint32_t GetContextValue(const uint64_t xuid, const uint32_t id) const;
+  uint32_t GetGameModeValue(const uint64_t xuid) const;
+  uint32_t GetGameTypeValue(const uint64_t xuid) const;
   std::vector<AttributeKey> GetUserContextIds(uint64_t xuid) const;
   std::u16string GetContextLocalizedString(uint64_t xuid, uint32_t id) const;
   std::u16string GetContextGameModeLocalizedString(uint64_t xuid) const;
@@ -128,6 +162,8 @@ class UserTracker {
   SpaInfo* spa_data_ = nullptr;
 
   std::set<uint64_t> tracked_xuids_;
+
+  const std::chrono::seconds periodic_maintenance_interval_ = 5s;
 
   struct CompareEqualString {
     bool operator()(std::u16string a, std::u16string b) const {
