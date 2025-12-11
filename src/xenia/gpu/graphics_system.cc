@@ -287,6 +287,7 @@ void GraphicsSystem::OnHostGpuLossFromAnyThread(
     return;
   }
   xe::kernel::XLiveAPI::DeleteAllSessionsByMac();
+  kernel_state()->xam_state()->StopPeriodicMaintenance();
   xe::FatalError("Graphics device lost (probably due to an internal error)");
 }
 

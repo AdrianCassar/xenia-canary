@@ -341,6 +341,8 @@ void ProfileManager::Logout(const uint8_t user_index, bool notify) {
     return;
   }
 
+  user_tracker_->StopPeriodicMaintenance(profile->second->xuid());
+  user_tracker_->CleanupOwnedSessions(profile->second->xuid());
   kernel_state_->xam_state()->user_tracker()->RemoveUser(
       profile->second->xuid());
   DismountProfile(profile->second->xuid());

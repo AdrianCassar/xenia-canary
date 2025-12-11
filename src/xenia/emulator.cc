@@ -1367,6 +1367,7 @@ bool Emulator::ExceptionCallback(Exception* ex) {
   }
 
   xe::kernel::XLiveAPI::DeleteAllSessionsByMac();
+  kernel_state()->xam_state()->StopPeriodicMaintenance();
 
   // Now suspend ourself (we should be a guest thread).
   current_thread->Suspend(nullptr);
@@ -1737,6 +1738,8 @@ X_STATUS Emulator::CompleteLaunch(const std::filesystem::path& path,
                                        module->hash().value());
     }
   }
+
+  kernel_state()->xam_state()->StartPeriodicMaintenance();
 
   return X_STATUS_SUCCESS;
 }

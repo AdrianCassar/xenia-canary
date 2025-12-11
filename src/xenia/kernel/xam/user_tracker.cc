@@ -7,11 +7,15 @@
  ******************************************************************************
  */
 
+#include <algorithm>
+
 #include "xenia/emulator.h"
 #include "xenia/kernel/xam/user_profile.h"
 
 #include "third_party/fmt/include/fmt/format.h"
 #include "third_party/stb/stb_image.h"
+#include "xenia/base/threading.h"
+#include "xenia/kernel/XLiveAPI.h"
 #include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/util/shim_utils.h"
 #include "xenia/kernel/xam/user_data.h"
@@ -23,6 +27,8 @@
 DECLARE_int32(user_language);
 
 DECLARE_int32(user_country);
+
+DECLARE_int32(discord_presence_user_index);
 
 namespace xe {
 namespace kernel {
@@ -41,6 +47,11 @@ bool UserTracker::AddUser(uint64_t xuid) {
     AddDefaultProperties(xuid);
     AddDefaultContexts(xuid);
   }
+
+  if (kernel_state()->emulator()->is_title_open()) {
+    StartPeriodicMaintenance(xuid);
+  }
+
   return true;
 }
 
@@ -988,6 +999,24 @@ std::optional<uint32_t> UserTracker::GetUserContext(uint64_t xuid,
   return entry->get_data()->data.u32;
 }
 
+uint32_t UserTracker::GetContextValue(uint64_t xuid, uint32_t id) const {
+  const xam::Property* context = GetProperty(xuid, id);
+
+  if (context) {
+    return context->get_data()->data.u32.get();
+  }
+
+  return 0;
+}
+
+uint32_t UserTracker::GetGameModeValue(uint64_t xuid) const {
+  return GetContextValue(xuid, XCONTEXT_GAME_MODE);
+}
+
+uint32_t UserTracker::GetGameTypeValue(uint64_t xuid) const {
+  return GetContextValue(xuid, XCONTEXT_GAME_TYPE);
+}
+
 std::vector<AttributeKey> UserTracker::GetUserContextIds(uint64_t xuid) const {
   if (!IsUserTracked(xuid)) {
     return {};
@@ -1198,6 +1227,296 @@ void UserTracker::RefreshTitleSummary(uint64_t xuid, uint32_t title_id) {
   title_data->gamerscore_earned = title_gpd->GetGamerscore();
 
   user->WriteGpd(kDashboardID);
+}
+
+PresenceSyncState UserTracker::IsPresenceOutOfSync(
+    uint64_t xuid, std::vector<FriendPresenceObjectJSON> presence_info) const {
+  PresenceSyncState sync_state = {};
+
+  auto user = kernel_state()->xam_state()->GetUserProfile(xuid);
+  if (!user) {
+    return sync_state;
+  }
+
+  if (presence_info.empty()) {
+    return sync_state;
+  }
+
+  for (const auto& player : presence_info) {
+    const uint64_t xuid = player.XUID();
+
+    if (!user->IsFriend(xuid) && !user->IsSubscribed(xuid)) {
+      XELOGI("Requested unknown peer presence: {} - {:016X}", player.Gamertag(),
+             xuid);
+      continue;
+    }
+
+    if (sync_state.friends && sync_state.peers) {
+      break;
+    }
+
+    if (user->IsFriend(xuid) && !sync_state.friends) {
+      X_ONLINE_FRIEND peer = {};
+
+      if (user->GetFriendFromXUID(xuid, &peer)) {
+        const X_ONLINE_FRIEND updated_peer_presence =
+            player.GetFriendPresence();
+
+        if (std::memcmp(&peer, &updated_peer_presence,
+                        sizeof(X_ONLINE_FRIEND)) != 0) {
+          sync_state.friends = true;
+        }
+      }
+    } else if (user->IsSubscribed(xuid) && !sync_state.peers) {
+      X_ONLINE_PRESENCE peer = {};
+
+      if (user->GetSubscriptionFromXUID(xuid, &peer)) {
+        const X_ONLINE_PRESENCE updated_peer_presence =
+            player.ToOnlineRichPresence();
+
+        if (std::memcmp(&peer, &updated_peer_presence,
+                        sizeof(X_ONLINE_PRESENCE)) != 0) {
+          sync_state.peers = true;
+        }
+      }
+    }
+  }
+
+  return sync_state;
+}
+
+void UserTracker::RefershFriendsAndSubscribersPresence(uint64_t xuid) const {
+  auto user = kernel_state()->xam_state()->GetUserProfile(xuid);
+  if (!user) {
+    return;
+  }
+
+  const auto friends_xuids = user->GetFriendsXUIDs();
+  const auto subscribed_xuids = user->GetSubscribedXUIDs();
+  std::set<uint64_t> friends_and_subscribed_xuids = {};
+
+  std::set_union(friends_xuids.cbegin(), friends_xuids.cend(),
+                 subscribed_xuids.cbegin(), subscribed_xuids.cend(),
+                 std::inserter(friends_and_subscribed_xuids,
+                               friends_and_subscribed_xuids.cbegin()));
+
+  const auto presences =
+      XLiveAPI::GetFriendsPresence(friends_and_subscribed_xuids);
+
+  const auto presence_sync_state =
+      IsPresenceOutOfSync(xuid, presences->PlayersPresence());
+
+  if (!presence_sync_state.IsOutOfSync()) {
+    return;
+  }
+
+  XELOGD("Friends/Subscribed peers presence state changed.");
+
+  for (const auto& player : presences->PlayersPresence()) {
+    const uint64_t xuid = player.XUID();
+
+    if (user->IsFriend(xuid)) {
+      X_ONLINE_FRIEND friend_presence = player.GetFriendPresence();
+      user->SetFriend(friend_presence);
+    } else if (user->IsSubscribed(xuid)) {
+      X_ONLINE_PRESENCE presence = player.ToOnlineRichPresence();
+      user->SetSubscriptionFromXUID(xuid, &presence);
+    }
+  }
+
+  if (presence_sync_state.friends) {
+    const uint32_t user_index =
+        kernel_state()->xam_state()->GetUserIndexAssignedToProfileFromXUID(
+            xuid);
+
+    kernel_state()->BroadcastNotification(kXNotificationFriendsPresenceChanged,
+                                          user_index);
+  }
+
+  if (presence_sync_state.peers) {
+    kernel_state()->BroadcastNotification(kXNotificationLivePresenceChanged, 0);
+  }
+}
+
+void UserTracker::AddOwnedSession(uint64_t xuid,
+                                  uint32_t session_handle) const {
+  auto user = kernel_state()->xam_state()->GetUserProfile(xuid);
+  if (!user) {
+    return;
+  }
+
+  auto object =
+      kernel_state()->object_table()->LookupObject<XSession>(session_handle);
+  if (!object) {
+    return;
+  }
+
+  user->AddOwnedSession(object);
+}
+
+void UserTracker::RemoveOwnedSession(uint64_t xuid,
+                                     uint32_t session_handle) const {
+  auto user = kernel_state()->xam_state()->GetUserProfile(xuid);
+  if (!user) {
+    return;
+  }
+
+  const auto sessions = user->GetOwnedSessions();
+
+  const auto& session_obj_ref =
+      std::find_if(sessions.cbegin(), sessions.cend(),
+                   [session_handle](object_ref<XSession> object) {
+                     return object->handle() == session_handle;
+                   });
+
+  if (session_obj_ref == sessions.cend()) {
+    return;
+  }
+
+  user->RemoveOwnedSession(*session_obj_ref);
+}
+
+bool UserTracker::HasOwnedSessions(uint64_t xuid) const {
+  auto user = kernel_state()->xam_state()->GetUserProfile(xuid);
+  if (!user) {
+    return false;
+  }
+
+  return user->GetOwnedSessions().size();
+}
+
+void UserTracker::CleanupOwnedSessions(uint64_t xuid) const {
+  auto user = kernel_state()->xam_state()->GetUserProfile(xuid);
+  if (!user) {
+    return;
+  }
+
+  for (const auto& session : user->GetOwnedSessions()) {
+    RemoveOwnedSession(xuid, session->handle());
+  }
+}
+
+// Should periodic maintenance be per-user or all users?
+void UserTracker::PeriodicMaintenance(uint64_t xuid,
+                                      size_t iteration_count) const {
+  if (!kernel_state()->emulator()->is_title_open()) {
+    return;
+  }
+
+  auto user = kernel_state()->xam_state()->GetUserProfile(xuid);
+  if (!user) {
+    return;
+  }
+
+  // Check if presence string needs updating.
+  const bool presence_string_update_available =
+      user->IsPresenceStringUpdateAvailable();
+
+  // Update discord rich presence before checking live state.
+  if (presence_string_update_available) {
+    user->BuildPresenceString(true, nullptr);
+
+    const std::u16string updated_presence = user->GetPresenceString();
+
+    XELOGI("Periodic Maintenance (Presence): {} - {}", user->name(),
+           xe::to_utf8(updated_presence));
+
+    const uint32_t user_index =
+        kernel_state()->xam_state()->GetUserIndexAssignedToProfileFromXUID(
+            xuid);
+
+    if (cvars::discord_presence_user_index == user_index) {
+      kernel_state()->emulator()->on_presence_change(
+          kernel_state()->emulator()->title_name(), updated_presence);
+    }
+  }
+
+  if (user->signin_state() != X_USER_SIGNIN_STATE::SignedInToLive ||
+      XLiveAPI::GetInitState() != XLiveAPI::InitState::Success) {
+    return;
+  }
+
+  // Check every 3nd iteration to reduce backend requests.
+  if (!(iteration_count % 3)) {
+    RefershFriendsAndSubscribersPresence(xuid);
+  }
+
+  if (presence_string_update_available) {
+    XLiveAPI::SetPresence({user->xuid()});
+  }
+
+  if (HasOwnedSessions(xuid)) {
+    for (const auto& session : user->GetOwnedSessions()) {
+      // 1. Check we are host of the session, only the host sends properties to
+      // the backend.
+      // 2. Check session is created so we have a valid session id and ensure
+      // session is already created on backend before updating properties.
+      // 3. Check if session has live features we don't want to POST properties
+      // for offline session.
+      if (session->IsHost() && session->IsCreated() &&
+          session->IsXboxLiveSession()) {
+        if (session->GetCachedLiveProperties() == user->properties_) {
+          continue;
+        }
+
+        if (XLiveAPI::SessionPropertiesSet(session->GetSessionID(),
+                                           user->xuid())) {
+          session->CacheLiveProperties(user->properties_);
+        }
+      }
+    }
+  }
+}
+
+void UserTracker::StartPeriodicMaintenance(uint64_t xuid) const {
+  auto user = kernel_state()->xam_state()->GetUserProfile(xuid);
+  if (!user) {
+    return;
+  }
+
+  const auto user_index = kernel_state()
+                              ->xam_state()
+                              ->profile_manager()
+                              ->GetUserIndexAssignedToProfile(xuid);
+
+  // TODO(Adrian):
+  // Netplay doesn't support multiple local profiles too well.
+  // We only register user index 0 on backend therefore start periodic
+  // maintenance only for that user for now.
+  if (user_index > 0) {
+    XELOGI(fmt::format("Skip Starting Periodic Maintenance for {:016X}", xuid));
+    return;
+  }
+
+  if (user->GetPeriodicMaintenanceTask()) {
+    return;
+  }
+
+  auto run = [iteration_count = size_t(0), xuid]() mutable {
+    kernel_state()->xam_state()->user_tracker()->PeriodicMaintenance(
+        xuid, iteration_count);
+    iteration_count++;
+  };
+
+  XELOGD(fmt::format("Started Periodic Maintenance:: {:016X}", xuid));
+
+  auto periodic_task = xe::threading::PeriodicCallback::CreateRepeating(
+      periodic_maintenance_interval_, run,
+      fmt::format("Periodic Maintenance: {}", user->name()).c_str());
+
+  user->SetPeriodicMaintenanceTask(std::move(periodic_task));
+}
+
+void UserTracker::StopPeriodicMaintenance(uint64_t xuid) const {
+  auto user = kernel_state()->xam_state()->GetUserProfile(xuid);
+  if (!user) {
+    return;
+  }
+
+  if (user->GetPeriodicMaintenanceTask()) {
+    XELOGD(fmt::format("Stopped Periodic Maintenance: {:016X}", xuid));
+    user->SetPeriodicMaintenanceTask({});
+  }
 }
 
 }  // namespace xam

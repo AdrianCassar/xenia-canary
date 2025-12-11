@@ -630,8 +630,6 @@ X_HRESULT XLiveBaseApp::XPresenceCreateEnumerator(uint32_t buffer_ptr,
   const auto peer_xuids =
       std::vector<uint64_t>(peer_xuids_ptr, peer_xuids_ptr + num_peers);
 
-  UpdatePresenceXUIDs(peer_xuids, user_index);
-
   for (auto i = starting_index; i < e->items_per_enumerate(); i++) {
     const xe::be<uint64_t> xuid = peer_xuids[i];
 
@@ -932,8 +930,6 @@ X_HRESULT XLiveBaseApp::XFriendsCreateEnumerator(uint32_t buffer_ptr,
     return result;
   }
 
-  UpdateFriendPresence(user_index);
-
   for (auto i = friends_starting_index; i < e->items_per_enumerate(); i++) {
     X_ONLINE_FRIEND peer = {};
 
@@ -953,49 +949,6 @@ X_HRESULT XLiveBaseApp::XFriendsCreateEnumerator(uint32_t buffer_ptr,
 
   *handle_ptr = xe::byte_swap<uint32_t>(e->handle());
   return X_E_SUCCESS;
-}
-
-void XLiveBaseApp::UpdateFriendPresence(const uint32_t user_index) {
-  if (!kernel_state()->xam_state()->IsUserSignedIn(user_index)) {
-    return;
-  }
-
-  auto const profile = kernel_state()->xam_state()->GetUserProfile(user_index);
-
-  const std::vector<uint64_t> peer_xuids = profile->GetFriendsXUIDs();
-
-  UpdatePresenceXUIDs(peer_xuids, user_index);
-}
-
-void XLiveBaseApp::UpdatePresenceXUIDs(const std::vector<uint64_t>& xuids,
-                                       const uint32_t user_index) {
-  if (!kernel_state()->xam_state()->IsUserSignedIn(user_index)) {
-    return;
-  }
-
-  auto const profile = kernel_state()->xam_state()->GetUserProfile(user_index);
-
-  const auto presences = XLiveAPI::GetFriendsPresence(xuids);
-
-  for (const auto& player : presences->PlayersPresence()) {
-    const uint64_t xuid = player.XUID();
-
-    if (!profile->IsFriend(xuid) && !profile->IsSubscribed(xuid)) {
-      XELOGI("Requested unknown peer presence: {} - {:016X}", player.Gamertag(),
-             xuid);
-      continue;
-    }
-
-    if (profile->IsFriend(xuid)) {
-      X_ONLINE_FRIEND peer = player.GetFriendPresence();
-
-      profile->SetFriend(peer);
-    } else if (profile->IsSubscribed(xuid)) {
-      X_ONLINE_PRESENCE presence = player.ToOnlineRichPresence();
-
-      profile->SetSubscriptionFromXUID(xuid, &presence);
-    }
-  }
 }
 
 X_HRESULT XLiveBaseApp::XInviteSend(uint32_t buffer_ptr) {
@@ -1058,9 +1011,8 @@ X_HRESULT XLiveBaseApp::XInviteGetAcceptedInfo(uint32_t buffer_ptr,
   memcpy(invite_info, user_profile->GetSelfInvite(), sizeof(X_INVITE_INFO));
   memset(user_profile->GetSelfInvite(), 0, sizeof(X_INVITE_INFO));
 
-  const std::vector<uint64_t> xuids = {invite_info->xuid_inviter};
-
-  const auto presence = XLiveAPI::GetFriendsPresence(xuids);
+  const auto presence =
+      XLiveAPI::GetFriendsPresence({invite_info->xuid_inviter});
 
   uint64_t session_id = 0;
 

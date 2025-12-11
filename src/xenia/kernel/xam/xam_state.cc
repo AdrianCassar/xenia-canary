@@ -103,6 +103,26 @@ void XamState::LoadSpaInfo(const SpaInfo* info) {
   user_tracker_->UpdateSpaInfo(spa_info_.get());
 }
 
+void XamState::StartPeriodicMaintenance() const {
+  for (uint32_t user_index = 0; user_index < XUserMaxUserCount; user_index++) {
+    const auto profile = GetUserProfile(user_index);
+
+    if (profile) {
+      user_tracker()->StartPeriodicMaintenance(profile->xuid());
+    }
+  }
+}
+
+void XamState::StopPeriodicMaintenance() const {
+  for (uint32_t user_index = 0; user_index < XUserMaxUserCount; user_index++) {
+    const auto profile = GetUserProfile(user_index);
+
+    if (profile) {
+      user_tracker()->StopPeriodicMaintenance(profile->xuid());
+    }
+  }
+}
+
 void XamState::SetContentRegisterCallback(uint32_t callback) {
   content_register_callback = callback;
 }
