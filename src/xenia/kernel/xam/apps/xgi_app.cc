@@ -614,7 +614,10 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
         return X_STATUS_INVALID_HANDLE;
       }
 
-      return session->DeleteSession(data);
+      const X_RESULT result = session->DeleteSession(data);
+      session->ReleaseHandle();
+
+      return result;
     }
     case 0x000B0012: {
       assert_true(!buffer_length ||
