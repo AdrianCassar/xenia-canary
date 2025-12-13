@@ -74,7 +74,8 @@ class XLiveAPI {
 
   static void DownloadPortMappings();
 
-  static std::unique_ptr<HTTPResponseObjectJSON> RegisterPlayer();
+  static std::unique_ptr<HTTPResponseObjectJSON> RegisterPlayer(
+      const uint64_t xuid);
 
   static const std::map<uint64_t, std::string> DeleteMyProfiles();
 
