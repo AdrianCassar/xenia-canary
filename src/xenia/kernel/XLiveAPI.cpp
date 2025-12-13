@@ -219,16 +219,17 @@ void XLiveAPI::Init() {
   // Download ports mappings before initializing UPnP.
   DownloadPortMappings();
 
-  std::unique_ptr<HTTPResponseObjectJSON> reg_result = RegisterPlayer();
+  // TODO(Adrian):
+  // Netplay doesn't support multiple local profiles too well.
+  // Only register user index 0 on backend for now to reduce issues.
+  const uint32_t user_index = 0;
+  const auto profile = kernel_state()->xam_state()->GetUserProfile(user_index);
 
-  if (reg_result &&
-      reg_result->StatusCode() == HTTP_STATUS_CODE::HTTP_CREATED) {
-    const uint32_t index = 0;
-    const auto profile = kernel_state()->xam_state()->GetUserProfile(index);
+  if (profile) {
+    std::unique_ptr<HTTPResponseObjectJSON> register_responce =
+        RegisterPlayer(profile->xuid());
 
-    if (profile->GetFriends().size() < dummy_friends_count_) {
-      profile->AddDummyFriends(dummy_friends_count_);
-    }
+    profile->AddDummyFriends(dummy_friends_count_);
   }
 
   initialized_ = InitState::Success;
@@ -511,15 +512,15 @@ void XLiveAPI::DownloadPortMappings() {
 // Add player to web server
 // A random mac address is changed every time a player is registered!
 // xuid + ip + mac = unique player on a network
-std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::RegisterPlayer() {
+std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::RegisterPlayer(
+    uint64_t xuid) {
   assert_not_null(mac_address_);
 
-  std::unique_ptr<HTTPResponseObjectJSON> response{};
+  std::unique_ptr<HTTPResponseObjectJSON> response = {};
 
-  // User index hard-coded
-  const uint32_t index = 0;
+  const auto user_profile = kernel_state()->xam_state()->GetUserProfile(xuid);
 
-  if (!kernel_state()->xam_state()->IsUserSignedIn(index)) {
+  if (!user_profile) {
     XELOGE("Cancelled registering profile, profile not signed in!");
     return response;
   }
@@ -529,27 +530,26 @@ std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::RegisterPlayer() {
     return response;
   }
 
-  const auto user_profile = kernel_state()->xam_state()->GetUserProfile(index);
-
   if (cvars::network_mode == NETWORK_MODE::XBOXLIVE &&
       !user_profile->IsLiveEnabled()) {
     XELOGE("Cancelled registering profile, profile is not live enabled!");
     return response;
   }
 
-  uint64_t xuid = user_profile->GetOnlineXUID();
+  uint64_t registered_xuid = user_profile->GetOnlineXUID();
 
   // Register offline profile for systemlink usage
   if (cvars::network_mode == NETWORK_MODE::LAN &&
       !user_profile->IsLiveEnabled()) {
-    xuid = user_profile->xuid();
+    registered_xuid = user_profile->xuid();
 
-    XELOGI("Registering offline profile {:016X} for systemlink usage", xuid);
+    XELOGI("Registering offline profile {:016X} for systemlink usage",
+           registered_xuid);
   }
 
   PlayerObjectJSON player = PlayerObjectJSON();
 
-  player.XUID(xuid);
+  player.XUID(registered_xuid);
   player.Gamertag(user_profile->name());
   player.MachineID(GetLocalMachineId(*mac_address_));
   player.HostAddress(OnlineIP_str());
@@ -570,7 +570,7 @@ std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::RegisterPlayer() {
 
   auto player_lookup = FindPlayer(OnlineIP_str());
 
-  // Check for errnours profile lookup
+  // Check for erroneous profile lookup
   if (player_lookup->XUID() != player.XUID()) {
     XELOGI("XLiveAPI:: {} XUID mismatch!", player.Gamertag());
     xuid_mismatch = true;
