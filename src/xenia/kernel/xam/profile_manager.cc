@@ -323,8 +323,13 @@ void ProfileManager::Login(const uint64_t xuid, const uint8_t user_index,
   UpdateConfig(xuid, assigned_user_slot);
 
   if (XLiveAPI::GetInitState() == XLiveAPI::InitState::Success) {
-    std::unique_ptr<HTTPResponseObjectJSON> reg_result =
-        XLiveAPI::RegisterPlayer();
+    // TODO(Adrian):
+    // Netplay doesn't support multiple local profiles too well.
+    // Only register user index 0 on backend for now to reduce issues.
+    if (GetUserIndexAssignedToProfile(xuid) == 0) {
+      std::unique_ptr<HTTPResponseObjectJSON> reg_result =
+          XLiveAPI::RegisterPlayer(xuid);
+    }
 
     logged_profiles_[assigned_user_slot]->AddDummyFriends(dummy_friends_count_);
   }
