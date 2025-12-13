@@ -120,7 +120,9 @@ class ProfileManager {
   bool IsAnyProfileSlotFree() const {
     return logged_profiles_.size() < XUserMaxUserCount;
   }
-  uint32_t SignedInProfilesCount() const { return !logged_profiles_.size(); }
+  uint32_t SignedInProfilesCount() const {
+    return static_cast<uint32_t>(logged_profiles_.size());
+  }
 
   std::filesystem::path GetProfileContentPath(
       const uint64_t xuid, const uint32_t title_id = -1,
