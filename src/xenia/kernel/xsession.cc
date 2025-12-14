@@ -14,6 +14,7 @@
 #include "xenia/emulator.h"
 #include "xenia/kernel/XLiveAPI.h"
 #include "xenia/kernel/xsession.h"
+#include "xenia/ui/imgui_host_notification.h"
 
 DECLARE_bool(upnp);
 
@@ -50,6 +51,17 @@ X_RESULT XSession::CreateSession(uint32_t user_index, uint8_t public_slots,
       kernel_state_->xam_state()->GetUserProfile(user_index);
   if (!user_profile) {
     return X_ERROR_FUNCTION_FAILED;
+  }
+
+  const uint8_t user_slot =
+      kernel_state_->xam_state()
+          ->profile_manager()
+          ->GetUserIndexAssignedToProfile(user_profile->xuid());
+
+  if (user_slot > 0) {
+    new xe::ui::HostNotificationWindow(
+        kernel_state()->emulator()->imgui_drawer(), "Session Creation Warning!",
+        "Currently only profile slot 1 is allowed to host sessions!", 0, 9);
   }
 
   // Mutually exclusive
