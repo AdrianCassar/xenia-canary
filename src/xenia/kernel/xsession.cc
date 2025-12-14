@@ -59,9 +59,22 @@ X_RESULT XSession::CreateSession(uint32_t user_index, uint8_t public_slots,
           ->GetUserIndexAssignedToProfile(user_profile->xuid());
 
   if (user_slot > 0) {
+    const auto profile =
+        kernel_state()->xam_state()->profile_manager()->GetProfile(uint8_t(0));
+
+    std::string message =
+        "Currently only profile slot 1 is allowed to host sessions!";
+
+    if (profile) {
+      message = fmt::format(
+          "Currently only profile slot 1 (signed in as {}) is allowed to host "
+          "sessions!",
+          profile->name());
+    }
+
     new xe::ui::HostNotificationWindow(
         kernel_state()->emulator()->imgui_drawer(), "Session Creation Warning!",
-        "Currently only profile slot 1 is allowed to host sessions!", 0, 9);
+        message, 0, 9);
   }
 
   // Mutually exclusive
