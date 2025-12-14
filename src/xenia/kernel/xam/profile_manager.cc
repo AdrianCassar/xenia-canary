@@ -326,7 +326,7 @@ void ProfileManager::Login(const uint64_t xuid, const uint8_t user_index,
     // TODO(Adrian):
     // Netplay doesn't support multiple local profiles too well.
     // Only register user index 0 on backend for now to reduce issues.
-    if (GetUserIndexAssignedToProfile(xuid) == 0) {
+    if (assigned_user_slot == 0) {
       std::unique_ptr<HTTPResponseObjectJSON> reg_result =
           XLiveAPI::RegisterPlayer(xuid);
     }
