@@ -931,8 +931,6 @@ dword_result_t XamReadTileToTextureEx_entry(
     extended_error = X_ERROR_SUCCESS;
     length = 0;
 
-    // How do we know if tile lookup is local or remote?
-    // What does XUserIndexNone mean here?
     if (static_cast<XTileType>(tile_type.value()) ==
         xe::kernel::xam::XTileType::kGamerTileByKey) {
       if (IsGamerPictureAvatar(title_id)) {
@@ -948,20 +946,40 @@ dword_result_t XamReadTileToTextureEx_entry(
 
     size_t buffer_size = size_t(stride) * size_t(tile_height);
 
-    auto user = kernel_state()->xam_state()->GetUserProfile(user_index);
-    if (!user) {
-      extended_error = X_E_NO_SUCH_USER;
-      return X_ERROR_FUNCTION_FAILED;
+    std::span<const uint8_t> tile = {};
+
+    // Local user
+    if (user_index < XUserMaxUserCount) {
+      auto user = kernel_state()->xam_state()->GetUserProfile(user_index);
+      if (!user) {
+        // 5841091E expects failure
+        extended_error = X_E_NO_SUCH_USER;
+        return X_ERROR_FUNCTION_FAILED;
+      }
+
+      tile = kernel_state()->xam_state()->user_tracker()->GetIcon(
+          user->xuid(), title_id, xtile_type, tile_id);
+    } else if (user_index == XUserIndexNone) {
+      // Remote user
+
+      // How do we retrieve the gamer picture from a gamercard picture key
+      // setting?
+
+      std::span<uint8_t> black_texture = std::span<uint8_t>(
+          reinterpret_cast<uint8_t*>(buffer_ptr.host_address()), buffer_size);
+
+      // Create a solid black texture
+      uint32_t count = 0;
+      std::generate(black_texture.begin(), black_texture.end(),
+                    [&count]() { return (count++ % 4 == 0) ? 0xFF : 0x00; });
+
+      return X_ERROR_SUCCESS;
     }
 
     // 434D0849
     if (fsmall) {
       xtile_type = XTileType::kGamerTileSmall;
     }
-
-    std::span<const uint8_t> tile =
-        kernel_state()->xam_state()->user_tracker()->GetIcon(
-            user->xuid(), title_id, xtile_type, tile_id);
 
     if (tile.empty()) {
       extended_error = X_E_FAIL;
