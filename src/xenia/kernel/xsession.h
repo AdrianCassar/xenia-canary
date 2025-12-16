@@ -419,6 +419,8 @@ class XSession : public XObject {
       xam::XUSER_PROPERTY* filter_properties_ptr,
       XSESSION_SEARCHRESULT* result);
 
+  void NotifySessionCreationWarning(uint32_t user_index) const;
+
   // uint64_t migrated_session_id_;
   uint64_t session_id_ = 0;
   uint32_t state_ = 0;
