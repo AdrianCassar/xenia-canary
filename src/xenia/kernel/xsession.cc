@@ -53,30 +53,6 @@ X_RESULT XSession::CreateSession(uint32_t user_index, uint8_t public_slots,
     return X_ERROR_FUNCTION_FAILED;
   }
 
-  const uint8_t user_slot =
-      kernel_state_->xam_state()
-          ->profile_manager()
-          ->GetUserIndexAssignedToProfile(user_profile->xuid());
-
-  if (user_slot > 0) {
-    const auto profile =
-        kernel_state()->xam_state()->profile_manager()->GetProfile(uint8_t(0));
-
-    std::string message =
-        "Currently only profile slot 1 is allowed to host sessions!";
-
-    if (profile) {
-      message = fmt::format(
-          "Currently only profile slot 1 (signed in as {}) is allowed to host "
-          "sessions!",
-          profile->name());
-    }
-
-    new xe::ui::HostNotificationWindow(
-        kernel_state()->emulator()->imgui_drawer(), "Session Creation Warning!",
-        message, 0, 9);
-  }
-
   // Mutually exclusive
   if (flags & JOIN_VIA_PRESENCE_DISABLED &&
       flags & JOIN_VIA_PRESENCE_FRIENDS_ONLY) {
@@ -212,6 +188,8 @@ X_RESULT XSession::CreateHostSession(XSESSION_INFO* session_info,
   } else if (IsXboxLiveSession()) {
     XELOGI("Creating xbox live session");
     session_id_ = GenerateSessionId(XNKID_ONLINE);
+
+    NotifySessionCreationWarning(user_index);
 
     // 58410821 adds properties after session creation
     // Properties are ad-hoc therefore should be updated on backend, only
@@ -1140,6 +1118,39 @@ void XSession::FillSessionProperties(
   }
 
   result->properties_ptr = properties_ptr;
+}
+
+void XSession::NotifySessionCreationWarning(uint32_t user_index) const {
+  const xam::UserProfile* user_profile =
+      kernel_state_->xam_state()->GetUserProfile(user_index);
+
+  if (user_profile) {
+    const uint8_t user_slot =
+        kernel_state_->xam_state()
+            ->profile_manager()
+            ->GetUserIndexAssignedToProfile(user_profile->xuid());
+
+    if (user_slot > 0) {
+      const auto profile =
+          kernel_state()->xam_state()->profile_manager()->GetProfile(
+              uint8_t(0));
+
+      std::string warning_msg =
+          "Currently only profile slot 1 is allowed to host Xbox Live "
+          "sessions!";
+
+      if (profile) {
+        warning_msg = fmt::format(
+            "Currently only profile slot 1 (signed in as {}) is allowed to "
+            "host Xbox Live sessions!",
+            profile->name());
+      }
+
+      new xe::ui::HostNotificationWindow(
+          kernel_state()->emulator()->imgui_drawer(),
+          "Session Creation Warning!", warning_msg, 0, 9);
+    }
+  }
 }
 
 void XSession::PrintSessionDetails() {
