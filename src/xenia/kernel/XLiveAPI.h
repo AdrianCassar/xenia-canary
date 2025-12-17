@@ -146,7 +146,7 @@ class XLiveAPI {
 
   static bool XStorageDelete(std::string server_path);
 
-  static std::span<uint8_t> XStorageDownload(std::string server_path);
+  static std::vector<uint8_t> XStorageDownload(std::string server_path);
 
   static X_STORAGE_UPLOAD_RESULT XStorageUpload(std::string server_path,
                                                 std::span<uint8_t> buffer);
