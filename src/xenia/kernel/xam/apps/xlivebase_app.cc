@@ -1770,22 +1770,22 @@ X_HRESULT XLiveBaseApp::XStorageDownloadToMemory(uint32_t buffer_ptr) {
        facility_type != X_STORAGE_FACILITY::FACILITY_PER_USER_TITLE);
 
   if (route_backend) {
-    std::span<uint8_t> buffer = XLiveAPI::XStorageDownload(item_to_download);
+    const std::vector<uint8_t> buffer =
+        XLiveAPI::XStorageDownload(item_to_download);
 
     if (!buffer.empty()) {
-      if (buffer.size_bytes() > download_buffer.size_bytes()) {
+      if (buffer.size() > download_buffer.size_bytes()) {
         XELOGI("{}: Provided file size {}b is larger than expected {}b",
-               __func__, buffer.size_bytes(), download_buffer.size_bytes());
+               __func__, buffer.size(), download_buffer.size_bytes());
         return X_E_INSUFFICIENT_BUFFER;
       }
 
-      memcpy(download_buffer.data(), buffer.data(), buffer.size_bytes());
+      memcpy(download_buffer.data(), buffer.data(), buffer.size());
 
       // Possible solution: Use custom HTTP header or encode binary in base64
       // with metadata
       download_results_ptr->xuid_owner = xuid_owner;
-      download_results_ptr->bytes_total =
-          static_cast<uint32_t>(buffer.size_bytes());
+      download_results_ptr->bytes_total = static_cast<uint32_t>(buffer.size());
       download_results_ptr->ft_created = time(0);
 
       result = X_E_SUCCESS;
