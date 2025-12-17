@@ -955,8 +955,9 @@ dword_result_t XamReadTileToTextureEx_entry(
     extended_error = X_ERROR_SUCCESS;
     length = 0;
 
-    if (static_cast<XTileType>(tile_type.value()) ==
-        xe::kernel::xam::XTileType::kGamerTileByKey) {
+    XTileType xtile_type = static_cast<XTileType>(tile_type.value());
+
+    if (xtile_type == XTileType::kGamerTileByKey) {
       if (IsGamerPictureAvatar(title_id)) {
         // ...
       } else if (IsGamerPictureCustom(title_id)) {
@@ -965,8 +966,6 @@ dword_result_t XamReadTileToTextureEx_entry(
         // GetId...
       }
     }
-
-    XTileType xtile_type = static_cast<XTileType>(tile_type.value());
 
     size_t buffer_size = size_t(stride) * size_t(tile_height);
 
@@ -979,6 +978,11 @@ dword_result_t XamReadTileToTextureEx_entry(
         // 5841091E expects failure
         extended_error = X_E_NO_SUCH_USER;
         return X_ERROR_FUNCTION_FAILED;
+      }
+
+      // 434D0849
+      if (fsmall) {
+        xtile_type = XTileType::kGamerTileSmall;
       }
 
       tile = kernel_state()->xam_state()->user_tracker()->GetIcon(
@@ -998,11 +1002,6 @@ dword_result_t XamReadTileToTextureEx_entry(
                     [&count]() { return (count++ % 4 == 0) ? 0xFF : 0x00; });
 
       return X_ERROR_SUCCESS;
-    }
-
-    // 434D0849
-    if (fsmall) {
-      xtile_type = XTileType::kGamerTileSmall;
     }
 
     if (tile.empty()) {
