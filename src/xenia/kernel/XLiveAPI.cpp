@@ -1393,13 +1393,13 @@ bool XLiveAPI::XStorageDelete(std::string server_path) {
   return true;
 }
 
-std::span<uint8_t> XLiveAPI::XStorageDownload(std::string server_path) {
+std::vector<uint8_t> XLiveAPI::XStorageDownload(std::string server_path) {
   // Remove address it's added later
   std::string endpoint = server_path.substr(GetApiAddress().size());
 
   std::unique_ptr<HTTPResponseObjectJSON> response = Get(endpoint);
 
-  std::span<uint8_t> buffer = {};
+  std::vector<uint8_t> buffer = {};
 
   if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_OK &&
       response->StatusCode() != HTTP_STATUS_CODE::HTTP_NO_CONTENT) {
@@ -1410,9 +1410,11 @@ std::span<uint8_t> XLiveAPI::XStorageDownload(std::string server_path) {
   }
 
   if (response->RawResponse().response) {
-    buffer = std::span<uint8_t>(
-        reinterpret_cast<uint8_t*>(response->RawResponse().response),
-        response->RawResponse().size);
+    const uint32_t size = static_cast<uint32_t>(response->RawResponse().size);
+    const uint8_t* downloaded_data =
+        reinterpret_cast<const uint8_t*>(response->RawResponse().response);
+
+    buffer = std::vector<uint8_t>(downloaded_data, downloaded_data + size);
   }
 
   return buffer;
