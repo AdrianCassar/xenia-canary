@@ -11,6 +11,7 @@
 
 #include "xenia/base/logging.h"
 #include "xenia/emulator.h"
+#include "xenia/kernel/XLiveAPI.h"
 #include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/util/shim_utils.h"
 #include "xenia/kernel/xam/user_profile.h"
@@ -288,8 +289,45 @@ uint32_t XamUserReadProfileSettingsEx(uint32_t title_id, uint32_t user_index,
       }
 
       if (!kernel_state()->xam_state()->IsUserSignedIn(user_xuid)) {
-        extended_error = X_E_NO_SUCH_USER;
-        return X_ERROR_FUNCTION_FAILED;
+        std::set<uint32_t> requested_settings = {setting_ids,
+                                                 setting_ids + setting_count};
+
+        // Games expect gamer profile pictures.
+        if (requested_settings.contains(
+                uint32_t(UserSettingId::XPROFILE_GAMERCARD_PICTURE_KEY))) {
+          const uint32_t default_settings_count = 1;
+
+          auto out_header =
+              reinterpret_cast<X_USER_READ_PROFILE_SETTINGS*>(buffer);
+          auto out_setting =
+              reinterpret_cast<X_USER_PROFILE_SETTING*>(&out_header[1]);
+          out_header->setting_count = default_settings_count;
+          out_header->settings_ptr =
+              kernel_state()->memory()->HostToGuestVirtual(out_setting);
+
+          std::fill_n(out_setting, default_settings_count,
+                      X_USER_PROFILE_SETTING{});
+
+          UserSetting default_gamer_picture =
+              UserSetting(UserSettingId::XPROFILE_GAMERCARD_PICTURE_KEY,
+                          xe::string_util::read_u16string_and_swap(
+                              u"FFFE07D10002000B0001000B"));
+
+          out_setting->setting_id =
+              uint32_t(UserSettingId::XPROFILE_GAMERCARD_PICTURE_KEY);
+          out_setting->source = default_gamer_picture.get_setting_source();
+
+          uint32_t additional_data_buffer_ptr =
+              out_header->settings_ptr +
+              (default_settings_count * sizeof(X_USER_PROFILE_SETTING));
+
+          default_gamer_picture.WriteToGuest(out_setting,
+                                             additional_data_buffer_ptr);
+
+          out_setting->xuid = user_xuid;
+        }
+
+        return X_ERROR_SUCCESS;
       }
 
       user_profile = kernel_state()->xam_state()->GetUserProfileAny(user_xuid);
@@ -939,6 +977,7 @@ dword_result_t XamReadTileToTextureEx_entry(
     size_t buffer_size = size_t(stride) * size_t(tile_height);
 
     std::span<const uint8_t> tile = {};
+    std::vector<uint8_t> downloaded_tile = {};
 
     // Local user
     if (user_index < XUserMaxUserCount) {
@@ -959,24 +998,44 @@ dword_result_t XamReadTileToTextureEx_entry(
     } else if (user_index == XUserIndexNone) {
       // Remote user
 
-      // How do we retrieve the gamer picture from a gamercard picture key
-      // setting?
+      xe::be<uint32_t> title_id = 0;
+      xe::be<uint32_t> big_tile_id = 0;
+      xe::be<uint32_t> small_tile_id = 0;
 
-      std::span<uint8_t> black_texture = std::span<uint8_t>(
-          reinterpret_cast<uint8_t*>(buffer_ptr.host_address()), buffer_size);
+      XamParseGamerTileKey_entry(key_ptr, &title_id.value, &big_tile_id.value,
+                                 &small_tile_id.value);
 
-      // Create a solid black texture
-      uint32_t count = 0;
-      std::generate(black_texture.begin(), black_texture.end(),
-                    [&count]() { return (count++ % 4 == 0) ? 0xFF : 0x00; });
+      if (IsGamerPictureFromDash(title_id)) {
+        // API doesn't support small tile ids
+        uint32_t requested_tile_id = fsmall ? small_tile_id : big_tile_id;
 
-      return X_ERROR_SUCCESS;
+        assert_false(fsmall);
+
+        if (!fsmall) {
+          downloaded_tile =
+              XLiveAPI::DownloadGamerPictureTile(title_id, big_tile_id);
+        }
+      }
     }
 
-    if (tile.empty()) {
-      extended_error = X_E_FAIL;
-      return X_ERROR_FUNCTION_FAILED;
+    if (downloaded_tile.empty()) {
+      downloaded_tile =
+          XLiveAPI::DownloadRandomDashGamerPictureTile(kDashboardID);
+
+      if (downloaded_tile.empty()) {
+        std::span<uint8_t> black_texture = std::span<uint8_t>(
+            reinterpret_cast<uint8_t*>(buffer_ptr.host_address()), buffer_size);
+
+        // Create a solid black texture
+        uint32_t count = 0;
+        std::generate(black_texture.begin(), black_texture.end(),
+                      [&count]() { return (count++ % 4 == 0) ? 0xFF : 0x00; });
+
+        return X_ERROR_SUCCESS;
+      }
     }
+
+    tile = {downloaded_tile.data(), downloaded_tile.size()};
 
     int width, height, channels;
     unsigned char* imageData =
