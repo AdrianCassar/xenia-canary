@@ -51,6 +51,10 @@ UserData::UserData(X_USER_DATA_TYPE data_type, UserDataTypes user_data) {
       extended_data_.resize(data_.data.unicode.size);
       memcpy(extended_data_.data(), reinterpret_cast<uint8_t*>(str.data()),
              data_.data.unicode.size);
+
+      // Add null terminator
+      data_.data.unicode.size += sizeof(char16_t);
+      extended_data_.insert(extended_data_.end(), {0, 0});
       break;
     }
     case X_USER_DATA_TYPE::INT32:
