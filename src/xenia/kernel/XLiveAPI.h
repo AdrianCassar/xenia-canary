@@ -60,6 +60,8 @@ class XLiveAPI {
 
   static std::string GetApiAddress();
 
+  static std::string BuildEndpoint(std::string endpoint);
+
   static void Init();
 
   static InitState GetInitState();
@@ -167,6 +169,12 @@ class XLiveAPI {
 
   static void SetPresence(const std::set<uint64_t> xuids);
 
+  static std::vector<uint8_t> DownloadGamerPictureTile(const uint32_t title_id,
+                                                       const uint32_t tile_id);
+
+  static std::vector<uint8_t> DownloadRandomDashGamerPictureTile(
+      const uint32_t title_id);
+
   static std::unique_ptr<HTTPResponseObjectJSON> PraseResponse(
       response_data response);
 
@@ -197,6 +205,23 @@ class XLiveAPI {
   inline static int8_t version_status;
 
   inline static uint32_t dummy_friends_count_ = 0;
+
+  static std::vector<uint32_t> GetDashboardTileIds() {
+    return {0x2000B, 0x2000C, 0x20001, 0x20009, 0x20004, 0x20000, 0x20008,
+            0x20007, 0x2000A, 0x20006, 0x20002, 0x20003, 0x20005, 0x21012,
+            0x21069, 0x21065, 0x21067, 0x21062, 0x21058, 0x21061, 0x21060,
+            0x21059, 0x21063, 0x21068, 0x21064, 0x21057, 0x21052, 0x21049,
+            0x21048, 0x21054, 0x21056, 0x21046, 0x21047, 0x21045, 0x21044,
+            0x21040, 0x21055, 0x21042, 0x21039, 0x21051, 0x21066, 0x21037,
+            0x21032, 0x21030, 0x21043, 0x21031, 0x21050, 0x21027, 0x21024,
+            0x21026, 0x21025, 0x21029, 0x21022, 0x21023, 0x21018, 0x21033,
+            0x21017, 0x21041, 0x21028, 0x21053, 0x21034, 0x21014, 0x21015,
+            0x21009, 0x21008, 0x21013, 0x21006, 0x21011, 0x21038, 0x21020,
+            0x21005, 0x21007, 0x21010, 0x21004, 0x21000, 0x21021, 0x21001,
+            0x21019, 0x21003, 0x21016, 0x21002, 0x21036, 0x21035};
+  }
+
+  inline static std::map<uint32_t, std::vector<uint8_t>> downloaded_tiles = {};
 
  private:
   inline static const std::string default_local_server_ = "192.168.0.1:36000/";
