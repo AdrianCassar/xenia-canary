@@ -185,6 +185,10 @@ std::string XLiveAPI::GetApiAddress() {
   return cvars::api_address;
 }
 
+std::string XLiveAPI::BuildEndpoint(std::string endpoint) {
+  return fmt::format("{}{}", GetApiAddress(), endpoint);
+}
+
 void XLiveAPI::Init() {
   if (GetInitState() != InitState::Pending) {
     return;
@@ -287,10 +291,8 @@ std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::Get(std::string endpoint,
     return PraseResponse(chunk);
   }
 
-  std::string endpoint_API = fmt::format("{}{}", GetApiAddress(), endpoint);
-
   if (cvars::logging) {
-    XELOGI("{} Endpoint: {}", __func__, endpoint_API);
+    XELOGI("{} Endpoint: {}", __func__, endpoint);
   }
 
   curl_slist* headers = NULL;
@@ -306,7 +308,7 @@ std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::Get(std::string endpoint,
     curl_easy_setopt(curl_handle, CURLOPT_TIMEOUT, timeout);
   }
 
-  curl_easy_setopt(curl_handle, CURLOPT_URL, endpoint_API.c_str());
+  curl_easy_setopt(curl_handle, CURLOPT_URL, endpoint.c_str());
   curl_easy_setopt(curl_handle, CURLOPT_CUSTOMREQUEST, "GET");
   curl_easy_setopt(curl_handle, CURLOPT_HTTPHEADER, headers);
   curl_easy_setopt(curl_handle, CURLOPT_USERAGENT, "xenia");
@@ -354,15 +356,13 @@ std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::Post(std::string endpoint,
     return PraseResponse(chunk);
   }
 
-  std::string endpoint_API = fmt::format("{}{}", GetApiAddress(), endpoint);
-
   if (cvars::logging) {
-    XELOGI("{} Endpoint: {}", __func__, endpoint_API);
+    XELOGI("{} Endpoint: {}", __func__, endpoint);
   }
 
   curl_slist* headers = NULL;
 
-  curl_easy_setopt(curl_handle, CURLOPT_URL, endpoint_API.c_str());
+  curl_easy_setopt(curl_handle, CURLOPT_URL, endpoint.c_str());
   curl_easy_setopt(curl_handle, CURLOPT_CUSTOMREQUEST, "POST");
   curl_easy_setopt(curl_handle, CURLOPT_USERAGENT, "xenia");
   curl_easy_setopt(curl_handle, CURLOPT_POSTFIELDS, data);
@@ -424,10 +424,8 @@ std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::Delete(std::string endpoint) {
     return PraseResponse(chunk);
   }
 
-  std::string endpoint_API = fmt::format("{}{}", GetApiAddress(), endpoint);
-
   if (cvars::logging) {
-    XELOGI("{} Endpoint: {}", __func__, endpoint_API);
+    XELOGI("{} Endpoint: {}", __func__, endpoint);
   }
 
   struct curl_slist* headers = NULL;
@@ -435,7 +433,7 @@ std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::Delete(std::string endpoint) {
   headers = curl_slist_append(headers, "Accept: application/json");
   headers = curl_slist_append(headers, "charset: utf-8");
 
-  curl_easy_setopt(curl_handle, CURLOPT_URL, endpoint_API.c_str());
+  curl_easy_setopt(curl_handle, CURLOPT_URL, endpoint.c_str());
 
   curl_easy_setopt(curl_handle, CURLOPT_CUSTOMREQUEST, "DELETE");
   curl_easy_setopt(curl_handle, CURLOPT_HTTPHEADER, headers);
@@ -467,7 +465,8 @@ std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::Delete(std::string endpoint) {
 sockaddr_in XLiveAPI::Getwhoami() {
   const uint32_t timeout = 3;
 
-  std::unique_ptr<HTTPResponseObjectJSON> response = Get("whoami", timeout);
+  std::unique_ptr<HTTPResponseObjectJSON> response =
+      Get(BuildEndpoint("whoami"), timeout);
 
   sockaddr_in addr{};
 
@@ -490,8 +489,8 @@ sockaddr_in XLiveAPI::Getwhoami() {
 }
 
 void XLiveAPI::DownloadPortMappings() {
-  std::string endpoint =
-      fmt::format("title/{:08X}/ports", kernel_state()->title_id());
+  std::string endpoint = BuildEndpoint(
+      fmt::format("title/{:08X}/ports", kernel_state()->title_id()));
 
   std::unique_ptr<HTTPResponseObjectJSON> response = Get(endpoint);
 
@@ -577,7 +576,9 @@ std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::RegisterPlayer(
   bool valid = player.Serialize(player_output);
   assert_true(valid);
 
-  response = Post("players", (uint8_t*)player_output.c_str());
+  std::string endpoint = BuildEndpoint("players");
+
+  response = Post(endpoint, (uint8_t*)player_output.c_str());
 
   if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_CREATED) {
     assert_always();
@@ -602,8 +603,9 @@ std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::RegisterPlayer(
 }
 
 const std::map<uint64_t, std::string> XLiveAPI::DeleteMyProfiles() {
-  std::unique_ptr<HTTPResponseObjectJSON> response =
-      Get("players/deletemyprofiles");
+  std::string endpoint = BuildEndpoint("players/deletemyprofiles");
+
+  std::unique_ptr<HTTPResponseObjectJSON> response = Get(endpoint);
 
   if (!response->RawResponse().response) {
     return {};
@@ -630,7 +632,7 @@ std::unique_ptr<PlayerObjectJSON> XLiveAPI::FindPlayer(std::string ip) {
 
   // POST & receive.
   std::unique_ptr<HTTPResponseObjectJSON> response =
-      Post("players/find", (uint8_t*)buffer.GetString());
+      Post(BuildEndpoint("players/find"), (uint8_t*)buffer.GetString());
 
   if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_CREATED) {
     XELOGE("FindPlayers error message: {}", response->Message());
@@ -660,8 +662,9 @@ bool XLiveAPI::UpdateQoSCache(const uint64_t sessionId,
 
 // Send QoS binary data to the server
 void XLiveAPI::QoSPost(uint64_t sessionId, uint8_t* qosData, size_t qosLength) {
-  std::string endpoint = fmt::format("title/{:08X}/sessions/{:016x}/qos",
-                                     kernel_state()->title_id(), sessionId);
+  std::string endpoint =
+      BuildEndpoint(fmt::format("title/{:08X}/sessions/{:016x}/qos",
+                                kernel_state()->title_id(), sessionId));
 
   std::unique_ptr<HTTPResponseObjectJSON> response =
       Post(endpoint, qosData, qosLength);
@@ -676,8 +679,9 @@ void XLiveAPI::QoSPost(uint64_t sessionId, uint8_t* qosData, size_t qosLength) {
 
 // Get QoS binary data from the server
 response_data XLiveAPI::QoSGet(uint64_t sessionId) {
-  std::string endpoint = fmt::format("title/{:08X}/sessions/{:016x}/qos",
-                                     kernel_state()->title_id(), sessionId);
+  std::string endpoint =
+      BuildEndpoint(fmt::format("title/{:08X}/sessions/{:016x}/qos",
+                                kernel_state()->title_id(), sessionId));
 
   std::unique_ptr<HTTPResponseObjectJSON> response = Get(endpoint);
 
@@ -695,8 +699,9 @@ response_data XLiveAPI::QoSGet(uint64_t sessionId) {
 }
 
 void XLiveAPI::SessionModify(uint64_t sessionId, XGI_SESSION_MODIFY* data) {
-  std::string endpoint = fmt::format("title/{:08X}/sessions/{:016x}/modify",
-                                     kernel_state()->title_id(), sessionId);
+  std::string endpoint =
+      BuildEndpoint(fmt::format("title/{:08X}/sessions/{:016x}/modify",
+                                kernel_state()->title_id(), sessionId));
 
   Document doc;
   doc.SetObject();
@@ -728,7 +733,8 @@ std::vector<std::unique_ptr<SessionObjectJSON>> XLiveAPI::GetTitleSessions(
     title_id = kernel_state()->title_id();
   }
 
-  std::string endpoint = fmt::format("title/{:08X}/sessions/search", title_id);
+  std::string endpoint =
+      BuildEndpoint(fmt::format("title/{:08X}/sessions/search", title_id));
 
   std::unique_ptr<HTTPResponseObjectJSON> response = Get(endpoint);
 
@@ -765,8 +771,8 @@ std::vector<std::unique_ptr<SessionObjectJSON>> XLiveAPI::GetTitleSessions(
 
 const std::vector<std::unique_ptr<SessionObjectJSON>> XLiveAPI::SessionSearch(
     XGI_SESSION_SEARCH* data, uint32_t num_users) {
-  std::string endpoint =
-      fmt::format("title/{:08X}/sessions/search", kernel_state()->title_id());
+  std::string endpoint = BuildEndpoint(
+      fmt::format("title/{:08X}/sessions/search", kernel_state()->title_id()));
 
   const auto user_profile =
       kernel_state()->xam_state()->GetUserProfile(data->user_index);
@@ -823,8 +829,9 @@ const std::vector<std::unique_ptr<SessionObjectJSON>> XLiveAPI::SessionSearch(
 
 const std::unique_ptr<SessionObjectJSON> XLiveAPI::SessionDetails(
     uint64_t sessionId) {
-  std::string endpoint = fmt::format("title/{:08X}/sessions/{:016x}/details",
-                                     kernel_state()->title_id(), sessionId);
+  std::string endpoint =
+      BuildEndpoint(fmt::format("title/{:08X}/sessions/{:016x}/details",
+                                kernel_state()->title_id(), sessionId));
 
   std::unique_ptr<HTTPResponseObjectJSON> response = Get(endpoint);
 
@@ -847,8 +854,9 @@ const std::unique_ptr<SessionObjectJSON> XLiveAPI::SessionDetails(
 
 std::unique_ptr<SessionObjectJSON> XLiveAPI::XSessionMigration(
     uint64_t sessionId, XGI_SESSION_MIGRATE* data) {
-  std::string endpoint = fmt::format("title/{:08X}/sessions/{:016x}/migrate",
-                                     kernel_state()->title_id(), sessionId);
+  std::string endpoint =
+      BuildEndpoint(fmt::format("title/{:08X}/sessions/{:016x}/migrate",
+                                kernel_state()->title_id(), sessionId));
 
   Document doc;
   doc.SetObject();
@@ -903,8 +911,8 @@ std::unique_ptr<SessionObjectJSON> XLiveAPI::XSessionMigration(
 std::unique_ptr<ArbitrationObjectJSON> XLiveAPI::XSessionArbitration(
     uint64_t sessionId) {
   std::string endpoint =
-      fmt::format("title/{:08X}/sessions/{:016x}/arbitration",
-                  kernel_state()->title_id(), sessionId);
+      BuildEndpoint(fmt::format("title/{:08X}/sessions/{:016x}/arbitration",
+                                kernel_state()->title_id(), sessionId));
 
   std::unique_ptr<ArbitrationObjectJSON> arbitration =
       std::make_unique<ArbitrationObjectJSON>();
@@ -926,8 +934,8 @@ std::unique_ptr<ArbitrationObjectJSON> XLiveAPI::XSessionArbitration(
 bool XLiveAPI::SessionFlushStats(uint64_t sessionId,
                                  view_properties_unordered_map stats) {
   std::string endpoint =
-      fmt::format("title/{:08X}/sessions/{:016x}/leaderboards",
-                  kernel_state()->title_id(), sessionId);
+      BuildEndpoint(fmt::format("title/{:08X}/sessions/{:016x}/leaderboards",
+                                kernel_state()->title_id(), sessionId));
 
   if (stats.empty()) {
     return true;
@@ -958,7 +966,7 @@ bool XLiveAPI::SessionFlushStats(uint64_t sessionId,
 
 std::unique_ptr<LeaderboardObjectJSON> XLiveAPI::LeaderboardsFind(
     const XGI_XUSER_READ_STATS stats) {
-  std::string endpoint = fmt::format("leaderboards/find");
+  std::string endpoint = BuildEndpoint(fmt::format("leaderboards/find"));
 
   auto read_stats = ReadUserStatsObjectJSON(stats);
 
@@ -985,8 +993,8 @@ std::unique_ptr<LeaderboardObjectJSON> XLiveAPI::LeaderboardsFind(
 }
 
 void XLiveAPI::DeleteSession(uint64_t sessionId) {
-  std::string endpoint = fmt::format("title/{:08X}/sessions/{:016x}",
-                                     kernel_state()->title_id(), sessionId);
+  std::string endpoint = BuildEndpoint(fmt::format(
+      "title/{:08X}/sessions/{:016x}", kernel_state()->title_id(), sessionId));
 
   std::unique_ptr<HTTPResponseObjectJSON> response = Delete(endpoint);
 
@@ -1001,8 +1009,8 @@ void XLiveAPI::DeleteSession(uint64_t sessionId) {
 }
 
 void XLiveAPI::DeleteAllSessionsByMac() {
-  const std::string endpoint =
-      fmt::format("DeleteSessions/{}", cvars::mac_address);
+  const std::string endpoint = BuildEndpoint(
+      fmt::format("DeleteSessions/{}", cvars::mac_address));
 
   std::unique_ptr<HTTPResponseObjectJSON> response = Delete(endpoint);
 
@@ -1012,7 +1020,7 @@ void XLiveAPI::DeleteAllSessionsByMac() {
 }
 
 void XLiveAPI::DeleteAllSessions() {
-  const std::string endpoint = fmt::format("DeleteSessions", 3);
+  const std::string endpoint = BuildEndpoint(fmt::format("DeleteSessions"));
 
   std::unique_ptr<HTTPResponseObjectJSON> response = Delete(endpoint);
 
@@ -1022,8 +1030,8 @@ void XLiveAPI::DeleteAllSessions() {
 }
 
 void XLiveAPI::XSessionCreate(uint64_t sessionId, XGI_SESSION_CREATE* data) {
-  std::string endpoint =
-      fmt::format("title/{:08X}/sessions", kernel_state()->title_id());
+  std::string endpoint = BuildEndpoint(
+      fmt::format("title/{:08X}/sessions", kernel_state()->title_id()));
 
   std::string sessionId_str = fmt::format("{:016x}", sessionId);
   assert_true(sessionId_str.size() == 16);
@@ -1080,8 +1088,9 @@ void XLiveAPI::XSessionCreate(uint64_t sessionId, XGI_SESSION_CREATE* data) {
 }
 
 bool XLiveAPI::SessionPropertiesSet(uint64_t session_id, uint64_t xuid) {
-  std::string endpoint = fmt::format("title/{:08X}/sessions/{:016x}/properties",
-                                     kernel_state()->title_id(), session_id);
+  std::string endpoint =
+      BuildEndpoint(fmt::format("title/{:08X}/sessions/{:016x}/properties",
+                                kernel_state()->title_id(), session_id));
 
   std::unique_ptr<PropertiesObjectJSON> properties_json =
       std::make_unique<PropertiesObjectJSON>();
@@ -1145,8 +1154,9 @@ bool XLiveAPI::SessionPropertiesSet(uint64_t session_id, uint64_t xuid) {
 
 const std::vector<xam::Property> XLiveAPI::SessionPropertiesGet(
     uint64_t session_id) {
-  std::string endpoint = fmt::format("title/{:08X}/sessions/{:016x}/properties",
-                                     kernel_state()->title_id(), session_id);
+  std::string endpoint =
+      BuildEndpoint(fmt::format("title/{:08X}/sessions/{:016x}/properties",
+                                kernel_state()->title_id(), session_id));
 
   std::unique_ptr<HTTPResponseObjectJSON> response = Get(endpoint);
 
@@ -1163,8 +1173,8 @@ const std::vector<xam::Property> XLiveAPI::SessionPropertiesGet(
 }
 
 SessionObjectJSON XLiveAPI::XSessionGet(uint64_t sessionId) {
-  std::string endpoint = fmt::format("title/{:08X}/sessions/{:016x}",
-                                     kernel_state()->title_id(), sessionId);
+  std::string endpoint = BuildEndpoint(fmt::format(
+      "title/{:08X}/sessions/{:016x}", kernel_state()->title_id(), sessionId));
 
   std::unique_ptr<SessionObjectJSON> session =
       std::make_unique<SessionObjectJSON>();
@@ -1184,8 +1194,8 @@ SessionObjectJSON XLiveAPI::XSessionGet(uint64_t sessionId) {
 }
 
 std::vector<X_TITLE_SERVER> XLiveAPI::GetServers() {
-  std::string endpoint =
-      fmt::format("title/{:08X}/servers", kernel_state()->title_id());
+  std::string endpoint = BuildEndpoint(
+      fmt::format("title/{:08X}/servers", kernel_state()->title_id()));
 
   if (xlsp_servers_cached) {
     return xlsp_servers;
@@ -1225,8 +1235,8 @@ std::vector<X_TITLE_SERVER> XLiveAPI::GetServers() {
 }
 
 std::unique_ptr<ServicesObjectJSON> XLiveAPI::GetServices() {
-  std::string endpoint =
-      fmt::format("title/{:08X}/services", kernel_state()->title_id());
+  std::string endpoint = BuildEndpoint(
+      fmt::format("title/{:08X}/services", kernel_state()->title_id()));
 
   std::unique_ptr<HTTPResponseObjectJSON> response = Get(endpoint);
 
@@ -1247,8 +1257,9 @@ std::unique_ptr<ServicesObjectJSON> XLiveAPI::GetServices() {
 
 void XLiveAPI::SessionJoinRemote(uint64_t sessionId,
                                  std::unordered_map<uint64_t, bool> members) {
-  std::string endpoint = fmt::format("title/{:08X}/sessions/{:016x}/join",
-                                     kernel_state()->title_id(), sessionId);
+  std::string endpoint =
+      BuildEndpoint(fmt::format("title/{:08X}/sessions/{:016x}/join",
+                                kernel_state()->title_id(), sessionId));
 
   Document doc;
   doc.SetObject();
@@ -1285,8 +1296,9 @@ void XLiveAPI::SessionJoinRemote(uint64_t sessionId,
 
 void XLiveAPI::SessionLeaveRemote(uint64_t sessionId,
                                   const std::vector<xe::be<uint64_t>> xuids) {
-  std::string endpoint = fmt::format("title/{:08X}/sessions/{:016x}/leave",
-                                     kernel_state()->title_id(), sessionId);
+  std::string endpoint =
+      BuildEndpoint(fmt::format("title/{:08X}/sessions/{:016x}/leave",
+                                kernel_state()->title_id(), sessionId));
 
   Document doc;
   doc.SetObject();
@@ -1318,8 +1330,9 @@ void XLiveAPI::SessionLeaveRemote(uint64_t sessionId,
 
 void XLiveAPI::SessionPreJoin(uint64_t sessionId,
                               const std::set<uint64_t>& xuids) {
-  std::string endpoint = fmt::format("title/{:08X}/sessions/{:016X}/prejoin",
-                                     kernel_state()->title_id(), sessionId);
+  std::string endpoint =
+      BuildEndpoint(fmt::format("title/{:08X}/sessions/{:016X}/prejoin",
+                                kernel_state()->title_id(), sessionId));
 
   Document doc;
   doc.SetObject();
@@ -1350,7 +1363,7 @@ void XLiveAPI::SessionPreJoin(uint64_t sessionId,
 
 std::unique_ptr<FriendsPresenceObjectJSON> XLiveAPI::GetFriendsPresence(
     const std::set<uint64_t>& xuids) {
-  const std::string endpoint = "players/presence";
+  const std::string endpoint = BuildEndpoint("players/presence");
 
   std::unique_ptr<FriendsPresenceObjectJSON> friends =
       std::make_unique<FriendsPresenceObjectJSON>();
@@ -1386,7 +1399,7 @@ std::unique_ptr<FriendsPresenceObjectJSON> XLiveAPI::GetFriendsPresence(
 X_STORAGE_BUILD_SERVER_PATH_RESULT XLiveAPI::XStorageBuildServerPath(
     std::string server_path) {
   // Remove address it's added later
-  std::string endpoint = server_path.substr(GetApiAddress().size());
+  std::string endpoint = server_path;
 
   X_STORAGE_BUILD_SERVER_PATH_RESULT result =
       X_STORAGE_BUILD_SERVER_PATH_RESULT::Invalid;
@@ -1422,7 +1435,7 @@ X_STORAGE_BUILD_SERVER_PATH_RESULT XLiveAPI::XStorageBuildServerPath(
 
 bool XLiveAPI::XStorageDelete(std::string server_path) {
   // Remove address it's added later
-  std::string endpoint = server_path.substr(GetApiAddress().size());
+  std::string endpoint = server_path;
 
   std::unique_ptr<HTTPResponseObjectJSON> response = Delete(endpoint);
 
@@ -1438,7 +1451,7 @@ bool XLiveAPI::XStorageDelete(std::string server_path) {
 
 std::vector<uint8_t> XLiveAPI::XStorageDownload(std::string server_path) {
   // Remove address it's added later
-  std::string endpoint = server_path.substr(GetApiAddress().size());
+  std::string endpoint = server_path;
 
   std::unique_ptr<HTTPResponseObjectJSON> response = Get(endpoint);
 
@@ -1466,7 +1479,7 @@ std::vector<uint8_t> XLiveAPI::XStorageDownload(std::string server_path) {
 X_STORAGE_UPLOAD_RESULT XLiveAPI::XStorageUpload(std::string server_path,
                                                  std::span<uint8_t> buffer) {
   // Remove address it's added later
-  std::string endpoint = server_path.substr(GetApiAddress().size());
+  std::string endpoint = server_path;
 
   X_STORAGE_UPLOAD_RESULT result = X_STORAGE_UPLOAD_RESULT::UPLOAD_ERROR;
 
@@ -1507,7 +1520,8 @@ XLiveAPI::XStorageEnumerate(std::string server_path, uint32_t max_items) {
 
   curl_easy_cleanup(curl);
 
-  std::string endpoint = "xstorage/enumerate/" + std::string(encoded_url);
+  std::string endpoint =
+      BuildEndpoint("xstorage/enumerate/" + std::string(encoded_url));
 
   if (encoded_url) {
     curl_free(encoded_url);
@@ -1552,7 +1566,7 @@ XLiveAPI::XStorageEnumerate(std::string server_path, uint32_t max_items) {
 
 std::unique_ptr<FindUsersObjectJSON> XLiveAPI::GetFindUsers(
     const std::vector<FIND_USER_INFO>& find_users_info) {
-  const std::string endpoint = "players/findusers";
+  const std::string endpoint = BuildEndpoint("players/findusers");
 
   std::unique_ptr<FindUsersObjectJSON> find_users =
       std::make_unique<FindUsersObjectJSON>();
@@ -1604,7 +1618,7 @@ PresenceObjectJSON XLiveAPI::BuildRichPresenceRequest(
 }
 
 void XLiveAPI::SetPresence(std::set<uint64_t> xuids) {
-  const std::string endpoint = "players/setpresence";
+  const std::string endpoint = BuildEndpoint("players/setpresence");
 
   std::string player_presence;
   bool valid = BuildRichPresenceRequest(xuids).Serialize(player_presence);
@@ -1620,6 +1634,40 @@ void XLiveAPI::SetPresence(std::set<uint64_t> xuids) {
     XELOGE("SetPresence error message: {}", response->Message());
     assert_always();
   }
+}
+
+std::vector<uint8_t> XLiveAPI::DownloadGamerPictureTile(uint32_t title_id,
+                                                        uint32_t tile_id) {
+  const std::string endpoint =
+      fmt::format("https://download.xboxgamer.pics/titles/{:x}/{:x}.png",
+                  title_id, tile_id);
+
+  if (downloaded_tiles.contains(tile_id)) {
+    return downloaded_tiles[tile_id];
+  }
+
+  std::vector<uint8_t> tile = XStorageDownload(endpoint);
+
+  // Cache tile
+  if (!tile.empty()) {
+    downloaded_tiles[tile_id] = tile;
+  }
+
+  return tile;
+}
+
+std::vector<uint8_t> XLiveAPI::DownloadRandomDashGamerPictureTile(
+    uint32_t title_id) {
+  const auto profile_picture_ids = XLiveAPI::GetDashboardTileIds();
+
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::uniform_int_distribution<uint32_t> dis(
+      0, uint32_t(profile_picture_ids.size()) - 1);
+
+  uint32_t tile_id = profile_picture_ids[dis(gen)];
+
+  return XLiveAPI::DownloadGamerPictureTile(title_id, tile_id);
 }
 
 std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::PraseResponse(
