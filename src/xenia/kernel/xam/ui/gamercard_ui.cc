@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cfloat>
 
+#include "xenia/base/jpeg_utils.h"
 #include "xenia/base/png_utils.h"
 #include "xenia/ui/file_picker.h"
 
@@ -391,7 +392,7 @@ void GamercardUI::SelectNewIcon() {
       path = selected_files[0];
     }
 
-    if (IsFilePngImage(path)) {
+    if (IsFilePngImage(path) || IsFileJpegImage(path)) {
       const auto res = GetImageResolution(path);
 
       if (res == kernel::xam::kProfileIconSizeSmall ||

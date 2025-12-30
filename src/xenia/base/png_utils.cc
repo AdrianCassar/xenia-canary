@@ -7,12 +7,34 @@
  ******************************************************************************
  */
 
-#include "xenia/base/png_utils.h"
+#include <span>
+
 #include "xenia/base/filesystem.h"
+#include "xenia/base/png_utils.h"
 
 #include "third_party/stb/stb_image.h"
 
 namespace xe {
+
+bool IsDataPngImage(std::span<const uint8_t> png_data) {
+  const uint32_t start_offset = 1;
+  const uint32_t magic_size = 3;
+  const uint32_t size = start_offset + magic_size;
+
+  if (png_data.empty() || png_data.size() < size) {
+    return false;
+  }
+
+  const auto magic = png_data.subspan(start_offset, magic_size);
+  const std::string png_magic =
+      std::string(reinterpret_cast<const char*>(magic.data()), magic_size);
+
+  if (png_magic != "PNG") {
+    return false;
+  }
+
+  return true;
+}
 
 bool IsFilePngImage(const std::filesystem::path& file_path) {
   FILE* file = xe::filesystem::OpenFile(file_path, "rb");
