@@ -9,6 +9,9 @@
 
 #include "xenia/kernel/xam/ui/create_profile_ui.h"
 #include "xenia/emulator.h"
+#include "xenia/kernel/XLiveAPI.h"
+#include "xenia/kernel/xam/user_settings.h"
+#include "xenia/ui/resources.h"
 
 namespace xe {
 namespace kernel {
@@ -16,68 +19,192 @@ namespace xam {
 namespace ui {
 
 void CreateProfileUI::OnDraw(ImGuiIO& io) {
-  if (!has_opened_) {
+  if (!create_profile_args_.dialog_open) {
     ImGui::OpenPopup("Create Profile");
-    has_opened_ = true;
+    create_profile_args_.dialog_open = true;
   }
 
-  auto profile_manager =
-      emulator_->kernel_state()->xam_state()->profile_manager();
+  if (!xeDrawCreateProfile(imgui_drawer(), emulator_, create_profile_args_)) {
+    Close();
+  }
+}
 
-  bool dialog_open = true;
-  if (!ImGui::BeginPopupModal("Create Profile", &dialog_open,
+void CreateProfileUI::Initalize() {
+  const auto gamerpic_key = GetDefaultGamerPictureKey();
+
+  if (gamerpic_key.has_value()) {
+    create_profile_args_.gamerpic_key = gamerpic_key;
+    create_profile_args_.downloaded_gamerpics =
+        XLiveAPI::DownloadCompleteGamerpic(gamerpic_key.value());
+  }
+}
+
+std::optional<GamerPictureKey> CreateProfileUI::GetDefaultGamerPictureKey() {
+  const auto default_picture_key = std::find_if(
+      default_setting_values.cbegin(), default_setting_values.cend(),
+      [](const UserSetting& setting) {
+        return setting.get_setting_id() ==
+               static_cast<uint32_t>(
+                   UserSettingId::XPROFILE_GAMERCARD_PICTURE_KEY);
+      });
+
+  if (default_picture_key == default_setting_values.cend()) {
+    return std::nullopt;
+  }
+
+  const UserSetting setting = *default_picture_key;
+
+  const auto gamerpic_key = *reinterpret_cast<const GamerPictureKey*>(
+      xe::to_utf8(std::get<std::u16string>(setting.get_host_data())).c_str());
+
+  return gamerpic_key;
+}
+
+bool xeDrawCreateProfile(xe::ui::ImGuiDrawer* imgui_drawer, Emulator* emulator,
+                         CreateProfileUIArgs& args) {
+  auto profile_manager =
+      emulator->kernel_state()->xam_state()->profile_manager();
+
+  if (!ImGui::BeginPopupModal("Create Profile", &args.dialog_open,
                               ImGuiWindowFlags_NoCollapse |
                                   ImGuiWindowFlags_AlwaysAutoResize |
                                   ImGuiWindowFlags_HorizontalScrollbar)) {
-    Close();
-    return;
+    return false;
   }
+
+  const float window_width = ImGui::GetContentRegionAvail().x;
+
+  float btn_height = 25;
+  float btn_width =
+      (window_width * 0.5f) - (ImGui::GetStyle().ItemSpacing.x * 0.5f);
+  ImVec2 half_width_btn = ImVec2(btn_width, btn_height);
+
+  if (args.downloaded_gamerpics.valid() &&
+      args.downloaded_gamerpics.wait_for(0s) == std::future_status::ready) {
+    const auto& gamerpics = args.downloaded_gamerpics.get();
+
+    args.big_gamerpic_texture = imgui_drawer->LoadImGuiIcon(gamerpics.first);
+  }
+
+  ImTextureID gamerpic =
+      reinterpret_cast<ImTextureID>(imgui_drawer->GetLoadingTileIcon());
+
+  if (args.big_gamerpic_texture) {
+    gamerpic = reinterpret_cast<ImTextureID>(args.big_gamerpic_texture.get());
+  }
+
+  ImGui::Image(gamerpic, xe::ui::default_image_icon_size);
+
+  ImGui::SameLine();
+
+  ImGui::BeginGroup();
 
   if (ImGui::IsWindowAppearing()) {
     ImGui::SetKeyboardFocusHere();
   }
 
   ImGui::TextUnformatted("Gamertag:");
+
   const bool enter_pressed =
-      ImGui::InputText("##Gamertag", gamertag_, sizeof(gamertag_),
+      ImGui::InputText("##Gamertag", args.gamertag, sizeof(args.gamertag),
                        ImGuiInputTextFlags_EnterReturnsTrue);
-  valid_gamertag_ = profile_manager->IsGamertagValid(std::string(gamertag_));
 
-  ImGui::Checkbox("Xbox Live Enabled", &live_enabled);
+  if (ImGui::IsItemEdited() || enter_pressed) {
+    args.valid_gamertag =
+        profile_manager->IsGamertagValid(std::string(args.gamertag));
+  }
 
-  ImGui::BeginDisabled(!valid_gamertag_);
-  if (ImGui::Button("Create") || (enter_pressed && valid_gamertag_)) {
+  ImGui::Checkbox("Xbox Live Enabled", &args.live_enabled);
+
+  ImGui::EndGroup();
+
+  ImGui::BeginDisabled(!args.valid_gamertag);
+  if (ImGui::Button("Create", half_width_btn) ||
+      (enter_pressed && args.valid_gamertag)) {
     bool autologin = (profile_manager->GetAccountCount() == 0);
 
     uint32_t reserved_flags = 0;
 
-    if (live_enabled) {
+    if (args.live_enabled) {
       reserved_flags |= X_XAMACCOUNTINFO::AccountReservedFlags::kLiveEnabled;
     }
 
-    if (profile_manager->CreateProfile(std::string(gamertag_), autologin,
-                                       migration_, reserved_flags) &&
-        migration_) {
-      emulator_->DataMigration(0xB13EBABEBABEBABE);
+    uint64_t created_profile_xuid = 0;
+
+    bool created = profile_manager->CreateProfile(
+        std::string(args.gamertag), autologin, args.migration, reserved_flags,
+        &created_profile_xuid);
+
+    if (created && args.migration) {
+      emulator->DataMigration(0xB13EBABEBABEBABE);
     }
-    std::ranges::fill(gamertag_, '\0');
-    dialog_open = false;
+
+    // Update gamerpic on profile creation.
+    // If 4 profiles are signed in then we must sign out last profile in order
+    // to update newly created profile gamerpic.
+    if (created) {
+      uint64_t last_user_profile_xuid = 0;
+      const uint8_t last_user_index = XUserMaxUserCount - 1;
+
+      if (profile_manager->SignedInProfilesCount() == XUserMaxUserCount) {
+        auto last_user_profile = profile_manager->GetProfile(last_user_index);
+
+        last_user_profile_xuid = last_user_profile->xuid();
+
+        profile_manager->Logout(last_user_index);
+        last_user_profile = nullptr;
+      }
+
+      profile_manager->Login(created_profile_xuid);
+
+      const auto created_user_profile =
+          profile_manager->GetProfile(created_profile_xuid);
+
+      if (args.downloaded_gamerpics.valid() && args.gamerpic_key.has_value()) {
+        const auto& gamerpics = args.downloaded_gamerpics.get();
+
+        const GamerPictureKey key = args.gamerpic_key.value();
+
+        const auto user_tracker = kernel_state()->xam_state()->user_tracker();
+
+        user_tracker->UpdateUserGamerpic(
+            created_user_profile->xuid(), key.GetTitleId(), key.GetBigTileId(),
+            key.GetSmallTileId(), gamerpics.first, gamerpics.second);
+
+        if (!autologin) {
+          const uint8_t created_user_index =
+              emulator->kernel_state()
+                  ->xam_state()
+                  ->GetUserIndexAssignedToProfileFromXUID(created_profile_xuid);
+
+          profile_manager->Logout(created_user_index);
+        }
+      }
+
+      if (last_user_profile_xuid) {
+        profile_manager->Login(last_user_profile_xuid);
+      }
+    }
+    std::ranges::fill(args.gamertag, '\0');
+    args.dialog_open = false;
   }
   ImGui::EndDisabled();
   ImGui::SameLine();
 
-  if (ImGui::Button("Cancel")) {
-    std::ranges::fill(gamertag_, '\0');
-    dialog_open = false;
+  if (ImGui::Button("Cancel", half_width_btn)) {
+    std::ranges::fill(args.gamertag, '\0');
+    args.dialog_open = false;
   }
 
-  if (!dialog_open) {
+  if (!args.dialog_open) {
     ImGui::CloseCurrentPopup();
-    Close();
     ImGui::EndPopup();
-    return;
+    return false;
   }
+
   ImGui::EndPopup();
+
+  return true;
 }
 
 }  // namespace ui

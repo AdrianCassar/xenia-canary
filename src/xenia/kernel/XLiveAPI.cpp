@@ -2,13 +2,10 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2025 Xenia Canary. All rights reserved.                          *
+ * Copyright 2026 Xenia Canary. All rights reserved.                          *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
-
-#include <random>
-#include <span>
 
 #include "third_party/rapidcsv/src/rapidcsv.h"
 
@@ -201,7 +198,7 @@ void XLiveAPI::Init() {
     uint32_t minor = (curl_info->version_num >> 8) & 0xFF;
     uint32_t patch = curl_info->version_num & 0xFF;
 
-    XELOGI("libcurl version {}.{}.{}\n", major, minor, patch);
+    XELOGI("libcurl version {}.{}.{}", major, minor, patch);
 
     if (curl_info->features & CURL_VERSION_SSL) {
       XELOGI("SSL support: Yes");
@@ -223,7 +220,11 @@ void XLiveAPI::Init() {
     return;
   }
 
-  online_ip_ = Getwhoami();
+  // Using future so we don't block this function. This prevents blocking the
+  // games thread during network initialization.
+  if (whoami_result_.valid()) {
+    online_ip_ = whoami_result_.get();
+  }
 
   if (!IsConnectedToServer()) {
     // Assign online ip as local ip to ensure XNADDR is not 0 for systemlink
@@ -280,11 +281,6 @@ std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::Get(std::string endpoint,
   response_data chunk = {};
   CURL* curl_handle = curl_easy_init();
   CURLcode result;
-
-  if (GetInitState() == InitState::Failed) {
-    XELOGE("XLiveAPI::Get: Initialization failed");
-    return PraseResponse(chunk);
-  }
 
   if (!curl_handle) {
     XELOGE("XLiveAPI::Get: Cannot initialize CURL");
@@ -461,12 +457,124 @@ std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::Delete(std::string endpoint) {
   return PraseResponse(chunk);
 }
 
+std::vector<HTTPResponseObjectJSON> XLiveAPI::GetMulti(
+    std::vector<std::string> urls, uint32_t per_request_timeout) {
+  CURLM* curl_multi_handle = curl_multi_init();
+  CURLMcode result;
+
+  std::vector<std::pair<std::string, HTTPResponseObjectJSON>>
+      random_ordered_responces = {};
+
+  if (!curl_multi_handle) {
+    XELOGE(fmt::format("XLiveAPI::{}: Cannot initialize CURL", __func__));
+    return {};
+  }
+
+  curl_slist* headers = NULL;
+  headers = curl_slist_append(headers, "Accept: application/octet-stream");
+
+  if (headers == NULL) {
+    return {};
+  }
+
+  curl_easy_setopt(curl_multi_handle, CURLOPT_HTTP_VERSION,
+                   CURL_HTTP_VERSION_2_0);
+  // curl_easy_setopt(curl_multi_handle, CURLOPT_PIPEWAIT, 1L);
+
+  std::unordered_map<CURL*, std::unique_ptr<response_data>> tasks;
+
+  for (const std::string url : urls) {
+    std::unique_ptr<response_data> task = std::make_unique<response_data>();
+
+    CURL* curl_handle = curl_easy_init();
+
+    if (per_request_timeout > 0) {
+      curl_easy_setopt(curl_handle, CURLOPT_TIMEOUT, per_request_timeout);
+    }
+
+    curl_easy_setopt(curl_handle, CURLOPT_URL, url.c_str());
+    curl_easy_setopt(curl_handle, CURLOPT_CUSTOMREQUEST, "GET");
+    curl_easy_setopt(curl_handle, CURLOPT_HTTPHEADER, headers);
+    curl_easy_setopt(curl_handle, CURLOPT_USERAGENT, "xenia");
+    curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, callback);
+    curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, task.get());
+
+    curl_multi_add_handle(curl_multi_handle, curl_handle);
+    tasks[curl_handle] = std::move(task);
+  }
+
+  int still_running = static_cast<int>(urls.size());
+  while (still_running) {
+    result = curl_multi_perform(curl_multi_handle, &still_running);
+    if (still_running) {
+      curl_multi_poll(curl_multi_handle, NULL, 0, 1000, NULL);
+    }
+  }
+
+  for (const auto& [handle, task] : tasks) {
+    CURLcode result =
+        curl_easy_getinfo(handle, CURLINFO_RESPONSE_CODE, &task->http_code);
+
+    if (result != CURLE_OK) {
+      return {};
+    }
+
+    char* url = NULL;
+    result = curl_easy_getinfo(handle, CURLINFO_EFFECTIVE_URL, &url);
+
+    if (result != CURLE_OK || url == NULL) {
+      return {};
+    }
+
+    const HTTP_STATUS_CODE http_code =
+        static_cast<HTTP_STATUS_CODE>(task->http_code);
+
+    if (result != CURLE_OK && http_code != HTTP_STATUS_CODE::HTTP_OK &&
+        http_code != HTTP_STATUS_CODE::HTTP_NO_CONTENT) {
+      assert_always();
+
+      XELOGE("XLiveAPI::{}: Failed! HTTP Error Code: {}", __func__,
+             task->http_code);
+    }
+
+    HTTPResponseObjectJSON responce = *PraseResponse(*task);
+
+    random_ordered_responces.push_back({std::string(url), responce});
+
+    curl_multi_remove_handle(curl_multi_handle, handle);
+    curl_easy_cleanup(handle);
+  }
+
+  tasks.clear();
+
+  curl_multi_cleanup(curl_multi_handle);
+  curl_slist_free_all(headers);
+
+  std::vector<HTTPResponseObjectJSON> responces = {};
+
+  // Re-order the responses in the order we requested based on the URL.
+  // If more than two URLs are equal then technically the wrong response could
+  // be found, but the data returned would be equal.
+  for (const std::string url : urls) {
+    for (const auto& responce : random_ordered_responces) {
+      if (url == responce.first) {
+        responces.push_back(responce.second);
+        break;
+      }
+    }
+  }
+
+  return responces;
+}
+
+void XLiveAPI::StartWhoamiAsync() {
+  whoami_result_ = std::async(std::launch::async, &XLiveAPI::Getwhoami);
+}
+
 // Check connection to xenia web server.
 sockaddr_in XLiveAPI::Getwhoami() {
-  const uint32_t timeout = 3;
-
   std::unique_ptr<HTTPResponseObjectJSON> response =
-      Get(BuildEndpoint("whoami"), timeout);
+      Get(BuildEndpoint("whoami"));
 
   sockaddr_in addr{};
 
@@ -578,7 +686,10 @@ std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::RegisterPlayer(
 
   std::string endpoint = BuildEndpoint("players");
 
-  response = Post(endpoint, (uint8_t*)player_output.c_str());
+  const uint8_t* player_register =
+      reinterpret_cast<const uint8_t*>(player_output.c_str());
+
+  response = Post(endpoint, player_register);
 
   if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_CREATED) {
     assert_always();
@@ -630,9 +741,12 @@ std::unique_ptr<PlayerObjectJSON> XLiveAPI::FindPlayer(std::string ip) {
   PrettyWriter<rapidjson::StringBuffer> writer(buffer);
   doc.Accept(writer);
 
+  const uint8_t* find_players_data =
+      reinterpret_cast<const uint8_t*>(buffer.GetString());
+
   // POST & receive.
   std::unique_ptr<HTTPResponseObjectJSON> response =
-      Post(BuildEndpoint("players/find"), (uint8_t*)buffer.GetString());
+      Post(BuildEndpoint("players/find"), find_players_data);
 
   if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_CREATED) {
     XELOGE("FindPlayers error message: {}", response->Message());
@@ -1009,8 +1123,8 @@ void XLiveAPI::DeleteSession(uint64_t sessionId) {
 }
 
 void XLiveAPI::DeleteAllSessionsByMac() {
-  const std::string endpoint = BuildEndpoint(
-      fmt::format("DeleteSessions/{}", cvars::mac_address));
+  const std::string endpoint =
+      BuildEndpoint(fmt::format("DeleteSessions/{}", cvars::mac_address));
 
   std::unique_ptr<HTTPResponseObjectJSON> response = Delete(endpoint);
 
@@ -1636,38 +1750,248 @@ void XLiveAPI::SetPresence(std::set<uint64_t> xuids) {
   }
 }
 
-std::vector<uint8_t> XLiveAPI::DownloadGamerPictureTile(uint32_t title_id,
-                                                        uint32_t tile_id) {
+TitleGamerpicsObjectJSON XLiveAPI::GetTitleGamerpic(uint32_t title_id) {
   const std::string endpoint =
-      fmt::format("https://download.xboxgamer.pics/titles/{:x}/{:x}.png",
-                  title_id, tile_id);
+      fmt::format("https://xboxgamer.pics/api/title/{:08x}", title_id);
 
-  if (downloaded_tiles.contains(tile_id)) {
-    return downloaded_tiles[tile_id];
+  std::unique_ptr<HTTPResponseObjectJSON> response = Get(endpoint);
+
+  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_OK) {
+    XELOGE("{} error message: {}", __func__, response->Message());
+    // assert_always();
+
+    return {};
   }
 
-  std::vector<uint8_t> tile = XStorageDownload(endpoint);
+  return *response->Deserialize<TitleGamerpicsObjectJSON>();
+}
 
-  // Cache tile
-  if (!tile.empty()) {
-    downloaded_tiles[tile_id] = tile;
+std::set<uint32_t> XLiveAPI::GetSupportedGamerpicTitles() {
+  const std::string endpoint = "https://xboxgamer.pics/api/idlist";
+
+  std::unique_ptr<HTTPResponseObjectJSON> response = Get(endpoint);
+
+  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_OK) {
+    XELOGE("{} error message: {}", __func__, response->Message());
+    // assert_always();
+
+    return {};
   }
+
+  std::set<uint32_t> supported_titles = {};
+
+  Document document;
+  document.Parse(response->RawResponse().response);
+
+  if (document.IsArray()) {
+    for (const auto& title_id_str : document.GetArray()) {
+      if (title_id_str.IsString()) {
+        uint32_t title_id =
+            string_util::from_string<uint32_t>(title_id_str.GetString(), true);
+
+        supported_titles.insert(title_id);
+      }
+    }
+  }
+
+  return supported_titles;
+}
+
+std::optional<PageGamerpicsObjectJSON> XLiveAPI::GetGamerpicPage(
+    uint32_t page, uint32_t per_page, std::string type_query) {
+  const std::string endpoint = fmt::format(
+      "https://xboxgamer.pics/api/titles?page={}&per_page={}&type={}", page,
+      per_page, type_query.c_str());
+
+  std::unique_ptr<HTTPResponseObjectJSON> response = Get(endpoint);
+
+  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_OK) {
+    XELOGE("{} error message: {}", __func__, response->Message());
+    assert_always();
+
+    return std::nullopt;
+  }
+
+  return *response->Deserialize<PageGamerpicsObjectJSON>();
+}
+
+std::map<uint32_t, std::vector<uint8_t>> XLiveAPI::GetMultiGameInfo(
+    std::unordered_map<uint32_t, std::string> images_data) {
+  if (images_data.empty()) {
+    return {};
+  }
+
+  std::vector<std::string> urls = {};
+
+  for (const auto& [title_id, image] : images_data) {
+    urls.push_back(fmt::format("https://assets.xboxgamer.pics/titles/{:x}/{}",
+                               title_id, image));
+  }
+
+  std::vector<HTTPResponseObjectJSON> games_info = GetMulti(urls, 5);
+
+  std::map<uint32_t, std::vector<uint8_t>> images = {};
+
+  if (games_info.size() != images_data.size()) {
+    assert_always();
+    return images;
+  }
+
+  // Requires the responses to be in order
+  for (uint32_t i = 0; const auto& [title_id, image] : images_data) {
+    const auto& game_info = games_info[i];
+
+    if (game_info.RawResponse().response) {
+      const uint32_t size = static_cast<uint32_t>(game_info.RawResponse().size);
+      const uint8_t* downloaded_data =
+          reinterpret_cast<const uint8_t*>(game_info.RawResponse().response);
+
+      images[title_id] =
+          std::vector<uint8_t>(downloaded_data, downloaded_data + size);
+    }
+
+    i++;
+  }
+
+  return images;
+}
+
+std::map<uint32_t, std::vector<uint8_t>> XLiveAPI::GetMultiGamerpics(
+    std::vector<std::string> cdn_parts) {
+  if (cdn_parts.empty()) {
+    return {};
+  }
+
+  std::vector<std::string> urls = {};
+
+  for (const auto& cdn : cdn_parts) {
+    urls.push_back(fmt::format("https://assets.xboxgamer.pics{}", cdn));
+  }
+
+  std::vector<HTTPResponseObjectJSON> gamerpics_data = GetMulti(urls, 5);
+
+  std::map<std::uint32_t, std::vector<uint8_t>> gamerpics = {};
+
+  if (gamerpics_data.size() != cdn_parts.size()) {
+    assert_always();
+    return gamerpics;
+  }
+
+  // Requires the responses to be in order
+  for (uint32_t i = 0; const auto& cdn : cdn_parts) {
+    const auto& gamerpic = gamerpics_data[i];
+
+    if (gamerpic.RawResponse().response) {
+      const uint32_t size = static_cast<uint32_t>(gamerpic.RawResponse().size);
+      const uint8_t* downloaded_data =
+          reinterpret_cast<const uint8_t*>(gamerpic.RawResponse().response);
+
+      std::string gamerpic_id_str = std::filesystem::path(cdn).stem().string();
+
+      uint32_t tile_id =
+          string_util::from_string<uint32_t>(gamerpic_id_str, true);
+
+      gamerpics[tile_id] =
+          std::vector<uint8_t>(downloaded_data, downloaded_data + size);
+    }
+
+    i++;
+  }
+
+  return gamerpics;
+}
+
+std::vector<uint8_t> XLiveAPI::DownloadGamerpicTile(uint32_t title_id,
+                                                    uint32_t tile_id) {
+  const std::string gamerpic_url = fmt::format(
+      "https://assets.xboxgamer.pics/titles/{:x}/{:x}.png", title_id, tile_id);
+
+  std::vector<uint8_t> tile = XStorageDownload(gamerpic_url);
 
   return tile;
 }
 
-std::vector<uint8_t> XLiveAPI::DownloadRandomDashGamerPictureTile(
-    uint32_t title_id) {
-  const auto profile_picture_ids = XLiveAPI::GetDashboardTileIds();
+std::future<std::vector<uint8_t>> XLiveAPI::DownloadGamerpicTileAsync(
+    uint32_t title_id, uint32_t tile_id) {
+  auto gamerpic = std::async(std::launch::async, [title_id, tile_id]() {
+    return xe::kernel::XLiveAPI::DownloadGamerpicTile(title_id, tile_id);
+  });
 
-  std::random_device rd;
-  std::mt19937 gen(rd());
-  std::uniform_int_distribution<uint32_t> dis(
-      0, uint32_t(profile_picture_ids.size()) - 1);
+  return gamerpic;
+}
 
-  uint32_t tile_id = profile_picture_ids[dis(gen)];
+std::shared_future<std::pair<std::vector<uint8_t>, std::vector<uint8_t>>>
+XLiveAPI::DownloadCompleteGamerpic(xam::GamerPictureKey gamerpic_key) {
+  auto gamerpic = std::async(std::launch::async, [gamerpic_key]() {
+    std::vector<std::string> cdn_parts = {};
 
-  return XLiveAPI::DownloadGamerPictureTile(title_id, tile_id);
+    const std::string big_gamerpic_cdn =
+        fmt::format("/titles/{:x}/{:x}.png", gamerpic_key.GetTitleId(),
+                    gamerpic_key.GetBigTileId());
+    const std::string small_gamerpic_cdn =
+        fmt::format("/titles/{:x}/{:x}.png", gamerpic_key.GetTitleId(),
+                    gamerpic_key.GetSmallTileId());
+
+    cdn_parts.push_back(big_gamerpic_cdn);
+    cdn_parts.push_back(small_gamerpic_cdn);
+
+    const auto gamerpics_data = GetMultiGamerpics(cdn_parts);
+
+    std::pair<std::vector<uint8_t>, std::vector<uint8_t>> gamerpics;
+
+    if (!gamerpics_data.contains(gamerpic_key.GetBigTileId()) ||
+        !gamerpics_data.contains(gamerpic_key.GetSmallTileId())) {
+      return gamerpics;
+    }
+
+    const auto& big_gamerpic = gamerpics_data.at(gamerpic_key.GetBigTileId());
+    const auto& small_gamerpic =
+        gamerpics_data.at(gamerpic_key.GetSmallTileId());
+
+    gamerpics = {big_gamerpic, small_gamerpic};
+
+    return gamerpics;
+  });
+
+  return gamerpic.share();
+}
+
+std::vector<uint8_t> XLiveAPI::DownloadRandomGamerpic() {
+  const std::string endpoint =
+      fmt::format("https://xboxgamer.pics/api/random/gamerpics?count=1");
+
+  std::unique_ptr<HTTPResponseObjectJSON> response = Get(endpoint);
+
+  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_OK) {
+    XELOGE("{} error message: {}", __func__, response->Message());
+    assert_always();
+
+    return {};
+  }
+
+  std::string gamerpic_path;
+
+  Document document;
+  document.Parse(response->RawResponse().response);
+
+  if (document.IsArray()) {
+    const auto gamerpic = document.GetArray();
+
+    if (gamerpic.Size() > 0) {
+      gamerpic_path = gamerpic[0].GetString();
+    }
+  }
+
+  if (gamerpic_path.empty()) {
+    return {};
+  }
+
+  const std::string endpoint_gamerpic =
+      fmt::format("https://xboxgamer.pics/{}", gamerpic_path);
+
+  std::vector<uint8_t> tile = XStorageDownload(endpoint_gamerpic);
+
+  return tile;
 }
 
 std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::PraseResponse(

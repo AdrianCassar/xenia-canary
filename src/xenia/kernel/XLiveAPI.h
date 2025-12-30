@@ -2,7 +2,7 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2025 Xenia Canary. All rights reserved.                          *
+ * Copyright 2026 Xenia Canary. All rights reserved.                          *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
@@ -10,6 +10,7 @@
 #ifndef XENIA_KERNEL_XLIVEAPI_H_
 #define XENIA_KERNEL_XLIVEAPI_H_
 
+#include <future>
 #include <span>
 #include <unordered_set>
 
@@ -18,6 +19,7 @@
 #include "xenia/base/byte_order.h"
 #include "xenia/kernel/upnp.h"
 #include "xenia/kernel/util/net_utils.h"
+#include "xenia/kernel/xam/user_settings.h"
 #include "xenia/kernel/xsession.h"
 
 #include "xenia/kernel/json/arbitration_object_json.h"
@@ -26,12 +28,14 @@
 #include "xenia/kernel/json/friend_presence_object_json.h"
 #include "xenia/kernel/json/http_response_object_json.h"
 #include "xenia/kernel/json/leaderboard_object_json.h"
+#include "xenia/kernel/json/page_gamerpics_object_json.h"
 #include "xenia/kernel/json/player_object_json.h"
 #include "xenia/kernel/json/presence_object_json.h"
 #include "xenia/kernel/json/properties_object_json.h"
 #include "xenia/kernel/json/read_user_stats_object_json.h"
 #include "xenia/kernel/json/services_json.h"
 #include "xenia/kernel/json/session_object_json.h"
+#include "xenia/kernel/json/title_gamerpics_object_json.h"
 #include "xenia/kernel/json/xstorage_file_info_object_json.h"
 
 #ifdef XE_PLATFORM_WIN32
@@ -75,6 +79,8 @@ class XLiveAPI {
   static int8_t GetVersionStatus();
 
   static void clearXnaddrCache();
+
+  static void StartWhoamiAsync();
 
   static sockaddr_in Getwhoami();
 
@@ -169,11 +175,30 @@ class XLiveAPI {
 
   static void SetPresence(const std::set<uint64_t> xuids);
 
-  static std::vector<uint8_t> DownloadGamerPictureTile(const uint32_t title_id,
-                                                       const uint32_t tile_id);
+  static TitleGamerpicsObjectJSON GetTitleGamerpic(uint32_t title_id);
 
-  static std::vector<uint8_t> DownloadRandomDashGamerPictureTile(
-      const uint32_t title_id);
+  static std::set<uint32_t> GetSupportedGamerpicTitles();
+
+  static std::optional<PageGamerpicsObjectJSON> GetGamerpicPage(
+      uint32_t page, uint32_t per_page, std::string type_query);
+
+  static std::map<uint32_t, std::vector<uint8_t>> GetMultiGameInfo(
+      std::unordered_map<uint32_t, std::string> images_data);
+
+  static std::map<uint32_t, std::vector<uint8_t>> GetMultiGamerpics(
+      std::vector<std::string> cdn_parts);
+
+  static std::vector<uint8_t> DownloadGamerpicTile(const uint32_t title_id,
+                                                   const uint32_t tile_id);
+
+  static std::future<std::vector<uint8_t>> DownloadGamerpicTileAsync(
+      uint32_t title_id, uint32_t tile_id);
+
+  static std::shared_future<
+      std::pair<std::vector<uint8_t>, std::vector<uint8_t>>>
+  DownloadCompleteGamerpic(xam::GamerPictureKey gamerpic_key);
+
+  static std::vector<uint8_t> DownloadRandomGamerpic();
 
   static std::unique_ptr<HTTPResponseObjectJSON> PraseResponse(
       response_data response);
@@ -194,6 +219,8 @@ class XLiveAPI {
   inline static bool xlsp_servers_cached = false;
   inline static std::vector<X_TITLE_SERVER> xlsp_servers = {};
 
+  inline static std::map<uint32_t, std::vector<uint8_t>> cached_gamerpics = {};
+
   inline static std::map<uint32_t, uint64_t> sessionIdCache = {};
   inline static std::map<uint32_t, uint64_t> macAddressCache = {};
   inline static std::map<uint64_t, std::vector<uint8_t>> qos_payload_cache = {};
@@ -206,23 +233,6 @@ class XLiveAPI {
 
   inline static uint32_t dummy_friends_count_ = 0;
 
-  static std::vector<uint32_t> GetDashboardTileIds() {
-    return {0x2000B, 0x2000C, 0x20001, 0x20009, 0x20004, 0x20000, 0x20008,
-            0x20007, 0x2000A, 0x20006, 0x20002, 0x20003, 0x20005, 0x21012,
-            0x21069, 0x21065, 0x21067, 0x21062, 0x21058, 0x21061, 0x21060,
-            0x21059, 0x21063, 0x21068, 0x21064, 0x21057, 0x21052, 0x21049,
-            0x21048, 0x21054, 0x21056, 0x21046, 0x21047, 0x21045, 0x21044,
-            0x21040, 0x21055, 0x21042, 0x21039, 0x21051, 0x21066, 0x21037,
-            0x21032, 0x21030, 0x21043, 0x21031, 0x21050, 0x21027, 0x21024,
-            0x21026, 0x21025, 0x21029, 0x21022, 0x21023, 0x21018, 0x21033,
-            0x21017, 0x21041, 0x21028, 0x21053, 0x21034, 0x21014, 0x21015,
-            0x21009, 0x21008, 0x21013, 0x21006, 0x21011, 0x21038, 0x21020,
-            0x21005, 0x21007, 0x21010, 0x21004, 0x21000, 0x21021, 0x21001,
-            0x21019, 0x21003, 0x21016, 0x21002, 0x21036, 0x21035};
-  }
-
-  inline static std::map<uint32_t, std::vector<uint8_t>> downloaded_tiles = {};
-
  private:
   inline static const std::string default_local_server_ = "192.168.0.1:36000/";
 
@@ -233,6 +243,8 @@ class XLiveAPI {
 
   inline static InitState initialized_ = InitState::Pending;
 
+  inline static std::future<sockaddr_in> whoami_result_;
+
   static std::unique_ptr<HTTPResponseObjectJSON> Get(
       std::string endpoint, const uint32_t timeout = 0);
 
@@ -241,6 +253,9 @@ class XLiveAPI {
                                                       size_t data_size = 0);
 
   static std::unique_ptr<HTTPResponseObjectJSON> Delete(std::string endpoint);
+
+  static std::vector<HTTPResponseObjectJSON> GetMulti(
+      std::vector<std::string> urls, uint32_t per_request_timeout = 0);
 
   // https://curl.se/libcurl/c/CURLOPT_WRITEFUNCTION.html
   static size_t callback(void* data, size_t size, size_t nmemb, void* clientp) {

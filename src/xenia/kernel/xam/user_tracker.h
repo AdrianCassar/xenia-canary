@@ -139,6 +139,16 @@ class UserTracker {
   // Images
   bool UpdateUserIcon(uint64_t xuid, std::span<const uint8_t> icon_data);
 
+  void UpdateGamerpicSetting(uint64_t xuid, uint32_t title_id,
+                             uint32_t big_tile_id, uint32_t small_tile_id);
+
+  bool UpdateUserGamerpic(uint64_t xuid, uint32_t title_id,
+                          uint32_t big_tile_id, uint32_t small_tile_id,
+                          std::vector<uint8_t> small_gamerpic_icon,
+                          std::vector<uint8_t> big_gamerpic_icon);
+
+  std::optional<xam::GamerPictureKey> GetUserGamerpicSetting(uint64_t xuid);
+
   std::span<const uint8_t> GetIcon(uint64_t xuid, uint32_t title_id,
                                    XTileType tile_type, uint64_t tile_id) const;
 

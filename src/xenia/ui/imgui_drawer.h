@@ -83,6 +83,8 @@ class ImGuiDrawer : public WindowInputListener, public UIDrawer {
     return locked_achievement_icon_.get();
   }
 
+  ImmediateTexture* GetLoadingTileIcon() { return loading_tile_icon_.get(); }
+
   ImFont* GetTitleFont() {
     if (!GetIO().Fonts->Fonts[1]->IsLoaded()) {
       return GetIO().Fonts->Fonts[0];
@@ -155,6 +157,7 @@ class ImGuiDrawer : public WindowInputListener, public UIDrawer {
   // detaching the presenter.
   std::unique_ptr<ImmediateTexture> font_texture_;
   std::unique_ptr<ImmediateTexture> locked_achievement_icon_;
+  std::unique_ptr<ImmediateTexture> loading_tile_icon_;
 
   std::vector<std::unique_ptr<ImmediateTexture>> notification_icon_textures_;
 
