@@ -19,6 +19,7 @@
 #include "xenia/kernel/xam/xam_private.h"
 #include "xenia/kernel/xenumerator.h"
 #include "xenia/kernel/xsession.h"
+#include "xenia/ui/resources.h"
 #include "xenia/xbox.h"
 
 #include "third_party/stb/stb_image.h"
@@ -932,15 +933,7 @@ dword_result_t XamParseGamerTileKey_entry(pointer_t<X_USER_DATA> key_ptr,
     *small_tile_id_ptr = gamer_picture_key->GetSmallTileId();
   }
 
-  bool is_from_dash = false;
-  bool is_avatar = false;
-  bool is_custom = false;
-
   if (title_id_ptr) {
-    is_from_dash = IsGamerPictureFromDash(*title_id_ptr);
-    is_avatar = IsGamerPictureAvatar(*title_id_ptr);
-    is_custom = IsGamerPictureCustom(*title_id_ptr);
-
     if (IsGamerPictureKeySet(*title_id_ptr)) {
       // Set default gamer picture key?
     }
@@ -964,20 +957,9 @@ dword_result_t XamReadTileToTextureEx_entry(
 
     XTileType xtile_type = static_cast<XTileType>(tile_type.value());
 
-    if (xtile_type == XTileType::kGamerTileByKey) {
-      if (IsGamerPictureAvatar(title_id)) {
-        // ...
-      } else if (IsGamerPictureCustom(title_id)) {
-        // GetPersonalID...
-      } else {
-        // GetId...
-      }
-    }
-
     size_t buffer_size = size_t(stride) * size_t(tile_height);
 
-    std::span<const uint8_t> tile = {};
-    std::vector<uint8_t> downloaded_tile = {};
+    std::vector<uint8_t> gamerpic_icon = {};
 
     // Local user
     if (user_index < XUserMaxUserCount) {
@@ -988,13 +970,28 @@ dword_result_t XamReadTileToTextureEx_entry(
         return X_ERROR_FUNCTION_FAILED;
       }
 
-      // 434D0849
-      if (fsmall) {
-        xtile_type = XTileType::kGamerTileSmall;
+      if (IsGamerPictureAvatar(title_id)) {
+        if (fsmall) {
+          xtile_type = XTileType::kAvatarGamerTileSmall;
+        } else {
+          xtile_type = XTileType::kAvatarGamerTile;
+        }
+      } else {
+        // 434D0849
+        if (fsmall) {
+          xtile_type = XTileType::kGamerTileSmall;
+        }
       }
 
-      tile = kernel_state()->xam_state()->user_tracker()->GetIcon(
-          user->xuid(), title_id, xtile_type, tile_id);
+      const auto tile_icon =
+          kernel_state()->xam_state()->user_tracker()->GetIcon(
+              user->xuid(), title_id, xtile_type, tile_id);
+
+      if (!tile_icon.empty()) {
+        gamerpic_icon.assign(tile_icon.begin(), tile_icon.end());
+      } else {
+        // Profile does not have a gamerpic.
+      }
     } else if (user_index == XUserIndexNone) {
       // Remote user
 
@@ -1005,42 +1002,38 @@ dword_result_t XamReadTileToTextureEx_entry(
       XamParseGamerTileKey_entry(key_ptr, &title_id.value, &big_tile_id.value,
                                  &small_tile_id.value);
 
-      if (IsGamerPictureFromDash(title_id)) {
-        // API doesn't support small tile ids
-        uint32_t requested_tile_id = fsmall ? small_tile_id : big_tile_id;
+      const uint32_t gamerpic_id = fsmall ? small_tile_id : big_tile_id;
 
-        assert_false(fsmall);
-
-        if (!fsmall) {
-          downloaded_tile =
-              XLiveAPI::DownloadGamerPictureTile(title_id, big_tile_id);
+      if (!IsGamerPictureAvatar(title_id) && !IsGamerPictureCustom(title_id)) {
+        if (XLiveAPI::cached_gamerpics.contains(gamerpic_id)) {
+          gamerpic_icon = XLiveAPI::cached_gamerpics.at(gamerpic_id);
+        } else {
+          gamerpic_icon = XLiveAPI::DownloadGamerpicTile(title_id, gamerpic_id);
+          XLiveAPI::cached_gamerpics[gamerpic_id] = gamerpic_icon;
         }
+      } else {
+        // We do not support avatar or custom gamerpics.
+        // If remote user is local we still cannot provide gamerpic as we would
+        // need to determine the user profile from the gamerpic key.
       }
     }
 
-    if (downloaded_tile.empty()) {
-      downloaded_tile =
-          XLiveAPI::DownloadRandomDashGamerPictureTile(kDashboardID);
+    if (gamerpic_icon.empty()) {
+      std::span<uint8_t> black_texture = std::span<uint8_t>(
+          reinterpret_cast<uint8_t*>(buffer_ptr.host_address()), buffer_size);
 
-      if (downloaded_tile.empty()) {
-        std::span<uint8_t> black_texture = std::span<uint8_t>(
-            reinterpret_cast<uint8_t*>(buffer_ptr.host_address()), buffer_size);
+      // Create a solid black texture
+      uint32_t count = 0;
+      std::generate(black_texture.begin(), black_texture.end(),
+                    [&count]() { return (count++ % 4 == 0) ? 0xFF : 0x00; });
 
-        // Create a solid black texture
-        uint32_t count = 0;
-        std::generate(black_texture.begin(), black_texture.end(),
-                      [&count]() { return (count++ % 4 == 0) ? 0xFF : 0x00; });
-
-        return X_ERROR_SUCCESS;
-      }
+      return X_ERROR_SUCCESS;
     }
-
-    tile = {downloaded_tile.data(), downloaded_tile.size()};
 
     int width, height, channels;
-    unsigned char* imageData =
-        stbi_load_from_memory(tile.data(), static_cast<int>(tile.size()),
-                              &width, &height, &channels, STBI_rgb_alpha);
+    unsigned char* imageData = stbi_load_from_memory(
+        gamerpic_icon.data(), static_cast<int>(gamerpic_icon.size()), &width,
+        &height, &channels, STBI_rgb_alpha);
 
     size_t icon_dimmension_size = width * height;
     std::fill_n(reinterpret_cast<uint8_t*>(buffer_ptr.host_address()),

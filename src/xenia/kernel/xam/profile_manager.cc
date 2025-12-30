@@ -504,7 +504,8 @@ std::filesystem::path ProfileManager::GetProfilePath(
 }
 
 bool ProfileManager::CreateProfile(const std::string gamertag, bool autologin,
-                                   bool default_xuid, uint32_t reserved_flags) {
+                                   bool default_xuid, uint32_t reserved_flags,
+                                   uint64_t* out_xuid) {
   const auto xuid = !default_xuid ? GenerateXuid() : 0xB13EBABEBABEBABE;
 
   if (!std::filesystem::create_directories(GetProfilePath(xuid))) {
@@ -519,7 +520,12 @@ bool ProfileManager::CreateProfile(const std::string gamertag, bool autologin,
   if (is_account_created && autologin) {
     Login(xuid);
   }
-  return is_account_created;
+
+  if (out_xuid) {
+    *out_xuid = xuid;
+  }
+
+  return true;
 }
 
 bool ProfileManager::CreateProfile(const X_XAMACCOUNTINFO* account_info,

@@ -200,6 +200,13 @@ void ProfileConfigDialog::OnDraw(ImGuiIO& io) {
     const uint8_t user_index =
         profile_manager->GetUserIndexAssignedToProfile(xuid);
 
+    // Create ImmediateTexture of profile gamerpic every frame (Slow
+    // Performance)
+    //
+    // If dialog is open while Gamerpic Browser changes gamerpic then we want to
+    // detect the change.
+    LoadProfileIcon(xuid);
+
     const auto profile_icon = profile_icon_.find(xuid) != profile_icon_.cend()
                                   ? profile_icon_[xuid].get()
                                   : nullptr;

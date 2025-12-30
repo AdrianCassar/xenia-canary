@@ -587,7 +587,10 @@ void EmulatorApp::OnDestroy() {
   // Delete sessions on shutdown.
   xe::kernel::XLiveAPI::DeleteAllSessionsByMac();
 
-  curl_global_cleanup();
+  // Causes crash if multiplexing connections haven't finished.
+  // XLiveAPI should be a class which should destroy the multiplexing handles
+  // before cleanup.
+  // curl_global_cleanup();
 #pragma endregion
 
   // Write all cvar overrides to the config.

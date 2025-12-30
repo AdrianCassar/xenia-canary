@@ -7,7 +7,12 @@
  ******************************************************************************
  */
 
+#include <memory>
+
+#include "xenia/kernel/xam/ui/create_profile_ui.h"
 #include "xenia/kernel/xam/ui/signin_ui.h"
+
+#include "xenia/kernel/XLiveAPI.h"
 
 namespace xe {
 namespace kernel {
@@ -26,14 +31,20 @@ SigninUI::SigninUI(xe::ui::ImGuiDrawer* imgui_drawer,
   if (flags_ & X_UI_FLAGS_ONLINEENABLED) {
     title_ = "Sign In - Xbox Live Enabled Profiles";
   }
+
+  const auto gamerpic_key = CreateProfileUI::GetDefaultGamerPictureKey();
+
+  if (gamerpic_key.has_value()) {
+    create_profile_args_.gamerpic_key = gamerpic_key;
+    create_profile_args_.downloaded_gamerpics =
+        XLiveAPI::DownloadCompleteGamerpic(gamerpic_key.value());
+  }
 }
 
 void SigninUI::OnDraw(ImGuiIO& io) {
-  bool first_draw = false;
   if (!has_opened_) {
     ImGui::OpenPopup(title_.c_str());
     has_opened_ = true;
-    first_draw = true;
     ReloadProfiles(true, flags_);
   }
   if (ImGui::BeginPopupModal(title_.c_str(), nullptr,
@@ -137,58 +148,15 @@ void SigninUI::OnDraw(ImGuiIO& io) {
     ImGui::Spacing();
 
     if (ImGui::Button("Create Profile")) {
-      creating_profile_ = true;
+      create_profile_args_.dialog_open = true;
       ImGui::OpenPopup("Create Profile");
-      first_draw = true;
     }
     ImGui::Spacing();
 
-    if (creating_profile_) {
-      if (ImGui::BeginPopupModal("Create Profile", nullptr,
-                                 ImGuiWindowFlags_NoCollapse |
-                                     ImGuiWindowFlags_AlwaysAutoResize |
-                                     ImGuiWindowFlags_HorizontalScrollbar)) {
-        if (first_draw) {
-          ImGui::SetKeyboardFocusHere();
-        }
-
-        ImGui::TextUnformatted("Gamertag:");
-        if (ImGui::InputText("##Gamertag", gamertag_, sizeof(gamertag_))) {
-          valid_gamertag_ =
-              profile_manager_->IsGamertagValid(std::string(gamertag_));
-        }
-
-        ImGui::Checkbox("Xbox Live Enabled", &live_enabled_profile_);
-
-        ImGui::BeginDisabled(!valid_gamertag_);
-        if (ImGui::Button("Create")) {
-          uint32_t reserved_flags = 0;
-
-          if (live_enabled_profile_) {
-            reserved_flags |=
-                X_XAMACCOUNTINFO::AccountReservedFlags::kLiveEnabled;
-          }
-
-          profile_manager_->CreateProfile(std::string(gamertag_), false, false,
-                                          reserved_flags);
-
-          std::fill(std::begin(gamertag_), std::end(gamertag_), '\0');
-          ImGui::CloseCurrentPopup();
-          creating_profile_ = false;
-          ReloadProfiles(false, flags_);
-        }
-        ImGui::EndDisabled();
-        ImGui::SameLine();
-
-        if (ImGui::Button("Cancel")) {
-          std::fill(std::begin(gamertag_), std::end(gamertag_), '\0');
-          ImGui::CloseCurrentPopup();
-          creating_profile_ = false;
-        }
-
-        ImGui::EndPopup();
-      } else {
-        creating_profile_ = false;
+    if (create_profile_args_.dialog_open) {
+      if (!xeDrawCreateProfile(imgui_drawer(), kernel_state()->emulator(),
+                               create_profile_args_)) {
+        ReloadProfiles(false, flags_);
       }
     }
 

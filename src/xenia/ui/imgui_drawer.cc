@@ -583,6 +583,16 @@ void ImGuiDrawer::SetImmediateDrawer(ImmediateDrawer* new_immediate_drawer) {
         reinterpret_cast<uint8_t*>(image_data));
 
     stbi_image_free(image_data);
+
+    // Load loading tile icon.
+    image_data =
+        stbi_load_from_memory(loading_tile_icon.first, loading_tile_icon.second,
+                              &width, &height, &channels, STBI_rgb_alpha);
+    loading_tile_icon_ = immediate_drawer_->CreateTexture(
+        width, height, ImmediateTextureFilter::kLinear, true,
+        reinterpret_cast<uint8_t*>(image_data));
+
+    stbi_image_free(image_data);
   }
 }
 

@@ -13,6 +13,7 @@
 #include <memory>
 #include <string>
 
+#include "xenia/app/gamerpic_browser.h"
 #include "xenia/app/profile_dialogs.h"
 #include "xenia/app/updater.h"
 #include "xenia/app/updater_dialog.h"
@@ -76,6 +77,9 @@ class EmulatorWindow {
   ui::WindowedAppContext& app_context() const { return app_context_; }
   ui::Window* window() const { return window_.get(); }
   ui::ImGuiDrawer* imgui_drawer() const { return imgui_drawer_.get(); }
+  std::shared_ptr<ui::ImGuiDrawer> imgui_drawer_shared() const {
+    return imgui_drawer_;
+  }
 
   ui::Presenter* GetGraphicsSystemPresenter() const;
   void SetupGraphicsSystemPresenterPainting();
@@ -100,6 +104,7 @@ class EmulatorWindow {
   void UpdateCompletionNotification();
 
   void ToggleProfilesConfigDialog();
+  void ToggleGamerpicBrowserDialog();
   void ToggleXMPConfigDialog();
   void ToggleFriendsDialog();
   void ToggleUpdaterDialog();
@@ -313,7 +318,8 @@ class EmulatorWindow {
   ui::WindowedAppContext& app_context_;
   EmulatorWindowListener window_listener_;
   std::unique_ptr<ui::Window> window_;
-  std::unique_ptr<ui::ImGuiDrawer> imgui_drawer_;
+  // shared_ptr needed for gamerpic browser
+  std::shared_ptr<ui::ImGuiDrawer> imgui_drawer_;
   std::unique_ptr<DisplayConfigGameConfigLoadCallback>
       display_config_game_config_load_callback_;
   // Creation may fail, in this case immediate drawer UI must not be drawn.
@@ -333,6 +339,8 @@ class EmulatorWindow {
   // Storing pointers and toggling dialog state is useful for broadcasting
   // messages back to guest.
   std::unique_ptr<ProfileConfigDialog> profile_config_dialog_;
+
+  std::unique_ptr<TitleGamerpicBrowser> gamerpic_browser_dialog_;
 
   std::unique_ptr<XMPConfigDialog> xmp_config_dialog_;
 
