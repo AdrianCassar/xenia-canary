@@ -92,6 +92,8 @@ class ImGuiDrawer : public WindowInputListener, public UIDrawer {
     return locked_achievement_icon_.get();
   }
 
+  ImmediateTexture* GetLoadingTileIcon() { return loading_tile_icon_.get(); }
+
   // For PushFont(nullptr, size). style.FontSizeBase changes with each PushFont.
   float GetFontSize() const { return font_size_; }
   float GetTitleFontSize() const { return font_size_ + kTitleFontSizeIncrease; }
@@ -164,6 +166,7 @@ class ImGuiDrawer : public WindowInputListener, public UIDrawer {
   // Resources specific to an immediate drawer - must be destroyed before
   // detaching the presenter.
   std::unique_ptr<ImmediateTexture> locked_achievement_icon_;
+  std::unique_ptr<ImmediateTexture> loading_tile_icon_;
 
   std::vector<std::unique_ptr<ImmediateTexture>> notification_icon_textures_;
 

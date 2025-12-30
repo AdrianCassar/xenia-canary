@@ -34,6 +34,9 @@ UserProfile::UserProfile(const uint64_t xuid,
   LoadProfileIcon(XTileType::kGamerTile);
   LoadProfileIcon(XTileType::kGamerTileSmall);
 
+  LoadProfileIcon(XTileType::kAvatarGamerTile);
+  LoadProfileIcon(XTileType::kAvatarGamerTileSmall);
+
   friends_ = std::vector<X_ONLINE_FRIEND>();
   subscriptions_ = std::map<uint64_t, X_ONLINE_PRESENCE>();
   self_invite = {};

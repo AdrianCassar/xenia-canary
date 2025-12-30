@@ -221,12 +221,15 @@ void ProfileConfigDialog::OnDraw(ImGuiIO& io) {
     const uint8_t user_index =
         profile_manager->GetUserIndexAssignedToProfile(xuid);
 
-    // Profile might be created after dialog was opened.
-    if (!profile_icon_.contains(xuid)) {
-      LoadProfileIcon(xuid);
-    }
+    // Create ImmediateTexture of profile gamerpic every frame (Slow
+    // Performance)
+    //
+    // If dialog is open while Gamerpic Browser changes gamerpic then we want to
+    // detect the change.
+    LoadProfileIcon(xuid);
 
-    const auto profile_icon = profile_icon_[xuid].get();
+    const auto profile_icon =
+        profile_icon_.contains(xuid) ? profile_icon_[xuid].get() : nullptr;
 
     auto context_menu_fun = [=, this]() -> bool {
       if (ImGui::BeginPopupContextItem("Profile Menu")) {
