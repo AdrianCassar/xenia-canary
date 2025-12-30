@@ -40,9 +40,9 @@ class AttributeStringFormatter {
   enum class AttributeType { Context = 0, Property = 1, Unknown = 255 };
 
   const std::regex presence_id_extract_from_specifier =
-      std::regex(R"((\{c(\d+)\})|(\{p(0x\d+)\}))");
+      std::regex(R"((\{c(\d+)\})|(\{p0x([0-9a-fA-F]{8})\}))");
   const std::wregex format_specifier_replace_fragment_regex_ =
-      std::wregex(LR"(\{c\d+\}|\{p0x\d+\})");
+      std::wregex(LR"(\{c\d+\}|\{p0x[0-9a-fA-F]{8}\})");
 
   const std::wregex consecutive_newlines_ = std::wregex(LR"(\n+)");
 
