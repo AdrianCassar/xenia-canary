@@ -16,6 +16,7 @@
 
 namespace xe {
 
+bool IsDataPngImage(const std::span<const uint8_t> png_data);
 bool IsFilePngImage(const std::filesystem::path& file_path);
 std::pair<uint16_t, uint16_t> GetImageResolution(
     const std::filesystem::path& file_path);

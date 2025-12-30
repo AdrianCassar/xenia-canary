@@ -178,7 +178,7 @@ EmulatorWindow::EmulatorWindow(Emulator* emulator,
       window_listener_(*this),
       window_(ui::Window::Create(app_context, kBaseTitle, width, height)),
       imgui_drawer_(
-          std::make_unique<ui::ImGuiDrawer>(window_.get(), kZOrderImGui)),
+          std::make_shared<ui::ImGuiDrawer>(window_.get(), kZOrderImGui)),
       display_config_game_config_load_callback_(
           new DisplayConfigGameConfigLoadCallback(*emulator, *this)) {
   base_title_ = std::string(kBaseTitle) +
@@ -811,6 +811,9 @@ bool EmulatorWindow::Initialize() {
     profile_menu->AddChild(MenuItem::Create(
         MenuItem::Type::kString, "&Show Profile Menu", "",
         std::bind(&EmulatorWindow::ToggleProfilesConfigDialog, this)));
+    profile_menu->AddChild(MenuItem::Create(
+        MenuItem::Type::kString, "&Gamerpic Browser", "",
+        std::bind(&EmulatorWindow::ToggleGamerpicBrowserDialog, this)));
   }
   main_menu->AddChild(std::move(profile_menu));
 
@@ -1205,6 +1208,10 @@ void EmulatorWindow::OnKeyDown(ui::KeyEvent& e) {
 }
 
 void EmulatorWindow::OnMouseDown(const ui::MouseEvent& e) {
+  if (imgui_drawer_->IsAnyDialogOpen()) {
+    return;
+  }
+
   if (e.button() == ui::MouseEvent::Button::kLeft) {
     ToggleFullscreenOnDoubleClick();
   }
@@ -1797,6 +1804,25 @@ void EmulatorWindow::ToggleProfilesConfigDialog() {
       profile_config_dialog_.release();
     } else {
       profile_config_dialog_.reset();
+    }
+    emulator_->kernel_state()->xam_state()->xam_dialogs_shown_--;
+  }
+}
+
+void EmulatorWindow::ToggleGamerpicBrowserDialog() {
+  if (!gamerpic_browser_dialog_) {
+    disable_hotkeys_ = true;
+    emulator_->kernel_state()->BroadcastNotification(kXNotificationSystemUI, 1);
+    gamerpic_browser_dialog_ =
+        TitleGamerpicBrowser::Create(imgui_drawer_.get(), this);
+    emulator_->kernel_state()->xam_state()->xam_dialogs_shown_++;
+  } else {
+    disable_hotkeys_ = false;
+    emulator_->kernel_state()->BroadcastNotification(kXNotificationSystemUI, 0);
+    if (gamerpic_browser_dialog_->IsClosing()) {
+      gamerpic_browser_dialog_.release();
+    } else {
+      gamerpic_browser_dialog_.reset();
     }
     emulator_->kernel_state()->xam_state()->xam_dialogs_shown_--;
   }
@@ -2550,6 +2576,11 @@ xe::X_STATUS EmulatorWindow::RunTitle(
     emulator_->kernel_state()->xam_state()->xam_dialogs_shown_--;
   }
 
+  if (gamerpic_browser_dialog_) {
+    gamerpic_browser_dialog_.reset();
+    emulator_->kernel_state()->xam_state()->xam_dialogs_shown_--;
+  }
+
   if (display_config_dialog_) {
     display_config_dialog_.reset();
   }
@@ -2708,6 +2739,10 @@ void EmulatorWindow::ClearDialogs() {
 
   if (friends_manager_dialog_) {
     friends_manager_dialog_.reset();
+  }
+
+  if (gamerpic_browser_dialog_) {
+    gamerpic_browser_dialog_.reset();
   }
 
   if (updater_dialog_) {
