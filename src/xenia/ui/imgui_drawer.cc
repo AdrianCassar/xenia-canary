@@ -289,9 +289,13 @@ std::unique_ptr<ImmediateTexture> ImGuiDrawer::LoadImGuiIcon(
     return {};
   }
 
-  return immediate_drawer_->CreateTexture(
+  auto texture = immediate_drawer_->CreateTexture(
       width, height, ImmediateTextureFilter::kLinear, true,
       reinterpret_cast<uint8_t*>(image_data));
+
+  stbi_image_free(image_data);
+
+  return texture;
 }
 
 std::map<uint32_t, std::unique_ptr<ImmediateTexture>> ImGuiDrawer::LoadIcons(
@@ -340,6 +344,7 @@ static constexpr ImWchar font_glyph_ranges[] = {
     0x2070, 0x209F,  // Superscripts & Subscripts
     0x2100, 0x214F,  // Letterlike Symbols
     0x2150, 0x218F,  // Number Forms
+    0x20A0, 0x20CF,  // Currency Symbols
     0,
 };
 
@@ -566,6 +571,14 @@ void ImGuiDrawer::SetImmediateDrawer(ImmediateDrawer* new_immediate_drawer) {
                                        locked_achievement_icon.second, &width,
                                        &height, &channels, STBI_rgb_alpha);
     locked_achievement_icon_ = immediate_drawer_->CreateTexture(
+        width, height, ImmediateTextureFilter::kLinear, true,
+        reinterpret_cast<uint8_t*>(image_data));
+
+    // Load loading tile icon.
+    image_data =
+        stbi_load_from_memory(loading_tile_icon.first, loading_tile_icon.second,
+                              &width, &height, &channels, STBI_rgb_alpha);
+    loading_tile_icon_ = immediate_drawer_->CreateTexture(
         width, height, ImmediateTextureFilter::kLinear, true,
         reinterpret_cast<uint8_t*>(image_data));
   }

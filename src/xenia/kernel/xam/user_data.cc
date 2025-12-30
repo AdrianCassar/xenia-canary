@@ -31,16 +31,20 @@ UserData::UserData(X_USER_DATA_TYPE data_type, UserDataTypes user_data) {
       break;
     case X_USER_DATA_TYPE::WSTRING: {
       std::u16string str = std::get<std::u16string>(user_data);
+      uint32_t max_chars = (kMaxUserDataSize / sizeof(char16_t)) - 1;
+
+      if (str.size() > max_chars) {
+        str.resize(max_chars);
+      }
+
+      str.push_back(u'\0');
+
       data_.data.unicode.size =
           static_cast<uint16_t>(string_util::size_in_bytes(str, false));
 
       extended_data_.resize(data_.data.unicode.size);
       memcpy(extended_data_.data(), reinterpret_cast<uint8_t*>(str.data()),
              data_.data.unicode.size);
-
-      // Add null terminator
-      data_.data.unicode.size += sizeof(char16_t);
-      extended_data_.insert(extended_data_.end(), {0, 0});
       break;
     }
     case X_USER_DATA_TYPE::INT32:

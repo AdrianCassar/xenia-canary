@@ -87,7 +87,8 @@ class ProfileManager {
   ~ProfileManager() = default;
 
   bool CreateProfile(const std::string gamertag, bool autologin,
-                     bool default_xuid = false, uint32_t reserved_flags = 0);
+                     bool default_xuid = false, uint32_t reserved_flags = 0,
+                     uint64_t* out_xuid = nullptr);
   bool CreateProfile(const X_XAMACCOUNTINFO* account_info, uint64_t xuid);
 
   bool DeleteProfile(const uint64_t xuid);

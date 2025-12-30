@@ -1685,6 +1685,7 @@ X_STATUS Emulator::CompleteLaunch(const std::filesystem::path& path,
     upnp_->Start();
   }
 
+  kernel::XLiveAPI::StartWhoamiAsync();
   kernel_state()->xam_state()->StartPeriodicMaintenance();
 
   return X_STATUS_SUCCESS;

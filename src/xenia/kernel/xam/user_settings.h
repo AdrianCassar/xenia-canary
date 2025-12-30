@@ -453,6 +453,28 @@ enum GAMERCARD_ZONE_OPTIONS : uint32_t {
   GAMERCARD_ZONE_UNDERGROUND
 };
 
+struct GamerPictureKey {
+  char title_id[8];
+  char big_tile_id[8];
+  char small_tile_id[8];
+
+  uint32_t GetTitleId() const {
+    return string_util::from_string<uint32_t>(
+        std::string(title_id, std::size(title_id)), true);
+  }
+
+  uint32_t GetBigTileId() const {
+    return string_util::from_string<uint32_t>(
+        std::string(big_tile_id, std::size(big_tile_id)), true);
+  }
+
+  uint32_t GetSmallTileId() const {
+    return string_util::from_string<uint32_t>(
+        std::string(small_tile_id, std::size(small_tile_id)), true);
+  }
+};
+static_assert_size(GamerPictureKey, 0x18);
+
 class UserSetting : public UserData {
  public:
   UserSetting(const UserSetting& setting);
@@ -506,6 +528,15 @@ class UserSetting : public UserData {
     return is_title_specific(static_cast<uint32_t>(setting_id_));
   }
 };
+
+const static std::array<UserSetting, 3> default_setting_values = {
+    UserSetting(UserSettingId::XPROFILE_OPTION_CONTROLLER_VIBRATION, 3),
+    UserSetting(
+        UserSettingId::XPROFILE_GAMER_TIER,
+        X_XAMACCOUNTINFO::AccountSubscriptionTier::kSubscriptionTierGold),
+    UserSetting(
+        UserSettingId::XPROFILE_GAMERCARD_PICTURE_KEY,
+        xe::string_util::read_u16string_and_swap(u"FFFE07D10002000200010002"))};
 
 }  // namespace xam
 }  // namespace kernel

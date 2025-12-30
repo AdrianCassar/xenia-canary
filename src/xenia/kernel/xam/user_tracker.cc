@@ -1146,6 +1146,101 @@ bool UserTracker::UpdateUserIcon(uint64_t xuid,
   return true;
 }
 
+void UserTracker::UpdateGamerpicSetting(uint64_t xuid, uint32_t title_id,
+                                        uint32_t big_tile_id,
+                                        uint32_t small_tile_id) {
+  std::u16string gamerpic_key = xe::to_utf16(
+      fmt::format("{:08X}{:08X}{:08X}", title_id, big_tile_id, small_tile_id));
+
+  const uint32_t gamerpic_key_size =
+      static_cast<uint32_t>(string_util::size_in_bytes(gamerpic_key, true));
+
+  const uint32_t gamerpic_key_address =
+      kernel_state()->memory()->SystemHeapAlloc(gamerpic_key_size);
+
+  char16_t* gamerpic_key_ptr =
+      kernel_state()->memory()->TranslateVirtual<char16_t*>(
+          gamerpic_key_address);
+
+  string_util::copy_and_swap_truncating(gamerpic_key_ptr, gamerpic_key,
+                                        gamerpic_key_size);
+
+  const uint8_t user_index =
+      kernel_state()->xam_state()->GetUserIndexAssignedToProfileFromXUID(xuid);
+
+  const uint32_t gamerpic_key_id =
+      static_cast<uint32_t>(xam::UserSettingId::XPROFILE_GAMERCARD_PICTURE_KEY);
+
+  xam::X_USER_PROFILE_SETTING setting_data = {};
+  setting_data.user_index = user_index;
+  setting_data.setting_id = gamerpic_key_id;
+  setting_data.data.type = xam::X_USER_DATA_TYPE::WSTRING;
+  setting_data.data.data.unicode.size = gamerpic_key_size;
+  setting_data.data.data.unicode.ptr = gamerpic_key_address;
+
+  const xam::UserSetting setting = xam::UserSetting(&setting_data);
+
+  kernel_state()->memory()->SystemHeapFree(gamerpic_key_address);
+
+  kernel_state()->xam_state()->user_tracker()->UpsertSetting(xuid, kDashboardID,
+                                                             &setting);
+
+  kernel_state()->BroadcastNotification(
+      kXNotificationSystemProfileSettingChanged, (1 << user_index) & 0xF);
+}
+
+bool UserTracker::UpdateUserGamerpic(uint64_t xuid, uint32_t title_id,
+                                     uint32_t big_tile_id,
+                                     uint32_t small_tile_id,
+                                     std::vector<uint8_t> small_gamerpic_icon,
+                                     std::vector<uint8_t> big_gamerpic_icon) {
+  auto user = kernel_state()->xam_state()->GetUserProfile(xuid);
+  if (!user) {
+    return false;
+  }
+
+  if (big_gamerpic_icon.empty() || small_gamerpic_icon.empty()) {
+    return false;
+  }
+
+  bool updated_big_tile = UpdateUserIcon(
+      xuid, {big_gamerpic_icon.data(), big_gamerpic_icon.size()});
+
+  bool updated_small_tile = UpdateUserIcon(
+      xuid, {small_gamerpic_icon.data(), small_gamerpic_icon.size()});
+
+  if (!updated_big_tile || !updated_small_tile) {
+    return false;
+  }
+
+  UpdateGamerpicSetting(xuid, title_id, big_tile_id, small_tile_id);
+
+  return true;
+}
+
+std::optional<xam::GamerPictureKey> UserTracker::GetUserGamerpicSetting(
+    uint64_t xuid) {
+  uint32_t setting_id =
+      static_cast<uint32_t>(xam::UserSettingId::XPROFILE_GAMERCARD_PICTURE_KEY);
+
+  auto user = kernel_state()->xam_state()->GetUserProfile(xuid);
+
+  const std::optional<UserSetting> gamerpic_setting =
+      GetGpdSetting(user, xe::kernel::kDashboardID, setting_id);
+
+  if (!gamerpic_setting.has_value()) {
+    return std::nullopt;
+  }
+
+  const std::string gamerpic_key_data =
+      xe::to_utf8(std::get<std::u16string>(gamerpic_setting->get_host_data()));
+
+  const xam::GamerPictureKey gamerpic_key =
+      *reinterpret_cast<const xam::GamerPictureKey*>(gamerpic_key_data.c_str());
+
+  return gamerpic_key;
+}
+
 std::span<const uint8_t> UserTracker::GetIcon(uint64_t xuid, uint32_t title_id,
                                               XTileType tile_type,
                                               uint64_t tile_id) const {
@@ -1185,9 +1280,11 @@ std::span<const uint8_t> UserTracker::GetIcon(uint64_t xuid, uint32_t title_id,
     case XTileType::kGamerTileSmall:
     case XTileType::kLocalGamerTile:
     case XTileType::kLocalGamerTileSmall:
-    case XTileType::kGamerTileByImageId:
     case XTileType::kPersonalGamerTile:
     case XTileType::kPersonalGamerTileSmall:
+    case XTileType::kAvatarGamerTile:
+    case XTileType::kAvatarGamerTileSmall:
+    case XTileType::kGamerTileByImageId:
     case XTileType::kGamerTileByKey:
       return user->GetProfileIcon(tile_type);
 

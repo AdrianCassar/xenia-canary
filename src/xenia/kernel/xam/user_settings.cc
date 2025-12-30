@@ -18,15 +18,6 @@ namespace xe {
 namespace kernel {
 namespace xam {
 
-const static std::array<UserSetting, 3> default_setting_values = {
-    UserSetting(UserSettingId::XPROFILE_OPTION_CONTROLLER_VIBRATION, 3),
-    UserSetting(
-        UserSettingId::XPROFILE_GAMER_TIER,
-        X_XAMACCOUNTINFO::AccountSubscriptionTier::kSubscriptionTierGold),
-    UserSetting(
-        UserSettingId::XPROFILE_GAMERCARD_PICTURE_KEY,
-        xe::string_util::read_u16string_and_swap(u"FFFE07D10002000200010002"))};
-
 UserSetting::UserSetting(const UserSetting& setting) : UserData(setting) {
   setting_id_ = setting.setting_id_;
   setting_source_ = setting.setting_source_;
