@@ -371,7 +371,6 @@ class KernelState {
   std::vector<object_ref<XNotifyListener>> notify_listeners_;
   bool has_notified_startup_ = false;
   bool has_notified_live_startup_ = false;
-  bool has_notified_system_and_live_ = false;
   bool has_notified_xparty_ = false;
 
   object_ref<UserModule> executable_module_;

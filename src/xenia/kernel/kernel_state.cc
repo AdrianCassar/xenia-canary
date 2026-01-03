@@ -1077,11 +1077,9 @@ void KernelState::RegisterNotifyListener(XNotifyListener* listener) {
   }
 
   // 4E4D07ED, 58410869. Fixes creating Xbox Live sessions.
+  // 4D5307D4 expects multiple notifications to access Xbox Live menus.
   // Sign in related
-  if (!has_notified_system_and_live_ &&
-      listener->mask() == (kXNotifySystem | kXNotifyLive)) {
-    has_notified_system_and_live_ = true;
-
+  if (listener->mask() == (kXNotifySystem | kXNotifyLive)) {
     const auto signed_in_players =
         xam_state()->profile_manager()->GetUsedUserSlots().to_ulong();
 
