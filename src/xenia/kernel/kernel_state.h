@@ -370,7 +370,6 @@ class KernelState {
   bool has_notified_startup_ = false;
   bool has_notified_live_startup_ = false;
   bool has_notified_xmp_startup_ = false;
-  bool has_notified_system_and_live_ = false;
   bool has_notified_xparty_ = false;
 
   object_ref<UserModule> executable_module_;
