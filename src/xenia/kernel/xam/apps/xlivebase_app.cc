@@ -1439,7 +1439,7 @@ X_HRESULT XLiveBaseApp::XStorageEnumerate(uint32_t buffer_ptr) {
 
     if (folder) {
       for (const auto& child : folder->children()) {
-        if (!(child->attributes() & FILE_ATTRIBUTE_DIRECTORY)) {
+        if (!(child->attributes() & X_FILE_ATTRIBUTE_DIRECTORY)) {
           total_num_items += 1;
         }
       }
@@ -1458,7 +1458,7 @@ X_HRESULT XLiveBaseApp::XStorageEnumerate(uint32_t buffer_ptr) {
         entry = folder->IterateChildren(enumeration_engine, &itr_index);
 
         if (entry) {
-          if (!(entry->attributes() & FILE_ATTRIBUTE_DIRECTORY)) {
+          if (!(entry->attributes() & X_FILE_ATTRIBUTE_DIRECTORY)) {
             entries.push_back(entry);
           }
         }
@@ -1572,8 +1572,8 @@ X_HRESULT XLiveBaseApp::XStringVerify(uint32_t buffer_ptr) {
       kernel_state_->memory()->HostToGuestVirtual(
           std::to_address(responses_ptr + 1));
 
-  HRESULT* response_results_ptr =
-      kernel_state_->memory()->TranslateVirtual<HRESULT*>(
+  X_HRESULT* response_results_ptr =
+      kernel_state_->memory()->TranslateVirtual<X_HRESULT*>(
           response_result_address);
 
   for (uint32_t i = 0; i < unmarshaller.NumStrings(); i++) {

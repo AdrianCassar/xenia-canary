@@ -278,7 +278,7 @@ X_STATUS XSocket::Listen(int backlog) {
 
 object_ref<XSocket> XSocket::Accept(XSOCKADDR_IN* name, int* name_len) {
   sockaddr sa = {};
-  int addrlen = 0;
+  socklen_t addrlen = 0;
   const bool is_name_and_name_len_available = name && name_len;
 
   if (is_name_and_name_len_available) {
@@ -312,7 +312,7 @@ int XSocket::Recv(uint8_t* buf, uint32_t buf_len, uint32_t flags) {
 }
 
 int XSocket::RecvFrom(uint8_t* buf, uint32_t buf_len, uint32_t flags,
-                      XSOCKADDR_IN* from, uint32_t* from_len) {
+                      XSOCKADDR_IN* from, socklen_t* from_len) {
   sockaddr sa{};
 
   if (from) {
@@ -320,7 +320,7 @@ int XSocket::RecvFrom(uint8_t* buf, uint32_t buf_len, uint32_t flags,
   }
 
   int ret = recvfrom(native_handle_, reinterpret_cast<char*>(buf), buf_len,
-                     flags, from ? &sa : nullptr, (int*)from_len);
+                     flags, from ? &sa : nullptr, from_len);
 
   if (from) {
     from->to_guest(&sa);
@@ -434,6 +434,7 @@ int XSocket::PollWSARecvFrom(bool wait, WSARecvFromData receive_async_data) {
   }
 
   flags = 0;
+  // MSG_PARTIAL Doesn't exist on linux?
   if (msg.msg_flags & MSG_TRUNC) flags |= MSG_PARTIAL;
   if (msg.msg_flags & MSG_OOB) flags |= MSG_OOB;
   receive_async_data.overlapped->offset = flags;

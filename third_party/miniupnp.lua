@@ -3,24 +3,29 @@ project("miniupnp")
   uuid("b7e0088f-ace6-4bba-b2cc-faae156c27fc")
   kind("StaticLib")
   language("C")
-  links({
-    "iphlpapi",
-    "ws2_32"
-  })
   defines({
-    "MINIUPNP_STATICLIB"
+    "MINIUPNP_STATICLIB",
   })
 
   filter { "platforms:Windows" }
+    links({
+      "iphlpapi",
+      "ws2_32",
+    })
+
     prebuildcommands {
       "cd $(SolutionDir)..\\third_party\\miniupnp\\miniupnpc\\msvc",
       "genminiupnpcstrings.vbs"
     }
 
   filter { "platforms:Linux" }
+    defines({
+      "_GNU_SOURCE",
+    })
+
     prebuildcommands {
-      "cd $(SolutionDir)..\\third_party\\miniupnp\\miniupnpc",
-      "updateminiupnpcstrings.sh"
+      "cd ../../third_party/miniupnp/miniupnpc",
+      "./updateminiupnpcstrings.sh"
     }
 
   filter {}

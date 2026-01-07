@@ -176,7 +176,7 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
       XSESSION_INFO* session_info_ptr =
           memory_->TranslateVirtual<XSESSION_INFO*>(data->session_info_ptr);
 
-      if (data->session_info_ptr == NULL) {
+      if (!data->session_info_ptr) {
         XELOGI("Session Migration Failed");
         return X_E_FAIL;
       }
