@@ -1073,6 +1073,8 @@ bool XLiveAPI::SessionPropertiesSet(uint64_t session_id, uint64_t xuid) {
   // This will prevent 4D5307D5 trying to set property XPROPERTY_GAMER_MU and
   // XPROPERTY_GAMER_SIGMA without data_address in XGIUserSetPropertyEx when
   // joining a session via custom search.
+  // 4E4D07DC will sometimes fail to find friends sessions, filtering properties
+  // by XMAT fixes session discovery inconsistency.
   for (const auto& property_attribute : propertie_ids) {
     const xam::Property* property =
         kernel_state()->xam_state()->user_tracker()->GetProperty(
