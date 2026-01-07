@@ -158,7 +158,7 @@ X_HRESULT_result_t XamUserGetSigninInfo_entry(
   }
 
   // If (X_USER_GET_SIGNIN_INFO_OFFLINE_XUID_ONLY |
-  // X_USER_GET_SIGNIN_INFO_OFFLINE_XUID_ONLY) are provided return online XUID
+  // X_USER_GET_SIGNIN_INFO_ONLINE_XUID_ONLY) are provided return online XUID
   if (flags & X_USER_GET_SIGNIN_INFO_ONLINE_XUID_ONLY) {
     info_ptr->xuid = user_profile->GetOnlineXUID();
   }
