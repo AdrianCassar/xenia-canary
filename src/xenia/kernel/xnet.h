@@ -13,6 +13,7 @@
 #include <random>
 
 #include "xenia/base/byte_order.h"
+#include "xenia/base/literals.h"
 #include "xenia/kernel/util/xfiletime.h"
 #include "xenia/kernel/xam/user_property.h"
 
@@ -26,6 +27,7 @@
 #endif
 
 namespace xe {
+using namespace xe::literals;
 
 // clang-format off
 
@@ -351,10 +353,10 @@ using view_properties_unordered_map = std::unordered_map<
     uint64_t,
     std::unordered_map<uint32_t, std::unordered_map<uint32_t, xam::Property>>>;
 
-constexpr uint32_t kTMSUserMaxSize = 8192;          // 8 KB
-constexpr uint32_t kTMSTitleMaxSize = 1048576 * 5;  // 5 MB
-constexpr uint32_t kTMSClipMaxSize = 1048576 * 11;  // 11 MB
-constexpr uint32_t kTMSFileMaxSize = 1048576 * 20;  // 20 MB (Custom)
+constexpr size_t kTMSUserMaxSize = 8_KiB;   // 8 KB
+constexpr size_t kTMSTitleMaxSize = 5_MiB;  // 5 MB
+constexpr size_t kTMSClipMaxSize = 11_MiB;  // 11 MB
+constexpr size_t kTMSFileMaxSize = 20_MiB;  // 20 MB (Custom)
 
 enum NETWORK_MODE : uint32_t { OFFLINE, LAN, XBOXLIVE };
 
