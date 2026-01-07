@@ -7,6 +7,7 @@
  ******************************************************************************
  */
 
+#include <span>
 #include <random>
 
 #include "third_party/rapidcsv/src/rapidcsv.h"

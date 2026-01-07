@@ -21,6 +21,8 @@
 
 #include <Iphlpapi.h>
 // clang-format on
+#elif XE_PLATFORM_LINUX
+#include <arpa/inet.h>
 #endif
 
 namespace xe {

@@ -152,7 +152,7 @@ class XSocket : public XObject {
   int Send(const uint8_t* buf, uint32_t buf_len, uint32_t flags);
 
   int RecvFrom(uint8_t* buf, uint32_t buf_len, uint32_t flags,
-               XSOCKADDR_IN* from, uint32_t* from_len);
+               XSOCKADDR_IN* from, socklen_t* from_len);
   int SendTo(uint8_t* buf, uint32_t buf_len, uint32_t flags, XSOCKADDR_IN* to,
              uint32_t to_len);
 

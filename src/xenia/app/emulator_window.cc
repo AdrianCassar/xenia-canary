@@ -309,7 +309,7 @@ void EmulatorWindow::OnEmulatorInitialized() {
   bool should_update = cvars::auto_check_updates &&
                        !(cvar::updated_arg_present && cvar::updated);
 
-  auto run = [=]() {
+  auto run = [=, this]() {
     std::string commit, date, tag;
     uint32_t response = 0;
 
