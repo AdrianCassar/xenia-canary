@@ -1681,6 +1681,10 @@ X_STATUS Emulator::CompleteLaunch(const std::filesystem::path& path,
     }
   }
 
+  if (cvars::upnp) {
+    upnp_->Start();
+  }
+
   kernel_state()->xam_state()->StartPeriodicMaintenance();
 
   return X_STATUS_SUCCESS;

@@ -12,6 +12,7 @@
 
 #include "xenia/kernel/json/friend_presence_object_json.h"
 #include "xenia/kernel/json/session_object_json.h"
+#include "xenia/kernel/upnp.h"
 #include "xenia/kernel/util/shim_utils.h"
 #include "xenia/kernel/xam/ui/netplay_manager_util.h"
 #include "xenia/ui/imgui_dialog.h"
@@ -147,6 +148,9 @@ bool xeDrawSessionContent(xe::ui::ImGuiDrawer* imgui_drawer,
 bool xeDrawMyDeletedProfiles(xe::ui::ImGuiDrawer* imgui_drawer,
                              ui::MyDeletedProfilesArgs& args,
                              std::map<uint64_t, std::string>* deleted_profiles);
+
+void xeDrawUPnPAndPorts(xe::ui::ImGuiDrawer* imgui_drawer,
+                        ui::UPnPAndPortsArgs& args, UPnP* upnp);
 
 }  // namespace xam
 }  // namespace kernel

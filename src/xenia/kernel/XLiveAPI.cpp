@@ -7,8 +7,8 @@
  ******************************************************************************
  */
 
-#include <span>
 #include <random>
+#include <span>
 
 #include "third_party/rapidcsv/src/rapidcsv.h"
 
@@ -60,11 +60,8 @@ DEFINE_int32(discord_presence_user_index, 0,
 using namespace rapidjson;
 
 // TODO:
-// LeaderboardsFind
-//
 // libcurl + wolfssl + TLS Support
 //
-// Asynchronous UPnP
 // Use the overlapped task for asynchronous curl requests.
 // API endpoint lookup table
 
@@ -492,17 +489,22 @@ void XLiveAPI::DownloadPortMappings() {
 
   const auto upnp = kernel_state()->emulator()->GetUPnP();
 
+  if (!upnp) {
+    return;
+  }
+
   if (doc.HasMember("connect")) {
     for (const auto& port : doc["connect"].GetArray()) {
-      upnp->AddMappedConnectPort(port["port"].GetInt(),
-                                 port["mappedTo"].GetInt());
+      upnp->AddMappedConnectPort(port["port"].GetUint(),
+                                 port["mappedTo"].GetUint());
     }
   }
 
   if (doc.HasMember("bind")) {
     for (const auto& port : doc["bind"].GetArray()) {
       const auto upnp = kernel_state()->emulator()->GetUPnP();
-      upnp->AddMappedBindPort(port["port"].GetInt(), port["mappedTo"].GetInt());
+      upnp->AddMappedBindPort(port["port"].GetUint(),
+                              port["mappedTo"].GetUint());
     }
   }
 
