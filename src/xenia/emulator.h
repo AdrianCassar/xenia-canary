@@ -184,6 +184,7 @@ class Emulator {
   };
 
   kernel::UPnP* GetUPnP() { return upnp_.get(); };
+  void ShutdownUPnP() { upnp_.reset(); };
 
   // Initializes the emulator and configures all components.
   // The given window is used for display and the provided functions are used

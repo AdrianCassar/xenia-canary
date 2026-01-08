@@ -2600,7 +2600,9 @@ void EmulatorWindow::NetplayStatus() {
   if (xe::kernel::XLiveAPI::GetInitState() !=
           xe::kernel::XLiveAPI::InitState::Pending &&
       cvars::upnp) {
-    if (emulator()->GetUPnP()->is_active()) {
+    const auto upnp = emulator()->GetUPnP();
+
+    if (upnp && upnp->IsActive()) {
       msg += "UPnP: Device found";
     } else {
       msg += "UPnP: Device search failed";
@@ -2628,18 +2630,6 @@ void EmulatorWindow::NetplayStatus() {
       msg += "Communication succeeded with api_address: " + cvars::api_address;
     } else {
       msg += "Communication failed with api_address: " + cvars::api_address;
-    }
-
-    msg += "\n\n";
-    const auto& port_results = *emulator()->GetUPnP()->port_binding_results();
-
-    for (const auto& [protocol, m_port_bindings] : port_results) {
-      for (const auto& [port, error] : m_port_bindings) {
-        const std::string error_status = error == 0 ? "Success" : "Error";
-
-        msg += fmt::format("{} - {}: {}\t({})\n", protocol, port, error,
-                           error_status);
-      }
     }
   }
 

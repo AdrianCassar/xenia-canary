@@ -588,6 +588,8 @@ void EmulatorApp::OnDestroy() {
   Profiler::Shutdown();
 
 #pragma region NetplayCleanup
+  emulator_->ShutdownUPnP();
+
   // Delete sessions on shutdown.
   xe::kernel::XLiveAPI::DeleteAllSessionsByMac();
 
