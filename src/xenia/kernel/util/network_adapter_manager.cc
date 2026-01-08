@@ -251,7 +251,7 @@ void NetworkAdapterManager::AutoSelectNetworkAdapter(
 
   // If upnp is disabled or upnp_root is empty fallback to winsock
   if (cvars::upnp && !cvars::upnp_root.empty()) {
-    local_ip = ip_to_sockaddr(UPnP::GetLocalIP());
+    local_ip = ip_to_sockaddr(UPnP::GetLocalIP_wget());
   } else {
     local_ip = WinsockGetLocalIP();
   }

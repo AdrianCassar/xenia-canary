@@ -70,6 +70,7 @@ class ManagerDialog final : public ui::ImGuiDialog {
   xe::kernel::xam::ui::FriendsContentArgs friends_args = {};
   xe::kernel::xam::ui::SessionsContentArgs sessions_args = {};
   xe::kernel::xam::ui::MyDeletedProfilesArgs deletion_args = {};
+  xe::kernel::xam::ui::UPnPAndPortsArgs upnp_and_ports_args = {};
   std::vector<xe::kernel::FriendPresenceObjectJSON> presences;
   std::vector<std::unique_ptr<xe::kernel::SessionObjectJSON>> sessions;
   std::map<uint64_t, std::string> deleted_profiles;
