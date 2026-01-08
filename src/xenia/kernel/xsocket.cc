@@ -244,9 +244,11 @@ X_STATUS XSocket::Connect(const XSOCKADDR_IN* name, int name_len) {
   XSOCKADDR_IN sa_in = XSOCKADDR_IN();
   memcpy(&sa_in, name, sizeof(XSOCKADDR_IN));
 
-  sa_in.address_port =
-      kernel_state()->emulator()->GetUPnP()->GetMappedConnectPort(
-          name->address_port);
+  const auto upnp = kernel_state()->emulator()->GetUPnP();
+
+  if (upnp) {
+    sa_in.address_port = upnp->GetMappedConnectPort(name->address_port);
+  }
 
   sockaddr addr = sa_in.to_host();
 
@@ -262,8 +264,11 @@ X_STATUS XSocket::Bind(const XSOCKADDR_IN* name, int name_len) {
   XSOCKADDR_IN sa_in = XSOCKADDR_IN();
   memcpy(&sa_in, name, sizeof(XSOCKADDR_IN));
 
-  sa_in.address_port = kernel_state()->emulator()->GetUPnP()->GetMappedBindPort(
-      name->address_port);
+  const auto upnp = kernel_state()->emulator()->GetUPnP();
+
+  if (upnp) {
+    sa_in.address_port = upnp->GetMappedBindPort(name->address_port);
+  }
 
   sockaddr addr = sa_in.to_host();
 
@@ -321,6 +326,7 @@ object_ref<XSocket> XSocket::Accept(XSOCKADDR_IN* name, int* name_len) {
   socket->af_ = af_;
   socket->type_ = type_;
   socket->proto_ = proto_;
+  socket->vdp_ = vdp_;
 
   return socket;
 }
@@ -602,8 +608,11 @@ int XSocket::Send(const uint8_t* buf, uint32_t buf_len, uint32_t flags) {
 
 int XSocket::SendTo(uint8_t* buf, uint32_t buf_len, uint32_t flags,
                     XSOCKADDR_IN* to, uint32_t to_len) {
-  to->address_port = kernel_state()->emulator()->GetUPnP()->GetMappedBindPort(
-      to->address_port);
+  const auto upnp = kernel_state()->emulator()->GetUPnP();
+
+  if (upnp) {
+    to->address_port = upnp->GetMappedBindPort(to->address_port);
+  }
 
   sockaddr addr = to->to_host();
 

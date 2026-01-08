@@ -51,6 +51,11 @@ struct MyDeletedProfilesArgs {
   bool deleted_profiles_open;
 };
 
+struct UPnPAndPortsArgs {
+  bool first_draw;
+  bool dialog_open;
+};
+
 }  // namespace ui
 }  // namespace xam
 }  // namespace kernel
