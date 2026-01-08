@@ -1989,6 +1989,10 @@ X_STATUS Emulator::CompleteLaunch(const std::filesystem::path& path,
   // suspend count without resuming it until the debugger wants.
   main_thread_->Resume();
 
+  if (cvars::upnp) {
+    upnp_->Start();
+  }
+
   kernel_state()->xam_state()->StartPeriodicMaintenance();
 
   return X_STATUS_SUCCESS;

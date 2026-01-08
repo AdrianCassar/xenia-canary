@@ -2,7 +2,7 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2023 Ben Vanik. All rights reserved.                             *
+ * Copyright 2026 Xenia Canary. All rights reserved.                          *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
@@ -10,6 +10,7 @@
 #ifndef XENIA_KERNEL_UPNP_H_
 #define XENIA_KERNEL_UPNP_H_
 
+#include <future>
 #include <map>
 #include <shared_mutex>
 
@@ -24,23 +25,108 @@ namespace kernel {
 
 class UPnP {
  public:
+  // https://openconnectivity.org/developer/specifications/upnp-resources/upnp/internet-gateway-device-igd-v-2-0/
+  // http://upnp.org/specs/gw/UPnP-gw-WANIPConnection-v2-Service.pdf
+  enum class UPnPErrorCodes : int32_t {
+    // General
+    Success = 0,
+
+    // Client-side Issues (400-499)
+    HttpUnauthorized = 401,
+
+    // Common Action Errors (600-699)
+    ActionNotAuthorized = 606,
+
+    // Action-specific errors for standard actions (700-799)
+    InactiveConnectionStateRequired = 703,
+    ConnectionSetupFailed = 704,
+    ConnectionSetupInProgress = 705,
+    ConnectionNotConfigured = 706,
+    DisconnectInProgress = 707,
+    InvalidLayer2Address = 708,
+    InternetAccessDisabled = 709,
+    InvalidConnectionType = 710,
+    ConnectionAlreadyTerminated = 711,
+    SpecifiedArrayIndexInvalid = 713,
+    NoSuchEntryInArray = 714,
+    WildcardNotPermittedInSourceIP = 715,
+    WildcardNotPermittedInExternalPort = 716,
+    ConflictInMappingEntry = 718,
+    SamePortValuesRequired = 724,
+    OnlyPermanentLeasesSupported = 725,
+    RemoteHostOnlySupportsRawTcp = 726,
+    ExternalPortOnlySupportsWildcard = 727,
+    NoPortMappingsAvailable = 728,
+    ConflictWithOtherMechanisms = 729,
+    PortMappingNotFound = 730,
+    InconsistentParameters = 733
+  };
+
   UPnP();
+
   ~UPnP();
+
+  bool IsActive() const { return active_; }
+
+  bool IsVariableLeaseSupported() const { return leases_supported_; }
+
+  static void SetUPnPState(bool upnp_state);
 
   void Initialize();
 
-  void SearchUPnP();
+  void Start();
 
-  bool is_active() const { return active_; }
+  std::optional<std::string> GetValidIGD();
 
-  // internal port is in BE notation.
-  uint32_t AddPort(std::string_view addr, uint16_t internal_port,
-                   std::string_view protocol);
+  std::optional<std::string> DiscoverValidIGD();
 
-  // internal port is in BE notation.
-  void RemovePort(uint16_t internal_port, std::string_view protocol);
+  UPNPDev* DiscoverUPnPDevices();
 
-  void RefreshPorts(std::string_view addr);
+  bool LoadIGD(std::string igd_root);
+
+  std::future<int32_t> AddPortAsync(std::string addr, uint16_t internal_port,
+                                    std::string protocol);
+
+  // Internal port is in BE notation.
+  int32_t AddPort(std::string addr, uint16_t internal_port,
+                  std::string protocol);
+
+  std::future<int32_t> RemovePortAsync(uint16_t port, std::string protocol);
+
+  // Internal port is in BE notation.
+  int32_t RemovePort(uint16_t internal_port, std::string protocol);
+
+  std::string GetLocalIP();
+
+  static std::string GetLocalIP_wget();
+
+  void TrackPort(uint16_t port, std::string protocol);
+
+  void OpenTrackedPorts();
+
+  void OpenPorts(
+      std::map<std::string, std::map<uint16_t, uint16_t>> open_ports);
+
+  void CloseOpenPorts();
+
+  void RefreshPorts();
+
+  uint16_t GetMappedConnectPort(uint16_t external_port);
+
+  uint16_t GetMappedBindPort(uint16_t external_port);
+
+  const std::map<std::string, std::map<uint16_t, uint16_t>> GetOpenedPorts();
+
+  const std::map<std::string, std::map<uint16_t, int32_t>>
+  GetPortBindingResults();
+
+  const std::map<uint16_t, std::string> GetTrackedPorts();
+
+  static std::string_view GetMiniUPnPcErrorCodeToDesc(int32_t error) noexcept;
+
+  static std::string_view GetUPnPErrorCodeToDesc(int32_t error) noexcept;
+
+  static std::string_view GetUPnPErrorCodeToDesc(UPnPErrorCodes error) noexcept;
 
   void AddMappedConnectPort(uint16_t port, uint16_t mapped_port) {
     mapped_connect_ports_.insert({port, mapped_port});
@@ -50,53 +136,34 @@ class UPnP {
     mapped_bind_ports_.insert({port, mapped_port});
   }
 
-  uint16_t GetMappedConnectPort(uint16_t port);
-
-  uint16_t GetMappedBindPort(uint16_t external_port);
-
-  std::map<std::string, std::map<uint16_t, int32_t>>* port_binding_results() {
-    return &port_binding_results_;
-  };
-
-  const bool GetRefreshedUnauthorized() const;
-
-  void SetRefreshedUnauthorized(const bool refreshed);
-
-  static const std::string GetLocalIP();
-
  private:
-  // https://openconnectivity.org/developer/specifications/upnp-resources/upnp/internet-gateway-device-igd-v-2-0/
-  // http://upnp.org/specs/gw/UPnP-gw-WANIPConnection-v2-Service.pdf
-  enum UPnPErrorCodes : int { OnlyPermanentLeasesSupported = 725 };
+  void CleanupIGD();
+  void StartPeriodicPortsRefresher();
 
-  typedef std::map<uint16_t, uint16_t> port_binding;
+  std::future<std::optional<std::string>> get_valid_IGD_;
 
-  void RemovePortExternal(uint16_t external_port, std::string_view protocol,
-                          bool verbose = true);
-  void RefreshPortsTimer();
-
-  bool LoadSavedUPnPDevice();
-  const UPNPDev* DiscoverUPnPDevice();
-  const UPNPDev* GetDeviceByName(const UPNPDev* device_list,
-                                 std::string device_name);
-  bool GetAndParseUPnPXmlData(std::string url);
-
-  std::shared_mutex mutex_;
   std::atomic<bool> active_ = false;
   std::atomic<bool> leases_supported_ = true;
-  std::atomic<bool> refreshed_unauthorized_ = false;
 
-  IGDdatas* igd_data_ = new IGDdatas();
-  UPNPUrls* igd_urls_ = new UPNPUrls();
+  std::mutex igd_mutex_;
+  IGDdatas igd_data_ = {};
+  UPNPUrls igd_urls_ = {};
+  char lan_addr_[64] = {};
 
+  const std::chrono::seconds default_lease_time_ = 1h;
   const std::chrono::minutes refresh_ports_interval_ = 45min;
   std::unique_ptr<xe::threading::PeriodicCallback> refresh_ports_timer_;
 
-  std::map<std::string, port_binding> port_bindings_;
+  std::mutex mutex_tracked_ports_;
+  std::map<uint16_t, std::string> tracked_ports_;
+
+  std::mutex mutex_bindings_;
+  std::map<std::string, std::map<uint16_t, uint16_t>> port_bindings_;
   std::map<std::string, std::map<uint16_t, int32_t>> port_binding_results_;
 
-  port_binding mapped_connect_ports_;
-  port_binding mapped_bind_ports_;
+  std::mutex mapped_mutex_;
+  std::map<uint16_t, uint16_t> mapped_connect_ports_;
+  std::map<uint16_t, uint16_t> mapped_bind_ports_;
 };
 
 }  // namespace kernel

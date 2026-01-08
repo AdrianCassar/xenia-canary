@@ -402,7 +402,7 @@ enum class X_INTERNET_SCHEME : uint32_t { HTTP = 1, HTTPS = 2 };
 
 enum class X_URL_COMPONENTS {
   Full,
-  Protocal,
+  Protocol,
   Username,
   Password,
   Host,
