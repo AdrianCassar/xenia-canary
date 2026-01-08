@@ -43,6 +43,8 @@ DECLARE_int32(license_mask);
 
 DECLARE_int32(network_mode);
 
+DECLARE_bool(upnp);
+
 namespace xe {
 namespace kernel {
 namespace xam {
@@ -1777,6 +1779,282 @@ bool xeDrawMyDeletedProfiles(
   }
 
   return true;
+}
+
+void xeDrawUPnPAndPorts(xe::ui::ImGuiDrawer* imgui_drawer,
+                        ui::UPnPAndPortsArgs& args, UPnP* upnp) {
+  ImGuiViewport* viewport = ImGui::GetMainViewport();
+  ImVec2 center = viewport->GetCenter();
+
+  float btn_height_padding = ImGui::GetStyle().FramePadding.x * 2.5f;
+  float btn_width_padding = ImGui::GetStyle().FramePadding.x * 5.0f;
+
+  auto centre_text = [](std::string text) {
+    ImVec2 text_size = ImGui::CalcTextSize(text.c_str());
+    ImGui::SetCursorPosX((ImGui::GetWindowWidth() - text_size.x) * 0.5f);
+    ImGui::Text(text.c_str());
+    ImGui::Separator();
+  };
+
+  if (args.first_draw) {
+    args.first_draw = false;
+
+    if (cvars::upnp && upnp) {
+      upnp->Start();
+    }
+  }
+
+  float btn_height = 25;
+  ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+  ImGui::SetNextWindowSizeConstraints(ImVec2(500, 0), ImVec2(500, 500));
+  if (ImGui::BeginPopupModal("UPnP and Ports", &args.dialog_open,
+                             ImGuiWindowFlags_AlwaysAutoResize |
+                                 ImGuiWindowFlags_NoResize |
+                                 ImGuiWindowFlags_NoMove)) {
+    if (ImGui::IsKeyPressed(ImGuiKey::ImGuiKey_GamepadFaceRight, false)) {
+      ImGui::CloseCurrentPopup();
+    }
+
+    std::string lbl_toggle_upnp = cvars::upnp ? "Disable UPnP" : "Enable UPnP";
+    ImVec2 toggle_upnp_lbl_size = ImGui::CalcTextSize(lbl_toggle_upnp.c_str());
+    ImVec2 toggle_upnp_btn_size =
+        ImVec2(toggle_upnp_lbl_size.x + btn_width_padding,
+               toggle_upnp_lbl_size.y + btn_height_padding);
+
+    if (ImGui::Button(lbl_toggle_upnp.c_str(), toggle_upnp_btn_size)) {
+      const bool upnp_state = !cvars::upnp;
+
+      UPnP::SetUPnPState(upnp_state);
+
+      if (upnp) {
+        if (upnp_state) {
+          if (!upnp->IsActive()) {
+            upnp->Start();
+          }
+
+          upnp->OpenTrackedPorts();
+        } else {
+          upnp->CloseOpenPorts();
+        }
+      }
+    }
+
+    if (cvars::upnp && upnp && upnp->IsActive() &&
+        kernel_state()->emulator()->is_title_open()) {
+      std::string lbl_refresh_ports = "Refresh Ports";
+      ImVec2 refresh_ports_lbl_size =
+          ImGui::CalcTextSize(lbl_refresh_ports.c_str());
+      ImVec2 refresh_upnp_btn_size =
+          ImVec2(refresh_ports_lbl_size.x + btn_width_padding,
+                 refresh_ports_lbl_size.y + btn_height_padding);
+
+      ImGui::SameLine();
+
+      ImGui::BeginDisabled(upnp->GetOpenedPorts().empty());
+      if (ImGui::Button("Refresh Ports", refresh_upnp_btn_size)) {
+        upnp->RefreshPorts();
+      }
+      ImGui::EndDisabled();
+    }
+
+    ImGui::SameLine();
+
+    std::string lbl_wiki_desc = "UPnP & Port Forwarding";
+    ImVec2 wiki_desc_size = ImGui::CalcTextSize(lbl_wiki_desc.c_str());
+
+    const float pos_x = ImGui::GetCursorPosX();
+    ImGui::SetCursorPosX(ImGui::GetCursorPosX() +
+                         ImGui::GetContentRegionAvail().x - wiki_desc_size.x);
+    ImGui::SetCursorPosY(ImGui::GetCursorPosY() -
+                         ImGui::GetStyle().ItemSpacing.y);
+    ImGui::TextLinkOpenURL(lbl_wiki_desc.c_str(),
+                           "https://github.com/AdrianCassar/xenia-canary/"
+                           "wiki/UPnP-&-Port-Forwarding");
+    ImGui::SetCursorPosX(pos_x);
+
+    ImGui::Spacing();
+    ImGui::Separator();
+
+    if (!upnp) {
+      centre_text("UPnP failed to initialize!");
+      ImGui::EndPopup();
+      return;
+    }
+
+    if (cvars::upnp) {
+      if (upnp->IsActive()) {
+        ImGui::Text("UPnP device found!");
+        ImGui::Spacing();
+      } else {
+        ImGui::Text(
+            "No UPnP devices discovered! Please check UPnP is supported or "
+            "enabled on your router.");
+        ImGui::Spacing();
+      }
+    }
+
+    if (!kernel_state()->emulator()->is_title_open()) {
+      centre_text("Game is not running!");
+      ImGui::EndPopup();
+      return;
+    }
+
+    if (kernel_state()->emulator()->is_title_open()) {
+      if (!cvars::upnp || !upnp->IsActive()) {
+        if (!upnp->GetTrackedPorts().empty()) {
+          ImGui::Text("Tracked Ports:");
+          ImGui::Spacing();
+
+          auto& tracked_ports = upnp->GetTrackedPorts();
+
+          if (ImGui::BeginTable("##PortsTable", 2,
+                                ImGuiTableFlags_SizingStretchProp |
+                                    ImGuiTableFlags_Borders)) {
+            ImGui::TableSetupColumn("Protocol");
+            ImGui::TableSetupColumn("Port");
+
+            ImGui::TableHeadersRow();
+
+            for (const auto& [internal_port, protocol] : tracked_ports) {
+              ImGui::TableNextRow();
+
+              ImGui::TableNextColumn();
+              ImGui::Text(protocol.c_str());
+
+              ImGui::TableNextColumn();
+              ImGui::Text(fmt::format("{}", internal_port).c_str());
+            }
+            ImGui::EndTable();
+          }
+        } else {
+          centre_text("No ports are tracked!");
+        }
+      } else if (upnp->IsActive()) {
+        if (!upnp->GetTrackedPorts().empty()) {
+          auto& tracked_ports = upnp->GetTrackedPorts();
+
+          ImGui::Spacing();
+
+          if (upnp->IsVariableLeaseSupported()) {
+            ImGui::TextWrapped(
+                "Your router supports variable UPnP lease times. UPnP ports "
+                "have "
+                "a lease time of 1 hour, every 45 minutes UPnP will reset the "
+                "lease time to 1 hour.");
+          } else {
+            ImGui::TextWrapped(
+                "Your router only supports permanent lease times.");
+          }
+
+          ImGui::Spacing();
+
+          ImGui::TextWrapped("All ports are closed upon exit.");
+
+          ImGui::Spacing();
+          ImGui::Spacing();
+
+          if (ImGui::BeginTable("##PortsTable", 5,
+                                ImGuiTableFlags_SizingStretchProp |
+                                    ImGuiTableFlags_Borders)) {
+            ImGui::TableSetupColumn("Protocol");
+            ImGui::TableSetupColumn("Port");
+            ImGui::TableSetupColumn("Error Code");
+            ImGui::TableSetupColumn("Status");
+            ImGui::TableSetupColumn("Action", ImGuiTableColumnFlags_WidthFixed,
+                                    150.0f);
+
+            ImGui::TableHeadersRow();
+
+            auto& port_results = upnp->GetPortBindingResults();
+            const auto opened_ports = upnp->GetOpenedPorts();
+
+            for (const auto& [internal_port, protocol] : tracked_ports) {
+              bool is_port_open = false;
+
+              if (opened_ports.contains(protocol)) {
+                if (opened_ports.at(protocol).contains(internal_port)) {
+                  is_port_open = true;
+                }
+              }
+
+              int32_t error_code = -1;
+
+              if (port_results.contains(protocol)) {
+                if (port_results.at(protocol).contains(internal_port)) {
+                  error_code = port_results.at(protocol).at(internal_port);
+                }
+              }
+
+              ImGui::TableNextRow();
+
+              ImGui::TableNextColumn();
+              ImGui::Text(protocol.c_str());
+
+              ImGui::TableNextColumn();
+              ImGui::Text(fmt::format("{}", internal_port).c_str());
+
+              ImGui::TableNextColumn();
+              ImGui::Text(fmt::format("{}", error_code).c_str());
+
+              ImGui::TableNextColumn();
+              std::string error_status;
+
+              if (!is_port_open && error_code == -1) {
+                error_status = "Port Closed";
+              } else {
+                if (error_code < 0) {
+                  error_status = UPnP::GetMiniUPnPcErrorCodeToDesc(error_code);
+                } else {
+                  error_status = UPnP::GetUPnPErrorCodeToDesc(error_code);
+                }
+              }
+
+              ImGui::TextWrapped(error_status.c_str());
+
+              ImGui::TableNextColumn();
+
+              float width = (ImGui::GetContentRegionAvail().x -
+                             ImGui::GetStyle().ItemSpacing.x) /
+                            2.0f;
+
+              std::string lbl_open_port = "Open";
+              ImVec2 open_port_lbl_size =
+                  ImGui::CalcTextSize(lbl_open_port.c_str());
+              ImVec2 open_ports_btn_size =
+                  ImVec2(width, open_port_lbl_size.y + btn_height_padding);
+
+              ImGui::BeginDisabled(is_port_open);
+              if (ImGui::Button(fmt::format("Open##{}", internal_port).c_str(),
+                                open_ports_btn_size)) {
+                upnp->AddPort(upnp->GetLocalIP(), internal_port, protocol);
+              }
+              ImGui::EndDisabled();
+
+              ImGui::SameLine();
+
+              std::string lbl_close_port = "Close";
+              ImVec2 close_port_lbl_size =
+                  ImGui::CalcTextSize(lbl_close_port.c_str());
+              ImVec2 close_port_btn_size =
+                  ImVec2(width, close_port_lbl_size.y + btn_height_padding);
+
+              ImGui::BeginDisabled(!is_port_open);
+              if (ImGui::Button(fmt::format("Close##{}", internal_port).c_str(),
+                                close_port_btn_size)) {
+                upnp->RemovePort(internal_port, protocol);
+              }
+              ImGui::EndDisabled();
+            }
+            ImGui::EndTable();
+          }
+        } else {
+          centre_text("No ports have opened!");
+        }
+      }
+    }
+
+    ImGui::EndPopup();
+  }
 }
 
 X_RESULT xeXamShowSigninUI(uint32_t user_index, uint32_t users_needed,

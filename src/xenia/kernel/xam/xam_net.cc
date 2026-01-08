@@ -1598,7 +1598,7 @@ dword_result_t NetDll_XHttpCrackUrl_entry(
             // Skip
             continue;
           } break;
-          case X_URL_COMPONENTS::Protocal: {
+          case X_URL_COMPONENTS::Protocol: {
             uint32_t scheme_ptr_out = url_components_ptr->scheme_ptr;
             uint32_t scheme_length_out = url_components_ptr->scheme_length;
 
@@ -1843,9 +1843,15 @@ dword_result_t NetDll_closesocket_entry(dword_t caller, dword_t socket_handle) {
     return -1;
   }
 
-  // Remove port if socket closes
-  // kernel_state()->emulator()->GetUPnP()->RemovePort(socket.get()->bound_port(),
-  //                                                  "UDP");
+  const auto upnp = kernel_state()->emulator()->GetUPnP();
+
+  if (upnp) {
+    CleanupUPnPActions();
+
+    auto remove_port = upnp->RemovePortAsync(socket->bound_port(),
+                                             socket->GetProtocolUPnPString());
+    upnp_actions_.push_back(std::move(remove_port));
+  }
 
   // TODO: Absolutely delete this object. It is no longer valid after calling
   // closesocket.
@@ -1965,29 +1971,32 @@ dword_result_t NetDll_bind_entry(dword_t caller, dword_t socket_handle,
 
   const auto upnp = kernel_state()->emulator()->GetUPnP();
 
-  auto& upnp_internal_port = name->address_port;
-  const uint16_t mapped_internal_port =
-      upnp->GetMappedBindPort(name->address_port);
+  uint16_t upnp_internal_port = name->address_port;
 
-  // Support wildcard port
-  if (!upnp_internal_port || !mapped_internal_port) {
-    upnp_internal_port = socket->bound_port();
+  if (upnp) {
+    const uint16_t mapped_internal_port =
+        upnp->GetMappedBindPort(name->address_port);
+
+    // Support wildcard port
+    if (!upnp_internal_port || !mapped_internal_port) {
+      upnp_internal_port = socket->bound_port();
+    }
+
+    const std::string protocol = socket->GetProtocolUPnPString();
+
+    if (upnp->IsActive()) {
+      CleanupUPnPActions();
+
+      auto open_port =
+          upnp->AddPortAsync(local_ip, upnp_internal_port, protocol);
+      upnp_actions_.push_back(std::move(open_port));
+    } else {
+      upnp->TrackPort(upnp_internal_port, protocol);
+    }
   }
 
   if (cvars::logging) {
-    XELOGI("Bind port {}", upnp_internal_port.get());
-  }
-
-  const std::string protocal = socket->GetProtocalUPnPString();
-
-  // Can be called multiple times.
-  const uint32_t result = upnp->AddPort(local_ip, upnp_internal_port, protocal);
-
-  // Only scan once
-  if (result == HTTP_UNAUTHORIZED && !upnp->GetRefreshedUnauthorized()) {
-    upnp->SearchUPnP();
-    upnp->SetRefreshedUnauthorized(true);
-    upnp->AddPort(local_ip, upnp_internal_port, protocal);
+    XELOGI("Bind port {}", upnp_internal_port);
   }
 
   return 0;
@@ -2450,6 +2459,17 @@ dword_result_t NetDll_XNetUnregisterKey_entry(dword_t caller,
   return 0;
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetUnregisterKey, kNetworking, kStub);
+
+// Remove completed UPnP actions
+void CleanupUPnPActions() {
+  auto completed_actions =
+      std::remove_if(upnp_actions_.begin(), upnp_actions_.end(),
+                     [](const std::future<int32_t>& f) {
+                       return f.wait_for(0s) == std::future_status::ready;
+                     });
+
+  upnp_actions_.erase(completed_actions, upnp_actions_.end());
+}
 
 }  // namespace xam
 }  // namespace kernel

@@ -457,6 +457,14 @@ void ManagerDialog::OnDraw(ImGuiIO& io) {
       ImGui::SetTooltip("Delete profiles to fix XUID mismatch error.");
     }
 
+    ImGui::SameLine();
+
+    if (ImGui::Button("UPnP and Ports", btn_size)) {
+      upnp_and_ports_args.first_draw = true;
+      upnp_and_ports_args.dialog_open = true;
+      ImGui::OpenPopup("UPnP and Ports");
+    }
+
     ImGui::SetWindowFontScale(1.0f);
 
     if (!friends_args.friends_open) {
@@ -554,6 +562,14 @@ void ManagerDialog::OnDraw(ImGuiIO& io) {
 
     xe::kernel::xam::xeDrawMyDeletedProfiles(imgui_drawer(), deletion_args,
                                              &deleted_profiles);
+
+    if (!upnp_and_ports_args.dialog_open) {
+      upnp_and_ports_args.first_draw = false;
+    }
+
+    xe::kernel::xam::xeDrawUPnPAndPorts(
+        imgui_drawer(), upnp_and_ports_args,
+        emulator_window_->emulator()->GetUPnP());
 
     ImGui::EndPopup();
   }

@@ -646,7 +646,9 @@ X_RESULT XSession::MigrateHost(XGI_SESSION_MIGRATE* data) {
       kernel_state_->memory()->TranslateVirtual<XSESSION_INFO*>(
           data->session_info_ptr);
 
-  if (!kernel_state()->emulator()->GetUPnP()->is_active()) {
+  const auto upnp = kernel_state()->emulator()->GetUPnP();
+
+  if (upnp && !upnp->IsActive()) {
     XELOGI("Migrating without UPnP");
     // return X_E_FAIL;
   }
