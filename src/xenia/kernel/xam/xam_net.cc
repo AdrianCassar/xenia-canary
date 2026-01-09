@@ -1977,14 +1977,17 @@ dword_result_t NetDll_bind_entry(dword_t caller, dword_t socket_handle,
     XELOGI("Bind port {}", upnp_internal_port.get());
   }
 
+  std::string protocal =
+      socket->GetProtocal() == XSocket::Protocol::X_IPPROTO_UDP ? "UDP" : "TCP";
+
   // Can be called multiple times.
-  const uint32_t result = upnp->AddPort(local_ip, upnp_internal_port, "UDP");
+  const uint32_t result = upnp->AddPort(local_ip, upnp_internal_port, protocal);
 
   // Only scan once
   if (result == HTTP_UNAUTHORIZED && !upnp->GetRefreshedUnauthorized()) {
     upnp->SearchUPnP();
     upnp->SetRefreshedUnauthorized(true);
-    upnp->AddPort(local_ip, upnp_internal_port, "UDP");
+    upnp->AddPort(local_ip, upnp_internal_port, protocal);
   }
 
   return 0;
