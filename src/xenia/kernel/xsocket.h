@@ -130,7 +130,17 @@ class XSocket : public XObject {
 
   uint64_t native_handle() const { return native_handle_; }
   uint16_t bound_port() const { return bound_port_; }
-  Protocol GetProtocal() const { return proto_; }
+  Protocol protocal() const { return proto_; }
+  bool IsVDPProtocal() const { return vdp_; }
+  std::string GetProtocalUPnPString() const {
+    if (proto_ == X_IPPROTO_UDP || proto_ == X_IPPROTO_VDP) {
+      return "UDP";
+    } else if (proto_ == X_IPPROTO_TCP) {
+      return "TCP";
+    } else {
+      return "UDP";
+    }
+  }
 
   X_STATUS Initialize(AddressFamily af, Type type, Protocol proto);
   X_STATUS Close();
@@ -191,6 +201,7 @@ class XSocket : public XObject {
   AddressFamily af_;    // Address family
   Type type_;           // Type (DGRAM/Stream/etc)
   Protocol proto_;      // Protocol (TCP/UDP/etc)
+  bool vdp_;            // VDP Protocol
   bool secure_ = true;  // Secure socket (encryption enabled)
 
   bool bound_ = false;  // Explicitly bound to an IP address?
