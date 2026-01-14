@@ -1977,8 +1977,7 @@ dword_result_t NetDll_bind_entry(dword_t caller, dword_t socket_handle,
     XELOGI("Bind port {}", upnp_internal_port.get());
   }
 
-  std::string protocal =
-      socket->GetProtocal() == XSocket::Protocol::X_IPPROTO_UDP ? "UDP" : "TCP";
+  const std::string protocal = socket->GetProtocalUPnPString();
 
   // Can be called multiple times.
   const uint32_t result = upnp->AddPort(local_ip, upnp_internal_port, protocal);

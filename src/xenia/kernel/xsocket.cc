@@ -58,12 +58,32 @@ X_STATUS XSocket::Initialize(AddressFamily af, Type type, Protocol proto) {
   type_ = type;
   proto_ = proto;
 
-  if (proto == Protocol::X_IPPROTO_VDP) {
-    // VDP is a layer on top of UDP.
-    proto = Protocol::X_IPPROTO_UDP;
+  if (!type) {
+    if (proto == X_IPPROTO_UDP || proto == X_IPPROTO_VDP) {
+      type_ = X_SOCK_DGRAM;
+    } else if (proto == X_IPPROTO_TCP) {
+      type_ = X_SOCK_STREAM;
+    }
   }
 
-  native_handle_ = socket(af, type, proto);
+  if (!proto) {
+    if (type_ == X_SOCK_DGRAM) {
+      proto_ = X_IPPROTO_UDP;
+    } else if (type_ == X_SOCK_STREAM) {
+      proto_ = X_IPPROTO_TCP;
+    }
+  } else if (proto == X_IPPROTO_VDP) {
+    // VDP is a layer on top of UDP.
+    proto_ = X_IPPROTO_UDP;
+    vdp_ = true;
+  }
+
+  if (!type && !proto) {
+    type_ = X_SOCK_STREAM;
+    proto_ = X_IPPROTO_TCP;
+  }
+
+  native_handle_ = socket(af, type_, proto_);
   if (native_handle_ == -1) {
     return X_STATUS_UNSUCCESSFUL;
   }
@@ -285,9 +305,9 @@ object_ref<XSocket> XSocket::Accept(XSOCKADDR_IN* name, int* name_len) {
     addrlen = byte_swap(*name_len);
   }
 
-  const uint64_t ret = accept(native_handle_, name ? &sa : nullptr,
-                              name_len ? &addrlen : nullptr);
-  if (ret == -1) {
+  const uint64_t socket_handle = accept(native_handle_, name ? &sa : nullptr,
+                                        name_len ? &addrlen : nullptr);
+  if (socket_handle == -1) {
     return nullptr;
   }
 
@@ -297,7 +317,7 @@ object_ref<XSocket> XSocket::Accept(XSOCKADDR_IN* name, int* name_len) {
   }
   // Create a kernel object to represent the new socket, and copy parameters
   // over.
-  auto socket = object_ref<XSocket>(new XSocket(kernel_state_, ret));
+  auto socket = object_ref<XSocket>(new XSocket(kernel_state_, socket_handle));
   socket->af_ = af_;
   socket->type_ = type_;
   socket->proto_ = proto_;
