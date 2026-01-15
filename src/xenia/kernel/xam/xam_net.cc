@@ -1317,8 +1317,9 @@ dword_result_t NetDll_XNetQosLookup_entry(
         qos->info[i].flags |= XNET_XNQOSINFO::DATA_RECEIVED;
       }
 
-      qos->info[i].probes_xmit = 4;
-      qos->info[i].probes_recv = 4;
+      // 415607DD and 415607D4 expect probes count, otherwise spams lookup.
+      qos->info[i].probes_xmit = probes_count.value();
+      qos->info[i].probes_recv = probes_count.value();
       qos->info[i].rtt_min_in_msecs = 10;
       qos->info[i].rtt_med_in_msecs = 10;
       qos->info[i].up_bits_per_sec = 1024 * 1024;
