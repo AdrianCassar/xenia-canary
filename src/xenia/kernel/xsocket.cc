@@ -38,19 +38,13 @@ const std::map<uint32_t, int> supported_socket_options = {
 // Translate socket TCP options to native
 const std::map<uint32_t, int> supported_tcp_options = {{0x0001, TCP_NODELAY}};
 
+// Translate ioctl commands to native
+const std::map<uint32_t, uint32_t> supported_controls = {
+    {0x8004667E, FIONBIO}, {0x4004667F, FIONREAD}};
+
 // Translate socket levels to native
 const std::map<uint32_t, int> supported_levels = {{0xFFFF, SOL_SOCKET},
                                                   {0x6, IPPROTO_TCP}};
-
-// TODO(Gliniak): Provide error mapping table.
-// Xbox error codes might not match with what we receive from OS.
-// TODO(has207): On Linux, asio returns POSIX errno values which games won't
-// understand. Needs POSIX -> WSAError mapping for proper cross-platform
-// support.
-uint32_t AsioErrorToWSAError(const asio::error_code& ec) {
-  if (!ec) return 0;
-  return static_cast<uint32_t>(ec.value());
-}
 
 XSocket::XSocket(KernelState* kernel_state)
     : XObject(kernel_state, kObjectType) {}
@@ -69,13 +63,16 @@ uint64_t XSocket::native_handle() const {
   if (tcp_socket_ && tcp_socket_->is_open()) {
     return static_cast<uint64_t>(tcp_socket_->native_handle());
   }
+
   if (udp_socket_ && udp_socket_->is_open()) {
     return static_cast<uint64_t>(udp_socket_->native_handle());
   }
+
   if (acceptor_ && acceptor_->is_open()) {
     return static_cast<uint64_t>(acceptor_->native_handle());
   }
-  return static_cast<uint64_t>(-1);
+
+  return -1;
 }
 
 X_STATUS XSocket::Initialize(AddressFamily af, Type type, Protocol proto) {
@@ -116,13 +113,16 @@ X_STATUS XSocket::Close() {
       tcp_socket_->shutdown(asio::socket_base::shutdown_both, ec);
       tcp_socket_->close(ec);
     }
+
     tcp_socket_.reset();
   }
 
   if (udp_socket_) {
     if (udp_socket_->is_open()) {
+      udp_socket_->shutdown(asio::socket_base::shutdown_both, ec);
       udp_socket_->close(ec);
     }
+
     udp_socket_.reset();
   }
 
@@ -130,6 +130,7 @@ X_STATUS XSocket::Close() {
     if (acceptor_->is_open()) {
       acceptor_->close(ec);
     }
+
     acceptor_.reset();
   }
 
@@ -138,7 +139,8 @@ X_STATUS XSocket::Close() {
 
 X_STATUS XSocket::GetOption(uint32_t level, uint32_t optname, void* optval_ptr,
                             uint32_t* optlen) {
-  if (!tcp_socket_ && !udp_socket_) {
+  int native_handle_val = static_cast<int>(native_handle());
+  if (native_handle_val == -1) {
     return X_STATUS_INVALID_HANDLE;
   }
 
@@ -152,23 +154,18 @@ X_STATUS XSocket::GetOption(uint32_t level, uint32_t optname, void* optval_ptr,
   int native_optname = optname;
   if (level == 0xFFFF && supported_socket_options.contains(optname)) {
     native_optname = supported_socket_options.at(optname);
-  } else if (level == IPPROTO_TCP && supported_tcp_options.contains(optname)) {
+  } else if (level == X_IPPROTO_TCP &&
+             supported_tcp_options.contains(optname)) {
     native_optname = supported_tcp_options.at(optname);
   }
 
   asio::error_code ec;
   socklen_t native_optlen = static_cast<socklen_t>(*optlen);
 
-  int native_handle_val = static_cast<int>(native_handle());
-  if (native_handle_val == -1) {
-    return X_STATUS_INVALID_HANDLE;
-  }
-
   int ret = getsockopt(native_handle_val, native_level, native_optname,
                        static_cast<char*>(optval_ptr), &native_optlen);
   if (ret < 0) {
-    last_error_ = AsioErrorToWSAError(
-        asio::error_code(errno, asio::error::get_system_category()));
+    // TODO: WSAGetLastError()
     return X_STATUS_UNSUCCESSFUL;
   }
 
@@ -178,14 +175,15 @@ X_STATUS XSocket::GetOption(uint32_t level, uint32_t optname, void* optval_ptr,
 
 X_STATUS XSocket::SetOption(uint32_t level, uint32_t optname, void* optval_ptr,
                             uint32_t optlen) {
+  int native_handle_val = static_cast<int>(native_handle());
+  if (native_handle_val == -1) {
+    return X_STATUS_INVALID_HANDLE;
+  }
+
   if (level == 0xFFFF && (optname == 0x5801 || optname == 0x5802)) {
     // Disable socket encryption
     secure_ = false;
     return X_STATUS_SUCCESS;
-  }
-
-  if (!tcp_socket_ && !udp_socket_) {
-    return X_STATUS_INVALID_HANDLE;
   }
 
   // Map Xbox socket levels to native
@@ -198,20 +196,15 @@ X_STATUS XSocket::SetOption(uint32_t level, uint32_t optname, void* optval_ptr,
   int native_optname = optname;
   if (level == 0xFFFF && supported_socket_options.contains(optname)) {
     native_optname = supported_socket_options.at(optname);
-  } else if (level == IPPROTO_TCP && supported_tcp_options.contains(optname)) {
+  } else if (level == X_IPPROTO_TCP &&
+             supported_tcp_options.contains(optname)) {
     native_optname = supported_tcp_options.at(optname);
-  }
-
-  int native_handle_val = static_cast<int>(native_handle());
-  if (native_handle_val == -1) {
-    return X_STATUS_INVALID_HANDLE;
   }
 
   int ret = setsockopt(native_handle_val, native_level, native_optname,
                        static_cast<char*>(optval_ptr), optlen);
   if (ret < 0) {
-    last_error_ = AsioErrorToWSAError(
-        asio::error_code(errno, asio::error::get_system_category()));
+    // TODO: WSAGetLastError()
     XELOGE("XSocket::SetOption: failed with error {:08X}", last_error_);
     return X_STATUS_UNSUCCESSFUL;
   }
@@ -229,12 +222,14 @@ X_STATUS XSocket::IOControl(uint32_t cmd, uint8_t* arg_ptr) {
     return X_STATUS_INVALID_HANDLE;
   }
 
+  assert_false(!supported_controls.contains(cmd));
+
   asio::error_code ec;
 
-  // FIONBIO - set non-blocking mode
+  // FIONBIO - Sets non-blocking mode
   if (cmd == 0x8004667E) {
     uint32_t value = *reinterpret_cast<uint32_t*>(arg_ptr);
-    bool non_blocking = (value != 0);
+    bool non_blocking = value != 0;
 
     if (tcp_socket_) {
       tcp_socket_->non_blocking(non_blocking, ec);
@@ -246,12 +241,14 @@ X_STATUS XSocket::IOControl(uint32_t cmd, uint8_t* arg_ptr) {
       last_error_ = AsioErrorToWSAError(ec);
       return X_STATUS_UNSUCCESSFUL;
     }
+
     return X_STATUS_SUCCESS;
   }
 
-  // FIONREAD - get bytes available
+  // FIONREAD - Gets available bytes
   if (cmd == 0x4004667F) {
     size_t available = 0;
+
     if (tcp_socket_) {
       available = tcp_socket_->available(ec);
     } else if (udp_socket_) {
@@ -277,8 +274,8 @@ X_STATUS XSocket::Connect(N_XSOCKADDR* name, int name_len) {
   }
 
   auto* addr_in = reinterpret_cast<N_XSOCKADDR_IN*>(name);
-  asio::ip::address_v4 addr(static_cast<uint32_t>(addr_in->sin_addr));
-  uint16_t port = static_cast<uint16_t>(addr_in->sin_port);
+  asio::ip::address_v4 addr(addr_in->sin_addr);
+  uint16_t port = addr_in->sin_port;
 
   asio::error_code ec;
 
@@ -314,8 +311,8 @@ X_STATUS XSocket::Bind(N_XSOCKADDR_IN* name, int name_len) {
            original_port, new_port);
   }
 
-  asio::ip::address_v4 addr(static_cast<uint32_t>(name->sin_addr));
-  uint16_t port = static_cast<uint16_t>(name->sin_port);
+  asio::ip::address_v4 addr(name->sin_addr);
+  uint16_t port = name->sin_port;
 
   asio::error_code ec;
 
@@ -332,8 +329,6 @@ X_STATUS XSocket::Bind(N_XSOCKADDR_IN* name, int name_len) {
     return X_STATUS_UNSUCCESSFUL;
   }
 
-  bound_ = true;
-
   // Get the actual bound port (important when binding to port 0)
   if (tcp_socket_) {
     bound_port_ = tcp_socket_->local_endpoint(ec).port();
@@ -342,7 +337,7 @@ X_STATUS XSocket::Bind(N_XSOCKADDR_IN* name, int name_len) {
   }
 
   if (ec) {
-    bound_port_ = port;
+    bound_ = true;
   }
 
   return X_STATUS_SUCCESS;
@@ -358,6 +353,7 @@ X_STATUS XSocket::Listen(int backlog) {
   // Create an acceptor and transfer the bound socket's native handle to it
   acceptor_ = std::make_unique<asio::ip::tcp::acceptor>(GetIoContext());
   acceptor_->assign(asio::ip::tcp::v4(), tcp_socket_->native_handle(), ec);
+
   if (ec) {
     last_error_ = AsioErrorToWSAError(ec);
     acceptor_.reset();
@@ -365,7 +361,7 @@ X_STATUS XSocket::Listen(int backlog) {
   }
 
   // Release the socket's handle since the acceptor now owns it
-  tcp_socket_->release();
+  tcp_socket_->close();
   tcp_socket_.reset();
 
   // Start listening
@@ -438,10 +434,11 @@ int XSocket::Shutdown(int how) {
       break;
   }
 
-  if (tcp_socket_) {
+  if (udp_socket_) {
+    udp_socket_->shutdown(shutdown_type, ec);
+  } else if (tcp_socket_) {
     tcp_socket_->shutdown(shutdown_type, ec);
   }
-  // UDP sockets don't support shutdown in the traditional sense
 
   if (ec) {
     last_error_ = AsioErrorToWSAError(ec);
@@ -452,13 +449,20 @@ int XSocket::Shutdown(int how) {
 }
 
 int XSocket::Recv(uint8_t* buf, uint32_t buf_len, uint32_t flags) {
-  if (!tcp_socket_) {
+  if (!tcp_socket_ && !udp_socket_) {
     return -1;
   }
 
   asio::error_code ec;
-  size_t bytes_received =
-      tcp_socket_->receive(asio::buffer(buf, buf_len), flags, ec);
+  size_t bytes_received = 0;
+
+  if (udp_socket_) {
+    bytes_received =
+        udp_socket_->receive(asio::buffer(buf, buf_len), flags, ec);
+  } else if (tcp_socket_) {
+    bytes_received =
+        tcp_socket_->receive(asio::buffer(buf, buf_len), flags, ec);
+  }
 
   if (ec) {
     last_error_ = AsioErrorToWSAError(ec);
@@ -470,7 +474,7 @@ int XSocket::Recv(uint8_t* buf, uint32_t buf_len, uint32_t flags) {
 
 int XSocket::RecvFrom(uint8_t* buf, uint32_t buf_len, uint32_t flags,
                       N_XSOCKADDR_IN* from, uint32_t* from_len) {
-  if (!udp_socket_ && !tcp_socket_) {
+  if (!tcp_socket_ && !udp_socket_) {
     return -1;
   }
 
@@ -505,12 +509,18 @@ int XSocket::RecvFrom(uint8_t* buf, uint32_t buf_len, uint32_t flags,
 }
 
 int XSocket::Send(const uint8_t* buf, uint32_t buf_len, uint32_t flags) {
-  if (!tcp_socket_) {
+  if (!tcp_socket_ && !udp_socket_) {
     return -1;
   }
 
   asio::error_code ec;
-  size_t bytes_sent = tcp_socket_->send(asio::buffer(buf, buf_len), flags, ec);
+  size_t bytes_sent = 0;
+
+  if (udp_socket_) {
+    bytes_sent = udp_socket_->send(asio::buffer(buf, buf_len), flags, ec);
+  } else if (tcp_socket_) {
+    bytes_sent = tcp_socket_->send(asio::buffer(buf, buf_len), flags, ec);
+  }
 
   if (ec) {
     last_error_ = AsioErrorToWSAError(ec);
@@ -522,7 +532,7 @@ int XSocket::Send(const uint8_t* buf, uint32_t buf_len, uint32_t flags) {
 
 int XSocket::SendTo(uint8_t* buf, uint32_t buf_len, uint32_t flags,
                     N_XSOCKADDR_IN* to, uint32_t to_len) {
-  if (!udp_socket_ && !tcp_socket_) {
+  if (!tcp_socket_ && !udp_socket_) {
     return -1;
   }
 
@@ -531,8 +541,8 @@ int XSocket::SendTo(uint8_t* buf, uint32_t buf_len, uint32_t flags,
 
   if (udp_socket_) {
     if (to) {
-      asio::ip::address_v4 addr(static_cast<uint32_t>(to->sin_addr));
-      uint16_t port = static_cast<uint16_t>(to->sin_port);
+      asio::ip::address_v4 addr(to->sin_addr);
+      uint16_t port = to->sin_port;
       asio::ip::udp::endpoint endpoint(addr, port);
 
       bytes_sent =
@@ -570,36 +580,40 @@ bool XSocket::QueuePacket(uint32_t src_ip, uint16_t src_port,
 }
 
 X_STATUS XSocket::GetSockName(uint8_t* buf, int* buf_len) {
-  auto handle = native_handle();
-  if (handle == static_cast<uint64_t>(-1)) {
-    return X_STATUS_INVALID_HANDLE;
+  asio::error_code ec;
+
+  if (udp_socket_) {
+    asio::ip::udp::endpoint sockname = udp_socket_->local_endpoint(ec);
+
+    if (ec) {
+      return X_STATUS_UNSUCCESSFUL;
+    }
+
+    std::memcpy(buf, sockname.data(), *buf_len);
+  } else if (tcp_socket_) {
+    asio::ip::tcp::endpoint sockname = tcp_socket_->local_endpoint(ec);
+
+    if (ec) {
+      return X_STATUS_UNSUCCESSFUL;
+    }
+
+    std::memcpy(buf, sockname.data(), *buf_len);
   }
 
-  socklen_t len = static_cast<socklen_t>(*buf_len);
-  int result = getsockname(static_cast<int>(handle),
-                           reinterpret_cast<sockaddr*>(buf), &len);
-  if (result == -1) {
-    last_error_ = AsioErrorToWSAError(
-        asio::error_code(errno, asio::error::get_system_category()));
-    return X_STATUS_UNSUCCESSFUL;
-  }
-
-  *buf_len = static_cast<int>(len);
   return X_STATUS_SUCCESS;
 }
 
 X_STATUS XSocket::GetPeerName(uint8_t* buf, int* buf_len) {
-  auto handle = native_handle();
-  if (handle == static_cast<uint64_t>(-1)) {
+  uint64_t native_handle_val = native_handle();
+  if (native_handle_val == -1) {
     return X_STATUS_INVALID_HANDLE;
   }
 
   socklen_t len = static_cast<socklen_t>(*buf_len);
-  int result = getpeername(static_cast<int>(handle),
+  int result = getpeername(static_cast<int>(native_handle_val),
                            reinterpret_cast<sockaddr*>(buf), &len);
+
   if (result == -1) {
-    last_error_ = AsioErrorToWSAError(
-        asio::error_code(errno, asio::error::get_system_category()));
     return X_STATUS_UNSUCCESSFUL;
   }
 
@@ -607,7 +621,23 @@ X_STATUS XSocket::GetPeerName(uint8_t* buf, int* buf_len) {
   return X_STATUS_SUCCESS;
 }
 
-uint32_t XSocket::GetLastWSAError() const { return last_error_; }
+uint32_t XSocket::GetLastWSAError() const {
+  // Todo(Gliniak): Provide error mapping table
+  // Xbox error codes might not match with what we receive from OS
+#ifdef XE_PLATFORM_WIN32
+  return WSAGetLastError();
+#endif
+  return errno;
+}
+
+// TODO(has207): On Linux, asio returns POSIX errno values which games won't
+// understand. Needs POSIX -> WSAError mapping for proper cross-platform
+// support.
+uint32_t XSocket::AsioErrorToWSAError(asio::error_code ec) const {
+  return static_cast<uint32_t>(ec.value());
+}
+
+uint32_t XSocket::GetLastAsioError() const { return last_error_; }
 
 }  // namespace kernel
 }  // namespace xe

@@ -139,6 +139,8 @@ class XSocket : public XObject {
              uint32_t to_len);
 
   uint32_t GetLastWSAError() const;
+  uint32_t AsioErrorToWSAError(asio::error_code ec) const;
+  uint32_t GetLastAsioError() const;
 
   struct packet {
     // These values are in network byte order.
