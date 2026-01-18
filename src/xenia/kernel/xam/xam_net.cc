@@ -471,9 +471,10 @@ dword_result_t NetDll_WSARecvFrom_entry(
   if (ret < 0) {
     XThread::SetLastError(socket->GetLastWSAError());
   } else if (ret >= 0 && !cvars::log_mask_ips && from_ptr) {
-    XELOGI("NetDll_WSARecvFrom: Received {} bytes from: {}",
+    XELOGI("NetDll_WSARecvFrom: Received {} bytes from: {}:{}({})",
            static_cast<uint32_t>(*num_bytes_recv_ptr),
-           ip_to_string(from_ptr->address_ip));
+           ip_to_string(from_ptr->address_ip), from_ptr->address_port.get(),
+           socket->GetProtocolUPnPString());
   }
 
   return ret;
@@ -545,8 +546,9 @@ dword_result_t NetDll_WSASendTo_entry(
     XThread::SetLastError(socket->GetLastWSAError());
     return result;
   } else if (result != -1 && to_ptr && !cvars::log_mask_ips) {
-    XELOGI("NetDll_WSASendTo: Send {} bytes to: {}", result,
-           ip_to_string(to_ptr->address_ip));
+    XELOGI("NetDll_WSASendTo: Send {} bytes to: {}:{}({})", result,
+           ip_to_string(to_ptr->address_ip), to_ptr->address_port.get(),
+           socket->GetProtocolUPnPString());
   }
 
   if (num_bytes_sent && !overlapped) {
@@ -2248,8 +2250,9 @@ dword_result_t NetDll_recvfrom_entry(dword_t caller, dword_t socket_handle,
   if (ret == -1) {
     XThread::SetLastError(socket->GetLastWSAError());
   } else if (ret >= 0 && !cvars::log_mask_ips && from_ptr) {
-    XELOGI("NetDll_recvfrom: Received {} bytes from: {}", ret,
-           ip_to_string(from_ptr->address_ip));
+    XELOGI("NetDll_recvfrom: Received {} bytes from: {}:{}({})", ret,
+           ip_to_string(from_ptr->address_ip), from_ptr->address_port.get(),
+           socket->GetProtocolUPnPString());
   }
 
   return ret;
@@ -2290,8 +2293,9 @@ dword_result_t NetDll_sendto_entry(dword_t caller, dword_t socket_handle,
   if (ret < 0) {
     XThread::SetLastError(socket->GetLastWSAError());
   } else if (ret >= 0 && to_ptr && !cvars::log_mask_ips) {
-    XELOGI("NetDll_sendto: Send {} bytes to: {}", ret,
-           ip_to_string(to_ptr->address_ip));
+    XELOGI("NetDll_sendto: Send {} bytes to: {}:{}({})", ret,
+           ip_to_string(to_ptr->address_ip), to_ptr->address_port.get(),
+           socket->GetProtocolUPnPString());
   }
 
   return ret;
