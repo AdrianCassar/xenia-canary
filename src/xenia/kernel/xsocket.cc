@@ -337,6 +337,7 @@ int XSocket::Recv(uint8_t* buf, uint32_t buf_len, uint32_t flags) {
   return recv(native_handle_, reinterpret_cast<char*>(buf), buf_len, flags);
 }
 
+// TCP ignores from and from_len.
 int XSocket::RecvFrom(uint8_t* buf, uint32_t buf_len, uint32_t flags,
                       XSOCKADDR_IN* from, socklen_t* from_len) {
   sockaddr sa{};
