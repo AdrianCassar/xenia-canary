@@ -1051,7 +1051,7 @@ DECLARE_XAM_EXPORT1(NetDll_XNetDnsRelease, kNetworking, kStub);
 dword_result_t NetDll_XNetQosServiceLookup_entry(dword_t caller, dword_t flags,
                                                  dword_t event_handle,
                                                  lpdword_t qos_ptr) {
-  XELOGI("XNetQosServiceLookup({:08X}, {:08X}, {:08X}, {:08X})", caller.value(),
+  XELOGI("XNetQosServiceLookup({}, {:08X}, {:08X}, {:08X})", caller.value(),
          flags.value(), event_handle.value(), qos_ptr.guest_address());
 
   if (!qos_ptr) {
@@ -1073,18 +1073,18 @@ dword_result_t NetDll_XNetQosServiceLookup_entry(dword_t caller, dword_t flags,
     qos->info[0].data_ptr = 0;
     qos->info[0].rtt_min_in_msecs = 10;
     qos->info[0].rtt_med_in_msecs = 10;
-    qos->info[0].up_bits_per_sec = 1024 * 1024;
-    qos->info[0].down_bits_per_sec = 1024 * 1024;
+    qos->info[0].up_bits_per_sec = static_cast<uint32_t>(1024_KiB);
+    qos->info[0].down_bits_per_sec = static_cast<uint32_t>(1024_KiB);
     qos->info[0].flags =
         XNET_XNQOSINFO::COMPLETE | XNET_XNQOSINFO::TARGET_CONTACTED;
 
-    *qos_ptr = qos_guest;
-  }
+    // If COMPLETE, TARGET_CONTACTED or PARTIAL_COMPLETE flag is set then set
+    // event.
+    if (qos->count > 0) {
+      xboxkrnl::xeNtSetEvent(event_handle, nullptr);
+    }
 
-  // If COMPLETE, TARGET_CONTACTED or PARTIAL_COMPLETE flag is set then set
-  // event.
-  if (qos->count > 0) {
-    xboxkrnl::xeNtSetEvent(event_handle, nullptr);
+    *qos_ptr = qos_guest;
   }
 
   return 0;
@@ -1324,8 +1324,8 @@ dword_result_t NetDll_XNetQosLookup_entry(
       qos->info[i].probes_recv = probes_count.value();
       qos->info[i].rtt_min_in_msecs = 10;
       qos->info[i].rtt_med_in_msecs = 10;
-      qos->info[i].up_bits_per_sec = 1024 * 1024;
-      qos->info[i].down_bits_per_sec = 1024 * 1024;
+      qos->info[i].up_bits_per_sec = static_cast<uint32_t>(1024_KiB);
+      qos->info[i].down_bits_per_sec = static_cast<uint32_t>(1024_KiB);
 
       qos->count_pending =
           std::max(static_cast<int>(qos->count_pending - 1), 0);
