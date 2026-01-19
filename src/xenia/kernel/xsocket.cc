@@ -241,8 +241,7 @@ X_STATUS XSocket::IOControl(uint32_t cmd, uint32_t* arg_ptr) {
 }
 
 X_STATUS XSocket::Connect(const XSOCKADDR_IN* name, int name_len) {
-  XSOCKADDR_IN sa_in = XSOCKADDR_IN();
-  memcpy(&sa_in, name, sizeof(XSOCKADDR_IN));
+  XSOCKADDR_IN sa_in = *name;
 
   const auto upnp = kernel_state()->emulator()->GetUPnP();
 
@@ -261,8 +260,7 @@ X_STATUS XSocket::Connect(const XSOCKADDR_IN* name, int name_len) {
 }
 
 X_STATUS XSocket::Bind(const XSOCKADDR_IN* name, int name_len) {
-  XSOCKADDR_IN sa_in = XSOCKADDR_IN();
-  memcpy(&sa_in, name, sizeof(XSOCKADDR_IN));
+  XSOCKADDR_IN sa_in = *name;
 
   const auto upnp = kernel_state()->emulator()->GetUPnP();
 
@@ -307,7 +305,7 @@ object_ref<XSocket> XSocket::Accept(XSOCKADDR_IN* name, int* name_len) {
   const bool is_name_and_name_len_available = name && name_len;
 
   if (is_name_and_name_len_available) {
-    addrlen = byte_swap(*name_len);
+    addrlen = xe::byte_swap(*name_len);
   }
 
   const uint64_t socket_handle = accept(native_handle_, name ? &sa : nullptr,
@@ -318,8 +316,9 @@ object_ref<XSocket> XSocket::Accept(XSOCKADDR_IN* name, int* name_len) {
 
   if (is_name_and_name_len_available) {
     name->to_guest(&sa);
-    *name_len = byte_swap(addrlen);
+    *name_len = xe::byte_swap(addrlen);
   }
+
   // Create a kernel object to represent the new socket, and copy parameters
   // over.
   auto socket = object_ref<XSocket>(new XSocket(kernel_state_, socket_handle));
@@ -340,7 +339,7 @@ int XSocket::Recv(uint8_t* buf, uint32_t buf_len, uint32_t flags) {
 // TCP ignores from and from_len.
 int XSocket::RecvFrom(uint8_t* buf, uint32_t buf_len, uint32_t flags,
                       XSOCKADDR_IN* from, socklen_t* from_len) {
-  sockaddr sa{};
+  sockaddr sa = {};
 
   if (from) {
     sa = from->to_host();
@@ -641,27 +640,25 @@ bool XSocket::QueuePacket(uint32_t src_ip, uint16_t src_port,
 
 X_STATUS XSocket::GetPeerName(XSOCKADDR_IN* buf, int* buf_len) {
   sockaddr addr = buf->to_host();
-  sockaddr* sa = const_cast<sockaddr*>(&addr);
 
-  int ret = getpeername(native_handle_, sa, (socklen_t*)buf_len);
+  int ret = getpeername(native_handle_, &addr, (socklen_t*)buf_len);
   if (ret < 0) {
     return X_STATUS_UNSUCCESSFUL;
   }
 
-  buf->to_guest(sa);
+  buf->to_guest(&addr);
   return X_STATUS_SUCCESS;
 }
 
 X_STATUS XSocket::GetSockName(XSOCKADDR_IN* buf, int* buf_len) {
   sockaddr addr = buf->to_host();
-  sockaddr* sa = const_cast<sockaddr*>(&addr);
 
-  int ret = getsockname(native_handle_, sa, (socklen_t*)buf_len);
+  int ret = getsockname(native_handle_, &addr, (socklen_t*)buf_len);
   if (ret < 0) {
     return X_STATUS_UNSUCCESSFUL;
   }
 
-  buf->to_guest(sa);
+  buf->to_guest(&addr);
   return X_STATUS_SUCCESS;
 }
 
