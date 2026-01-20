@@ -41,6 +41,14 @@ X_HRESULT XUserFindUsersUnmarshaller::Deserialize() {
   xuid_issuer_ = Read<uint64_t>();
   num_users_ = Read<uint32_t>();
 
+  const uint32_t results_capacity =
+      GetAsyncTask()->GetXLiveAsyncTask()->results_size /
+      sizeof(FIND_USER_INFO);
+
+  if (num_users_ > results_capacity) {
+    return X_E_INSUFFICIENT_BUFFER;
+  }
+
   for (uint32_t i = 0; i < num_users_; i++) {
     users_.push_back(Read<FIND_USER_INFO>());
   }
