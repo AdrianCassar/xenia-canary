@@ -232,7 +232,7 @@ enum PropertyID : uint32_t {
   XPROPERTY_RANK =
       PropertyID(true, kernel::xam::X_USER_DATA_TYPE::INT32, 0x001), // 0x10008001
   XPROPERTY_GAMERNAME =
-      PropertyID(true, kernel::xam::X_USER_DATA_TYPE::WSTRING, 0x002), // 0x40008002 (Displayed in XSession Search)
+      PropertyID(true, kernel::xam::X_USER_DATA_TYPE::WSTRING, 0x002), // 0x40008002 (Displayed in Leaderboards)
   XPROPERTY_SESSION_ID =
       PropertyID(true, kernel::xam::X_USER_DATA_TYPE::INT64, 0x003), // 0x20008003
   XPROPERTY_GAMER_ZONE =
@@ -252,7 +252,7 @@ enum PropertyID : uint32_t {
   XPROPERTY_AFFILIATE_VALUE =
       PropertyID(true, kernel::xam::X_USER_DATA_TYPE::INT64, 0x108), // 0x20008108
   XPROPERTY_GAMER_HOSTNAME =
-      PropertyID(true, kernel::xam::X_USER_DATA_TYPE::WSTRING, 0x109), // 0x40008109 (Displayed in Leaderboards)
+      PropertyID(true, kernel::xam::X_USER_DATA_TYPE::WSTRING, 0x109), // 0x40008109 (Displayed in XSession Search)
   XPROPERTY_PLATFORM_TYPE =
       PropertyID(true, kernel::xam::X_USER_DATA_TYPE::INT32, 0x201), // 0x10008201
   XPROPERTY_PLATFORM_LOCK =
