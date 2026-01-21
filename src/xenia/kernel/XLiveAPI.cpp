@@ -1270,6 +1270,13 @@ void XLiveAPI::XSessionCreate(uint64_t sessionId, XGI_SESSION_CREATE* data) {
   XELOGI("XSessionCreate POST Success");
 }
 
+// 4D5308AB doesn't contain XPROPERTY_GAMER_HOSTNAME in XMAT but nevertheless is
+// required to discover sessions.
+// Include XPROPERTY_GAMER_PUID anyway, it's useful information to have on the
+// backend.
+const std::set<uint32_t> default_system_matchmaking_properties = {
+    XPROPERTY_GAMER_PUID, XPROPERTY_GAMER_HOSTNAME};
+
 bool XLiveAPI::SessionPropertiesSet(uint64_t session_id, uint64_t xuid) {
   std::string endpoint =
       BuildEndpoint(fmt::format("title/{:08X}/sessions/{:016x}/properties",
@@ -1286,33 +1293,76 @@ bool XLiveAPI::SessionPropertiesSet(uint64_t session_id, uint64_t xuid) {
 
   std::vector<xam::Property> properties = {};
 
-  // TODO(Adrian): Filter by SPA XMAT
-  // This will prevent 4D5307D5 trying to set property XPROPERTY_GAMER_MU and
+  // XMAT Filtering:
+  // We do not filter returned properties via XSessionSearch procedure index
+  // which is defined in XLAST. In the meantime we can filter by XMAT instead.
+  //
+  // This prevents 4D5307D5 trying to set property XPROPERTY_GAMER_MU and
   // XPROPERTY_GAMER_SIGMA without data_address in XGIUserSetPropertyEx when
   // joining a session via custom search.
-  // 4E4D07DC will sometimes fail to find friends sessions, filtering properties
-  // by XMAT fixes session discovery inconsistency.
+  //
+  // 4E4D07DC will sometimes fail to find friends sessions, filtering
+  // properties by XMAT fixes session discovery inconsistency.
   for (const auto& property_attribute : propertie_ids) {
-    const xam::Property* property =
-        kernel_state()->xam_state()->user_tracker()->GetProperty(
-            user_profile->xuid(), property_attribute.value);
+    const auto property =
+        kernel_state()->emulator()->game_info_database()->GetProperty(
+            property_attribute.value);
 
-    properties.push_back(*property);
+    if (property.has_value()) {
+      if (property->is_matchmaking ||
+          default_system_matchmaking_properties.contains(property->id)) {
+        const xam::Property* property =
+            kernel_state()->xam_state()->user_tracker()->GetProperty(
+                user_profile->xuid(), property_attribute.value);
+
+        properties.push_back(*property);
+      } else {
+        const std::string description =
+            string_util::remove_eol(string_util::trim(property->description));
+
+        if (description.empty()) {
+          XELOGI("{}: Skipping non-matchmaking property: {:08X}", __func__,
+                 property_attribute.value);
+        } else {
+          XELOGI("{}: Skipping non-matchmaking property: {} - {:08X}", __func__,
+                 description, property_attribute.value);
+        }
+      }
+    }
   }
-
-  std::vector<xam::Property> contexts = {};
 
   const auto contexts_ids =
       kernel_state()->xam_state()->user_tracker()->GetUserContextIds(
           user_profile->xuid());
 
-  // TODO(Adrian): Filter by SPA XMAT
+  // XMAT Filtering:
+  // We do not filter returned contexts via XSessionSearch procedure index which
+  // is defined in XLAST. In the mean time we can filter by XMAT instead.
   for (const auto& context_attribute : contexts_ids) {
-    const xam::Property* property =
-        kernel_state()->xam_state()->user_tracker()->GetProperty(
-            user_profile->xuid(), context_attribute.value);
+    const auto context_property =
+        kernel_state()->emulator()->game_info_database()->GetContext(
+            context_attribute.value);
 
-    properties.push_back(*property);
+    if (context_property.has_value()) {
+      if (context_property->is_matchmaking) {
+        const xam::Property* property =
+            kernel_state()->xam_state()->user_tracker()->GetProperty(
+                user_profile->xuid(), context_attribute.value);
+
+        properties.push_back(*property);
+      } else {
+        const std::string description = string_util::remove_eol(
+            string_util::trim(context_property->description));
+
+        if (description.empty()) {
+          XELOGI("{}: Skipping non-matchmaking context: {:08X}", __func__,
+                 context_attribute.value);
+        } else {
+          XELOGI("{}: Skipping non-matchmaking context: {} {:08X}", __func__,
+                 description, context_attribute.value);
+        }
+      }
+    }
   }
 
   properties_json->Properties(properties);
