@@ -265,10 +265,16 @@ void UserTracker::AddDefaultProperties(uint64_t xuid) {
 
   // Normally matchmaking query returns would handle ordering.
 
-  // Required - 58410A59 expects this property first, otherwise crashes.
+  // Required
+  // 4D5308AB XMAT doesn't mark this as a matchmaking property but expects it
+  // for discovering sessions.
+  // 58410A59 expects this property first, otherwise crashes.
   AddProperty(xuid, &GAMER_HOST_NAME);
-  // Required - 58410AC2 sets this manually
+
+  // Required
+  // 58410AC2 sets this manually
   AddProperty(xuid, &PUID);
+
   AddProperty(xuid, &GAMER_NAME);
   AddProperty(xuid, &GAMER_RATING);
   AddProperty(xuid, &GAMER_ZONE);
