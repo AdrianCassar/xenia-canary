@@ -65,6 +65,9 @@ class Property : public UserData {
   bool IsContext() const { return data_.type == X_USER_DATA_TYPE::CONTEXT; }
   void WriteToGuest(XUSER_PROPERTY* property) const;
   std::vector<uint8_t> Serialize() const;
+  std::optional<std::string> SerializeToBase64() const;
+  static std::optional<Property> DeserializeBase64(
+      const std::string property_base64);
 
   bool operator==(const Property& other) const {
     return data_ == other.data_ && extended_data_ == other.extended_data_;
