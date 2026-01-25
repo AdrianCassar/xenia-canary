@@ -29,20 +29,13 @@ bool PropertiesObjectJSON::Deserialize(const rapidjson::Value& obj) {
       return false;
     }
 
-    for (auto& serialized_property : propertiesObj.GetArray()) {
-      const std::string base64 = serialized_property.GetString();
-      std::uint32_t base64_size = static_cast<uint32_t>(base64.size());
-      std::uint32_t base64_decode_size = AV_BASE64_DECODE_SIZE(base64_size);
+    for (const auto& serialized_property : propertiesObj.GetArray()) {
+      const std::optional<xam::Property> property =
+          xam::Property::DeserializeBase64(serialized_property.GetString());
 
-      uint8_t* data_out = new uint8_t[base64_decode_size];
-      auto out = av_base64_decode(data_out, base64.c_str(), base64_decode_size);
-
-      std::span<uint8_t> data_span =
-          std::span<uint8_t>(data_out, base64_decode_size);
-
-      const xam::Property property = xam::Property(data_span);
-
-      properties_.push_back(property);
+      if (property.has_value()) {
+        properties_.push_back(property.value());
+      }
     }
   }
 
@@ -57,20 +50,12 @@ bool PropertiesObjectJSON::Serialize(
 
   writer->StartArray();
 
-  for (const auto& entry : properties_) {
-    auto entry_data = entry.Serialize();
+  for (const auto& property : properties_) {
+    const auto property_base64 = property.SerializeToBase64();
 
-    const uint32_t entry_size = static_cast<uint32_t>(entry_data.size());
-    const uint32_t entry_out_size = AV_BASE64_SIZE(entry_size);
-
-    std::vector<char> entry_serialized(entry_out_size);
-
-    auto out = av_base64_encode(entry_serialized.data(), entry_out_size,
-                                entry_data.data(), entry_size);
-
-    std::string base64_out = std::string(entry_serialized.data());
-
-    writer->String(base64_out);
+    if (property_base64.has_value()) {
+      writer->String(property_base64.value());
+    }
   }
 
   writer->EndArray();
