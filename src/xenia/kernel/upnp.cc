@@ -14,6 +14,7 @@
 #include "xenia/base/logging.h"
 #include "xenia/kernel/upnp.h"
 #include "xenia/kernel/util/net_utils.h"
+#include "xenia/kernel/xnet.h"
 
 DEFINE_string(upnp_root, "", "UPnP Root Device", "Live");
 

@@ -2,7 +2,7 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2025 Xenia Canary. All rights reserved.                          *
+ * Copyright 2026 Xenia Canary. All rights reserved.                          *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
@@ -10,7 +10,11 @@
 #ifndef XENIA_KERNEL_UTIL_NET_UTILS_H_
 #define XENIA_KERNEL_UTIL_NET_UTILS_H_
 
-#include "xenia/kernel/kernel_state.h"
+#include <cstdint>
+#include <string>
+#include <vector>
+
+#include "xenia/base/platform.h"
 
 #ifdef XE_PLATFORM_WIN32
 // clang-format off
@@ -77,4 +81,4 @@ std::unique_ptr<MacAddress> GenerateMacAddress();
 }  // namespace kernel
 }  // namespace xe
 
-#endif
+#endif  // XENIA_KERNEL_UTIL_NET_UTILS_H_
