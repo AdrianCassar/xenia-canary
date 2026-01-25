@@ -2,13 +2,16 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2025 Xenia Canary. All rights reserved.                          *
+ * Copyright 2026 Xenia Canary. All rights reserved.                          *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
 
-#include "xenia/kernel/util/net_utils.h"
+#include <random>
+
+#include "xenia/base/cvar.h"
 #include "xenia/base/logging.h"
+#include "xenia/kernel/util/net_utils.h"
 
 DECLARE_string(network_guid);
 
