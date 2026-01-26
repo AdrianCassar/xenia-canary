@@ -1586,8 +1586,7 @@ bool xeDrawSessionContent(xe::ui::ImGuiDrawer* imgui_drawer,
   const std::string join_label =
       std::format("Join Session##{}", session->SessionID());
 
-  bool caller = MacAddress(session->MacAddress()).to_uint64() ==
-                XLiveAPI::mac_address_->to_uint64();
+  bool caller = MacAddress(session->MacAddress()) == GetConsoleMacAddress();
 
   std::string version_text = "Version mismatch!";
   std::string media_text = "Media ID mismatch!";
@@ -1709,9 +1708,7 @@ bool xeDrawSessionsContent(
     }
 
     for (auto& session : *sessions) {
-      bool caller = MacAddress(session->MacAddress()).to_uint64() ==
-                    XLiveAPI::mac_address_->to_uint64();
-
+      bool caller = MacAddress(session->MacAddress()) == GetConsoleMacAddress();
       if (sessions_args.filter_own && caller) {
         continue;
       }
