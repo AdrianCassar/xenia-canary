@@ -57,6 +57,8 @@ DEFINE_int32(discord_presence_user_index, 0,
              "User profile index used for Discord rich presence [0, 3].",
              "Live");
 
+DECLARE_string(mac_address);
+
 using namespace rapidjson;
 
 // TODO:
@@ -94,7 +96,8 @@ void XLiveAPI::IpGetConsoleXnAddr(XNADDR* XnAddr_ptr) {
 
   XnAddr_ptr->abOnline.platform_type = PLATFORM_TYPE::Xbox360;
 
-  memcpy(XnAddr_ptr->abEnet, mac_address_->raw(), sizeof(MacAddress));
+  memcpy(XnAddr_ptr->abEnet, GetConsoleMacAddress().raw(),
+         MacAddress::MacAddressSize);
 }
 
 std::vector<std::string> XLiveAPI::ParseAPIList() {
@@ -191,10 +194,6 @@ void XLiveAPI::Init() {
     } else {
       XELOGI("HTTP/2 support: No");
     }
-  }
-
-  if (!mac_address_) {
-    mac_address_ = GenerateMacAddress();
   }
 
   if (cvars::network_mode == NETWORK_MODE::OFFLINE) {
@@ -512,13 +511,10 @@ void XLiveAPI::DownloadPortMappings() {
   return;
 }
 
-// Add player to web server
-// A random mac address is changed every time a player is registered!
+// Register player on the backend
 // xuid + ip + mac = unique player on a network
 std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::RegisterPlayer(
     uint64_t xuid) {
-  assert_not_null(mac_address_);
-
   std::unique_ptr<HTTPResponseObjectJSON> response = {};
 
   const auto user_profile = kernel_state()->xam_state()->GetUserProfile(xuid);
@@ -528,7 +524,7 @@ std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::RegisterPlayer(
     return response;
   }
 
-  if (!mac_address_) {
+  if (cvars::mac_address.empty()) {
     XELOGE("Cancelled registering profile!");
     return response;
   }
@@ -552,11 +548,13 @@ std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::RegisterPlayer(
 
   PlayerObjectJSON player = PlayerObjectJSON();
 
+  MacAddress mac_address = GetConsoleMacAddress();
+
   player.XUID(registered_xuid);
   player.Gamertag(user_profile->name());
-  player.MachineID(GetLocalMachineId(*mac_address_));
+  player.MachineID(GetLocalMachineId(mac_address));
   player.HostAddress(OnlineIP_str());
-  player.MacAddress(mac_address_->to_uint64());
+  player.MacAddress(mac_address.to_uint64());
 
   std::string player_output;
   bool valid = player.Serialize(player_output);
@@ -842,7 +840,7 @@ std::unique_ptr<SessionObjectJSON> XLiveAPI::XSessionMigration(
 
   doc.AddMember("xuid", xuid_str, doc.GetAllocator());
   doc.AddMember("hostAddress", OnlineIP_str(), doc.GetAllocator());
-  doc.AddMember("macAddress", mac_address_->to_string(), doc.GetAllocator());
+  doc.AddMember("macAddress", cvars::mac_address, doc.GetAllocator());
   doc.AddMember("port", GetPlayerPort(), doc.GetAllocator());
 
   rapidjson::StringBuffer buffer;
@@ -975,12 +973,8 @@ void XLiveAPI::DeleteSession(uint64_t sessionId) {
 }
 
 void XLiveAPI::DeleteAllSessionsByMac() {
-  if (!mac_address_) {
-    return;
-  }
-
   const std::string endpoint =
-      fmt::format("DeleteSessions/{}", mac_address_->to_string());
+      fmt::format("DeleteSessions/{}", cvars::mac_address);
 
   std::unique_ptr<HTTPResponseObjectJSON> response = Delete(endpoint);
 
@@ -1037,7 +1031,7 @@ void XLiveAPI::XSessionCreate(uint64_t sessionId, XGI_SESSION_CREATE* data) {
   session.PrivateSlotsCount(data->num_slots_private);
   session.UserIndex(data->user_index);
   session.HostAddress(OnlineIP_str());
-  session.MacAddress(mac_address_->to_string());
+  session.MacAddress(cvars::mac_address);
   session.Port(GetPlayerPort());
 
   std::string session_output;

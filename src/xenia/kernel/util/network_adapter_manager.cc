@@ -96,7 +96,7 @@ std::vector<std::string> NetworkAdapterManager::GetAdaptersNames() const {
   return adapter_names;
 };
 
-std::unique_ptr<MacAddress> NetworkAdapterManager::GetAdapterMacAddressFromGUID(
+MacAddress NetworkAdapterManager::GetAdapterMacAddressFromGUID(
     const std::string guid) const {
   const auto adapter = GetAdapterFromGUID(guid);
 
@@ -105,7 +105,7 @@ std::unique_ptr<MacAddress> NetworkAdapterManager::GetAdapterMacAddressFromGUID(
     uint8_t mac_address[MacAddress::MacAddressSize];
     memcpy(mac_address, adapter->PhysicalAddress, MacAddress::MacAddressSize);
 
-    return std::make_unique<MacAddress>(mac_address);
+    return mac_address;
   } else {
     // If there are no adapters generate a mac address.
     return GenerateMacAddress();

@@ -180,8 +180,6 @@ class XLiveAPI {
 
   static const std::string OnlineIP_str() { return ip_to_string(online_ip_); };
 
-  inline static std::unique_ptr<MacAddress> mac_address_ = nullptr;
-
   inline static bool xlsp_servers_cached = false;
   inline static std::vector<X_TITLE_SERVER> xlsp_servers = {};
 

@@ -52,8 +52,7 @@ class NetworkAdapterManager {
 
   std::vector<std::string> GetAdaptersNames() const;
 
-  std::unique_ptr<MacAddress> GetAdapterMacAddressFromGUID(
-      const std::string guid) const;
+  MacAddress GetAdapterMacAddressFromGUID(const std::string guid) const;
 
   std::optional<IP_ADAPTER_ADDRESSES> GetSelectedAdapter() const;
 

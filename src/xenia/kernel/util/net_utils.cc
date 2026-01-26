@@ -17,6 +17,9 @@ DECLARE_string(network_guid);
 
 DECLARE_bool(logging);
 
+// TODO(Adrian): This should be moved to XConfig once supported.
+DEFINE_string(mac_address, "", "Console MAC address. (Do not touch!)", "Live");
+
 namespace xe {
 namespace kernel {
 
@@ -190,23 +193,33 @@ uint64_t GetLocalMachineId(const MacAddress mac_address) {
   return GetMachineId(mac_address.to_uint64());
 }
 
-std::unique_ptr<MacAddress> GenerateMacAddress() {
-  uint8_t* mac_address = new uint8_t[6];
+void CreateConsoleMacAddress() {
+  if (cvars::mac_address.empty()) {
+    const MacAddress mac_address = GenerateMacAddress();
+    OVERRIDE_string(mac_address, mac_address.to_string());
+  }
+}
+
+MacAddress GetConsoleMacAddress() { return MacAddress(cvars::mac_address); }
+
+MacAddress GenerateMacAddress() {
+  uint8_t mac_address[MacAddress::MacAddressSize] = {};
 
   // MAC OUI part for MS devices.
-  mac_address[0] = 0x00;
-  mac_address[1] = 0x22;
-  mac_address[2] = 0x48;
+  mac_address[0] = kCoronaOUI[0];
+  mac_address[1] = kCoronaOUI[1];
+  mac_address[2] = kCoronaOUI[2];
 
   std::random_device rnd;
   std::mt19937_64 gen(rnd());
-  std::uniform_int_distribution<uint16_t> dist(0, -1);
+  std::uniform_int_distribution<uint16_t> dist(
+      0, std::numeric_limits<uint16_t>::max());
 
-  for (int i = 3; i < MacAddress::MacAddressSize; i++) {
+  for (uint8_t i = 3; i < MacAddress::MacAddressSize; i++) {
     mac_address[i] = static_cast<uint8_t>(dist(rnd));
   }
 
-  return std::make_unique<MacAddress>(mac_address);
+  return MacAddress(mac_address);
 }
 
 }  // namespace kernel

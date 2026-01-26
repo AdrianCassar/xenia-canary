@@ -32,8 +32,11 @@
 namespace xe {
 namespace kernel {
 
-const uint32_t BROADCAST = 0xFFFFFFFF;
-const uint32_t LOOPBACK = 0x7F000001;
+constexpr uint32_t BROADCAST = 0xFFFFFFFF;
+constexpr uint32_t LOOPBACK = 0x7F000001;
+
+// https://macaddress.io/statistics/company/9398
+constexpr uint8_t kCoronaOUI[3] = {0x7C, 0x1E, 0x52};
 
 struct response_data {
   char* response;
@@ -43,12 +46,17 @@ struct response_data {
 
 class MacAddress {
  public:
-  static const uint8_t MacAddressSize = 6;
+  static constexpr uint8_t MacAddressSize = 6;
 
   MacAddress(const uint8_t* macaddress);
   MacAddress(std::string macaddress);
   MacAddress(uint64_t macaddress);
   ~MacAddress();
+
+  bool operator==(const MacAddress& lhs) const {
+    return std::equal(std::begin(mac_address_), std::end(mac_address_),
+                      std::begin(lhs.mac_address_), std::end(lhs.mac_address_));
+  };
 
   const uint8_t* raw() const;
   std::vector<uint8_t> to_array() const;
@@ -59,7 +67,7 @@ class MacAddress {
   std::string to_printable_form() const;
 
  private:
-  uint8_t mac_address_[MacAddressSize];
+  uint8_t mac_address_[MacAddressSize] = {};
 };
 
 sockaddr_in WinsockGetLocalIP();
@@ -76,7 +84,11 @@ uint64_t GetMachineId(const uint64_t mac_address);
 
 uint64_t GetLocalMachineId(const MacAddress mac_address);
 
-std::unique_ptr<MacAddress> GenerateMacAddress();
+void CreateConsoleMacAddress();
+
+MacAddress GetConsoleMacAddress();
+
+MacAddress GenerateMacAddress();
 
 }  // namespace kernel
 }  // namespace xe
