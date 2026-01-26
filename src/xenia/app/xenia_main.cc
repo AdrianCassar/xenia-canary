@@ -63,6 +63,7 @@
 #include "third_party/fmt/include/fmt/format.h"
 
 #include "xenia/kernel/XLiveAPI.h"
+#include "xenia/kernel/util/net_utils.h"
 
 DEFINE_string(apu, "any", "Audio system. Use: [any, nop, sdl, xaudio2]", "APU");
 DEFINE_string(gpu, "any", "Graphics system. Use: [any, d3d12, vulkan, null]",
@@ -518,6 +519,8 @@ bool EmulatorApp::OnInitialize() {
     XELOGE("Cannot initialize CURL! Error code: {}",
            static_cast<uint32_t>(status));
   }
+
+  kernel::CreateConsoleMacAddress();
 
   // Create the emulator but don't initialize so we can setup the window.
   emulator_ =

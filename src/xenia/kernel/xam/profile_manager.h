@@ -18,6 +18,7 @@
 #include "third_party/fmt/include/fmt/format.h"
 #include "xenia/base/string.h"
 #include "xenia/kernel/title_id_utils.h"
+#include "xenia/kernel/util/net_utils.h"
 #include "xenia/kernel/xam/user_profile.h"
 #include "xenia/xbox.h"
 
@@ -45,10 +46,26 @@ inline const std::string kDashboardStringID =
 constexpr std::string_view kDefaultMountFormat = "User_{:016X}";
 
 const static inline uint64_t GenerateXuid() {
-  std::random_device rd;
-  std::mt19937 gen(rd());
+  const std::vector<uint8_t> mac_array = GetConsoleMacAddress().to_array();
 
-  return ((uint64_t)0xE03 << 52) + (gen() % (1 << 31));
+  std::random_device rd;
+  std::mt19937_64 gen(rd());
+
+  std::uniform_int_distribution<uint16_t> dis(
+      0, std::numeric_limits<uint16_t>::max());
+
+  uint64_t prefix = 0xE000ULL << 48;
+  uint64_t random = static_cast<uint64_t>(dis(gen)) << 32;
+  uint64_t mac_part = 0;
+
+  mac_part |= static_cast<uint64_t>(mac_array[2]) << 24;
+  mac_part |= static_cast<uint64_t>(mac_array[3]) << 16;
+  mac_part |= static_cast<uint64_t>(mac_array[4]) << 8;
+  mac_part |= mac_array[5];
+
+  const uint64_t xuid = prefix | random | mac_part;
+
+  return xuid;
 }
 
 class ProfileManager {
