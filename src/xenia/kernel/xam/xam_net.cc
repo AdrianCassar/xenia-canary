@@ -267,7 +267,7 @@ dword_result_t NetDll_XNetCleanup_entry(dword_t caller, lpvoid_t params) {
 DECLARE_XAM_EXPORT1(NetDll_XNetCleanup, kNetworking, kImplemented);
 
 dword_result_t XNetLogonGetMachineID_entry(lpqword_t machine_id_ptr) {
-  *machine_id_ptr = GetLocalMachineId(*XLiveAPI::mac_address_);
+  *machine_id_ptr = GetLocalMachineId(GetConsoleMacAddress());
 
   // if (XLiveAPI::GetInitState() != XLiveAPI::InitState::Success) {
   //   *machine_id_ptr = 0;
@@ -839,8 +839,7 @@ dword_result_t NetDll_XNetXnAddrToInAddr_entry(dword_t caller,
     in_addr->s_addr = 0;
   }
 
-  if (memcmp(XLiveAPI::mac_address_.get(), xn_addr->abEnet,
-             sizeof(MacAddress)) == 0) {
+  if (GetConsoleMacAddress() == MacAddress(xn_addr->abEnet)) {
     XELOGI("Resolving XNetXnAddrToInAddr to LOOPBACK!");
     in_addr->s_addr = xe::byte_swap(LOOPBACK);
 
@@ -926,7 +925,7 @@ dword_result_t NetDll_XNetInAddrToXnAddr_entry(dword_t caller, dword_t in_addr,
     mac = MacAddress(XLiveAPI::macAddressCache[xn_addr->inaOnline.s_addr]);
   }
 
-  std::memcpy(xn_addr->abEnet, mac.raw(), sizeof(MacAddress));
+  std::memcpy(xn_addr->abEnet, mac.raw(), MacAddress::MacAddressSize);
 
   if (xid_ptr != nullptr) {
     XNKID* sessionId_ptr = kernel_memory()->TranslateVirtual<XNKID*>(xid_ptr);
