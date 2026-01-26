@@ -68,6 +68,7 @@
 #include "third_party/fmt/include/fmt/format.h"
 
 #include "xenia/kernel/XLiveAPI.h"
+#include "xenia/kernel/util/net_utils.h"
 
 #if XE_PLATFORM_WIN32
 #include "xenia/base/main_win.h"
@@ -558,6 +559,8 @@ bool EmulatorApp::OnInitialize() {
     XELOGE("Cannot initialize CURL! Error code: {}",
            static_cast<uint32_t>(status));
   }
+
+  kernel::CreateConsoleMacAddress();
 
   // Create the emulator but don't initialize so we can setup the window.
   emulator_ =

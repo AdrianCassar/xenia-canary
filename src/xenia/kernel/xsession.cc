@@ -1206,7 +1206,7 @@ void XSession::GetXnAddrFromSessionObject(SessionObjectJSON* session,
 
   const MacAddress mac = MacAddress(session->MacAddress());
 
-  memcpy(&XnAddr_ptr->abEnet, mac.raw(), sizeof(MacAddress));
+  memcpy(XnAddr_ptr->abEnet, mac.raw(), MacAddress::MacAddressSize);
 
   XnAddr_ptr->wPortOnline = session->Port();
 

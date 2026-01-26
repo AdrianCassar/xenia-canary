@@ -1061,8 +1061,8 @@ X_HRESULT XLiveBaseApp::XInviteGetAcceptedInfo(uint32_t buffer_ptr,
 
   const MacAddress mac = MacAddress(session->MacAddress());
 
-  memcpy(&invite_info->host_info.hostAddress.abEnet, mac.raw(),
-         sizeof(MacAddress));
+  memcpy(invite_info->host_info.hostAddress.abEnet, mac.raw(),
+         MacAddress::MacAddressSize);
 
   invite_info->host_info.hostAddress.wPortOnline = session->Port();
 
