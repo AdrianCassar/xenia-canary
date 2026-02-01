@@ -303,7 +303,7 @@ std::string UPnP::GetLocalIP_wget() {
 
 void UPnP::TrackPort(uint16_t port, std::string protocol) {
   std::lock_guard tracked_lock(mutex_tracked_ports_);
-  tracked_ports_[port] = protocol;
+  tracked_ports_[protocol].insert(port);
 }
 
 void UPnP::OpenTrackedPorts() {
@@ -311,8 +311,10 @@ void UPnP::OpenTrackedPorts() {
     return;
   }
 
-  for (const auto& [internal_port, protocol] : GetTrackedPorts()) {
-    AddPort(GetLocalIP(), internal_port, protocol);
+  for (const auto& [protocol, internal_ports] : GetTrackedPorts()) {
+    for (const auto& internal_port : internal_ports) {
+      AddPort(GetLocalIP(), internal_port, protocol);
+    }
   }
 }
 
@@ -424,7 +426,7 @@ UPnP::GetPortBindingResults() {
   return port_binding_results_;
 }
 
-const std::map<uint16_t, std::string> UPnP::GetTrackedPorts() {
+const std::map<std::string, std::set<uint16_t>> UPnP::GetTrackedPorts() {
   std::lock_guard tracked_lock(mutex_tracked_ports_);
   return tracked_ports_;
 }
