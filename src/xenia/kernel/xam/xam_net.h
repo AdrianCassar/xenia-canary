@@ -11,6 +11,7 @@
 #define XENIA_KERNEL_XAM_XAM_NET_H_
 
 #include <future>
+#include <mutex>
 
 namespace xe {
 namespace kernel {
@@ -20,6 +21,9 @@ namespace xam {
 bool EXPLICIT_XBOXLIVE_KEY = false;
 
 std::vector<std::future<int32_t>> upnp_actions_;
+
+std::map<uint32_t, std::stop_source> qos_lookup_threads;
+std::mutex qos_lookup_mutex;
 
 static void CleanupUPnPActions();
 
