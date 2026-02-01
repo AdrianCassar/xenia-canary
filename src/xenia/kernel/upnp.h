@@ -11,7 +11,7 @@
 #define XENIA_KERNEL_UPNP_H_
 
 #include <future>
-#include <map>
+#include <set>
 #include <shared_mutex>
 
 #include <third_party/miniupnp/miniupnpc/include/miniupnpc.h>
@@ -120,7 +120,7 @@ class UPnP {
   const std::map<std::string, std::map<uint16_t, int32_t>>
   GetPortBindingResults();
 
-  const std::map<uint16_t, std::string> GetTrackedPorts();
+  const std::map<std::string, std::set<uint16_t>> GetTrackedPorts();
 
   static std::string_view GetMiniUPnPcErrorCodeToDesc(int32_t error) noexcept;
 
@@ -155,7 +155,7 @@ class UPnP {
   std::unique_ptr<xe::threading::PeriodicCallback> refresh_ports_timer_;
 
   std::mutex mutex_tracked_ports_;
-  std::map<uint16_t, std::string> tracked_ports_;
+  std::map<std::string, std::set<uint16_t>> tracked_ports_;
 
   std::mutex mutex_bindings_;
   std::map<std::string, std::map<uint16_t, uint16_t>> port_bindings_;
