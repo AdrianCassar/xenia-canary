@@ -1053,36 +1053,49 @@ dword_result_t NetDll_XNetQosServiceLookup_entry(dword_t caller, dword_t flags,
     return static_cast<uint32_t>(X_WSAError::X_WSAEINVAL);
   }
 
-  XNQOS* qos = nullptr;
+  const uint32_t qos_address = kernel_memory()->SystemHeapAlloc(sizeof(XNQOS));
+  XNQOS* qos = kernel_memory()->TranslateVirtual<XNQOS*>(qos_address);
 
-  if (qos_ptr) {
-    const uint32_t qos_guest = kernel_memory()->SystemHeapAlloc(sizeof(XNQOS));
-    qos = kernel_memory()->TranslateVirtual<XNQOS*>(qos_guest);
+  *qos_ptr = qos_address;
 
-    qos->count = 1;
-    qos->count_pending = 0;
+  qos->count_pending = 1;
 
-    qos->info[0].probes_xmit = 4;
-    qos->info[0].probes_recv = 4;
+  auto run = [=](std::stop_token stop_token) {
+    if (stop_token.stop_requested()) {
+      return;
+    }
+
+    qos->info[0].probes_xmit = 8;
+    qos->info[0].probes_recv = 8;
     qos->info[0].data_len = 0;
     qos->info[0].data_ptr = 0;
     qos->info[0].rtt_min_in_msecs = 10;
     qos->info[0].rtt_med_in_msecs = 10;
-    qos->info[0].up_bits_per_sec = static_cast<uint32_t>(1024_KiB);
-    qos->info[0].down_bits_per_sec = static_cast<uint32_t>(1024_KiB);
-    qos->info[0].flags =
-        XNET_XNQOSINFO::COMPLETE | XNET_XNQOSINFO::TARGET_CONTACTED;
+
+    // 4541080F and 584109B7 expect high bit/sec
+    qos->info[0].up_bits_per_sec = static_cast<uint32_t>(5_MiB);
+    qos->info[0].down_bits_per_sec = static_cast<uint32_t>(5_MiB);
+
+    qos->info[0].flags = XNET_XNQOSINFO::COMPLETE |
+                         XNET_XNQOSINFO::PARTIAL_COMPLETE |
+                         XNET_XNQOSINFO::TARGET_CONTACTED;
+
+    qos->count_pending = 0;
+    qos->count = 1;
 
     // If COMPLETE, TARGET_CONTACTED or PARTIAL_COMPLETE flag is set then set
     // event.
-    if (qos->count > 0) {
-      xboxkrnl::xeNtSetEvent(event_handle, nullptr);
-    }
+    xboxkrnl::xeNtSetEvent(event_handle, nullptr);
+  };
 
-    *qos_ptr = qos_guest;
-  }
+  std::jthread qos_lookup_thread(run);
 
-  return 0;
+  std::unique_lock lock(qos_lookup_mutex);
+  qos_lookup_threads[qos_address] = qos_lookup_thread.get_stop_source();
+
+  qos_lookup_thread.detach();
+
+  return X_ERROR_SUCCESS;
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetQosServiceLookup, kNetworking, kStub);
 
@@ -1092,19 +1105,37 @@ dword_result_t NetDll_XNetQosRelease_entry(dword_t caller,
     return static_cast<uint32_t>(X_WSAError::X_WSAEINVAL);
   }
 
+  const uint32_t qos_address =
+      kernel_state()->memory()->HostToGuestVirtual(std::to_address(qos_ptr));
+
+  std::unique_lock lock(qos_lookup_mutex);
+
+  if (!qos_lookup_threads.contains(qos_address)) {
+    XELOGI("XNetQosRelease: QoS already released {:08X}",
+           qos_ptr.guest_address());
+    return X_ERROR_SUCCESS;
+  }
+
+  qos_lookup_threads.at(qos_address).request_stop();
+
   for (uint32_t i = 0; i < qos_ptr->count; i++) {
-    if (qos_ptr[i].info->data_ptr) {
-      kernel_memory()->SystemHeapFree(qos_ptr[i].info->data_ptr);
+    const XNQOSINFO& qos_info = qos_ptr->info[i];
+
+    if (qos_info.data_ptr && (qos_info.flags & XNET_XNQOSINFO::DATA_RECEIVED)) {
+      kernel_memory()->SystemHeapFree(qos_info.data_ptr);
     }
   }
 
   kernel_memory()->SystemHeapFree(qos_ptr.guest_address());
-  return 0;
+
+  qos_lookup_threads.erase(qos_address);
+
+  return X_ERROR_SUCCESS;
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetQosRelease, kNetworking, kStub);
 
-// Create a socket and listen for incoming probes via player port and filter by
-// session id
+// Create a socket and listen for incoming probes via player port and filter
+// by session id
 dword_result_t NetDll_XNetQosListen_entry(
     dword_t caller, pointer_t<XNKID> sessionId, pointer_t<uint32_t> data,
     dword_t data_size, dword_t bits_per_second, dword_t flags) {
@@ -1173,171 +1204,166 @@ dword_result_t NetDll_XNetQosLookup_entry(
     pointer_t<uint32_t> service_ids_PtrsPtr, dword_t probes_count,
     dword_t bits_per_second, dword_t flags, dword_t event_handle,
     lpdword_t qos_ptr) {
-  if (!sessionId_PtrsPtr || !qos_ptr) {
+  if (!qos_ptr) {
     return static_cast<uint32_t>(X_WSAError::X_WSAEACCES);
   }
 
-  std::vector<XNADDR> remote_addresses{};
-  std::vector<XNKID> session_ids{};
-  std::vector<XNKEY> remote_keys{};
-  std::vector<in_addr> security_gateways{};
-  std::vector<uint32_t> service_ids{};
+  auto session_ids = std::make_shared<std::vector<XNKID>>();
+  auto remote_keys = std::make_shared<std::vector<XNKEY>>();
+  auto remote_addresses = std::make_shared<std::vector<XNADDR>>();
+  auto service_ids = std::make_shared<std::vector<uint32_t>>();
+  auto security_gateways = std::make_shared<std::vector<in_addr>>();
 
-  if (num_remote_consoles) {
-    const xe::be<uint32_t>* session_id_ptrs =
+  if (sessionId_PtrsPtr) {
+    const xe::be<uint32_t>* session_id_ptrs_ptr =
         kernel_memory()->TranslateVirtual<xe::be<uint32_t>*>(sessionId_PtrsPtr);
 
-    const auto session_id_ptr_array = std::vector<xe::be<uint32_t>>(
-        session_id_ptrs, session_id_ptrs + num_remote_consoles);
+    const auto session_ids_ptrs = std::vector<uint32_t>(
+        session_id_ptrs_ptr, session_id_ptrs_ptr + num_remote_consoles);
 
-    for (uint32_t i = 0; i < num_remote_consoles; i++) {
-      XNKID session_id =
-          *kernel_memory()->TranslateVirtual<XNKID*>(session_id_ptr_array[i]);
+    for (const auto& session_id_ptr : session_ids_ptrs) {
+      const XNKID session_id =
+          *kernel_memory()->TranslateVirtual<XNKID*>(session_id_ptr);
 
-      session_ids.push_back(session_id);
+      session_ids->push_back(session_id);
     }
   }
 
   if (remote_keys_PtrsPtr) {
-    const xe::be<uint32_t>* remote_keys_ptrs =
+    const xe::be<uint32_t>* remote_keys_ptrs_ptr =
         kernel_memory()->TranslateVirtual<xe::be<uint32_t>*>(
             remote_keys_PtrsPtr);
 
-    auto remote_keys_ptr_array = std::vector<xe::be<uint32_t>>(
-        remote_keys_ptrs, remote_keys_ptrs + num_remote_consoles);
+    const auto remote_keys_ptrs = std::vector<uint32_t>(
+        remote_keys_ptrs_ptr, remote_keys_ptrs_ptr + num_remote_consoles);
 
-    for (uint32_t i = 0; i < num_remote_consoles; i++) {
+    for (const auto& remote_keys_ptr : remote_keys_ptrs) {
       const XNKEY remote_key =
-          *kernel_memory()->TranslateVirtual<XNKEY*>(remote_keys_ptr_array[i]);
+          *kernel_memory()->TranslateVirtual<XNKEY*>(remote_keys_ptr);
 
-      remote_keys.push_back(remote_key);
+      remote_keys->push_back(remote_key);
     }
   }
 
   if (remote_addresses_PtrsPtr) {
-    const xe::be<uint32_t>* remote_addresses_ptrs =
+    const xe::be<uint32_t>* remote_addresses_ptrs_ptr =
         kernel_memory()->TranslateVirtual<xe::be<uint32_t>*>(
             remote_addresses_PtrsPtr);
 
-    auto remote_addresses_ptr_array = std::vector<xe::be<uint32_t>>(
-        remote_addresses_ptrs, remote_addresses_ptrs + num_remote_consoles);
+    const auto remote_addresses_ptrs =
+        std::vector<uint32_t>(remote_addresses_ptrs_ptr,
+                              remote_addresses_ptrs_ptr + num_remote_consoles);
 
-    for (uint32_t i = 0; i < num_remote_consoles; i++) {
+    for (const auto& remote_address_ptr : remote_addresses_ptrs) {
       const XNADDR remote_address =
-          *kernel_memory()->TranslateVirtual<XNADDR*>(remote_addresses_ptrs[i]);
+          *kernel_memory()->TranslateVirtual<XNADDR*>(remote_address_ptr);
 
-      remote_addresses.push_back(remote_address);
+      remote_addresses->push_back(remote_address);
     }
   }
 
   if (service_ids_PtrsPtr) {
-    const xe::be<uint32_t>* service_ids_ptrs =
+    XELOGI("XNetQosLookup: Service Ids");
+
+    const xe::be<uint32_t>* service_ids_ptrs_ptr =
         kernel_memory()->TranslateVirtual<xe::be<uint32_t>*>(
             service_ids_PtrsPtr);
 
-    auto service_ids_ptr_array = std::vector<xe::be<uint32_t>>(
-        service_ids_ptrs, service_ids_ptrs + num_remote_consoles);
+    const auto service_ids_ptrs = std::vector<uint32_t>(
+        service_ids_ptrs_ptr, service_ids_ptrs_ptr + num_gateways);
 
-    for (uint32_t i = 0; i < num_remote_consoles; i++) {
-      const uint32_t service_id = *kernel_memory()->TranslateVirtual<uint32_t*>(
-          service_ids_ptr_array[i]);
+    for (const auto& service_ids_ptr : service_ids_ptrs) {
+      const uint32_t service_id =
+          *kernel_memory()->TranslateVirtual<uint32_t*>(service_ids_ptr);
 
-      service_ids.push_back(service_id);
+      service_ids->push_back(service_id);
     }
   }
 
   if (gateways_PtrsPtr) {
-    const xe::be<uint32_t>* gateways_ptrs =
+    XELOGI("XNetQosLookup: Gateways");
+
+    const xe::be<uint32_t>* gateways_ptrs_ptr =
         kernel_memory()->TranslateVirtual<xe::be<uint32_t>*>(gateways_PtrsPtr);
 
-    auto gateways_ptr_array = std::vector<xe::be<uint32_t>>(
-        gateways_ptrs, gateways_ptrs + num_gateways);
+    const auto gateways_ptrs = std::vector<uint32_t>(
+        gateways_ptrs_ptr, gateways_ptrs_ptr + num_gateways);
 
-    for (uint32_t i = 0; i < num_gateways; i++) {
+    for (const auto& gateways_ptr : gateways_ptrs) {
       const in_addr gateway_key =
-          *kernel_memory()->TranslateVirtual<in_addr*>(gateways_ptr_array[i]);
+          *kernel_memory()->TranslateVirtual<in_addr*>(gateways_ptr);
 
-      security_gateways.push_back(gateway_key);
+      security_gateways->push_back(gateway_key);
     }
   }
 
   // const uint32_t count = num_remote_consoles + num_gateways;
   const uint32_t count = num_remote_consoles;
 
-  uint32_t countOffset = 0;
+  const uint32_t size = sizeof(XNQOS) + (sizeof(XNQOSINFO) * count);
+  const uint32_t qos_address = kernel_memory()->SystemHeapAlloc(size);
+  XNQOS* qos = kernel_memory()->TranslateVirtual<XNQOS*>(qos_address);
 
-  // Fake QoS count to fix GoW 3
-  if (kernel_state()->title_id() == 0x4D5308AB) {
-    countOffset = 1;
-  }
+  *qos_ptr = qos_address;
 
-  const uint32_t size =
-      sizeof(XNQOS) + (sizeof(XNQOSINFO) * (count - 1) + countOffset);
-  const uint32_t qos_guest = kernel_memory()->SystemHeapAlloc(size);
-  XNQOS* qos = kernel_memory()->TranslateVirtual<XNQOS*>(qos_guest);
-
-  /*
-   GoW 3 - TU 0
-   If qos->count is not equal to num_remote_consoles then it will join
-   sessions otherwise repeats QoS lookup
-
-   L4D2
-   Removes session if QoS failed therefore adding fake entry must be valid to
-   prevent removal of valid session
-  */
-
+  // 415707D1 uses count_pending to determine completion relying on async
+  // implementation.
+  // Therefore it expects qos->count_pending != 0 on return, otherwise will
+  // cause QoS lookup spam.
   qos->count_pending = count;
-  qos->count = count + countOffset;
 
-  const uint32_t probes = qos->count - countOffset;
+  auto run = [=, shared_session_ids = session_ids](std::stop_token stop_token) {
+    for (uint32_t i = 0; i < count && !stop_token.stop_requested(); i++) {
+      XNQOSINFO& qos_info = qos->info[i];
 
-  for (uint32_t i = 0; i < probes; i++) {
-    uint64_t session_id = session_ids[i].as_uintBE64();
-    response_data chunk = XLiveAPI::QoSGet(session_id);
+      response_data chunk = {.http_code = HTTP_STATUS_CODE::HTTP_NO_CONTENT};
 
-    if (chunk.http_code == HTTP_STATUS_CODE::HTTP_OK ||
-        chunk.http_code == HTTP_STATUS_CODE::HTTP_NO_CONTENT) {
-      qos->info[i].data_ptr = 0;
-      qos->info[i].data_len = 0;
-      qos->info[i].flags =
-          XNET_XNQOSINFO::COMPLETE | XNET_XNQOSINFO::TARGET_CONTACTED;
+      if (i < shared_session_ids->size()) {
+        const uint64_t session_id = shared_session_ids->at(i).as_uintBE64();
+        chunk = XLiveAPI::QoSGet(session_id);
+      }
 
-      if (chunk.size) {
-        uint32_t data_ptr =
-            kernel_memory()->SystemHeapAlloc(static_cast<uint32_t>(chunk.size));
-        uint32_t* data = kernel_memory()->TranslateVirtual<uint32_t*>(data_ptr);
+      if (chunk.http_code == HTTP_STATUS_CODE::HTTP_OK) {
+        if (chunk.response && chunk.size) {
+          uint32_t data_ptr = kernel_memory()->SystemHeapAlloc(
+              static_cast<uint16_t>(chunk.size));
+          uint8_t* data = kernel_memory()->TranslateVirtual<uint8_t*>(data_ptr);
 
-        memcpy(data, chunk.response, chunk.size);
+          std::memcpy(data, chunk.response, chunk.size);
 
-        qos->info[i].data_ptr = data_ptr;
-        qos->info[i].data_len = static_cast<uint16_t>(chunk.size);
-        qos->info[i].flags |= XNET_XNQOSINFO::DATA_RECEIVED;
+          qos_info.data_ptr = data_ptr;
+          qos_info.data_len = static_cast<uint16_t>(chunk.size);
+          qos_info.flags |= XNET_XNQOSINFO::DATA_RECEIVED;
+        }
       }
 
       // 415607DD and 415607D4 expect probes count, otherwise spams lookup.
-      qos->info[i].probes_xmit = probes_count.value();
-      qos->info[i].probes_recv = probes_count.value();
-      qos->info[i].rtt_min_in_msecs = 10;
-      qos->info[i].rtt_med_in_msecs = 10;
-      qos->info[i].up_bits_per_sec = static_cast<uint32_t>(1024_KiB);
-      qos->info[i].down_bits_per_sec = static_cast<uint32_t>(1024_KiB);
+      qos_info.probes_xmit = probes_count.value();
+      qos_info.probes_recv = probes_count.value();
+      qos_info.rtt_min_in_msecs = 10;
+      qos_info.rtt_med_in_msecs = 10;
+      qos_info.up_bits_per_sec = static_cast<uint32_t>(5_MiB);
+      qos_info.down_bits_per_sec = static_cast<uint32_t>(5_MiB);
+      qos_info.flags |=
+          XNET_XNQOSINFO::COMPLETE | XNET_XNQOSINFO::TARGET_CONTACTED;
 
       qos->count_pending =
-          std::max(static_cast<int>(qos->count_pending - 1), 0);
+          std::max(static_cast<int32_t>(qos->count_pending - 1), 0);
+      qos->count++;
     }
 
-    // Prevent L4D2 removing info[probes - 1] entry
-    if (i == (probes - 1)) {
-      memcpy(&qos->info[probes], &qos->info[i], sizeof(XNQOSINFO));
+    // If COMPLETE or TARGET_CONTACTED flag is then set event.
+    if (qos->count > 0) {
+      xboxkrnl::xeNtSetEvent(event_handle, nullptr);
     }
+  };
 
-    *qos_ptr = qos_guest;
-  }
+  std::jthread qos_lookup_thread(run);
 
-  // If COMPLETE or TARGET_CONTACTED flag is then set event.
-  if (qos->count > 0) {
-    xboxkrnl::xeNtSetEvent(event_handle, nullptr);
-  }
+  std::unique_lock lock(qos_lookup_mutex);
+  qos_lookup_threads[qos_address] = qos_lookup_thread.get_stop_source();
+
+  qos_lookup_thread.detach();
 
   return X_ERROR_SUCCESS;
 }
