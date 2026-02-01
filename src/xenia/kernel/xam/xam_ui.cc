@@ -1915,14 +1915,16 @@ void xeDrawUPnPAndPorts(xe::ui::ImGuiDrawer* imgui_drawer,
 
             ImGui::TableHeadersRow();
 
-            for (const auto& [internal_port, protocol] : tracked_ports) {
-              ImGui::TableNextRow();
+            for (const auto& [protocol, internal_ports] : tracked_ports) {
+              for (const auto& internal_port : internal_ports) {
+                ImGui::TableNextRow();
 
-              ImGui::TableNextColumn();
-              ImGui::Text(protocol.c_str());
+                ImGui::TableNextColumn();
+                ImGui::Text(protocol.c_str());
 
-              ImGui::TableNextColumn();
-              ImGui::Text(fmt::format("{}", internal_port).c_str());
+                ImGui::TableNextColumn();
+                ImGui::Text(fmt::format("{}", internal_port).c_str());
+              }
             }
             ImGui::EndTable();
           }
@@ -1968,82 +1970,89 @@ void xeDrawUPnPAndPorts(xe::ui::ImGuiDrawer* imgui_drawer,
             auto& port_results = upnp->GetPortBindingResults();
             const auto opened_ports = upnp->GetOpenedPorts();
 
-            for (const auto& [internal_port, protocol] : tracked_ports) {
-              bool is_port_open = false;
+            for (const auto& [protocol, internal_ports] : tracked_ports) {
+              for (const auto& internal_port : internal_ports) {
+                bool is_port_open = false;
 
-              if (opened_ports.contains(protocol)) {
-                if (opened_ports.at(protocol).contains(internal_port)) {
-                  is_port_open = true;
+                if (opened_ports.contains(protocol)) {
+                  if (opened_ports.at(protocol).contains(internal_port)) {
+                    is_port_open = true;
+                  }
                 }
-              }
 
-              int32_t error_code = -1;
+                int32_t error_code = -1;
 
-              if (port_results.contains(protocol)) {
-                if (port_results.at(protocol).contains(internal_port)) {
-                  error_code = port_results.at(protocol).at(internal_port);
+                if (port_results.contains(protocol)) {
+                  if (port_results.at(protocol).contains(internal_port)) {
+                    error_code = port_results.at(protocol).at(internal_port);
+                  }
                 }
-              }
 
-              ImGui::TableNextRow();
+                ImGui::TableNextRow();
 
-              ImGui::TableNextColumn();
-              ImGui::Text(protocol.c_str());
+                ImGui::TableNextColumn();
+                ImGui::Text(protocol.c_str());
 
-              ImGui::TableNextColumn();
-              ImGui::Text(fmt::format("{}", internal_port).c_str());
+                ImGui::TableNextColumn();
+                ImGui::Text(fmt::format("{}", internal_port).c_str());
 
-              ImGui::TableNextColumn();
-              ImGui::Text(fmt::format("{}", error_code).c_str());
+                ImGui::TableNextColumn();
+                ImGui::Text(fmt::format("{}", error_code).c_str());
 
-              ImGui::TableNextColumn();
-              std::string error_status;
+                ImGui::TableNextColumn();
+                std::string error_status;
 
-              if (!is_port_open && error_code == -1) {
-                error_status = "Port Closed";
-              } else {
-                if (error_code < 0) {
-                  error_status = UPnP::GetMiniUPnPcErrorCodeToDesc(error_code);
+                if (!is_port_open && error_code == -1) {
+                  error_status = "Port Closed";
                 } else {
-                  error_status = UPnP::GetUPnPErrorCodeToDesc(error_code);
+                  if (error_code < 0) {
+                    error_status =
+                        UPnP::GetMiniUPnPcErrorCodeToDesc(error_code);
+                  } else {
+                    error_status = UPnP::GetUPnPErrorCodeToDesc(error_code);
+                  }
                 }
+
+                ImGui::TextWrapped(error_status.c_str());
+
+                ImGui::TableNextColumn();
+
+                float width = (ImGui::GetContentRegionAvail().x -
+                               ImGui::GetStyle().ItemSpacing.x) /
+                              2.0f;
+
+                std::string lbl_open_port = "Open";
+                ImVec2 open_port_lbl_size =
+                    ImGui::CalcTextSize(lbl_open_port.c_str());
+                ImVec2 open_ports_btn_size =
+                    ImVec2(width, open_port_lbl_size.y + btn_height_padding);
+
+                std::string open_lbl = fmt::format("{}## {}({})", lbl_open_port,
+                                                   internal_port, protocol);
+
+                ImGui::BeginDisabled(is_port_open);
+                if (ImGui::Button(open_lbl.c_str(), open_ports_btn_size)) {
+                  upnp->AddPort(upnp->GetLocalIP(), internal_port, protocol);
+                }
+                ImGui::EndDisabled();
+
+                ImGui::SameLine();
+
+                std::string lbl_close_port = "Close";
+                ImVec2 close_port_lbl_size =
+                    ImGui::CalcTextSize(lbl_close_port.c_str());
+                ImVec2 close_port_btn_size =
+                    ImVec2(width, close_port_lbl_size.y + btn_height_padding);
+
+                std::string lbl_close = fmt::format(
+                    "{}## {}({})", lbl_close_port, internal_port, protocol);
+
+                ImGui::BeginDisabled(!is_port_open);
+                if (ImGui::Button(lbl_close.c_str(), close_port_btn_size)) {
+                  upnp->RemovePort(internal_port, protocol);
+                }
+                ImGui::EndDisabled();
               }
-
-              ImGui::TextWrapped(error_status.c_str());
-
-              ImGui::TableNextColumn();
-
-              float width = (ImGui::GetContentRegionAvail().x -
-                             ImGui::GetStyle().ItemSpacing.x) /
-                            2.0f;
-
-              std::string lbl_open_port = "Open";
-              ImVec2 open_port_lbl_size =
-                  ImGui::CalcTextSize(lbl_open_port.c_str());
-              ImVec2 open_ports_btn_size =
-                  ImVec2(width, open_port_lbl_size.y + btn_height_padding);
-
-              ImGui::BeginDisabled(is_port_open);
-              if (ImGui::Button(fmt::format("Open##{}", internal_port).c_str(),
-                                open_ports_btn_size)) {
-                upnp->AddPort(upnp->GetLocalIP(), internal_port, protocol);
-              }
-              ImGui::EndDisabled();
-
-              ImGui::SameLine();
-
-              std::string lbl_close_port = "Close";
-              ImVec2 close_port_lbl_size =
-                  ImGui::CalcTextSize(lbl_close_port.c_str());
-              ImVec2 close_port_btn_size =
-                  ImVec2(width, close_port_lbl_size.y + btn_height_padding);
-
-              ImGui::BeginDisabled(!is_port_open);
-              if (ImGui::Button(fmt::format("Close##{}", internal_port).c_str(),
-                                close_port_btn_size)) {
-                upnp->RemovePort(internal_port, protocol);
-              }
-              ImGui::EndDisabled();
             }
             ImGui::EndTable();
           }
