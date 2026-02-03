@@ -887,6 +887,7 @@ dword_result_t NetDll_XNetInAddrToXnAddr_entry(dword_t caller, dword_t in_addr,
   xn_addr->ina.s_addr = ntohl(in_addr);
   xn_addr->inaOnline.s_addr = ntohl(in_addr);
   xn_addr->wPortOnline = XLiveAPI::GetPlayerPort();
+  xn_addr->abOnline.platform_type = PLATFORM_TYPE::Xbox360;
 
   // Find cached online IP?
   if (XLiveAPI::macAddressCache.find(xn_addr->inaOnline.s_addr) ==
