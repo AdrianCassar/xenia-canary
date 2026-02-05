@@ -33,7 +33,6 @@ struct FriendsContentArgs {
   bool filter_title;
   bool filter_offline;
   bool refresh_presence;
-  bool refresh_presence_sync;
   AddFriendArgs add_friend_args = {};
   ImGuiTextFilter filter = {};
 };

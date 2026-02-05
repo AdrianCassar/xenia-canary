@@ -385,6 +385,32 @@ void ProfileConfigDialog::OnDraw(ImGuiIO& io) {
   ImGui::End();
 }
 
+void ManagerDialog::Initalize(ui::ImGuiDrawer* imgui_drawer,
+                              uint32_t user_index) {
+  const auto profile =
+      emulator_window_->emulator()->kernel_state()->xam_state()->GetUserProfile(
+          user_index);
+
+  if (!profile) {
+    return;
+  }
+
+  friends_presence_ = RefreshFriendsPresence(profile);
+}
+
+std::future<std::vector<kernel::FriendPresenceObjectJSON>>
+ManagerDialog::RefreshFriendsPresence(xe::kernel::xam::UserProfile* profile) {
+  return std::async(std::launch::async, [profile, this]() {
+    const uint8_t user_index =
+        emulator_window_->emulator()
+            ->kernel_state()
+            ->xam_state()
+            ->GetUserIndexAssignedToProfileFromXUID(profile->xuid());
+
+    return kernel::XLiveAPI::GetAllFriendsPresence(user_index);
+  });
+}
+
 void ManagerDialog::OnDraw(ImGuiIO& io) {
   if (!manager_opened_) {
     manager_opened_ = true;
@@ -469,8 +495,6 @@ void ManagerDialog::OnDraw(ImGuiIO& io) {
 
     if (!friends_args.friends_open) {
       friends_args.first_draw = false;
-      friends_args.refresh_presence_sync = true;
-      presences = {};
     }
 
     if (!sessions_args.sessions_open) {
@@ -479,7 +503,21 @@ void ManagerDialog::OnDraw(ImGuiIO& io) {
       sessions.clear();
     }
 
-    xeDrawFriendsContent(imgui_drawer(), profile, friends_args, &presences);
+    if (friends_presence_.valid()) {
+      if (friends_presence_.wait_for(0s) == std::future_status::ready) {
+        friends_presence_result_ = friends_presence_.get();
+      }
+    }
+
+    if (friends_args.refresh_presence) {
+      friends_presence_result_ = {};
+      friends_args.refresh_presence = false;
+
+      friends_presence_ = RefreshFriendsPresence(profile);
+    }
+
+    xeDrawFriendsContent(imgui_drawer(), profile, friends_args,
+                         &friends_presence_result_);
 
     xeDrawSessionsContent(imgui_drawer(), profile, sessions_args, &sessions);
 
