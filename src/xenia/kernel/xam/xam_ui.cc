@@ -1406,7 +1406,6 @@ bool xeDrawFriendsContent(xe::ui::ImGuiDrawer* imgui_drawer,
     ImGui::BeginDisabled(!profile->GetFriendsCount());
     if (ImGui::Button("Refresh", half_width_btn)) {
       args.refresh_presence = true;
-      *presences = {};
     }
     ImGui::EndDisabled();
 
@@ -1420,28 +1419,14 @@ bool xeDrawFriendsContent(xe::ui::ImGuiDrawer* imgui_drawer,
 
     xeDrawAddFriend(imgui_drawer, profile, args.add_friend_args);
 
+    if (args.add_friend_args.added_friend) {
+      args.refresh_presence = true;
+      args.add_friend_args.added_friend = false;
+    }
+
     ImGui::Spacing();
     ImGui::Separator();
     ImGui::Spacing();
-
-    if (args.refresh_presence || args.refresh_presence_sync ||
-        args.add_friend_args.added_friend) {
-      auto run = [presences, user_index]() {
-        *presences = XLiveAPI::GetAllFriendsPresence(user_index);
-      };
-
-      if (args.refresh_presence_sync) {
-        run();
-
-        args.refresh_presence_sync = false;
-      } else {
-        std::thread get_presences_thread(run);
-        get_presences_thread.detach();
-
-        args.refresh_presence = false;
-        args.add_friend_args.added_friend = false;
-      }
-    }
 
     for (uint32_t index = 0; auto& presence : *presences) {
       bool filter_gamertags =
@@ -1508,7 +1493,7 @@ bool xeDrawFriendsContent(xe::ui::ImGuiDrawer* imgui_drawer,
       if (ImGui::Button("Yes", btn_size)) {
         profile->RemoveAllFriends();
 
-        *presences = {};
+        args.refresh_presence = true;
 
         kernel_state()->BroadcastNotification(
             kXNotificationFriendsFriendRemoved, user_index);
