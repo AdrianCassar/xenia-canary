@@ -10,12 +10,14 @@
 #ifndef XENIA_APP_PROFILE_DIALOGS_H_
 #define XENIA_APP_PROFILE_DIALOGS_H_
 
+#include <future>
 #include <memory>
 #include <set>
 
 #include "xenia/kernel/json/friend_presence_object_json.h"
 #include "xenia/kernel/json/session_object_json.h"
 #include "xenia/kernel/xam/ui/netplay_manager_util.h"
+#include "xenia/kernel/xam/user_profile.h"
 #include "xenia/ui/imgui_dialog.h"
 #include "xenia/ui/imgui_drawer.h"
 #include "xenia/xbox.h"
@@ -64,10 +66,16 @@ class ProfileConfigDialog final : public ui::ImGuiDialog {
 class ManagerDialog final : public ui::ImGuiDialog {
  public:
   ManagerDialog(ui::ImGuiDrawer* imgui_drawer, EmulatorWindow* emulator_window)
-      : ui::ImGuiDialog(imgui_drawer), emulator_window_(emulator_window) {}
+      : ui::ImGuiDialog(imgui_drawer), emulator_window_(emulator_window) {
+    Initalize(imgui_drawer, 0);
+  }
 
  protected:
   void OnDraw(ImGuiIO& io) override;
+  void Initalize(ui::ImGuiDrawer* imgui_drawer, uint32_t user_index);
+
+  std::future<std::vector<kernel::FriendPresenceObjectJSON>>
+  RefreshFriendsPresence(xe::kernel::xam::UserProfile* profile);
 
  private:
   bool manager_opened_ = false;
@@ -77,10 +85,12 @@ class ManagerDialog final : public ui::ImGuiDialog {
   xe::kernel::xam::ui::SessionsContentArgs sessions_args = {};
   xe::kernel::xam::ui::MyDeletedProfilesArgs deletion_args = {};
   xe::kernel::xam::ui::UPnPAndPortsArgs upnp_and_ports_args = {};
-  std::vector<xe::kernel::FriendPresenceObjectJSON> presences;
   std::vector<std::unique_ptr<xe::kernel::SessionObjectJSON>> sessions;
   std::map<uint64_t, std::string> deleted_profiles;
   EmulatorWindow* emulator_window_;
+  std::future<std::vector<xe::kernel::FriendPresenceObjectJSON>>
+      friends_presence_;
+  std::vector<xe::kernel::FriendPresenceObjectJSON> friends_presence_result_;
 };
 
 }  // namespace app
