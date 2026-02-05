@@ -16,12 +16,26 @@ namespace xam {
 namespace ui {
 
 FriendsUI::FriendsUI(xe::ui::ImGuiDrawer* imgui_drawer, UserProfile* profile)
-    : XamDialog(imgui_drawer), profile_(profile) {}
+    : XamDialog(imgui_drawer), profile_(profile) {
+  friends_presence_ = RefreshFriendsPresence(profile);
+}
 
+std::future<std::vector<FriendPresenceObjectJSON>>
+FriendsUI::RefreshFriendsPresence(UserProfile* profile) {
+  return std::async(std::launch::async, [profile]() {
+    const uint8_t user_index =
+        kernel_state()->xam_state()->GetUserIndexAssignedToProfileFromXUID(
+            profile->xuid());
+
+    return XLiveAPI::GetAllFriendsPresence(user_index);
+  });
+}
+
+// TODO(Adrian): Move into a separate function so draw can be reused with dialog
+// manager to reduce duplication.
 void FriendsUI::OnDraw(ImGuiIO& io) {
   if (!args.friends_open) {
     args.first_draw = true;
-    args.refresh_presence_sync = true;
     args.friends_open = true;
 
     ImGui::OpenPopup("Friends");
@@ -31,7 +45,19 @@ void FriendsUI::OnDraw(ImGuiIO& io) {
     }
   }
 
-  xeDrawFriendsContent(imgui_drawer(), profile_, args, &presences);
+  if (friends_presence_.valid()) {
+    if (friends_presence_.wait_for(0s) == std::future_status::ready) {
+      friends_presence_result_ = friends_presence_.get();
+    }
+  }
+
+  if (args.refresh_presence) {
+    friends_presence_ = RefreshFriendsPresence(profile_);
+    args.refresh_presence = false;
+  }
+
+  xeDrawFriendsContent(imgui_drawer(), profile_, args,
+                       &friends_presence_result_);
 
   if (!args.friends_open) {
     Close();
