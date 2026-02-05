@@ -20,6 +20,8 @@ namespace ui {
 struct AddFriendArgs {
   bool add_friend_open;
   bool add_friend_first_draw;
+  bool search_filter_context_open;
+  bool add_friend_context_open;
   bool added_friend;
   bool are_friends;
   bool valid_xuid;
