@@ -968,8 +968,7 @@ bool xeDrawFriendContent(xe::ui::ImGuiDrawer* imgui_drawer,
       kernel_state()->xam_state()->GetUserIndexAssignedToProfileFromXUID(
           profile->GetLogonXUID());
 
-  const ImVec2 drawing_start_position = ImGui::GetCursorPos();
-  ImVec2 current_drawing_position = ImGui::GetCursorPos();
+  ImVec2 start_drawing_position = ImGui::GetCursorPos();
 
   ImGui::TextUnformatted(presence.Gamertag().c_str());
 
@@ -979,9 +978,8 @@ bool xeDrawFriendContent(xe::ui::ImGuiDrawer* imgui_drawer,
 
   if (!presence.TitleID().empty()) {
     ImGui::SameLine();
-    ImGui::SetCursorPos(current_drawing_position);
-    ImGui::SetCursorPosY(current_drawing_position.y +
-                         ImGui::GetTextLineHeight());
+    ImGui::SetCursorPos(start_drawing_position);
+    ImGui::SetCursorPosY(start_drawing_position.y + ImGui::GetTextLineHeight());
 
     if (title_id) {
       if (title_id == kernel_state()->title_id()) {
@@ -998,8 +996,8 @@ bool xeDrawFriendContent(xe::ui::ImGuiDrawer* imgui_drawer,
   }
 
   ImGui::SameLine();
-  ImGui::SetCursorPos(current_drawing_position);
-  ImGui::SetCursorPosY(current_drawing_position.y +
+  ImGui::SetCursorPos(start_drawing_position);
+  ImGui::SetCursorPosY(start_drawing_position.y +
                        index * ImGui::GetTextLineHeight());
 
   const uint64_t friend_xuid = presence.XUID();
@@ -1011,8 +1009,8 @@ bool xeDrawFriendContent(xe::ui::ImGuiDrawer* imgui_drawer,
 
   if (!presence.RichPresence().empty()) {
     ImGui::SameLine();
-    ImGui::SetCursorPos(current_drawing_position);
-    ImGui::SetCursorPosY(current_drawing_position.y +
+    ImGui::SetCursorPos(start_drawing_position);
+    ImGui::SetCursorPosY(start_drawing_position.y +
                          index * ImGui::GetTextLineHeight());
 
     std::string presense_string =
@@ -1026,7 +1024,11 @@ bool xeDrawFriendContent(xe::ui::ImGuiDrawer* imgui_drawer,
     index++;
   }
 
+  const ImVec2 friend_info_drawing_end_position = ImGui::GetCursorPos();
+
   ImGui::Spacing();
+
+  ImGui::BeginGroup();
 
   float btn_height = 25;
   float btn_width = (ImGui::GetContentRegionAvail().x * 0.5f) -
@@ -1136,12 +1138,16 @@ bool xeDrawFriendContent(xe::ui::ImGuiDrawer* imgui_drawer,
       ImGui::SetTooltip("Add Friend");
     }
   }
-  ImGui::Spacing();
+  ImGui::EndGroup();
 
+  ImVec2 buttons_row_size = ImGui::GetItemRectSize();
   ImVec2 drawing_end_position = ImGui::GetCursorPos();
 
+  ImGui::Spacing();
+
   if (selected_xuid_) {
-    ImGui::SetCursorPos(drawing_start_position);
+    ImGui::SetCursorPos(
+        ImVec2(start_drawing_position.x + 2, start_drawing_position.y));
 
     const std::string selectable_label =
         std::format("##Selectable{}", friend_xuid_str);
@@ -1149,8 +1155,8 @@ bool xeDrawFriendContent(xe::ui::ImGuiDrawer* imgui_drawer,
         std::format("Friend Menu##{}", friend_xuid_str);
 
     auto selectable_area =
-        ImVec2(drawing_end_position.x - drawing_start_position.x,
-               (drawing_end_position.y - drawing_start_position.y) - 35);
+        ImVec2(buttons_row_size.x - 6,
+               friend_info_drawing_end_position.y - start_drawing_position.y);
 
     ImGui::PushStyleColor(ImGuiCol_HeaderHovered, IM_COL32(50, 100, 200, 50));
     ImGui::PushStyleColor(ImGuiCol_HeaderActive, IM_COL32(0, 0, 0, 0));
@@ -1199,7 +1205,8 @@ bool xeDrawAddFriend(xe::ui::ImGuiDrawer* imgui_drawer, UserProfile* profile,
   ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
   if (ImGui::BeginPopupModal("Add Friend", &args.add_friend_open,
                              ImGuiWindowFlags_AlwaysAutoResize)) {
-    if (ImGui::IsKeyPressed(ImGuiKey::ImGuiKey_GamepadFaceRight, false)) {
+    if (!args.add_friend_context_open &&
+        ImGui::IsKeyPressed(ImGuiKey::ImGuiKey_GamepadFaceRight, false)) {
       ImGui::CloseCurrentPopup();
     }
 
@@ -1285,11 +1292,13 @@ bool xeDrawAddFriend(xe::ui::ImGuiDrawer* imgui_drawer, UserProfile* profile,
     }
 
     if (ImGui::BeginPopupContextItem("##AddFriendContexts")) {
-      if (ImGui::MenuItem("Paste")) {
-        const char* clipboard = ImGui::GetClipboardText();
+      args.add_friend_context_open = true;
 
-        if (clipboard && strlen(clipboard)) {
-          strncpy(args.add_xuid_, clipboard, 16);
+      if (ImGui::MenuItem("Paste")) {
+        const std::string clipboard = ImGui::GetClipboardText();
+
+        if (!clipboard.empty()) {
+          strncpy(args.add_xuid_, clipboard.c_str(), sizeof(args.add_xuid_));
         }
       }
 
@@ -1300,6 +1309,8 @@ bool xeDrawAddFriend(xe::ui::ImGuiDrawer* imgui_drawer, UserProfile* profile,
       }
 
       ImGui::EndPopup();
+    } else {
+      args.add_friend_context_open = false;
     }
 
     ImGui::BeginDisabled(!args.valid_xuid || args.are_friends || max_friends);
@@ -1352,7 +1363,7 @@ bool xeDrawFriendsContent(xe::ui::ImGuiDrawer* imgui_drawer,
   ImVec2 center = viewport->GetCenter();
 
   ImGui::SetNextWindowSizeConstraints(ImVec2(400, 205), ImVec2(400, 600));
-  ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+  ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
   if (ImGui::BeginPopupModal("Friends", &args.friends_open,
                              ImGuiWindowFlags_NoCollapse |
                                  ImGuiWindowFlags_AlwaysAutoResize |
@@ -1360,6 +1371,7 @@ bool xeDrawFriendsContent(xe::ui::ImGuiDrawer* imgui_drawer,
     ImGui::SetWindowFontScale(1.05f);
 
     if (!args.add_friend_args.add_friend_open &&
+        !args.add_friend_args.search_filter_context_open &&
         ImGui::IsKeyPressed(ImGuiKey::ImGuiKey_GamepadFaceRight, false)) {
       ImGui::CloseCurrentPopup();
     }
@@ -1394,14 +1406,16 @@ bool xeDrawFriendsContent(xe::ui::ImGuiDrawer* imgui_drawer,
     }
 
     if (ImGui::BeginPopupContextItem("##SearchFilter")) {
-      if (ImGui::MenuItem("Paste")) {
-        const char* clipboard = ImGui::GetClipboardText();
+      args.add_friend_args.search_filter_context_open = true;
 
-        if (clipboard && strlen(clipboard)) {
+      if (ImGui::MenuItem("Paste")) {
+        const std::string clipboard = ImGui::GetClipboardText();
+
+        if (!clipboard.empty()) {
           memset(args.filter.InputBuf, 0, sizeof(args.filter.InputBuf));
 
-          strncpy(args.filter.InputBuf, clipboard,
-                  sizeof(args.filter.InputBuf) - 1);
+          strncpy(args.filter.InputBuf, clipboard.c_str(),
+                  sizeof(args.filter.InputBuf));
 
           args.filter.Build();
         }
@@ -1415,6 +1429,8 @@ bool xeDrawFriendsContent(xe::ui::ImGuiDrawer* imgui_drawer,
       }
 
       ImGui::EndPopup();
+    } else {
+      args.add_friend_args.search_filter_context_open = false;
     }
 
     if (std::string(args.filter.InputBuf).empty()) {
