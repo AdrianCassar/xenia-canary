@@ -926,6 +926,19 @@ void TitleGamerpicBrowser::UpdateGamerpicIfRequested(
       }
 
       if (updated) {
+        // XUIDs -> Title IDs -> Settings
+        user_settingids_map settings = {};
+
+        settings[profile_->GetOnlineXUID()][xe::kernel::kDashboardID].push_back(
+            kernel::xam::UserSettingId::XPROFILE_GAMERCARD_PICTURE_KEY);
+
+        // Profile settings are sent along with profile registration, therefore
+        // it doesn't matter if this fails due to profile not existing on the
+        // backend.
+        if (!kernel::XLiveAPI::SetUsersSettings(settings)) {
+          XELOGW("Updating Backend Gamerpic Setting Failed!");
+        }
+
         new_gamerpic_ = {};
         small_gamerpic_ = {};
 

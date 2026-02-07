@@ -21,11 +21,13 @@
 #include "xenia/kernel/util/net_utils.h"
 #include "xenia/kernel/xam/user_settings.h"
 #include "xenia/kernel/xsession.h"
+#include "xenia/ui/imgui_drawer.h"
 
 #include "xenia/kernel/json/arbitration_object_json.h"
 #include "xenia/kernel/json/delete_my_profiles_json.h"
 #include "xenia/kernel/json/find_users_object_json.h"
 #include "xenia/kernel/json/friend_presence_object_json.h"
+#include "xenia/kernel/json/getusersettings_object_json.h"
 #include "xenia/kernel/json/http_response_object_json.h"
 #include "xenia/kernel/json/leaderboard_object_json.h"
 #include "xenia/kernel/json/page_gamerpics_object_json.h"
@@ -35,6 +37,7 @@
 #include "xenia/kernel/json/read_user_stats_object_json.h"
 #include "xenia/kernel/json/services_json.h"
 #include "xenia/kernel/json/session_object_json.h"
+#include "xenia/kernel/json/setusersettings_object_json.h"
 #include "xenia/kernel/json/title_gamerpics_object_json.h"
 #include "xenia/kernel/json/xstorage_file_info_object_json.h"
 
@@ -43,6 +46,19 @@
 #endif  // XE_PLATFORM_WIN32
 
 namespace xe {
+
+// Settings must maintain order.
+using user_settingids_map =
+    std::map<uint64_t,
+             std::map<uint32_t, std::vector<kernel::xam::UserSettingId>>>;
+
+// Settings must maintain order.
+using user_settings_map =
+    std::map<uint64_t,
+             std::map<uint32_t, std::vector<kernel::xam::UserSetting>>>;
+
+using gamerpics_pair = std::pair<std::vector<uint8_t>, std::vector<uint8_t>>;
+
 namespace kernel {
 
 class XLiveAPI {
@@ -175,6 +191,13 @@ class XLiveAPI {
 
   static void SetPresence(const std::set<uint64_t> xuids);
 
+  static bool SetUsersSettings(user_settingids_map settings);
+
+  static user_settings_map GetUsersSettings(user_settingids_map settings);
+
+  static std::vector<uint8_t> GetUserGamerpicTile(uint64_t xuid,
+                                                  bool small_tile);
+
   static TitleGamerpicsObjectJSON GetTitleGamerpic(uint32_t title_id);
 
   static std::set<uint32_t> GetSupportedGamerpicTitles();
@@ -194,23 +217,32 @@ class XLiveAPI {
   static std::future<std::vector<uint8_t>> DownloadGamerpicTileAsync(
       uint32_t title_id, uint32_t tile_id);
 
-  static std::shared_future<
-      std::pair<std::vector<uint8_t>, std::vector<uint8_t>>>
-  DownloadCompleteGamerpic(xam::GamerPictureKey gamerpic_key);
+  static std::shared_future<gamerpics_pair> DownloadCompleteGamerpic(
+      xam::GamerPictureKey gamerpic_key);
+
+  static std::map<uint64_t, std::vector<uint8_t>> GetMultiGamerpicsFromXUIDs(
+      std::set<uint64_t> xuids, bool fsmall = false);
 
   static std::vector<uint8_t> DownloadRandomGamerpic();
+
+  static std::future<
+      std::map<uint64_t, std::shared_ptr<xe::ui::ImmediateTexture>>>
+  GetFriendsGamerpicsAsync(const uint64_t xuid, ui::ImGuiDrawer* imgui_drawer);
 
   static std::unique_ptr<HTTPResponseObjectJSON> PraseResponse(
       response_data response);
 
+  static std::future<std::vector<FriendPresenceObjectJSON>>
+  GetFriendsPresenceAsync(const uint64_t xuid);
+
   static std::vector<FriendPresenceObjectJSON> GetAllFriendsPresence(
-      const uint32_t user_index);
+      const uint64_t xuid);
 
   static std::map<uint64_t, FriendPresenceObjectJSON> GetOfflineFriendsPresence(
-      const uint32_t user_index);
+      const uint64_t xuid);
 
   static std::map<uint64_t, FriendPresenceObjectJSON> GetOnlineFriendsPresence(
-      const uint32_t user_index);
+      const uint64_t xuid);
 
   static const sockaddr_in OnlineIP() { return online_ip_; };
 

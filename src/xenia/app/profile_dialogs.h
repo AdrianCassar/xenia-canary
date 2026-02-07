@@ -20,6 +20,7 @@
 #include "xenia/kernel/xam/user_profile.h"
 #include "xenia/ui/imgui_dialog.h"
 #include "xenia/ui/imgui_drawer.h"
+#include "xenia/ui/immediate_drawer.h"
 #include "xenia/xbox.h"
 
 namespace xe {
@@ -58,6 +59,7 @@ class ProfileConfigDialog final : public ui::ImGuiDialog {
   std::vector<std::unique_ptr<ui::ImmediateTexture>> released_icons_;
   std::shared_ptr<std::set<uint64_t>> pending_icon_reloads_ =
       std::make_shared<std::set<uint64_t>>();
+  std::map<uint64_t, kernel::xam::GamerPictureKey> profile_gamerpic_key_;
 
   uint64_t selected_xuid_ = 0;
   EmulatorWindow* emulator_window_;
@@ -74,9 +76,6 @@ class ManagerDialog final : public ui::ImGuiDialog {
   void OnDraw(ImGuiIO& io) override;
   void Initalize(ui::ImGuiDrawer* imgui_drawer, uint32_t user_index);
 
-  std::future<std::vector<kernel::FriendPresenceObjectJSON>>
-  RefreshFriendsPresence(xe::kernel::xam::UserProfile* profile);
-
  private:
   bool manager_opened_ = false;
   uint64_t selected_xuid_ = 0;
@@ -91,6 +90,10 @@ class ManagerDialog final : public ui::ImGuiDialog {
   std::future<std::vector<xe::kernel::FriendPresenceObjectJSON>>
       friends_presence_;
   std::vector<xe::kernel::FriendPresenceObjectJSON> friends_presence_result_;
+  std::future<std::map<uint64_t, std::shared_ptr<xe::ui::ImmediateTexture>>>
+      immediate_gamerpics_;
+  std::map<uint64_t, std::shared_ptr<xe::ui::ImmediateTexture>>
+      immediate_gamerpics_result_;
 };
 
 }  // namespace app

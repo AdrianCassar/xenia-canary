@@ -17,6 +17,7 @@ namespace xe {
 namespace kernel {
 PlayerObjectJSON::PlayerObjectJSON()
     : xuid_(0),
+      settings_({}),
       hostAddress_(""),
       gamertag_(""),
       machineId_(0),
@@ -51,6 +52,8 @@ bool PlayerObjectJSON::Deserialize(const rapidjson::Value& obj) {
     MacAddress(address.to_uint64());
   }
 
+  DeserializeSettings(obj);
+
   if (obj.HasMember("sessionId")) {
     SessionID(
         string_util::from_string<uint64_t>(obj["sessionId"].GetString(), true));
@@ -82,9 +85,60 @@ bool PlayerObjectJSON::Serialize(
   writer->String("macAddress");
   writer->String(fmt::format("{:012x}", macAddress_.get()));
 
+  writer->String("settings");
+  writer->StartObject();
+
+  for (const auto& [title_id, settings] : settings_) {
+    writer->String(fmt::format("{:08X}", title_id));
+    writer->StartArray();
+
+    for (const auto& setting : settings) {
+      const auto setting_base64 = setting.SerializeToBase64();
+
+      if (setting_base64.has_value()) {
+        writer->String(setting_base64.value());
+      }
+    }
+
+    writer->EndArray();
+  }
+
+  writer->EndObject();
+
   writer->EndObject();
 
   return true;
 }
+
+void PlayerObjectJSON::DeserializeSettings(const rapidjson::Value& obj) {
+  const rapidjson::Value::ConstMemberIterator settingsObj_itr =
+      obj.FindMember("settings");
+
+  if (settingsObj_itr == obj.MemberEnd()) {
+    return;
+  }
+
+  const auto& settings = settingsObj_itr->value;
+
+  if (!settings.IsArray()) {
+    return;
+  }
+
+  for (const auto& title_id_str : settings.GetArray()) {
+    const uint32_t title_id =
+        xe::string_util::from_string<uint32_t>(title_id_str.GetString(), true);
+
+    for (const auto& serialized_setting : title_id_str.GetArray()) {
+      const std::string setting_base64 = serialized_setting.GetString();
+
+      const auto setting = xam::UserSetting::DeserializeBase64(setting_base64);
+
+      if (setting.has_value()) {
+        settings_[title_id].push_back(setting.value());
+      }
+    }
+  }
+}
+
 }  // namespace kernel
 }  // namespace xe
