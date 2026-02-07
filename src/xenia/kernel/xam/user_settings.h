@@ -15,15 +15,17 @@
 #include <variant>
 #include <vector>
 
-#include "xenia/kernel/xam/profile_manager.h"
+#include "xenia/kernel/title_id_utils.h"
 #include "xenia/kernel/xam/user_data.h"
-#include "xenia/kernel/xam/user_profile.h"
-
-#include "xenia/xbox.h"
+#include "xenia/kernel/xam/xam.h"
+#include "xenia/kernel/xam/xdbf/gpd_info.h"
 
 namespace xe {
 namespace kernel {
 namespace xam {
+
+enum class X_USER_PROFILE_SETTING_SOURCE : uint32_t;
+struct X_USER_PROFILE_SETTING;
 
 constexpr uint32_t SettingKey(X_USER_DATA_TYPE type, uint16_t size,
                               uint16_t id) {
@@ -486,11 +488,14 @@ class UserSetting : public UserData {
   UserSetting(const X_XDBF_GPD_SETTING_HEADER* profile_setting,
               std::span<const uint8_t> extended_data);
 
-  static std::optional<UserSetting> GetDefaultSetting(const UserProfile* user,
-                                                      uint32_t setting_id);
+  static std::optional<UserSetting> GetDefaultSetting(uint32_t setting_id);
   void WriteToGuest(X_USER_PROFILE_SETTING* setting_ptr,
                     uint32_t& extended_data_address);
   std::vector<uint8_t> Serialize() const;
+
+  std::optional<std::string> SerializeToBase64() const;
+
+  static std::optional<UserSetting> DeserializeBase64(const std::string base64);
 
   uint32_t get_setting_id() const { return static_cast<uint32_t>(setting_id_); }
   X_USER_PROFILE_SETTING_SOURCE get_setting_source() const {
@@ -501,6 +506,10 @@ class UserSetting : public UserData {
     return std::find(known_settings.cbegin(), known_settings.cend(),
                      static_cast<UserSettingId>(setting_id)) !=
            known_settings.cend();
+  }
+
+  static bool is_title_specific(uint32_t setting_id) {
+    return (setting_id & 0x3F00) == 0x3F00;
   }
 
  private:
@@ -518,10 +527,6 @@ class UserSetting : public UserData {
       return true;
     }
     return false;
-  }
-
-  static bool is_title_specific(uint32_t setting_id) {
-    return (setting_id & 0x3F00) == 0x3F00;
   }
 
   bool is_title_specific() const {

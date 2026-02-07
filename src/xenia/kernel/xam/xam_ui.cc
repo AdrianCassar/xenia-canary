@@ -913,11 +913,23 @@ bool xeDrawProfileContent(xe::ui::ImGuiDrawer* imgui_drawer,
 
 bool xeDrawFriendContent(xe::ui::ImGuiDrawer* imgui_drawer,
                          UserProfile* profile,
+                         std::shared_ptr<xe::ui::ImmediateTexture> icon_texture,
                          FriendPresenceObjectJSON& presence,
                          uint64_t* selected_xuid_, uint64_t* removed_xuid_) {
   const uint32_t user_index =
       kernel_state()->xam_state()->GetUserIndexAssignedToProfileFromXUID(
           profile->GetLogonXUID());
+
+  if (icon_texture) {
+    ImGui::Image(reinterpret_cast<ImTextureID>(icon_texture.get()),
+                 xe::ui::default_image_icon_size);
+    ImGui::SameLine();
+  } else {
+    ImGui::Image(
+        reinterpret_cast<ImTextureID>(imgui_drawer->GetLoadingTileIcon()),
+        xe::ui::default_image_icon_size);
+    ImGui::SameLine();
+  }
 
   ImVec2 start_drawing_position = ImGui::GetCursorPos();
 
@@ -977,8 +989,6 @@ bool xeDrawFriendContent(xe::ui::ImGuiDrawer* imgui_drawer,
 
   const ImVec2 friend_info_drawing_end_position = ImGui::GetCursorPos();
 
-  ImGui::Spacing();
-
   ImGui::BeginGroup();
 
   float btn_height = 25;
@@ -999,6 +1009,8 @@ bool xeDrawFriendContent(xe::ui::ImGuiDrawer* imgui_drawer,
   const bool same_title = title_id == kernel_state()->title_id();
 
   if (!is_self) {
+    ImGui::Spacing();
+
     ImGui::BeginDisabled(!presence.SessionID() || !same_title);
     if (ImGui::Button(join_label.c_str(), half_width_btn)) {
       X_INVITE_INFO invite = {};
@@ -1094,8 +1106,6 @@ bool xeDrawFriendContent(xe::ui::ImGuiDrawer* imgui_drawer,
   ImVec2 buttons_row_size = ImGui::GetItemRectSize();
   ImVec2 drawing_end_position = ImGui::GetCursorPos();
 
-  ImGui::Spacing();
-
   if (selected_xuid_) {
     ImGui::SetCursorPos(
         ImVec2(start_drawing_position.x + 2, start_drawing_position.y));
@@ -1106,7 +1116,7 @@ bool xeDrawFriendContent(xe::ui::ImGuiDrawer* imgui_drawer,
         std::format("Friend Menu##{}", friend_xuid_str);
 
     auto selectable_area =
-        ImVec2(buttons_row_size.x - 6,
+        ImVec2(buttons_row_size.x - (xe::ui::default_image_icon_size.x + 14),
                friend_info_drawing_end_position.y - start_drawing_position.y);
 
     ImGui::PushStyleColor(ImGuiCol_HeaderHovered, IM_COL32(50, 100, 200, 50));
@@ -1299,9 +1309,12 @@ bool xeDrawAddFriend(xe::ui::ImGuiDrawer* imgui_drawer, UserProfile* profile,
   return true;
 }
 
-bool xeDrawFriendsContent(xe::ui::ImGuiDrawer* imgui_drawer,
-                          UserProfile* profile, ui::FriendsContentArgs& args,
-                          std::vector<FriendPresenceObjectJSON>* presences) {
+bool xeDrawFriendsContent(
+    xe::ui::ImGuiDrawer* imgui_drawer, UserProfile* profile,
+    ui::FriendsContentArgs& args,
+    std::vector<FriendPresenceObjectJSON>* presences,
+    std::map<uint64_t, std::shared_ptr<xe::ui::ImmediateTexture>>&
+        immediate_gamerpics) {
   if (!profile || !presences) {
     return false;
   }
@@ -1472,10 +1485,16 @@ bool xeDrawFriendsContent(xe::ui::ImGuiDrawer* imgui_drawer,
           continue;
         }
 
+        std::shared_ptr<xe::ui::ImmediateTexture> gamerpic = {};
+
+        if (immediate_gamerpics.contains(presence.XUID())) {
+          gamerpic = immediate_gamerpics.at(presence.XUID());
+        }
+
         uint64_t selected_xuid_ = 0;
         uint64_t removed_xuid_ = 0;
-        xeDrawFriendContent(imgui_drawer, profile, presence, &selected_xuid_,
-                            &removed_xuid_);
+        xeDrawFriendContent(imgui_drawer, profile, gamerpic, presence,
+                            &selected_xuid_, &removed_xuid_);
 
         if (removed_xuid_) {
           presences->erase(presences->begin() + index);
