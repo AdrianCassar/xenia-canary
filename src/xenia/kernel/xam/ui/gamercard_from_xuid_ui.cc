@@ -56,6 +56,16 @@ GamercardFromXUIDUI::GamercardFromXUIDUI(xe::ui::ImGuiDrawer* imgui_drawer,
   } else {
     const auto presences = XLiveAPI::GetFriendsPresence({xuid_});
 
+    immediate_gamerpic_ =
+        std::async(std::launch::async, [xuid, imgui_drawer]() {
+          const auto gamerpic = XLiveAPI::GetUserGamerpicTile(xuid, false);
+
+          std::shared_ptr<xe::ui::ImmediateTexture> shared_gamerpic =
+              std::move(imgui_drawer->LoadImGuiIcon({gamerpic}));
+
+          return shared_gamerpic;
+        });
+
     if (!presences->PlayersPresence().empty()) {
       presence_ = presences->PlayersPresence().front();
 
@@ -63,6 +73,20 @@ GamercardFromXUIDUI::GamercardFromXUIDUI(xe::ui::ImGuiDrawer* imgui_drawer,
         presence_.RichPresence(profile_->GetPresenceString());
       }
     }
+  }
+
+  if (is_self) {
+    const auto gamerpic = kernel_state()
+                              ->xam_state()
+                              ->GetUserProfile(profile_->xuid())
+                              ->GetProfileIcon(XTileType::kGamerTile);
+    immediate_gamerpic_ =
+        std::async(std::launch::async, [gamerpic, imgui_drawer]() {
+          std::shared_ptr<xe::ui::ImmediateTexture> shared_gamerpic =
+              std::move(imgui_drawer->LoadImGuiIcon({gamerpic}));
+
+          return shared_gamerpic;
+        });
   }
 }
 
@@ -75,6 +99,14 @@ void GamercardFromXUIDUI::OnDraw(ImGuiIO& io) {
   ImGuiViewport* viewport = ImGui::GetMainViewport();
   ImVec2 center = viewport->GetCenter();
 
+  std::shared_ptr<xe::ui::ImmediateTexture> gamerpic_texture = {};
+
+  if (immediate_gamerpic_.valid()) {
+    if (immediate_gamerpic_.wait_for(0s) == std::future_status::ready) {
+      gamerpic_texture = immediate_gamerpic_.get();
+    }
+  }
+
   ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
   if (ImGui::BeginPopupModal(title_.c_str(), &card_opened,
                              ImGuiWindowFlags_AlwaysAutoResize)) {
@@ -82,30 +114,8 @@ void GamercardFromXUIDUI::OnDraw(ImGuiIO& io) {
       card_opened = false;
     }
 
-    if (is_self) {
-      const uint8_t user_index =
-          kernel_state()->xam_state()->GetUserIndexAssignedToProfileFromXUID(
-              xuid_);
-      const auto account =
-          kernel_state()->xam_state()->profile_manager()->GetAccount(
-              profile_->xuid());
-
-      const auto gamer_icon = kernel_state()
-                                  ->xam_state()
-                                  ->GetUserProfile(profile_->xuid())
-                                  ->GetProfileIcon(XTileType::kGamerTile);
-
-      xe::ui::ImmediateTexture* icon_texture =
-          imgui_drawer()->LoadImGuiIcon(gamer_icon).release();
-
-      kernel::xam::xeDrawProfileContent(imgui_drawer(), profile_->xuid(),
-                                        user_index, account, icon_texture,
-                                        nullptr, {}, nullptr);
-      ImGui::Separator();
-      ImGui::Spacing();
-    }
-
-    xeDrawFriendContent(imgui_drawer(), profile_, presence_, nullptr, nullptr);
+    xeDrawFriendContent(imgui_drawer(), profile_, gamerpic_texture, presence_,
+                        nullptr, nullptr);
 
     ImGui::EndPopup();
   }

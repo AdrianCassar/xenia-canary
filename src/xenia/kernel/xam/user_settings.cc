@@ -7,6 +7,10 @@
  ******************************************************************************
  */
 
+extern "C" {
+#include "third_party/FFmpeg/libavutil/base64.h"
+}
+
 #include "xenia/kernel/xam/user_settings.h"
 
 #include "third_party/fmt/include/fmt/format.h"
@@ -128,6 +132,54 @@ std::vector<uint8_t> UserSetting::Serialize() const {
          extended_data_.size());
 
   return data;
+}
+
+std::optional<std::string> UserSetting::SerializeToBase64() const {
+  const auto setting_data = Serialize();
+
+  const uint32_t size = static_cast<uint32_t>(setting_data.size());
+  const uint32_t out_size = AV_BASE64_SIZE(size);
+
+  std::vector<char> serialized_data(out_size);
+
+  const char* out = av_base64_encode(serialized_data.data(), out_size,
+                                     setting_data.data(), size);
+
+  if (!out) {
+    return std::nullopt;
+  }
+
+  const std::string base64_out = std::string(serialized_data.data());
+
+  return base64_out;
+}
+
+std::optional<UserSetting> UserSetting::DeserializeBase64(std::string base64) {
+  const std::uint32_t size = static_cast<uint32_t>(base64.size());
+  const std::uint32_t decode_size = AV_BASE64_DECODE_SIZE(size);
+
+  std::vector<uint8_t> setting_out(decode_size);
+
+  const int out =
+      av_base64_decode(setting_out.data(), base64.c_str(), decode_size);
+
+  if (out < 0) {
+    return std::nullopt;
+  }
+
+  const std::span<uint8_t> setting_data =
+      std::span<uint8_t>(setting_out.data(), decode_size);
+
+  xam::X_XDBF_GPD_SETTING_HEADER header = {};
+  std::span<uint8_t> extended_data = {};
+
+  memcpy(&header, setting_data.data(), sizeof(xam::X_XDBF_GPD_SETTING_HEADER));
+
+  extended_data = setting_data.subspan(sizeof(xam::X_XDBF_GPD_SETTING_HEADER));
+
+  const xam::UserSetting setting = xam::UserSetting(&header, extended_data);
+
+  return setting;
 }
 
 }  // namespace xam

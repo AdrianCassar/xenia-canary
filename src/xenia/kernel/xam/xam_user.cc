@@ -19,6 +19,7 @@
 #include "xenia/kernel/xam/xam_private.h"
 #include "xenia/kernel/xenumerator.h"
 #include "xenia/kernel/xsession.h"
+#include "xenia/ui/imgui_drawer.h"
 #include "xenia/ui/resources.h"
 #include "xenia/xbox.h"
 
@@ -242,12 +243,24 @@ uint32_t XamUserReadProfileSettingsEx(uint32_t title_id, uint32_t user_index,
     return X_ERROR_INVALID_PARAMETER;
   }
 
+  // Dashbaord expects settings in order use vector to ensure insertion order
+  // is maintained.
+  const std::vector<uint32_t> settings_ids = {setting_ids,
+                                              setting_ids + setting_count};
+
+  const std::vector<uint64_t> profile_xuids = {xuids, xuids + xuid_count};
+
   uint32_t needed_header_size = 0;
   uint32_t needed_data_size = 0;
-  for (uint32_t i = 0; i < setting_count; ++i) {
+  for (const uint32_t setting_id : settings_ids) {
+    if (!UserSetting::is_setting_valid(setting_id)) {
+      if (!setting_id) {
+        XELOGE("{} requested unknown setting {:08X}", __func__, setting_id);
+      }
+    }
+
     needed_header_size += sizeof(X_USER_PROFILE_SETTING);
-    AttributeKey setting_key;
-    setting_key.value = static_cast<uint32_t>(setting_ids[i]);
+    AttributeKey setting_key = {.value = setting_id};
     switch (static_cast<X_USER_DATA_TYPE>(setting_key.type)) {
       case X_USER_DATA_TYPE::WSTRING:
       case X_USER_DATA_TYPE::BINARY:
@@ -282,110 +295,196 @@ uint32_t XamUserReadProfileSettingsEx(uint32_t title_id, uint32_t user_index,
       return X_ERROR_FUNCTION_FAILED;
     }
 
-    if (xuids) {
-      uint64_t user_xuid = static_cast<uint64_t>(xuids[0]);
+    // Function seems to support multiple XUID lookups, but games always lookup
+    // xuids individually?
+    assert_false(profile_xuids.size() > 1);
 
-      if (IsOnlineXUID(user_xuid)) {
-        XELOGI("Looking up remote profile settings XUID: {:016X}", user_xuid);
+    const auto requested_settings_view =
+        settings_ids | std::views::transform([](uint32_t id) {
+          return static_cast<xam::UserSettingId>(id);
+        });
+
+    const std::vector<xam::UserSettingId> requested_settings_ids(
+        requested_settings_view.begin(), requested_settings_view.end());
+
+    user_settings_map remote_user_settings = {};
+    user_settings_map local_user_settings = {};
+
+    const uint32_t titleId = title_id ? title_id : kernel_state()->title_id();
+
+    std::vector<uint64_t> total_profile_xuids = profile_xuids;
+
+    // We split the settings into their respective title ids for lookup,
+    // therefore we lose the setting ids order!
+    const auto GetLocalUserSettings = [requested_settings_ids,
+                                       titleId](UserProfile* user_profile) {
+      std::map<uint32_t, std::vector<xam::UserSetting>> title_settings = {};
+
+      if (!user_profile) {
+        return title_settings;
       }
 
-      if (!kernel_state()->xam_state()->IsUserSignedIn(user_xuid)) {
-        std::set<uint32_t> requested_settings = {setting_ids,
-                                                 setting_ids + setting_count};
+      for (const xam::UserSettingId setting_id : requested_settings_ids) {
+        const uint32_t setting_id_val = static_cast<uint32_t>(setting_id);
+        uint32_t setting_title_id = titleId;
 
-        // Games expect gamer profile pictures.
-        if (requested_settings.contains(
-                uint32_t(UserSettingId::XPROFILE_GAMERCARD_PICTURE_KEY))) {
-          const uint32_t default_settings_count = 1;
-
-          auto out_header =
-              reinterpret_cast<X_USER_READ_PROFILE_SETTINGS*>(buffer);
-          auto out_setting =
-              reinterpret_cast<X_USER_PROFILE_SETTING*>(&out_header[1]);
-          out_header->setting_count = default_settings_count;
-          out_header->settings_ptr =
-              kernel_state()->memory()->HostToGuestVirtual(out_setting);
-
-          std::fill_n(out_setting, default_settings_count,
-                      X_USER_PROFILE_SETTING{});
-
-          UserSetting default_gamer_picture =
-              UserSetting(UserSettingId::XPROFILE_GAMERCARD_PICTURE_KEY,
-                          xe::string_util::read_u16string_and_swap(
-                              u"FFFE07D10002000B0001000B"));
-
-          out_setting->setting_id =
-              uint32_t(UserSettingId::XPROFILE_GAMERCARD_PICTURE_KEY);
-          out_setting->source = default_gamer_picture.get_setting_source();
-
-          uint32_t additional_data_buffer_ptr =
-              out_header->settings_ptr +
-              (default_settings_count * sizeof(X_USER_PROFILE_SETTING));
-
-          default_gamer_picture.WriteToGuest(out_setting,
-                                             additional_data_buffer_ptr);
-
-          out_setting->xuid = user_xuid;
+        // If setting is not title specific then assume it belongs to the
+        // dashboard.
+        if (!xam::UserSetting::is_title_specific(
+                static_cast<uint32_t>(setting_id_val))) {
+          setting_title_id = kDashboardID;
         }
 
-        return X_ERROR_SUCCESS;
+        const auto user_setting =
+            kernel_state()->xam_state()->user_tracker()->GetSetting(
+                user_profile, setting_title_id,
+                static_cast<uint32_t>(setting_id_val));
+
+        if (user_setting.has_value()) {
+          title_settings[setting_title_id].push_back(user_setting.value());
+        }
       }
 
-      user_profile = kernel_state()->xam_state()->GetUserProfileAny(user_xuid);
+      return title_settings;
+    };
+
+    if (!profile_xuids.empty()) {
+      user_settingids_map remote_user_setting_ids = {};
+
+      for (const uint64_t xuid : profile_xuids) {
+        if (!kernel_state()->xam_state()->IsUserSignedIn(xuid) &&
+            IsOnlineXUID(xuid)) {
+          for (const xam::UserSettingId settings_id : requested_settings_ids) {
+            uint32_t setting_title_id = titleId;
+
+            // If setting is not title specific then assume it belongs to the
+            // dashboard.
+            if (!xam::UserSetting::is_title_specific(
+                    static_cast<uint32_t>(settings_id))) {
+              setting_title_id = kDashboardID;
+            }
+
+            remote_user_setting_ids[xuid][setting_title_id].push_back(
+                settings_id);
+          }
+        } else {
+          const auto user_profile =
+              kernel_state()->xam_state()->GetUserProfileAny(xuid);
+
+          const auto settings = GetLocalUserSettings(user_profile);
+
+          if (user_profile) {
+            local_user_settings[xuid] = settings;
+          }
+        }
+      }
+
+      if (!remote_user_setting_ids.empty()) {
+        remote_user_settings =
+            XLiveAPI::GetUsersSettings(remote_user_setting_ids);
+      }
+    } else {
+      const auto user_profile =
+          kernel_state()->xam_state()->GetUserProfile(user_index);
+
+      const auto settings = GetLocalUserSettings(user_profile);
+
+      if (user_profile) {
+        total_profile_xuids.push_back(user_profile->xuid());
+        local_user_settings[user_profile->xuid()] = settings;
+      }
     }
 
-    if (!user_profile) {
+    if (local_user_settings.empty() && remote_user_settings.empty()) {
       extended_error = X_E_NO_SUCH_USER;
       return X_ERROR_FUNCTION_FAILED;
     }
 
+    // The order of xuids isn't preserved.
+    user_settings_map users_settings = local_user_settings;
+    users_settings.merge(remote_user_settings);
+
     auto out_header = reinterpret_cast<X_USER_READ_PROFILE_SETTINGS*>(buffer);
-    auto out_setting =
-        reinterpret_cast<X_USER_PROFILE_SETTING*>(&out_header[1]);
-    out_header->setting_count = static_cast<uint32_t>(setting_count);
-    out_header->settings_ptr =
-        kernel_state()->memory()->HostToGuestVirtual(out_setting);
 
-    uint32_t additional_data_buffer_ptr =
-        out_header->settings_ptr +
-        (setting_count * sizeof(X_USER_PROFILE_SETTING));
+    // Maintain XUIDs and setting ids order.
+    for (const uint64_t xuid : total_profile_xuids) {
+      std::memset(out_header, 0, sizeof(X_USER_READ_PROFILE_SETTINGS));
 
-    std::fill_n(out_setting, setting_count, X_USER_PROFILE_SETTING{});
+      auto out_setting =
+          reinterpret_cast<X_USER_PROFILE_SETTING*>(out_header + 1);
 
-    for (uint32_t n = 0; n < setting_count; ++n) {
-      const uint32_t setting_id = setting_ids[n];
-      if (!UserSetting::is_setting_valid(setting_id)) {
-        if (setting_id != 0) {
-          XELOGE(
-              "xeXamUserReadProfileSettingsEx requested unimplemented setting "
-              "{:08X}",
-              setting_id);
+      std::fill_n(out_setting, setting_count, X_USER_PROFILE_SETTING{});
+
+      out_header->setting_count =
+          static_cast<uint32_t>(requested_settings_ids.size());
+      out_header->settings_ptr =
+          kernel_state()->memory()->HostToGuestVirtual(out_setting);
+
+      uint32_t additional_data_buffer_ptr =
+          out_header->settings_ptr +
+          (setting_count * sizeof(X_USER_PROFILE_SETTING));
+
+      // Maintain requested settings id order.
+      for (const xam::UserSettingId setting_id : requested_settings_ids) {
+        const uint32_t setting_id_val = static_cast<uint32_t>(setting_id);
+        uint32_t setting_title_id = titleId;
+
+        // If setting is not title specific then assume it belongs to the
+        // dashboard.
+        if (!xam::UserSetting::is_title_specific(
+                static_cast<uint32_t>(setting_id_val))) {
+          setting_title_id = kDashboardID;
         }
-        --out_header->setting_count;
-        continue;
-      }
 
-      const bool is_valid =
-          kernel_state()->xam_state()->user_tracker()->GetUserSetting(
-              user_profile->xuid(),
-              title_id ? title_id : kernel_state()->title_id(), setting_id,
-              out_setting, additional_data_buffer_ptr);
+        std::vector<xam::UserSetting> settings = {};
 
-      if (is_valid) {
-        if (xuids) {
-          uint64_t user_xuid = static_cast<uint64_t>(xuids[0]);
-
-          if (IsOnlineXUID(user_xuid)) {
-            out_setting->xuid = user_profile->GetOnlineXUID();
-          } else {
-            out_setting->xuid = user_profile->xuid();
+        if (users_settings.contains(xuid)) {
+          if (users_settings.at(xuid).contains(setting_title_id)) {
+            settings = users_settings.at(xuid).at(setting_title_id);
           }
+        }
+
+        if (settings.empty()) {
+          assert_always();
+
+          XELOGI(fmt::format(
+              "XamUserReadProfileSettingsEx: {:08X}: {:08X} not found!",
+              setting_title_id, setting_id_val));
+          continue;
+        }
+
+        auto it =
+            std::find_if(settings.cbegin(), settings.cend(),
+                         [&setting_id_val](xam::UserSetting setting) {
+                           return setting_id_val == setting.get_setting_id();
+                         });
+
+        if (it == settings.cend()) {
+          assert_always();
+
+          XELOGI(fmt::format(
+              "XamUserReadProfileSettingsEx: {:08X}: {:08X} not found!",
+              setting_title_id, setting_id_val));
+          continue;
+        }
+
+        xam::UserSetting setting = *it;
+
+        out_setting->setting_id = setting.get_setting_id();
+        out_setting->source = setting.get_setting_source();
+
+        setting.WriteToGuest(out_setting, additional_data_buffer_ptr);
+
+        if (xuids) {
+          out_setting->xuid = xuid;
         } else {
-          out_setting->xuid = -1;
           out_setting->user_index = user_index;
         }
+
+        out_setting++;
       }
-      ++out_setting;
+
+      out_header++;
     }
 
     return X_ERROR_SUCCESS;

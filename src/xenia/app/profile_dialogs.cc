@@ -118,11 +118,17 @@ void ProfileConfigDialog::LoadProfileIcon(const uint64_t xuid) {
     return;
   }
 
-  const auto profile_manager = emulator_window_->emulator()
-                                   ->kernel_state()
-                                   ->xam_state()
-                                   ->profile_manager();
+  const auto xam_state =
+      emulator_window_->emulator()->kernel_state()->xam_state();
+
+  const auto profile_manager = xam_state->profile_manager();
+  const auto user_tracker = xam_state->user_tracker();
+
   if (!profile_manager) {
+    return;
+  }
+
+  if (!user_tracker) {
     return;
   }
 
@@ -132,7 +138,17 @@ void ProfileConfigDialog::LoadProfileIcon(const uint64_t xuid) {
     if (profile_icon_.contains(xuid)) {
       profile_icon_[xuid].release();
     }
+
+    if (profile_gamerpic_key_.contains(xuid)) {
+      profile_gamerpic_key_.erase(xuid);
+    }
     return;
+  }
+
+  const auto gamerpic_key = user_tracker->GetUserGamerpicSetting(xuid);
+
+  if (gamerpic_key.has_value()) {
+    profile_gamerpic_key_[xuid] = gamerpic_key.value();
   }
 
   const auto profile_icon =
@@ -200,12 +216,32 @@ void ProfileConfigDialog::OnDraw(ImGuiIO& io) {
     const uint8_t user_index =
         profile_manager->GetUserIndexAssignedToProfile(xuid);
 
-    // Create ImmediateTexture of profile gamerpic every frame (Slow
-    // Performance)
+    // Detect the change because creating ImmediateTexture every frame will
+    // impact performance.
     //
     // If dialog is open while Gamerpic Browser changes gamerpic then we want to
     // detect the change.
-    LoadProfileIcon(xuid);
+    const auto user_tracker = emulator_window_->emulator()
+                                  ->kernel_state()
+                                  ->xam_state()
+                                  ->user_tracker();
+
+    if (user_tracker && profile_gamerpic_key_.contains(xuid)) {
+      const auto gamerpic_key = user_tracker->GetUserGamerpicSetting(xuid);
+
+      if (gamerpic_key.has_value()) {
+        const kernel::xam::GamerPictureKey cached_gamerpic_key =
+            profile_gamerpic_key_.at(xuid);
+        const kernel::xam::GamerPictureKey current_gamerpic_key =
+            gamerpic_key.value();
+
+        // Reload gamerpic icon if changed.
+        if (memcmp(&cached_gamerpic_key, &current_gamerpic_key,
+                   sizeof(kernel::xam::GamerPictureKey)) != 0) {
+          LoadProfileIcon(xuid);
+        }
+      }
+    }
 
     const auto profile_icon = profile_icon_.find(xuid) != profile_icon_.cend()
                                   ? profile_icon_[xuid].get()
@@ -402,20 +438,10 @@ void ManagerDialog::Initalize(ui::ImGuiDrawer* imgui_drawer,
     return;
   }
 
-  friends_presence_ = RefreshFriendsPresence(profile);
-}
-
-std::future<std::vector<kernel::FriendPresenceObjectJSON>>
-ManagerDialog::RefreshFriendsPresence(xe::kernel::xam::UserProfile* profile) {
-  return std::async(std::launch::async, [profile, this]() {
-    const uint8_t user_index =
-        emulator_window_->emulator()
-            ->kernel_state()
-            ->xam_state()
-            ->GetUserIndexAssignedToProfileFromXUID(profile->xuid());
-
-    return kernel::XLiveAPI::GetAllFriendsPresence(user_index);
-  });
+  friends_presence_ =
+      kernel::XLiveAPI::GetFriendsPresenceAsync(profile->xuid());
+  immediate_gamerpics_ =
+      kernel::XLiveAPI::GetFriendsGamerpicsAsync(profile->xuid(), imgui_drawer);
 }
 
 void ManagerDialog::OnDraw(ImGuiIO& io) {
@@ -520,11 +546,21 @@ void ManagerDialog::OnDraw(ImGuiIO& io) {
       friends_presence_result_ = {};
       friends_args.refresh_presence = false;
 
-      friends_presence_ = RefreshFriendsPresence(profile);
+      friends_presence_ =
+          kernel::XLiveAPI::GetFriendsPresenceAsync(profile->xuid());
+      immediate_gamerpics_ = kernel::XLiveAPI::GetFriendsGamerpicsAsync(
+          profile->xuid(), imgui_drawer());
+    }
+
+    if (immediate_gamerpics_.valid()) {
+      if (immediate_gamerpics_.wait_for(0s) == std::future_status::ready) {
+        immediate_gamerpics_result_.merge(immediate_gamerpics_.get());
+      }
     }
 
     xeDrawFriendsContent(imgui_drawer(), profile, friends_args,
-                         &friends_presence_result_);
+                         &friends_presence_result_,
+                         immediate_gamerpics_result_);
 
     xeDrawSessionsContent(imgui_drawer(), profile, sessions_args, &sessions);
 
