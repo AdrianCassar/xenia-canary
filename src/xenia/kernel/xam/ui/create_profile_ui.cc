@@ -81,7 +81,8 @@ bool xeDrawCreateProfile(xe::ui::ImGuiDrawer* imgui_drawer, Emulator* emulator,
 
   if (args.downloaded_gamerpics.valid() &&
       args.downloaded_gamerpics.wait_for(0s) == std::future_status::ready) {
-    const auto& gamerpics = args.downloaded_gamerpics.get();
+    const std::pair<std::vector<uint8_t>, std::vector<uint8_t>> gamerpics =
+        args.downloaded_gamerpics.get();
 
     args.big_gamerpic_texture = imgui_drawer->LoadImGuiIcon(gamerpics.first);
   }
@@ -161,8 +162,7 @@ bool xeDrawCreateProfile(xe::ui::ImGuiDrawer* imgui_drawer, Emulator* emulator,
           profile_manager->GetProfile(created_profile_xuid);
 
       if (args.downloaded_gamerpics.valid() && args.gamerpic_key.has_value()) {
-        const auto& gamerpics = args.downloaded_gamerpics.get();
-
+        const gamerpics_pair gamerpics = args.downloaded_gamerpics.get();
         const GamerPictureKey key = args.gamerpic_key.value();
 
         const auto user_tracker = kernel_state()->xam_state()->user_tracker();

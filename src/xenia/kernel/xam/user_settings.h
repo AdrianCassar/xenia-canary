@@ -534,6 +534,10 @@ class UserSetting : public UserData {
                     uint32_t& extended_data_address);
   std::vector<uint8_t> Serialize() const;
 
+  std::optional<std::string> SerializeToBase64() const;
+
+  static std::optional<UserSetting> DeserializeBase64(const std::string base64);
+
   uint32_t get_setting_id() const { return static_cast<uint32_t>(setting_id_); }
   X_USER_PROFILE_SETTING_SOURCE get_setting_source() const {
     return setting_source_;
@@ -551,6 +555,10 @@ class UserSetting : public UserData {
            known_settings.cend();
   }
 
+  static bool is_title_specific(uint32_t setting_id) {
+    return (setting_id & 0x3F00) == 0x3F00;
+  }
+
  private:
   UserSettingId setting_id_;
   X_USER_PROFILE_SETTING_SOURCE setting_source_;
@@ -566,10 +574,6 @@ class UserSetting : public UserData {
       return true;
     }
     return false;
-  }
-
-  static bool is_title_specific(uint32_t setting_id) {
-    return (setting_id & 0x3F00) == 0x3F00;
   }
 
   bool is_title_specific() const {

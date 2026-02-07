@@ -10,9 +10,11 @@
 #ifndef XENIA_KERNEL_PLAYER_OBJECT_JSON_H_
 #define XENIA_KERNEL_PLAYER_OBJECT_JSON_H_
 
+#include <map>
 #include <vector>
 
 #include "xenia/kernel/json/base_object_json.h"
+#include "xenia/kernel/xam/user_settings.h"
 
 namespace xe {
 namespace kernel {
@@ -28,6 +30,8 @@ class PlayerObjectJSON : public BaseObjectJSON {
   virtual bool Serialize(
       rapidjson::PrettyWriter<rapidjson::StringBuffer>* writer) const;
 
+  void DeserializeSettings(const rapidjson::Value& obj);
+
   const xe::be<uint64_t>& XUID() const { return xuid_; }
   void XUID(const xe::be<uint64_t>& xuid) { xuid_ = xuid; }
 
@@ -42,6 +46,14 @@ class PlayerObjectJSON : public BaseObjectJSON {
   const std::string& HostAddress() const { return hostAddress_; }
   void HostAddress(const std::string& hostAddress) {
     hostAddress_ = hostAddress;
+  }
+
+  const std::map<uint32_t, std::vector<xam::UserSetting>>& Settings() const {
+    return settings_;
+  }
+  void Settings(
+      const std::map<uint32_t, std::vector<xam::UserSetting>>& settings) {
+    settings_ = settings;
   }
 
   const std::string& Gamertag() const { return gamertag_; }
@@ -60,6 +72,7 @@ class PlayerObjectJSON : public BaseObjectJSON {
   xe::be<uint64_t> machineId_;
   xe::be<uint64_t> macAddress_;  // 6 Bytes
   xe::be<uint64_t> sessionId_;
+  std::map<uint32_t, std::vector<xam::UserSetting>> settings_;
   uint16_t port_;
 };
 

@@ -23,9 +23,6 @@ class FriendsUI : public XamDialog {
  public:
   FriendsUI(xe::ui::ImGuiDrawer* imgui_drawer, UserProfile* profile);
 
-  std::future<std::vector<FriendPresenceObjectJSON>> RefreshFriendsPresence(
-      UserProfile* profile);
-
  private:
   void OnDraw(ImGuiIO& io) override;
 
@@ -33,6 +30,10 @@ class FriendsUI : public XamDialog {
   ui::FriendsContentArgs args = {};
   std::future<std::vector<FriendPresenceObjectJSON>> friends_presence_;
   std::vector<FriendPresenceObjectJSON> friends_presence_result_;
+  std::future<std::map<uint64_t, std::shared_ptr<xe::ui::ImmediateTexture>>>
+      immediate_gamerpics_;
+  std::map<uint64_t, std::shared_ptr<xe::ui::ImmediateTexture>>
+      immediate_gamerpics_result_;
 };
 
 }  // namespace ui
