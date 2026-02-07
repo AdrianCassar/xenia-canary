@@ -17,6 +17,7 @@
 #include "xenia/xbox.h"
 
 #include "xenia/kernel/json/friend_presence_object_json.h"
+#include "xenia/kernel/xam/user_profile.h"
 #include "xenia/kernel/xam/user_settings.h"
 
 using namespace std::chrono_literals;

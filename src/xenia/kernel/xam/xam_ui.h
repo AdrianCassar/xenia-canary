@@ -124,12 +124,16 @@ bool xeDrawProfileContent(xe::ui::ImGuiDrawer* imgui_drawer,
                           std::function<void()> on_profile_change,
                           uint64_t* selected_xuid);
 
-bool xeDrawFriendsContent(xe::ui::ImGuiDrawer* imgui_drawer,
-                          UserProfile* profile, ui::FriendsContentArgs& args,
-                          std::vector<FriendPresenceObjectJSON>* presences);
+bool xeDrawFriendsContent(
+    xe::ui::ImGuiDrawer* imgui_drawer, UserProfile* profile,
+    ui::FriendsContentArgs& args,
+    std::vector<FriendPresenceObjectJSON>* presences,
+    std::map<uint64_t, std::shared_ptr<xe::ui::ImmediateTexture>>&
+        immediate_gamerpics);
 
 bool xeDrawFriendContent(xe::ui::ImGuiDrawer* imgui_drawer,
                          UserProfile* profile,
+                         std::shared_ptr<xe::ui::ImmediateTexture> icon_texture,
                          FriendPresenceObjectJSON& presence,
                          uint64_t* selected_xuid_, uint64_t* removed_xuid_);
 
