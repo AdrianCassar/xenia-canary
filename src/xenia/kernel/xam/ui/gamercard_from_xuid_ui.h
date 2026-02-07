@@ -10,6 +10,8 @@
 #ifndef XENIA_KERNEL_XAM_UI_GAMERCARD_FROM_XUID_UI_H_
 #define XENIA_KERNEL_XAM_UI_GAMERCARD_FROM_XUID_UI_H_
 
+#include <future>
+
 #include "xenia/kernel/json/friend_presence_object_json.h"
 #include "xenia/kernel/xam/xam_ui.h"
 
@@ -31,6 +33,8 @@ class GamercardFromXUIDUI : public XamDialog {
   bool are_friends = false;
   std::string title_;
   const uint64_t xuid_;
+  std::shared_future<std::shared_ptr<xe::ui::ImmediateTexture>>
+      immediate_gamerpic_;
   UserProfile* profile_;
   FriendPresenceObjectJSON presence_;
 };

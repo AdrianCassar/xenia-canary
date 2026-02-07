@@ -670,6 +670,48 @@ std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::RegisterPlayer(
            registered_xuid);
   }
 
+  std::map<uint32_t, std::vector<xam::UserSetting>> settings;
+
+  const std::set<xam::UserSettingId> default_dashboard_settings = {
+      xam::UserSettingId::XPROFILE_GAMER_DIFFICULTY,
+      xam::UserSettingId::XPROFILE_GAMER_TYPE,
+      xam::UserSettingId::XPROFILE_GAMERCARD_PICTURE_KEY,
+      xam::UserSettingId::XPROFILE_GAMERCARD_MOTTO,
+      xam::UserSettingId::XPROFILE_GAMERCARD_ZONE,
+      xam::UserSettingId::XPROFILE_GAMERCARD_REGION,
+      xam::UserSettingId::XPROFILE_GAMERCARD_CRED,
+      xam::UserSettingId::XPROFILE_GAMERCARD_REP,
+      xam::UserSettingId::XPROFILE_GAMERCARD_TITLES_PLAYED,
+      xam::UserSettingId::XPROFILE_GAMERCARD_ACHIEVEMENTS_EARNED,
+      xam::UserSettingId::XPROFILE_GAMERCARD_TITLE_CRED_EARNED};
+
+  const std::set<xam::UserSettingId> default_title_settings = {
+      xam::UserSettingId::XPROFILE_TITLE_SPECIFIC1,
+      xam::UserSettingId::XPROFILE_TITLE_SPECIFIC2,
+      xam::UserSettingId::XPROFILE_TITLE_SPECIFIC3};
+
+  for (const xam::UserSettingId setting_id : default_dashboard_settings) {
+    if (const auto setting =
+            kernel_state()->xam_state()->user_tracker()->GetSetting(
+                user_profile, kDashboardID,
+                static_cast<uint32_t>(setting_id))) {
+      if (setting.has_value()) {
+        settings[kDashboardID].push_back(setting.value());
+      }
+    }
+  }
+
+  for (const xam::UserSettingId setting_id : default_title_settings) {
+    if (const auto setting =
+            kernel_state()->xam_state()->user_tracker()->GetSetting(
+                user_profile, kernel_state()->title_id(),
+                static_cast<uint32_t>(setting_id))) {
+      if (setting.has_value()) {
+        settings[kernel_state()->title_id()].push_back(setting.value());
+      }
+    }
+  }
+
   PlayerObjectJSON player = PlayerObjectJSON();
 
   MacAddress mac_address = GetConsoleMacAddress();
@@ -679,6 +721,7 @@ std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::RegisterPlayer(
   player.MachineID(GetLocalMachineId(mac_address));
   player.HostAddress(OnlineIP_str());
   player.MacAddress(mac_address.to_uint64());
+  player.Settings(settings);
 
   std::string player_output;
   bool valid = player.Serialize(player_output);
@@ -1750,6 +1793,131 @@ void XLiveAPI::SetPresence(std::set<uint64_t> xuids) {
   }
 }
 
+bool XLiveAPI::SetUsersSettings(user_settingids_map settings) {
+  const std::string endpoint = BuildEndpoint("players/setsettings");
+
+  user_settings_map users_settings = {};
+
+  for (const auto& [xuid, titles] : settings) {
+    for (const auto& [title_id, settings] : titles) {
+      for (const auto& setting_id : settings) {
+        const auto user_profile =
+            kernel_state()->xam_state()->GetUserProfileAny(xuid);
+
+        if (const auto setting =
+                kernel_state()->xam_state()->user_tracker()->GetSetting(
+                    user_profile, title_id,
+                    static_cast<uint32_t>(setting_id))) {
+          if (setting.has_value()) {
+            users_settings[xuid][title_id].push_back(setting.value());
+          }
+        }
+      }
+    }
+  }
+
+  SetUserSettingsObjectJSON user_settingsObj = {};
+  user_settingsObj.Settings(users_settings);
+
+  std::string user_settings_json;
+  bool valid = user_settingsObj.Serialize(user_settings_json);
+  assert_true(valid);
+
+  const uint8_t* user_settings_data =
+      reinterpret_cast<const uint8_t*>(user_settings_json.c_str());
+
+  std::unique_ptr<HTTPResponseObjectJSON> response =
+      Post(endpoint, user_settings_data);
+
+  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_CREATED) {
+    XELOGE("{} error message: {}", __func__, response->Message());
+    assert_always();
+
+    return false;
+  }
+
+  return true;
+}
+
+user_settings_map XLiveAPI::GetUsersSettings(user_settingids_map settings) {
+  const std::string endpoint = BuildEndpoint("players/getsettings");
+
+  GetUserSettingsObjectJSON user_settingsObj = {};
+  user_settingsObj.SettingIds(settings);
+
+  std::string user_settings_json;
+  bool valid = user_settingsObj.Serialize(user_settings_json);
+  assert_true(valid);
+
+  const uint8_t* user_settings_data =
+      reinterpret_cast<const uint8_t*>(user_settings_json.c_str());
+
+  std::unique_ptr<HTTPResponseObjectJSON> response =
+      Post(endpoint, user_settings_data);
+
+  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_CREATED) {
+    XELOGE("{} error message: {}", __func__, response->Message());
+    // assert_always();
+
+    return {};
+  }
+
+  auto result = response->Deserialize<GetUserSettingsObjectJSON>();
+
+  return result->Settings();
+}
+
+std::vector<uint8_t> XLiveAPI::GetUserGamerpicTile(uint64_t xuid,
+                                                   bool small_tile) {
+  user_settingids_map settings_ids = {};
+
+  settings_ids[xuid][xe::kernel::kDashboardID].push_back(
+      xam::UserSettingId::XPROFILE_GAMERCARD_PICTURE_KEY);
+
+  const auto settings = kernel::XLiveAPI::GetUsersSettings(settings_ids);
+
+  uint32_t setting_id =
+      static_cast<uint32_t>(xam::UserSettingId::XPROFILE_GAMERCARD_PICTURE_KEY);
+
+  bool has_gamerpic_key = false;
+
+  if (settings.contains(xuid)) {
+    if (settings.at(xuid).contains(xe::kernel::kDashboardID)) {
+      for (const auto& setting :
+           settings.at(xuid).at(xe::kernel::kDashboardID)) {
+        if (setting.get_setting_id() == setting_id) {
+          has_gamerpic_key = true;
+        }
+      }
+    }
+  }
+
+  if (!has_gamerpic_key) {
+    return {};
+  }
+
+  xam::UserSetting gamerpic_setting =
+      settings.at(xuid).at(xe::kernel::kDashboardID).front();
+
+  std::string gamerpic_key_data =
+      xe::to_utf8(std::get<std::u16string>(gamerpic_setting.get_host_data()));
+
+  const xam::GamerPictureKey gamerpic_key =
+      *reinterpret_cast<const xam::GamerPictureKey*>(gamerpic_key_data.c_str());
+
+  std::vector<uint8_t> gamerpic = {};
+
+  uint32_t tile_id = gamerpic_key.GetBigTileId();
+
+  if (small_tile) {
+    tile_id = gamerpic_key.GetSmallTileId();
+  }
+
+  gamerpic = DownloadGamerpicTile(gamerpic_key.GetTitleId(), tile_id);
+
+  return gamerpic;
+}
+
 TitleGamerpicsObjectJSON XLiveAPI::GetTitleGamerpic(uint32_t title_id) {
   const std::string endpoint =
       fmt::format("https://xboxgamer.pics/api/title/{:08x}", title_id);
@@ -1920,8 +2088,61 @@ std::future<std::vector<uint8_t>> XLiveAPI::DownloadGamerpicTileAsync(
   return gamerpic;
 }
 
-std::shared_future<std::pair<std::vector<uint8_t>, std::vector<uint8_t>>>
-XLiveAPI::DownloadCompleteGamerpic(xam::GamerPictureKey gamerpic_key) {
+std::map<uint64_t, std::vector<uint8_t>> XLiveAPI::GetMultiGamerpicsFromXUIDs(
+    std::set<uint64_t> xuids, bool fsmall) {
+  user_settingids_map remote_user_setting_ids = {};
+
+  for (const auto& xuid : xuids) {
+    remote_user_setting_ids[xuid][kDashboardID].push_back(
+        xam::UserSettingId::XPROFILE_GAMERCARD_PICTURE_KEY);
+  }
+
+  const auto remote_user_settings = GetUsersSettings(remote_user_setting_ids);
+
+  std::map<uint64_t, uint32_t> remote_users_tile = {};
+
+  std::vector<std::string> cdn_parts = {};
+
+  for (const auto& [xuid, title_ids] : remote_user_settings) {
+    for (const auto& [title_id, settings] : title_ids) {
+      for (const auto& setting : settings) {
+        if (setting.get_setting_id() ==
+            static_cast<uint32_t>(
+                xam::UserSettingId::XPROFILE_GAMERCARD_PICTURE_KEY)) {
+          const xam::GamerPictureKey gamerpic_key =
+              *reinterpret_cast<const xam::GamerPictureKey*>(
+                  xe::to_utf8(std::get<std::u16string>(setting.get_host_data()))
+                      .c_str());
+
+          const uint32_t tile_id = fsmall ? gamerpic_key.GetSmallTileId()
+                                          : gamerpic_key.GetBigTileId();
+
+          const std::string gamerpic_cdn = fmt::format(
+              "/titles/{:x}/{:x}.png", gamerpic_key.GetTitleId(), tile_id);
+
+          cdn_parts.push_back(gamerpic_cdn);
+
+          remote_users_tile[xuid] = tile_id;
+        }
+      }
+    }
+  }
+
+  const auto gamerpics_data = GetMultiGamerpics(cdn_parts);
+
+  std::map<uint64_t, std::vector<uint8_t>> gamerpics = {};
+
+  for (const auto& [xuid, tile_id] : remote_users_tile) {
+    if (gamerpics_data.contains(tile_id)) {
+      gamerpics[xuid] = gamerpics_data.at(tile_id);
+    }
+  }
+
+  return gamerpics;
+}
+
+std::shared_future<gamerpics_pair> XLiveAPI::DownloadCompleteGamerpic(
+    xam::GamerPictureKey gamerpic_key) {
   auto gamerpic = std::async(std::launch::async, [gamerpic_key]() {
     std::vector<std::string> cdn_parts = {};
 
@@ -1937,7 +2158,7 @@ XLiveAPI::DownloadCompleteGamerpic(xam::GamerPictureKey gamerpic_key) {
 
     const auto gamerpics_data = GetMultiGamerpics(cdn_parts);
 
-    std::pair<std::vector<uint8_t>, std::vector<uint8_t>> gamerpics;
+    gamerpics_pair gamerpics;
 
     if (!gamerpics_data.contains(gamerpic_key.GetBigTileId()) ||
         !gamerpics_data.contains(gamerpic_key.GetSmallTileId())) {
@@ -1994,6 +2215,31 @@ std::vector<uint8_t> XLiveAPI::DownloadRandomGamerpic() {
   return tile;
 }
 
+std::future<std::map<uint64_t, std::shared_ptr<xe::ui::ImmediateTexture>>>
+XLiveAPI::GetFriendsGamerpicsAsync(uint64_t xuid,
+                                   ui::ImGuiDrawer* imgui_drawer) {
+  const auto user_profile = kernel_state()->xam_state()->GetUserProfile(xuid);
+
+  if (!user_profile) {
+    return {};
+  }
+
+  return std::async(std::launch::async, [user_profile, imgui_drawer]() {
+    const auto gamerpics = kernel::XLiveAPI::GetMultiGamerpicsFromXUIDs(
+        user_profile->GetFriendsXUIDs());
+
+    std::map<uint64_t, std::shared_ptr<xe::ui::ImmediateTexture>>
+        immediate_gamerpics = {};
+
+    for (const auto& [xuid, gamerpic] : gamerpics) {
+      immediate_gamerpics[xuid] =
+          std::move(imgui_drawer->LoadImGuiIcon({gamerpic}));
+    }
+
+    return immediate_gamerpics;
+  });
+}
+
 std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::PraseResponse(
     response_data chunk) {
   std::unique_ptr<HTTPResponseObjectJSON> response =
@@ -2024,18 +2270,22 @@ std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::PraseResponse(
   return response;
 }
 
-std::vector<FriendPresenceObjectJSON> XLiveAPI::GetAllFriendsPresence(
-    const uint32_t user_index) {
-  const auto profile = kernel_state()->xam_state()->GetUserProfile(user_index);
+std::future<std::vector<FriendPresenceObjectJSON>>
+XLiveAPI::GetFriendsPresenceAsync(uint64_t xuid) {
+  return std::async(std::launch::async,
+                    [xuid]() { return XLiveAPI::GetAllFriendsPresence(xuid); });
+}
 
-  auto offline_peer_presences = GetOfflineFriendsPresence(user_index);
+// TODO(Adrian): Take advantage of periodic maintenance.
+std::vector<FriendPresenceObjectJSON> XLiveAPI::GetAllFriendsPresence(
+    uint64_t xuid) {
+  auto offline_peer_presences = GetOfflineFriendsPresence(xuid);
   std::map<uint64_t, FriendPresenceObjectJSON> online_peer_presences = {};
 
-  if (XLiveAPI::IsConnectedToServer()) {
-    online_peer_presences = GetOnlineFriendsPresence(user_index);
-  }
+  online_peer_presences = GetOnlineFriendsPresence(xuid);
 
-  auto& merged_peer_presences = online_peer_presences;
+  std::map<uint64_t, FriendPresenceObjectJSON> merged_peer_presences =
+      online_peer_presences;
 
   merged_peer_presences.merge(offline_peer_presences);
 
@@ -2067,12 +2317,16 @@ std::vector<FriendPresenceObjectJSON> XLiveAPI::GetAllFriendsPresence(
 }
 
 std::map<uint64_t, FriendPresenceObjectJSON>
-XLiveAPI::GetOfflineFriendsPresence(const uint32_t user_index) {
-  const auto profile = kernel_state()->xam_state()->GetUserProfile(user_index);
+XLiveAPI::GetOfflineFriendsPresence(uint64_t xuid) {
+  const auto user_profile = kernel_state()->xam_state()->GetUserProfile(xuid);
+
+  if (!user_profile) {
+    return {};
+  }
 
   std::map<uint64_t, FriendPresenceObjectJSON> peer_presences = {};
 
-  for (uint32_t count = 1; const auto& xuid : profile->GetFriendsXUIDs()) {
+  for (uint32_t count = 1; const auto& xuid : user_profile->GetFriendsXUIDs()) {
     FriendPresenceObjectJSON peer = {};
     peer.Gamertag(std::format("Friend {}", count));
     peer.XUID(xuid);
@@ -2085,13 +2339,16 @@ XLiveAPI::GetOfflineFriendsPresence(const uint32_t user_index) {
 }
 
 std::map<uint64_t, FriendPresenceObjectJSON> XLiveAPI::GetOnlineFriendsPresence(
-    const uint32_t user_index) {
-  const auto profile = kernel_state()->xam_state()->GetUserProfile(user_index);
+    uint64_t xuid) {
+  const auto user_profile = kernel_state()->xam_state()->GetUserProfile(xuid);
 
+  if (!user_profile) {
+    return {};
+  }
   std::map<uint64_t, FriendPresenceObjectJSON> peer_presences = {};
 
   const auto friends_presence_responce =
-      XLiveAPI::GetFriendsPresence(profile->GetFriendsXUIDs());
+      XLiveAPI::GetFriendsPresence(user_profile->GetFriendsXUIDs());
 
   const auto& friends_presence = friends_presence_responce->PlayersPresence();
 
