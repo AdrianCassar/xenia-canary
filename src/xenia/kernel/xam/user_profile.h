@@ -205,8 +205,8 @@ class UserProfile {
   bool UnsubscribeFromXUID(const uint64_t xuid);
   bool IsSubscribed(const uint64_t xuid);
 
-  void SetSelfInvite(X_INVITE_INFO* invite_info);
-  X_INVITE_INFO* GetSelfInvite() { return &self_invite; };
+  void SetSelfInvite(X_INVITE_INFO invite_info);
+  X_INVITE_INFO GetSelfInvite() { return self_invite; };
 
   const std::set<uint64_t> GetSubscribedXUIDs() const;
 
