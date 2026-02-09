@@ -47,6 +47,9 @@ class XLiveAPI {
 
   static void IpGetConsoleXnAddr(XNADDR* XnAddr_ptr);
 
+  static void GetXnAddrFromSessionObject(SessionObjectJSON session,
+                                         XNADDR* XnAddr_ptr);
+
   static std::vector<std::string> ParseAPIList();
 
   static void SetAPIAddress(std::string address);
@@ -125,7 +128,7 @@ class XLiveAPI {
 
   static void XSessionCreate(uint64_t sessionId, XGI_SESSION_CREATE* data);
 
-  static std::unique_ptr<SessionObjectJSON> XSessionGet(uint64_t sessionId);
+  static SessionObjectJSON XSessionGet(uint64_t sessionId);
 
   static std::vector<X_TITLE_SERVER> GetServers();
 

@@ -1001,14 +1001,14 @@ bool xeDrawFriendContent(xe::ui::ImGuiDrawer* imgui_drawer,
   if (!is_self) {
     ImGui::BeginDisabled(!presence.SessionID() || !same_title);
     if (ImGui::Button(join_label.c_str(), half_width_btn)) {
-      X_INVITE_INFO* invite = profile->GetSelfInvite();
+      X_INVITE_INFO invite = {};
 
-      memset(invite, 0, sizeof(X_INVITE_INFO));
+      invite.xuid_invitee = profile->GetOnlineXUID();
+      invite.xuid_inviter = presence.XUID();
+      invite.title_id = kernel_state()->title_id();
+      invite.from_game_invite = false;
 
-      invite->from_game_invite = false;
-      invite->title_id = kernel_state()->title_id();
-      invite->xuid_invitee = profile->GetOnlineXUID();
-      invite->xuid_inviter = presence.XUID();
+      profile->SetSelfInvite(invite);
 
       kernel_state()->BroadcastNotification(kXNotificationLiveInviteAccepted,
                                             user_index);
@@ -1619,14 +1619,14 @@ bool xeDrawSessionContent(xe::ui::ImGuiDrawer* imgui_drawer,
   ImGui::BeginDisabled(!session->SessionID_UInt() || caller);
   if (ImGui::Button(join_label.c_str(),
                     ImVec2(ImGui::GetContentRegionAvail().x, 25))) {
-    X_INVITE_INFO* invite = profile->GetSelfInvite();
+    X_INVITE_INFO invite = {};
 
-    memset(invite, 0, sizeof(X_INVITE_INFO));
+    invite.xuid_invitee = profile->GetOnlineXUID();
+    invite.xuid_inviter = session->XUID_UInt();
+    invite.title_id = kernel_state()->title_id();
+    invite.from_game_invite = false;
 
-    invite->from_game_invite = false;
-    invite->title_id = kernel_state()->title_id();
-    invite->xuid_invitee = profile->GetOnlineXUID();
-    invite->xuid_inviter = session->XUID_UInt();
+    profile->SetSelfInvite(invite);
 
     kernel_state()->BroadcastNotification(kXNotificationLiveInviteAccepted,
                                           user_index);

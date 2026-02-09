@@ -464,8 +464,8 @@ bool UserProfile::IsSubscribed(const uint64_t xuid) {
   return subscriptions_.count(xuid) != 0;
 }
 
-void UserProfile::SetSelfInvite(X_INVITE_INFO* invite_info) {
-  memcpy(&self_invite, invite_info, sizeof(X_INVITE_INFO));
+void UserProfile::SetSelfInvite(X_INVITE_INFO invite_info) {
+  self_invite = invite_info;
 }
 
 const std::set<uint64_t> UserProfile::GetSubscribedXUIDs() const {
