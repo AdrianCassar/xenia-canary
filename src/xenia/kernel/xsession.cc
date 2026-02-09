@@ -240,13 +240,12 @@ X_RESULT XSession::JoinExistingSession(XSESSION_INFO* session_info) {
     assert_always();
   }
 
-  const std::unique_ptr<SessionObjectJSON> session =
-      XLiveAPI::XSessionGet(session_id_);
+  const auto session = XLiveAPI::XSessionGet(session_id_);
 
   // Begin XNetRegisterKey?
 
-  if (!session->HostAddress().empty()) {
-    GetXnAddrFromSessionObject(session.get(), &session_info->hostAddress);
+  if (!session.HostAddress().empty()) {
+    XLiveAPI::GetXnAddrFromSessionObject(session, &session_info->hostAddress);
   }
 
   return X_ERROR_SUCCESS;
@@ -1172,12 +1171,8 @@ X_RESULT XSession::GetSessionByIDs(Memory* memory, XNKID* session_ids_ptr,
 
     const auto session = XLiveAPI::XSessionGet(session_id);
 
-    if (!session->HostAddress().empty()) {
-      // HUH? How it should be filled in this case?
-      FillSessionContext(memory, 0, nullptr, {}, 0, nullptr,
-                         &search_results->results_ptr[result_index]);
-      FillSessionProperties(memory, 0, nullptr, {}, 0, nullptr,
-                            &search_results->results_ptr[result_index]);
+    // Skip setting contexts and properties in such case.
+    if (!session.HostAddress().empty()) {
       FillSessionSearchResult(session,
                               &search_results->results_ptr[result_index]);
 
@@ -1191,41 +1186,16 @@ X_RESULT XSession::GetSessionByIDs(Memory* memory, XNKID* session_ids_ptr,
   return X_ERROR_SUCCESS;
 }
 
-void XSession::GetXnAddrFromSessionObject(SessionObjectJSON* session,
-                                          XNADDR* XnAddr_ptr) {
-  memset(XnAddr_ptr, 0, sizeof(XNADDR));
+void XSession::FillSessionSearchResult(const SessionObjectJSON session,
+                                       XSESSION_SEARCHRESULT* result) {
+  result->filled_private_slots = session.FilledPrivateSlotsCount();
+  result->filled_public_slots = session.FilledPublicSlotsCount();
+  result->open_private_slots = session.OpenPrivateSlotsCount();
+  result->open_public_slots = session.OpenPublicSlotsCount();
 
-  // We only store online IP on server.
+  Uint64toXNKID(session.SessionID_UInt(), &result->info.sessionID);
 
-  // if (XLiveAPI::IsOnline()) {
-  // } else {
-  // }
-
-  XnAddr_ptr->inaOnline = ip_to_in_addr(session->HostAddress());
-  XnAddr_ptr->ina = ip_to_in_addr(session->HostAddress());
-
-  const MacAddress mac = MacAddress(session->MacAddress());
-
-  memcpy(XnAddr_ptr->abEnet, mac.raw(), MacAddress::MacAddressSize);
-
-  XnAddr_ptr->wPortOnline = session->Port();
-
-  // 545407F2 will fail to join session if platform type does not match host's
-  // platform type
-  XnAddr_ptr->abOnline.platform_type = PLATFORM_TYPE::Xbox360;
-}
-
-void XSession::FillSessionSearchResult(
-    const std::unique_ptr<SessionObjectJSON>& session,
-    XSESSION_SEARCHRESULT* result) {
-  result->filled_private_slots = session->FilledPrivateSlotsCount();
-  result->filled_public_slots = session->FilledPublicSlotsCount();
-  result->open_private_slots = session->OpenPrivateSlotsCount();
-  result->open_public_slots = session->OpenPublicSlotsCount();
-
-  Uint64toXNKID(session->SessionID_UInt(), &result->info.sessionID);
-
-  GetXnAddrFromSessionObject(session.get(), &result->info.hostAddress);
+  XLiveAPI::GetXnAddrFromSessionObject(session, &result->info.hostAddress);
 
   GenerateIdentityExchangeKey(&result->info.keyExchangeKey);
 }

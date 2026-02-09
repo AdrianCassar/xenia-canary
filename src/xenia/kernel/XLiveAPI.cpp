@@ -100,6 +100,23 @@ void XLiveAPI::IpGetConsoleXnAddr(XNADDR* XnAddr_ptr) {
          MacAddress::MacAddressSize);
 }
 
+void XLiveAPI::GetXnAddrFromSessionObject(SessionObjectJSON session,
+                                          XNADDR* XnAddr_ptr) {
+  memset(XnAddr_ptr, 0, sizeof(XNADDR));
+
+  XnAddr_ptr->inaOnline = ip_to_in_addr(session.HostAddress());
+  XnAddr_ptr->ina = ip_to_in_addr(session.HostAddress());
+
+  const MacAddress mac_address = MacAddress(session.MacAddress());
+  memcpy(XnAddr_ptr->abEnet, mac_address.raw(), MacAddress::MacAddressSize);
+
+  XnAddr_ptr->wPortOnline = session.Port();
+
+  // 545407F2 will fail to join session if platform type does not match host's
+  // platform type
+  XnAddr_ptr->abOnline.platform_type = PLATFORM_TYPE::Xbox360;
+}
+
 std::vector<std::string> XLiveAPI::ParseAPIList() {
   if (cvars::api_list.empty()) {
     OVERRIDE_string(api_list, default_public_server_ + ",");
@@ -1134,7 +1151,7 @@ const std::vector<xam::Property> XLiveAPI::SessionPropertiesGet(
   return properties->Properties();
 }
 
-std::unique_ptr<SessionObjectJSON> XLiveAPI::XSessionGet(uint64_t sessionId) {
+SessionObjectJSON XLiveAPI::XSessionGet(uint64_t sessionId) {
   std::string endpoint = fmt::format("title/{:08X}/sessions/{:016x}",
                                      kernel_state()->title_id(), sessionId);
 
@@ -1147,12 +1164,12 @@ std::unique_ptr<SessionObjectJSON> XLiveAPI::XSessionGet(uint64_t sessionId) {
     XELOGE("XSessionGet error message: {}", response->Message());
     assert_always();
 
-    return session;
+    return *session;
   }
 
   session = response->Deserialize<SessionObjectJSON>();
 
-  return session;
+  return *session;
 }
 
 std::vector<X_TITLE_SERVER> XLiveAPI::GetServers() {
