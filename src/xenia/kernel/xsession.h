@@ -389,12 +389,8 @@ class XSession : public XObject {
     return (flags & checked_flag) == checked_flag;
   };
 
-  static void GetXnAddrFromSessionObject(SessionObjectJSON* session,
-                                         XNADDR* XnAddr_ptr);
-
-  static void FillSessionSearchResult(
-      const std::unique_ptr<SessionObjectJSON>& session_info,
-      XSESSION_SEARCHRESULT* result);
+  static void FillSessionSearchResult(const SessionObjectJSON session_info,
+                                      XSESSION_SEARCHRESULT* result);
 
   static void FillSessionContext(Memory* memory, uint32_t matchmaking_index,
                                  util::XLastMatchmakingQuery* matchmaking_query,
