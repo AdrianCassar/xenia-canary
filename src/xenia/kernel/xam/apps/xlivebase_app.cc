@@ -1006,8 +1006,10 @@ X_HRESULT XLiveBaseApp::XInviteGetAcceptedInfo(uint32_t buffer_ptr,
   const auto user_profile =
       kernel_state()->xam_state()->GetUserProfile(user_index);
 
-  memcpy(invite_info, user_profile->GetSelfInvite(), sizeof(X_INVITE_INFO));
-  memset(user_profile->GetSelfInvite(), 0, sizeof(X_INVITE_INFO));
+  *invite_info = user_profile->GetSelfInvite();
+
+  // Reset self invite
+  user_profile->SetSelfInvite({});
 
   const auto presence =
       XLiveAPI::GetFriendsPresence({invite_info->xuid_inviter});
@@ -1028,7 +1030,7 @@ X_HRESULT XLiveBaseApp::XInviteGetAcceptedInfo(uint32_t buffer_ptr,
 
   const auto session = XLiveAPI::XSessionGet(session_id);
 
-  if (!session->SessionID_UInt()) {
+  if (!session.SessionID_UInt()) {
     new xe::ui::HostNotificationWindow(
         kernel_state()->emulator()->imgui_drawer(), "Joining Session",
         "Unable to join session", 0);
@@ -1048,23 +1050,11 @@ X_HRESULT XLiveBaseApp::XInviteGetAcceptedInfo(uint32_t buffer_ptr,
 
   XLiveAPI::SessionPreJoin(session_id, local_members);
 
-  // Use GetXnAddrFromSessionObject
-  Uint64toXNKID(session->SessionID_UInt(), &invite_info->host_info.sessionID);
+  Uint64toXNKID(session.SessionID_UInt(), &invite_info->host_info.sessionID);
   GenerateIdentityExchangeKey(&invite_info->host_info.keyExchangeKey);
 
-  memset(&invite_info->host_info.hostAddress, 0, sizeof(XNADDR));
-
-  invite_info->host_info.hostAddress.inaOnline =
-      ip_to_in_addr(session->HostAddress());
-  invite_info->host_info.hostAddress.ina =
-      ip_to_in_addr(session->HostAddress());
-
-  const MacAddress mac = MacAddress(session->MacAddress());
-
-  memcpy(invite_info->host_info.hostAddress.abEnet, mac.raw(),
-         MacAddress::MacAddressSize);
-
-  invite_info->host_info.hostAddress.wPortOnline = session->Port();
+  XLiveAPI::GetXnAddrFromSessionObject(session,
+                                       &invite_info->host_info.hostAddress);
 
   return X_E_SUCCESS;
 }
