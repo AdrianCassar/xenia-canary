@@ -247,9 +247,6 @@ DECLARE_XAM_EXPORT1(NetDll_XNetStartup, kNetworking, kImplemented);
 dword_result_t NetDll_XNetStartupEx_entry(dword_t caller,
                                           pointer_t<XNetStartupParams> params,
                                           dword_t versionReq) {
-  // versionReq
-  // MW3, Ghosts: 0x20501400
-
   return NetDll_XNetStartup_entry(caller, params);
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetStartupEx, kNetworking, kImplemented);
@@ -649,19 +646,18 @@ dword_result_t NetDll_XNetGetTitleXnAddr_entry(dword_t caller,
                                                pointer_t<XNADDR> XnAddr_ptr) {
   XnAddr_ptr.Zero();
 
-  // Wait for NetDll_WSAStartup or XNetStartup to setup XLiveAPI.
+  // 415607D1, 4D5307E6
+  // XNetStartup, WSAStartup, WSAStartupEx were not called before
+  // XNetGetTitleXnAddr.
   if (XLiveAPI::GetInitState() == XLiveAPI::InitState::Pending) {
-    // Call of Duty 2 - does not call XNetStartup or WSAStartup before
-    // XNetGetTitleXnAddr.
     XLiveAPI::Init();
-
-    return XNADDR_STATUS::XNADDR_PENDING;
   }
 
-  uint8_t status = 0;
+  uint32_t status = 0;
 
   if (cvars::network_mode == NETWORK_MODE::OFFLINE) {
-    status |= XNADDR_STATUS::XNADDR_ETHERNET | XNADDR_STATUS::XNADDR_STATIC;
+    status |=
+        XNADDR_STATUS::XNADDR_ETHERNET | XNADDR_STATUS::XNADDR_TROUBLESHOOT;
   }
 
   if (cvars::network_mode != NETWORK_MODE::OFFLINE) {
@@ -981,7 +977,7 @@ DECLARE_XAM_EXPORT1(NetDll_XNetGetSystemLinkPort, kNetworking, kImplemented);
 
 dword_result_t NetDll_XNetGetBroadcastVersionStatus_entry(dword_t caller,
                                                           dword_t reset) {
-  return X_STATUS_SUCCESS;
+  return X_ERROR_SUCCESS;
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetGetBroadcastVersionStatus, kNetworking, kStub);
 
