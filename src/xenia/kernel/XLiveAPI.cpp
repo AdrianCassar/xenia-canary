@@ -768,6 +768,9 @@ const std::vector<std::unique_ptr<SessionObjectJSON>> XLiveAPI::SessionSearch(
   std::string endpoint =
       fmt::format("title/{:08X}/sessions/search", kernel_state()->title_id());
 
+  const auto user_profile =
+      kernel_state()->xam_state()->GetUserProfile(data->user_index);
+
   Document doc;
   doc.SetObject();
 
@@ -775,12 +778,20 @@ const std::vector<std::unique_ptr<SessionObjectJSON>> XLiveAPI::SessionSearch(
   doc.AddMember("resultsCount", data->num_results, doc.GetAllocator());
   doc.AddMember("numUsers", num_users, doc.GetAllocator());
 
+  // Filter own sessions from search.
+  if (user_profile) {
+    const std::string searcher_xuid_str =
+        fmt::format("{:016X}", user_profile->GetOnlineXUID());
+
+    doc.AddMember("searcher_xuid", searcher_xuid_str, doc.GetAllocator());
+  }
+
   rapidjson::StringBuffer buffer;
   PrettyWriter<rapidjson::StringBuffer> writer(buffer);
   doc.Accept(writer);
 
   std::unique_ptr<HTTPResponseObjectJSON> response =
-      Post(endpoint, (uint8_t*)buffer.GetString());
+      Post(endpoint, reinterpret_cast<const uint8_t*>(buffer.GetString()));
 
   std::vector<std::unique_ptr<SessionObjectJSON>> sessions;
 
