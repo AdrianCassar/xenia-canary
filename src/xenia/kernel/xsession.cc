@@ -314,7 +314,7 @@ X_RESULT XSession::JoinSession(XGI_SESSION_MANAGE* data) {
           data->private_slots_array_ptr);
 
   for (uint32_t i = 0; i < data->array_count; i++) {
-    XSESSION_MEMBER* member = new XSESSION_MEMBER();
+    XSESSION_MEMBER member = {};
 
     if (join_local) {
       const uint32_t user_index = static_cast<uint32_t>(indices_array[i]);
@@ -334,8 +334,8 @@ X_RESULT XSession::JoinSession(XGI_SESSION_MANAGE* data) {
         return X_ERROR_SUCCESS;
       }
 
-      member->OnlineXUID = xuid_online;
-      member->UserIndex = user_index;
+      member.OnlineXUID = xuid_online;
+      member.UserIndex = user_index;
 
       local_details_.ActualMemberCount = std::min<int32_t>(
           XUserMaxUserCount, local_details_.ActualMemberCount + 1);
@@ -356,8 +356,8 @@ X_RESULT XSession::JoinSession(XGI_SESSION_MANAGE* data) {
         return X_ERROR_SUCCESS;
       }
 
-      member->OnlineXUID = xuid_online;
-      member->UserIndex = user_index;
+      member.OnlineXUID = xuid_online;
+      member.UserIndex = user_index;
 
       const bool is_local_member =
           kernel_state()->xam_state()->IsUserSignedIn(xuid_online);
@@ -371,7 +371,7 @@ X_RESULT XSession::JoinSession(XGI_SESSION_MANAGE* data) {
     const bool is_private = private_slots_array[i];
 
     if (is_private && local_details_.AvailablePrivateSlots > 0) {
-      member->SetPrivate();
+      member.SetPrivate();
 
       local_details_.AvailablePrivateSlots =
           std::max<int32_t>(0, local_details_.AvailablePrivateSlots - 1);
@@ -380,15 +380,15 @@ X_RESULT XSession::JoinSession(XGI_SESSION_MANAGE* data) {
           std::max<int32_t>(0, local_details_.AvailablePublicSlots - 1);
     }
 
-    XELOGI("XUID: {:016X} - Occupying {} slot", member->OnlineXUID.get(),
-           member->IsPrivate() ? "private" : "public");
+    XELOGI("XUID: {:016X} - Occupying {} slot", member.OnlineXUID.get(),
+           member.IsPrivate() ? "private" : "public");
 
-    members[member->OnlineXUID] = member->IsPrivate();
+    members[member.OnlineXUID] = member.IsPrivate();
 
     if (join_local) {
-      local_members_.emplace(member->OnlineXUID, *member);
+      local_members_.emplace(member.OnlineXUID, member);
     } else {
-      remote_members_.emplace(member->OnlineXUID, *member);
+      remote_members_.emplace(member.OnlineXUID, member);
     }
   }
 
@@ -441,7 +441,7 @@ X_RESULT XSession::LeaveSession(XGI_SESSION_MANAGE* data) {
   const auto profile_manager = kernel_state()->xam_state()->profile_manager();
 
   for (uint32_t i = 0; i < data->array_count; i++) {
-    XSESSION_MEMBER* member = new XSESSION_MEMBER();
+    XSESSION_MEMBER member = {};
 
     if (leave_local) {
       const uint32_t user_index = static_cast<uint32_t>(indices_array[i]);
@@ -460,7 +460,7 @@ X_RESULT XSession::LeaveSession(XGI_SESSION_MANAGE* data) {
         return X_ERROR_SUCCESS;
       }
 
-      member = &local_members_[xuid_online];
+      member = local_members_[xuid_online];
     } else {
       const xe::be<uint64_t> xuid_online = xuid_array[i];
 
@@ -470,10 +470,10 @@ X_RESULT XSession::LeaveSession(XGI_SESSION_MANAGE* data) {
         return X_ERROR_SUCCESS;
       }
 
-      member = &remote_members_[xuid_online];
+      member = remote_members_[xuid_online];
     }
 
-    if (member->IsPrivate()) {
+    if (member.IsPrivate()) {
       // Removing a private member but all members are removed
       assert_false(local_details_.AvailablePrivateSlots ==
                    local_details_.MaxPrivateSlots);
@@ -493,16 +493,16 @@ X_RESULT XSession::LeaveSession(XGI_SESSION_MANAGE* data) {
 
     // Keep arbitrated session members for stats reporting
     if (is_arbitrated) {
-      member->SetZombie();
+      member.SetZombie();
     }
 
-    if (!member->IsZombie()) {
+    if (!member.IsZombie()) {
       bool removed = false;
 
-      XELOGI("XUID: {:016X} - Leaving {} slot", member->OnlineXUID.get(),
-             member->IsPrivate() ? "private" : "public");
+      XELOGI("XUID: {:016X} - Leaving {} slot", member.OnlineXUID.get(),
+             member.IsPrivate() ? "private" : "public");
 
-      const xe::be<uint64_t> xuid_online = member->OnlineXUID;
+      const xe::be<uint64_t> xuid_online = member.OnlineXUID;
 
       if (leave_local) {
         removed = local_members_.erase(xuid_online);
