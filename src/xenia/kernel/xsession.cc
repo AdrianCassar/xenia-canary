@@ -1153,21 +1153,18 @@ X_RESULT XSession::GetSessionByIDs(Memory* memory, XNKID* session_ids_ptr,
   SEARCH_RESULTS* search_results =
       memory->TranslateVirtual<SEARCH_RESULTS*>(search_results_ptr);
 
-  const uint32_t session_search_result_ptr =
-      memory->SystemHeapAlloc(results_buffer_size);
-
   search_results->results_ptr =
-      memory->TranslateVirtual<XSESSION_SEARCHRESULT*>(
-          session_search_result_ptr);
+      reinterpret_cast<XSESSION_SEARCHRESULT*>(search_results + 1);
+
+  const uint32_t session_search_result_ptr =
+      memory->HostToGuestVirtual(std::to_address(search_results->results_ptr));
 
   uint32_t result_index = 0;
 
   for (uint32_t i = 0; i < num_session_ids; i++) {
     const xe::be<uint64_t> session_id = XNKIDtoUint64(&session_ids_ptr[i]);
 
-    if (!IsValidXNKID(session_id)) {
-      continue;
-    }
+    IsValidXNKID(session_id);
 
     const auto session = XLiveAPI::XSessionGet(session_id);
 
