@@ -1197,13 +1197,12 @@ DECLARE_XAM_EXPORT1(NetDll_XNetQosListen, kNetworking, kSketchy);
 
 dword_result_t NetDll_XNetQosLookup_entry(
     dword_t caller, dword_t num_remote_consoles,
-    pointer_t<uint32_t> remote_addresses_PtrsPtr,
-    pointer_t<uint32_t> sessionId_PtrsPtr,
-    pointer_t<uint32_t> remote_keys_PtrsPtr, dword_t num_gateways,
-    pointer_t<uint32_t> gateways_PtrsPtr,
-    pointer_t<uint32_t> service_ids_PtrsPtr, dword_t probes_count,
-    dword_t bits_per_second, dword_t flags, dword_t event_handle,
-    lpdword_t qos_ptr) {
+    pointer_t<uint32_t> remote_addresses_array_ptrs,
+    pointer_t<uint32_t> sessionId_array_ptrs,
+    pointer_t<uint32_t> remote_keys_array_ptrs, dword_t num_gateways,
+    pointer_t<in_addr> gateways_array, pointer_t<uint32_t> service_ids_array,
+    dword_t probes_count, dword_t bits_per_second, dword_t flags,
+    dword_t event_handle, lpdword_t qos_ptr) {
   if (!qos_ptr) {
     return static_cast<uint32_t>(X_WSAError::X_WSAEACCES);
   }
@@ -1211,12 +1210,13 @@ dword_result_t NetDll_XNetQosLookup_entry(
   auto session_ids = std::make_shared<std::vector<XNKID>>();
   auto remote_keys = std::make_shared<std::vector<XNKEY>>();
   auto remote_addresses = std::make_shared<std::vector<XNADDR>>();
-  auto service_ids = std::make_shared<std::vector<uint32_t>>();
-  auto security_gateways = std::make_shared<std::vector<in_addr>>();
+  std::shared_ptr<std::vector<uint32_t>> service_ids;
+  std::shared_ptr<std::vector<in_addr>> security_gateways;
 
-  if (sessionId_PtrsPtr) {
+  if (sessionId_array_ptrs) {
     const xe::be<uint32_t>* session_id_ptrs_ptr =
-        kernel_memory()->TranslateVirtual<xe::be<uint32_t>*>(sessionId_PtrsPtr);
+        kernel_memory()->TranslateVirtual<xe::be<uint32_t>*>(
+            sessionId_array_ptrs);
 
     const auto session_ids_ptrs = std::vector<uint32_t>(
         session_id_ptrs_ptr, session_id_ptrs_ptr + num_remote_consoles);
@@ -1229,10 +1229,10 @@ dword_result_t NetDll_XNetQosLookup_entry(
     }
   }
 
-  if (remote_keys_PtrsPtr) {
+  if (remote_keys_array_ptrs) {
     const xe::be<uint32_t>* remote_keys_ptrs_ptr =
         kernel_memory()->TranslateVirtual<xe::be<uint32_t>*>(
-            remote_keys_PtrsPtr);
+            remote_keys_array_ptrs);
 
     const auto remote_keys_ptrs = std::vector<uint32_t>(
         remote_keys_ptrs_ptr, remote_keys_ptrs_ptr + num_remote_consoles);
@@ -1245,10 +1245,10 @@ dword_result_t NetDll_XNetQosLookup_entry(
     }
   }
 
-  if (remote_addresses_PtrsPtr) {
+  if (remote_addresses_array_ptrs) {
     const xe::be<uint32_t>* remote_addresses_ptrs_ptr =
         kernel_memory()->TranslateVirtual<xe::be<uint32_t>*>(
-            remote_addresses_PtrsPtr);
+            remote_addresses_array_ptrs);
 
     const auto remote_addresses_ptrs =
         std::vector<uint32_t>(remote_addresses_ptrs_ptr,
@@ -1262,43 +1262,27 @@ dword_result_t NetDll_XNetQosLookup_entry(
     }
   }
 
-  if (service_ids_PtrsPtr) {
-    XELOGI("XNetQosLookup: Service Ids");
-
-    const xe::be<uint32_t>* service_ids_ptrs_ptr =
-        kernel_memory()->TranslateVirtual<xe::be<uint32_t>*>(
-            service_ids_PtrsPtr);
-
-    const auto service_ids_ptrs = std::vector<uint32_t>(
-        service_ids_ptrs_ptr, service_ids_ptrs_ptr + num_gateways);
-
-    for (const auto& service_ids_ptr : service_ids_ptrs) {
-      const uint32_t service_id =
-          *kernel_memory()->TranslateVirtual<uint32_t*>(service_ids_ptr);
-
-      service_ids->push_back(service_id);
-    }
+  if (num_gateways) {
+    XELOGI("XNetQosLookup: Gateways & Service Ids");
   }
 
-  if (gateways_PtrsPtr) {
-    XELOGI("XNetQosLookup: Gateways");
+  if (service_ids_array) {
+    const xe::be<uint32_t>* service_ids_ptr =
+        kernel_memory()->TranslateVirtual<xe::be<uint32_t>*>(service_ids_array);
 
-    const xe::be<uint32_t>* gateways_ptrs_ptr =
-        kernel_memory()->TranslateVirtual<xe::be<uint32_t>*>(gateways_PtrsPtr);
-
-    const auto gateways_ptrs = std::vector<uint32_t>(
-        gateways_ptrs_ptr, gateways_ptrs_ptr + num_gateways);
-
-    for (const auto& gateways_ptr : gateways_ptrs) {
-      const in_addr gateway_key =
-          *kernel_memory()->TranslateVirtual<in_addr*>(gateways_ptr);
-
-      security_gateways->push_back(gateway_key);
-    }
+    service_ids = std::make_shared<std::vector<uint32_t>>(
+        service_ids_ptr, service_ids_ptr + num_gateways);
   }
 
-  // const uint32_t count = num_remote_consoles + num_gateways;
-  const uint32_t count = num_remote_consoles;
+  if (gateways_array) {
+    const xe::be<in_addr>* gateways_ptr =
+        kernel_memory()->TranslateVirtual<xe::be<in_addr>*>(gateways_array);
+
+    security_gateways = std::make_shared<std::vector<in_addr>>(
+        gateways_ptr, gateways_ptr + num_gateways);
+  }
+
+  const uint32_t count = num_remote_consoles + num_gateways;
 
   const uint32_t size = sizeof(XNQOS) + (sizeof(XNQOSINFO) * count);
   const uint32_t qos_address = kernel_memory()->SystemHeapAlloc(size);
