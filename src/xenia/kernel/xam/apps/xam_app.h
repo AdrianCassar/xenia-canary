@@ -22,8 +22,9 @@ class XamApp : public App {
  public:
   explicit XamApp(KernelState* kernel_state);
 
-  X_HRESULT DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
-                                uint32_t buffer_length) override;
+  X_HRESULT ExecuteDispatchMessage(uint32_t message, uint32_t buffer_ptr,
+                                   uint32_t buffer_length,
+                                   uint32_t* extended_error) override;
 };
 
 }  // namespace apps
