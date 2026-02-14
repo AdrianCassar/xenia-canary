@@ -280,8 +280,9 @@ class XmpApp : public App {
                                           uint32_t song_count,
                                           uint32_t storage_ptr);
 
-  X_HRESULT DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
-                                uint32_t buffer_length) override;
+  X_HRESULT ExecuteDispatchMessage(uint32_t message, uint32_t buffer_ptr,
+                                   uint32_t buffer_length,
+                                   uint32_t* extended_error) override;
 
  private:
   xe::global_critical_region global_critical_region_;

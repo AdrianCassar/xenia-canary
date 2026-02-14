@@ -22,8 +22,9 @@ class XLiveBaseApp : public App {
  public:
   explicit XLiveBaseApp(KernelState* kernel_state);
 
-  X_HRESULT DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
-                                uint32_t buffer_length) override;
+  X_HRESULT ExecuteDispatchMessage(uint32_t message, uint32_t buffer_ptr,
+                                   uint32_t buffer_length,
+                                   uint32_t* extended_error) override;
 
  private:
   X_HRESULT XPresenceInitialize(uint32_t buffer_ptr, uint32_t buffer_length);
@@ -47,7 +48,8 @@ class XLiveBaseApp : public App {
   X_HRESULT XStringVerify(uint32_t buffer_ptr);
   X_HRESULT XUserEstimateRankForRating(uint32_t buffer_ptr);
   X_HRESULT XStorageDelete(uint32_t buffer_ptr);
-  X_HRESULT XStorageDownloadToMemory(uint32_t buffer_ptr);
+  X_HRESULT XStorageDownloadToMemory(uint32_t buffer_ptr,
+                                     uint32_t* extended_error);
   X_HRESULT XStorageUploadFromMemory(uint32_t buffer_ptr);
   X_HRESULT XStorageBuildServerPath(uint32_t buffer_ptr);
   X_HRESULT XOnlineGetTaskProgress(uint32_t buffer_ptr);

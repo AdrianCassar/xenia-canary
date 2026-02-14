@@ -1239,8 +1239,10 @@ void KernelState::CompleteOverlappedDeferredEx(
      Smaller delay fixes it e.g. 5ms.
     */
     xe::threading::Sleep(kDeferredOverlappedDelayMillis);
-    uint32_t extended_error, length;
-    auto result = completion_callback(extended_error, length);
+    uint32_t extended_error = 0;
+    uint32_t length = 0;
+    uint32_t result = completion_callback(extended_error, length);
+
     CompleteOverlappedEx(overlapped_ptr, result, extended_error, length);
     if (post_callback) {
       post_callback();
