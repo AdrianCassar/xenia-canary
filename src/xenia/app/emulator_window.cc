@@ -195,7 +195,7 @@ EmulatorWindow::EmulatorWindow(Emulator* emulator,
                 XE_BUILD_BRANCH "@" XE_BUILD_COMMIT_SHORT " on " XE_BUILD_DATE
                 ")";
 
-  updater_ = new Updater("AdrianCassar", "xenia-canary");
+  updater_ = std::make_shared<Updater>("AdrianCassar", "xenia-canary");
 
   LoadRecentlyLaunchedTitles();
 }
@@ -293,7 +293,7 @@ void EmulatorWindow::OnEmulatorInitialized() {
   bool should_update = cvars::auto_check_updates &&
                        !(cvar::updated_arg_present && cvar::updated);
 
-  auto run = [=, this]() {
+  auto run = [=, this](std::stop_token stoken) {
     std::string commit, date, tag;
     uint32_t response = 0;
 
@@ -306,9 +306,8 @@ void EmulatorWindow::OnEmulatorInitialized() {
   };
 
   if (should_update) {
-    std::thread check_for_updates = std::thread(run);
-
-    check_for_updates.detach();
+    update_check_thread_ = std::jthread(run);
+    update_check_thread_.detach();
   }
 #endif
 }

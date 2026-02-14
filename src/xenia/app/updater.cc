@@ -378,17 +378,19 @@ std::string Updater::FormatDate(const std::string& iso_date) const {
 uint32_t Updater::DownloadLatestNightlyArtifact(
     const std::string& workflow_file, const std::string& branch,
     const std::string& artifact_name, const std::string& output_path,
-    std::function<void(double, double)> progress_callback) const {
+    std::function<void(double, double)> progress_callback,
+    std::function<bool()> cancel_check) const {
   const std::string endpoint =
       fmt::format("https://nightly.link/{}/{}/workflows/{}/{}/{}", owner_,
                   repo_, workflow_file, branch, artifact_name);
 
-  return DownloadFile(endpoint, output_path, progress_callback);
+  return DownloadFile(endpoint, output_path, progress_callback, cancel_check);
 }
 
 uint32_t Updater::DownloadLatestRelease(
     const std::string& asset_name, const std::string& output_path,
-    std::function<void(double, double)> progress_callback) const {
+    std::function<void(double, double)> progress_callback,
+    std::function<bool()> cancel_check) const {
   std::vector<uint8_t> response_buffer = {};
 
   const std::string endpoint = fmt::format(
@@ -431,7 +433,7 @@ uint32_t Updater::DownloadLatestRelease(
     return -1;
   }
 
-  return DownloadFile(asset_url, output_path, progress_callback);
+  return DownloadFile(asset_url, output_path, progress_callback, cancel_check);
 }
 
 uint32_t Updater::DownloadFile(const std::string& file_endpoint,
@@ -459,20 +461,30 @@ uint32_t Updater::DownloadFile(const std::string& file_endpoint,
   return response_code;
 }
 
+struct ProgressCallbackData {
+  std::function<void(double, double)> progress_callback;
+  std::function<bool()> cancel_check;
+};
+
 static int CurlProgressCallback(void* clientp, curl_off_t dltotal,
                                 curl_off_t dlnow, curl_off_t ultotal,
                                 curl_off_t ulnow) {
-  auto* progress_callback =
-      reinterpret_cast<std::function<void(double, double)>*>(clientp);
-  if (progress_callback && *progress_callback) {
-    (*progress_callback)((double)dlnow, (double)dltotal);
+  auto* callback_data = static_cast<ProgressCallbackData*>(clientp);
+
+  if (callback_data->cancel_check && callback_data->cancel_check()) {
+    return 1;  // 1 = abort transfer
+  }
+
+  if (callback_data->progress_callback) {
+    callback_data->progress_callback((double)dlnow, (double)dltotal);
   }
   return 0;  // 0 = continue, else abort transfer
 }
 
 uint32_t Updater::DownloadFile(
     const std::string& file_endpoint, const std::string& output_path,
-    std::function<void(double, double)> progress_callback) const {
+    std::function<void(double, double)> progress_callback,
+    std::function<bool()> cancel_check) const {
   std::vector<uint8_t> response_buffer = {};
 
   CURL* curl = curl_easy_init();
@@ -484,6 +496,11 @@ uint32_t Updater::DownloadFile(
     return -1;
   }
 
+  // Prepare callback data
+  ProgressCallbackData callback_data;
+  callback_data.progress_callback = progress_callback;
+  callback_data.cancel_check = cancel_check;
+
   curl_easy_setopt(curl, CURLOPT_URL, file_endpoint.c_str());
   curl_easy_setopt(curl, CURLOPT_USERAGENT, "xenia-canary");
   curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
@@ -494,7 +511,7 @@ uint32_t Updater::DownloadFile(
   curl_easy_setopt(curl, CURLOPT_NOPROGRESS,
                    0L);  // Must be set to 0 for XFERINFOFUNCTION
   curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, CurlProgressCallback);
-  curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &progress_callback);
+  curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &callback_data);
 
   CURLcode result = curl_easy_perform(curl);
 

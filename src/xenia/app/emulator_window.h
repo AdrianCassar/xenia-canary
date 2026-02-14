@@ -328,8 +328,8 @@ class EmulatorWindow {
   std::string base_title_;
   bool initializing_shader_storage_ = false;
 
-  Updater* updater_;
-  bool update_found_ = false;
+  std::shared_ptr<Updater> updater_;
+  std::atomic<bool> update_found_ = false;
 
   std::unique_ptr<DisplayConfigDialog> display_config_dialog_;
 
@@ -348,6 +348,9 @@ class EmulatorWindow {
   std::unique_ptr<UpdaterCompletionDialog> updater_completion_dialog_;
 
   std::vector<RecentTitleEntry> recently_launched_titles_;
+
+  // JThread for checking updates in the background
+  std::jthread update_check_thread_;
 };
 
 }  // namespace app

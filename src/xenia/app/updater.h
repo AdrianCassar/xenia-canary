@@ -52,18 +52,21 @@ class Updater {
   uint32_t DownloadLatestNightlyArtifact(
       const std::string& workflow_file, const std::string& branch,
       const std::string& artifact_name, const std::string& output_path,
-      std::function<void(double, double)> progress_callback) const;
+      std::function<void(double, double)> progress_callback,
+      std::function<bool()> cancel_check = nullptr) const;
 
   uint32_t DownloadLatestRelease(
       const std::string& asset_name, const std::string& output_path,
-      std::function<void(double, double)> progress_callback) const;
+      std::function<void(double, double)> progress_callback,
+      std::function<bool()> cancel_check = nullptr) const;
 
   uint32_t DownloadFile(const std::string& file_endpoint,
                         const std::string& output_path) const;
 
-  uint32_t DownloadFile(
-      const std::string& file_endpoint, const std::string& output_path,
-      std::function<void(double, double)> progress_callback) const;
+  uint32_t DownloadFile(const std::string& file_endpoint,
+                        const std::string& output_path,
+                        std::function<void(double, double)> progress_callback,
+                        std::function<bool()> cancel_check = nullptr) const;
 
   uint32_t GetRecentCommitMessages(const std::string& branch,
                                    std::vector<std::string>& messages,

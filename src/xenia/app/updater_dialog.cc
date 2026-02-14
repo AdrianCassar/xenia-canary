@@ -368,41 +368,76 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
           }
 
           if (!show_replace_dialog_) {
-            auto run = [this]() {
+            // Cancel any existing download thread before starting a new one
+            if (download_thread_.joinable()) {
+              download_thread_.request_stop();
+              download_thread_.join();
+            }
+
+            download_cancelled_ = false;  // Reset cancellation flag
+
+            auto run = [this](std::stop_token st) {
               auto callback = [this](double now, double total) {
                 if (total > 0.0) {
                   download_progress_ = static_cast<float>(now / total);
                 }
               };
 
+              // Check both the original cancellation flag and the stop token
+              auto cancel_check = [this, st]() {
+                return download_cancelled_ || st.stop_requested();
+              };
+
+              uint32_t response_code;
               if (stable_toggle_) {
-                download_response_code_ = updater_->DownloadLatestRelease(
+                response_code = updater_->DownloadLatestRelease(
                     std::string(artifact_name_), downloaded_file_path_.string(),
-                    callback);
+                    callback, cancel_check);
               } else {
-                download_response_code_ =
-                    updater_->DownloadLatestNightlyArtifact(
-                        "Windows_build", XE_BUILD_BRANCH,
-                        std::string(artifact_name_),
-                        downloaded_file_path_.string(), callback);
+                response_code = updater_->DownloadLatestNightlyArtifact(
+                    "Windows_build", XE_BUILD_BRANCH,
+                    std::string(artifact_name_), downloaded_file_path_.string(),
+                    callback, cancel_check);
               }
 
-              if (download_response_code_ == HTTP_STATUS_CODE::HTTP_OK) {
-                downloaded_ = true;
-              } else {
-                // If download failed show download button again to retry
-                downloaded_ = false;
-                downloaded_failed_ = true;
-                hide_download_button_ = false;
-                downloaded_file_path_ = "";
-              }
+              // Only update if not cancelled
+              if (!download_cancelled_ && !st.stop_requested()) {
+                download_response_code_ = response_code;
 
-              downloading_ = false;
-              download_progress_ = 0.0f;
+                if (response_code == HTTP_STATUS_CODE::HTTP_OK) {
+                  downloaded_ = true;
+                } else {
+                  // If download failed show download button again to retry
+                  downloaded_ = false;
+                  downloaded_failed_ = true;
+                  hide_download_button_ = false;
+                  downloaded_file_path_ = "";
+                }
+
+                downloading_ = false;
+                download_progress_ = 0.0f;
+              } else {
+                std::error_code ec;
+
+                // Download was cancelled, delete the partially downloaded file
+                if (!downloaded_file_path_.empty() &&
+                    std::filesystem::exists(downloaded_file_path_, ec)) {
+                  std::filesystem::remove(downloaded_file_path_, ec);
+                }
+
+                if (ec) {
+                  XELOGE(
+                      "Failed to delete partially downloaded file after "
+                      "cancellation {}: {}",
+                      artifact_name_, ec.message());
+                }
+
+                downloading_ = false;
+                download_progress_ = 0.0f;
+              }
             };
 
-            std::thread download = std::thread(run);
-            download.detach();
+            download_thread_ = std::jthread(run);
 
             hide_download_button_ = true;
             downloaded_failed_ = false;
@@ -595,6 +630,26 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
 #endif  //  DEBUG
 
   if (!updater_opened_) {
+    // Cancel any ongoing download when dialog is closed
+    download_cancelled_ = true;
+
+    // Delete the partially downloaded file if download was cancelled
+    if (downloading_ && !downloaded_) {
+      std::error_code ec;
+
+      if (!downloaded_file_path_.empty() &&
+          std::filesystem::exists(downloaded_file_path_, ec)) {
+        std::filesystem::remove(downloaded_file_path_, ec);
+      }
+
+      if (ec) {
+        XELOGE(
+            "Failed to delete partially downloaded file after "
+            "cancellation {}: {}",
+            artifact_name_, ec.message());
+      }
+    }
+
     Close();
     ImGui::CloseCurrentPopup();
     emulator_window_->ToggleUpdaterDialog();
