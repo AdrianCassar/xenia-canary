@@ -49,9 +49,10 @@ XLiveBaseApp::XLiveBaseApp(KernelState* kernel_state)
 
 /// <param name="buffer_ptr"> - Generic param1 could be anything.</param>
 /// <param name="buffer_length"> - Generic param2 could be anything.</param>
-X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
-                                            uint32_t buffer_ptr,
-                                            uint32_t buffer_length) {
+X_HRESULT XLiveBaseApp::ExecuteDispatchMessage(uint32_t message,
+                                               uint32_t buffer_ptr,
+                                               uint32_t buffer_length,
+                                               uint32_t* extended_error) {
   // NOTE: buffer_length may be zero or valid.
   uint8_t* buffer = memory_->TranslateVirtual<uint8_t*>(buffer_ptr);
 
@@ -71,7 +72,7 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
       // 534507D4, 555307D7, 545107D1 - XStorageDownloadToMemory
       XELOGD("XStorageDownloadToMemory({:08X}, {:08X})", buffer_ptr,
              buffer_length);
-      return XStorageDownloadToMemory(buffer_ptr);
+      return XStorageDownloadToMemory(buffer_ptr, extended_error);
 
       // XELOGD("XStorageDelete({:08X}, {:08X})", buffer_ptr, buffer_length);
       // return XStorageDelete(buffer_ptr);
@@ -82,7 +83,7 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
       // 555307D7 - XStorageEnumerate
       XELOGD("XStorageDownloadToMemory({:08X}, {:08X})", buffer_ptr,
              buffer_length);
-      return XStorageDownloadToMemory(buffer_ptr);
+      return XStorageDownloadToMemory(buffer_ptr, extended_error);
     }
     case 0x0005000A: {
       assert_true(!buffer_length ||
@@ -1677,7 +1678,8 @@ X_HRESULT XLiveBaseApp::XStorageDelete(uint32_t buffer_ptr) {
   return result;
 }
 
-X_HRESULT XLiveBaseApp::XStorageDownloadToMemory(uint32_t buffer_ptr) {
+X_HRESULT XLiveBaseApp::XStorageDownloadToMemory(uint32_t buffer_ptr,
+                                                 uint32_t* extended_error) {
   // 41560817, 513107D5, 513107D9, 415607DD, 415607DD
 
   if (!buffer_ptr) {
