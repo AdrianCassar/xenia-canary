@@ -1147,6 +1147,17 @@ void KernelState::CompleteOverlapped(uint32_t overlapped_ptr, X_RESULT result) {
 void KernelState::CompleteOverlappedEx(uint32_t overlapped_ptr, X_RESULT result,
                                        uint32_t extended_error,
                                        uint32_t length) {
+  // If function failed then overwrite return error.
+  // What if a function expects a different return error?
+  if (result != X_ERROR_SUCCESS) {
+    result = X_ERROR_FUNCTION_FAILED;
+
+    // Function failed without setting extended_error.
+    if (extended_error == X_ERROR_SUCCESS) {
+      extended_error = X_E_FUNCTION_FAILED;
+    }
+  }
+
   auto ptr = memory()->TranslateVirtual(overlapped_ptr);
   XOverlappedSetResult(ptr, result);
   XOverlappedSetExtendedError(ptr, extended_error);
