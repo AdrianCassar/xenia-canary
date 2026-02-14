@@ -174,8 +174,9 @@ X_HRESULT XmpApp::XMPGetTitlePlaylistBufferSize(uint32_t xmp_client,
   return X_E_SUCCESS;
 }
 
-X_HRESULT XmpApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
-                                      uint32_t buffer_length) {
+X_HRESULT XmpApp::ExecuteDispatchMessage(uint32_t message, uint32_t buffer_ptr,
+                                         uint32_t buffer_length,
+                                         uint32_t* extended_error) {
   // NOTE: buffer_length may be zero or valid.
   auto buffer = memory_->TranslateVirtual(buffer_ptr);
   switch (message) {
