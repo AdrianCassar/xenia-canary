@@ -1677,6 +1677,11 @@ X_HRESULT XLiveBaseApp::XStorageDelete(uint32_t buffer_ptr) {
   return result;
 }
 
+// XStorageDownloadToMemory:
+// 41560817, 545107D1 (TU0), 4D5307D6
+//
+// Expects X_ONLINE_E_STORAGE_FILE_NOT_FOUND as extended error and
+// X_ERROR_FUNCTION_FAILED as result.
 X_HRESULT XLiveBaseApp::XStorageDownloadToMemory(uint32_t buffer_ptr,
                                                  uint32_t* extended_error) {
   // 41560817, 513107D5, 513107D9, 415607DD, 415607DD
@@ -1712,7 +1717,7 @@ X_HRESULT XLiveBaseApp::XStorageDownloadToMemory(uint32_t buffer_ptr,
 
   std::string item_to_download = xe::to_utf8(unmarshaller.ServerPath());
 
-  X_STATUS result = X_ONLINE_E_STORAGE_FILE_NOT_FOUND;
+  X_STATUS result = X_E_SUCCESS;
 
   X_STORAGE_FACILITY facility_type =
       GetStorageFacilityTypeFromServerPath(item_to_download);
@@ -1730,7 +1735,13 @@ X_HRESULT XLiveBaseApp::XStorageDownloadToMemory(uint32_t buffer_ptr,
       if (buffer.size() > download_buffer.size_bytes()) {
         XELOGI("{}: Provided file size {}b is larger than expected {}b",
                __func__, buffer.size(), download_buffer.size_bytes());
-        return X_E_INSUFFICIENT_BUFFER;
+        result = X_ERROR_FUNCTION_FAILED;
+
+        if (extended_error) {
+          *extended_error = X_E_INSUFFICIENT_BUFFER;
+        }
+
+        return result;
       }
 
       memcpy(download_buffer.data(), buffer.data(), buffer.size());
@@ -1743,7 +1754,11 @@ X_HRESULT XLiveBaseApp::XStorageDownloadToMemory(uint32_t buffer_ptr,
 
       result = X_E_SUCCESS;
     } else {
-      result = X_ONLINE_E_STORAGE_FILE_NOT_FOUND;
+      result = X_ERROR_FUNCTION_FAILED;
+
+      if (extended_error) {
+        *extended_error = X_ONLINE_E_STORAGE_FILE_NOT_FOUND;
+      }
     }
   }
 
@@ -1772,7 +1787,13 @@ X_HRESULT XLiveBaseApp::XStorageDownloadToMemory(uint32_t buffer_ptr,
         if (bytes_read > unmarshaller.BufferSize()) {
           XELOGI("{}: Provided file size {}b is larger than expected {}b",
                  __func__, bytes_read, unmarshaller.BufferSize());
-          return X_E_INSUFFICIENT_BUFFER;
+          result = X_ERROR_FUNCTION_FAILED;
+
+          if (extended_error) {
+            *extended_error = X_E_INSUFFICIENT_BUFFER;
+          }
+
+          return result;
         }
 
         memcpy(download_buffer.data(), file_data.data(), bytes_read);
@@ -1785,11 +1806,19 @@ X_HRESULT XLiveBaseApp::XStorageDownloadToMemory(uint32_t buffer_ptr,
         result = X_E_SUCCESS;
       } else {
         XELOGI("{}: Failed to download: {}", __func__, filename);
-        result = X_E_FAIL;
+        result = X_ERROR_FUNCTION_FAILED;
+
+        if (extended_error) {
+          *extended_error = X_ONLINE_E_STORAGE_FILE_NOT_FOUND;
+        }
       }
     } else {
       XELOGI("{}: {} doesn't exist!", __func__, filename);
-      result = X_ONLINE_E_STORAGE_FILE_NOT_FOUND;
+      result = X_ERROR_FUNCTION_FAILED;
+
+      if (extended_error) {
+        *extended_error = X_ONLINE_E_STORAGE_FILE_NOT_FOUND;
+      }
     }
   }
 
