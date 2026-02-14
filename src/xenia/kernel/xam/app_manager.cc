@@ -46,7 +46,9 @@ X_HRESULT AppManager::DispatchMessageSync(uint32_t app_id, uint32_t message,
   if (it == app_lookup_.end()) {
     return X_E_NOTFOUND;
   }
-  return it->second->DispatchMessageSync(message, buffer_ptr, buffer_length);
+
+  return it->second->ExecuteDispatchMessage(message, buffer_ptr, buffer_length,
+                                            nullptr);
 }
 
 X_HRESULT AppManager::DispatchMessageAsync(uint32_t app_id, uint32_t message,
@@ -69,16 +71,19 @@ X_HRESULT AppManager::DispatchMessageAsync(uint32_t app_id, uint32_t message,
 
   auto post = [memory, buffer_in]() { memory->SystemHeapFree(buffer_in); };
 
-  auto run = [it, message, buffer_in, buffer_length]() -> X_RESULT {
-    return it->second->DispatchMessageSync(message, buffer_in, buffer_length);
+  auto run = [it, message, buffer_in, buffer_length](
+                 uint32_t& extended_error, uint32_t& length) -> X_RESULT {
+    return it->second->ExecuteDispatchMessage(message, buffer_in, buffer_length,
+                                              &extended_error);
   };
 
   if (overlapped_ptr) {
-    it->second->kernel_state_->CompleteOverlappedDeferred(run, overlapped_ptr,
-                                                          nullptr, post);
+    it->second->kernel_state_->CompleteOverlappedDeferredEx(run, overlapped_ptr,
+                                                            nullptr, post);
     return X_ERROR_IO_PENDING;
   };
 
+  // Sync does not set extended error codes.
   const X_HRESULT result =
       DispatchMessageSync(app_id, message, buffer_in, buffer_length);
   post();

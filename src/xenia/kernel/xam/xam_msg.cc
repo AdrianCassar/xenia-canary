@@ -51,17 +51,17 @@ X_HRESULT xeXMsgStartIORequestEx(uint32_t app, uint32_t message,
                                  X_TASK_ARGS* xam_task_args_ptr) {
   auto result = kernel_state()->app_manager()->DispatchMessageAsync(
       app, message, buffer_ptr, buffer_length, overlapped_ptr);
+
   if (result == X_E_NOTFOUND) {
     XELOGE("XMsgStartIORequestEx: app {:08X} undefined", app);
     result = X_E_INVALIDARG;
     XThread::SetLastError(X_ERROR_NOT_FOUND);
   }
-  if (overlapped_ptr) {
-    result = X_ERROR_IO_PENDING;
-  }
+
   if (result == X_ERROR_SUCCESS || result == X_ERROR_IO_PENDING) {
     XThread::SetLastError(0);
   }
+
   return result;
 }
 
