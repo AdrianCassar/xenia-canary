@@ -12,6 +12,7 @@
 
 #include "xenia/base/cvar.h"
 #include "xenia/base/logging.h"
+#include "xenia/kernel/XLiveAPI.h"
 #include "xenia/kernel/xam/friends_util.h"
 #include "xenia/kernel/xnet.h"
 
@@ -92,7 +93,7 @@ std::vector<std::uint64_t> ParseFriendsXUIDs() {
     }
 
     if (index == 0 && xuid <= X_ONLINE_MAX_FRIENDS) {
-      dummy_friends_count_ = static_cast<uint32_t>(xuid);
+      XLiveAPI::dummy_friends_count_ = static_cast<uint32_t>(xuid);
 
       index++;
       continue;
