@@ -16,8 +16,6 @@
 namespace xe {
 namespace kernel {
 
-static uint32_t dummy_friends_count_ = 0;
-
 std::vector<std::string> ParseDelimitedList(std::string_view csv,
                                             uint32_t count = 0);
 

@@ -196,6 +196,8 @@ class XLiveAPI {
 
   inline static int8_t version_status;
 
+  inline static uint32_t dummy_friends_count_ = 0;
+
  private:
   inline static const std::string default_local_server_ = "192.168.0.1:36000/";
 
