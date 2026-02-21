@@ -331,7 +331,8 @@ void ProfileManager::Login(const uint64_t xuid, const uint8_t user_index,
           XLiveAPI::RegisterPlayer(xuid);
     }
 
-    logged_profiles_[assigned_user_slot]->AddDummyFriends(dummy_friends_count_);
+    logged_profiles_[assigned_user_slot]->AddDummyFriends(
+        XLiveAPI::dummy_friends_count_);
   }
 }
 
