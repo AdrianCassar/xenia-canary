@@ -738,6 +738,9 @@ DECLARE_XAM_EXPORT1(NetDll_XNetUnregisterInAddr, kNetworking, kStub);
 dword_result_t NetDll_XNetConnect_entry(dword_t caller, dword_t addr) {
   XELOGI("XNetConnect({:08X})", cvars::log_mask_ips ? 0 : addr.value());
 
+  // 43430806, 43430821 and 5841124E fail to connect without sleep.
+  xe::threading::Sleep(150ms);
+
   return X_ERROR_SUCCESS;
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetConnect, kNetworking, kStub);
