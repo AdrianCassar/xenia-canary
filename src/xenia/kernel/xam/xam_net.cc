@@ -1350,7 +1350,14 @@ dword_result_t NetDll_XNetQosLookup_entry(
   std::unique_lock lock(qos_lookup_mutex);
   qos_lookup_threads[qos_address] = qos_lookup_thread.get_stop_source();
 
-  qos_lookup_thread.detach();
+  // 5345081A expects QoS results immediately on return, assume this behavior is
+  // expected due to probes count of 0.
+  if (probes_count) {
+    qos_lookup_thread.detach();
+  } else {
+    XELOGI("XNetQosLookup: Sync Lookup!");
+    qos_lookup_thread.join();
+  }
 
   return X_ERROR_SUCCESS;
 }
