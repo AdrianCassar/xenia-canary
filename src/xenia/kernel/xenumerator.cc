@@ -258,5 +258,33 @@ uint32_t ContentEnumerator::WriteItems(uint8_t* buffer_data,
   return X_ERROR_SUCCESS;
 }
 
+uint32_t FriendsEnumerator::WriteItems(uint8_t* buffer_data,
+                                       uint32_t buffer_size,
+                                       uint32_t* written_count) {
+  std::memset(buffer_data, 0, buffer_size);
+
+  const size_t actual_count =
+      std::min(items_.size() - current_item_, items_per_enumerate());
+  if (!actual_count) {
+    return X_ERROR_NO_MORE_FILES;
+  }
+
+  const size_t available_count = buffer_size / item_size();
+
+  // 4C4107D7 expects valid count.
+  const size_t valid_count = std::min(actual_count, available_count);
+
+  X_ONLINE_FRIEND* results = reinterpret_cast<X_ONLINE_FRIEND*>(buffer_data);
+
+  std::copy_n(items_.begin() + current_item_, valid_count, results);
+
+  current_item_ += valid_count;
+
+  if (written_count) {
+    *written_count = static_cast<uint32_t>(valid_count);
+  }
+
+  return X_ERROR_SUCCESS;
+}
 }  // namespace kernel
 }  // namespace xe

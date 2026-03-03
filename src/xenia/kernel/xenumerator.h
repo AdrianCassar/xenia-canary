@@ -261,6 +261,23 @@ class ContentEnumerator : public XEnumerator {
   size_t current_item_ = 0;
 };
 
+class FriendsEnumerator : public XEnumerator {
+ public:
+  FriendsEnumerator(KernelState* kernel_state, size_t items_per_enumerate)
+      : XEnumerator(kernel_state, items_per_enumerate,
+                    sizeof(X_ONLINE_FRIEND)) {}
+
+  size_t item_count() const { return items_.size(); }
+
+  void AppendItem(const X_ONLINE_FRIEND& item) { items_.push_back(item); }
+
+  uint32_t WriteItems(uint8_t* buffer_data, uint32_t buffer_size,
+                      uint32_t* written_count) override;
+
+ private:
+  std::vector<X_ONLINE_FRIEND> items_;
+  size_t current_item_ = 0;
+};
 }  // namespace kernel
 }  // namespace xe
 
