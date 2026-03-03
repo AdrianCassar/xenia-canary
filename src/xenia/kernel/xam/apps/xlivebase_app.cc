@@ -921,8 +921,9 @@ X_HRESULT XLiveBaseApp::XFriendsCreateEnumerator(uint32_t buffer_ptr,
 
   auto const profile = kernel_state()->xam_state()->GetUserProfile(user_index);
 
-  auto e = make_object<XStaticEnumerator<X_ONLINE_FRIEND>>(kernel_state_,
-                                                           friends_amount);
+  auto e = object_ref<FriendsEnumerator>(
+      new FriendsEnumerator(kernel_state(), friends_amount));
+
   auto result = e->Initialize(-1, app_id(), 0x58021, 0x58022, 0);
 
   if (XFAILED(result)) {
@@ -935,9 +936,7 @@ X_HRESULT XLiveBaseApp::XFriendsCreateEnumerator(uint32_t buffer_ptr,
     const bool is_friend = profile->GetFriendFromIndex(i, &peer);
 
     if (is_friend) {
-      auto item = e->AppendItem();
-
-      memcpy(item, &peer, sizeof(X_ONLINE_FRIEND));
+      e->AppendItem(peer);
     }
   }
 
