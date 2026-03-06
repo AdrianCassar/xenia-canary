@@ -293,21 +293,20 @@ void EmulatorWindow::OnEmulatorInitialized() {
   bool should_update = cvars::auto_check_updates &&
                        !(cvar::updated_arg_present && cvar::updated);
 
-  auto run = [=, this](std::stop_token stoken) {
-    std::string commit, date, tag;
-    uint32_t response = 0;
-
-    update_found_ = updater_->StartupUpdateCheck(&commit, &date, &response);
-
-    if (update_found_) {
-      app_context_.CallInUIThread(
-          [this, commit, date]() { ShowUpdateAvailableDialog(commit, date); });
-    }
-  };
-
   if (should_update) {
-    update_check_thread_ = std::jthread(run);
-    update_check_thread_.detach();
+    // Use async callback-based approach for non-blocking update check
+    updater_->StartupUpdateCheckAsync(
+        [this](bool update_found, const std::string& commit,
+               const std::string& date, uint32_t response) {
+          // Store the result for use in UpdaterDialog
+          update_found_.store(update_found);
+          if (update_found) {
+            // Schedule UI update on main thread
+            app_context_.CallInUIThread([this, commit, date]() {
+              ShowUpdateAvailableDialog(commit, date);
+            });
+          }
+        });
   }
 #endif
 }
@@ -1841,7 +1840,7 @@ void EmulatorWindow::ToggleUpdaterDialog() {
     disable_hotkeys_ = true;
     emulator_->kernel_state()->BroadcastNotification(kXNotificationSystemUI, 1);
     updater_dialog_ = std::make_unique<UpdaterDialog>(
-        updater_, update_found_, imgui_drawer_.get(), this);
+        updater_, update_found_.load(), imgui_drawer_.get(), this);
     emulator_->kernel_state()->xam_state()->xam_dialogs_shown_++;
   } else {
     disable_hotkeys_ = false;

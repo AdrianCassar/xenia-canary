@@ -6,10 +6,13 @@
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
+#include <algorithm>
+#include <atomic>
 #include <filesystem>
 #include <fstream>
 #include <functional>
 #include <iostream>
+#include <memory>
 #include <string>
 
 #include "third_party/fmt/include/fmt/format.h"
@@ -189,6 +192,57 @@ bool Updater::CheckForUpdates(bool stable, const std::string& branch,
   }
 
   return update_available;
+}
+
+void Updater::CheckForUpdatesAsync(bool stable, const std::string& branch,
+                                   UpdateCheckCallback callback) {
+  // Cleanup completed futures first
+  CleanupAsyncOperations();
+
+  // Launch async task and store the future
+  async_operations_.push_back(
+      std::async(std::launch::async, [this, stable, branch, callback]() {
+        std::string commit_hash;
+        std::string date;
+        std::string tag;
+        uint32_t response_code = 0;
+
+        bool update_available = CheckForUpdates(stable, branch, &commit_hash,
+                                                &date, &tag, &response_code);
+
+        // Invoke callback with results
+        callback(update_available, commit_hash, date, tag, response_code);
+      }));
+}
+
+void Updater::StartupUpdateCheckAsync(StartupUpdateCheckCallback callback) {
+  // Cleanup completed futures first
+  CleanupAsyncOperations();
+
+  // Launch async task and store the future
+  async_operations_.push_back(
+      std::async(std::launch::async, [this, callback]() {
+        std::string commit_hash;
+        std::string commit_date;
+        uint32_t response_code = 0;
+
+        bool update_available =
+            StartupUpdateCheck(&commit_hash, &commit_date, &response_code);
+
+        // Invoke callback with results
+        callback(update_available, commit_hash, commit_date, response_code);
+      }));
+}
+
+void Updater::CleanupAsyncOperations() {
+  // Remove completed futures from the vector
+  async_operations_.erase(
+      std::remove_if(async_operations_.begin(), async_operations_.end(),
+                     [](std::future<void>& fut) {
+                       return fut.wait_for(std::chrono::seconds(0)) ==
+                              std::future_status::ready;
+                     }),
+      async_operations_.end());
 }
 
 #ifdef XE_PLATFORM_WIN32
@@ -464,12 +518,19 @@ uint32_t Updater::DownloadFile(const std::string& file_endpoint,
 struct ProgressCallbackData {
   std::function<void(double, double)> progress_callback;
   std::function<bool()> cancel_check;
+  std::atomic<bool>* cancelled;
 };
 
 static int CurlProgressCallback(void* clientp, curl_off_t dltotal,
                                 curl_off_t dlnow, curl_off_t ultotal,
                                 curl_off_t ulnow) {
   auto* callback_data = static_cast<ProgressCallbackData*>(clientp);
+
+  // Check atomic cancellation flag first
+  // Should be safe even if callback_data is stale??
+  if (callback_data->cancelled && callback_data->cancelled->load()) {
+    return 1;  // 1 = abort transfer
+  }
 
   if (callback_data->cancel_check && callback_data->cancel_check()) {
     return 1;  // 1 = abort transfer
@@ -496,10 +557,15 @@ uint32_t Updater::DownloadFile(
     return -1;
   }
 
+  // Atomic Cancellation flag
+  std::atomic<bool> cancelled(false);
+
   // Prepare callback data
-  ProgressCallbackData callback_data;
-  callback_data.progress_callback = progress_callback;
-  callback_data.cancel_check = cancel_check;
+  // Using unique_ptr to ensure proper lifetime management
+  auto callback_data = std::make_unique<ProgressCallbackData>();
+  callback_data->progress_callback = progress_callback;
+  callback_data->cancel_check = cancel_check;
+  callback_data->cancelled = &cancelled;
 
   curl_easy_setopt(curl, CURLOPT_URL, file_endpoint.c_str());
   curl_easy_setopt(curl, CURLOPT_USERAGENT, "xenia-canary");
@@ -511,16 +577,32 @@ uint32_t Updater::DownloadFile(
   curl_easy_setopt(curl, CURLOPT_NOPROGRESS,
                    0L);  // Must be set to 0 for XFERINFOFUNCTION
   curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, CurlProgressCallback);
-  curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &callback_data);
+  curl_easy_setopt(curl, CURLOPT_XFERINFODATA, callback_data.get());
+
+  // Timeout options to prevent hanging on slow/stalled connections
+  curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, 1024L);  // 1 KB/s
+  curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, 30L);     // 30 seconds
 
   CURLcode result = curl_easy_perform(curl);
+
+  // Set cancellation flag before cleanup to signal callback to return
+  // immediately
+  cancelled.store(true);
 
   fclose(fp);
 
   long response_code = 0;
   curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
 
+  // Clean up callback data before curl cleanup to prevent dangling pointer
+  callback_data.reset();
   curl_easy_cleanup(curl);
+
+  if (result == CURLE_ABORTED_BY_CALLBACK) {
+    // Download was cancelled by user
+    XELOGI("Download cancelled by user");
+    return 0;  // Return 0 to indicate clean cancellation
+  }
 
   if (result != CURLE_OK && response_code == 0) {
     response_code = -1;

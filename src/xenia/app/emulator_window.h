@@ -348,9 +348,6 @@ class EmulatorWindow {
   std::unique_ptr<UpdaterCompletionDialog> updater_completion_dialog_;
 
   std::vector<RecentTitleEntry> recently_launched_titles_;
-
-  // JThread for checking updates in the background
-  std::jthread update_check_thread_;
 };
 
 }  // namespace app

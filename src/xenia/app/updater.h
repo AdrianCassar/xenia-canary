@@ -13,11 +13,23 @@
 #include <cstdint>
 #include <filesystem>
 #include <functional>
+#include <future>
 #include <string>
 #include <vector>
 
 namespace xe {
 namespace app {
+
+// Callback types for async operations
+using UpdateCheckCallback =
+    std::function<void(bool update_available, const std::string& commit_hash,
+                       const std::string& commit_date, const std::string& tag,
+                       uint32_t response_code)>;
+
+using StartupUpdateCheckCallback =
+    std::function<void(bool update_available, const std::string& commit_hash,
+                       const std::string& commit_date, uint32_t response_code)>;
+
 class Updater {
  public:
   Updater(const std::string& owner, const std::string& repo);
@@ -28,12 +40,20 @@ class Updater {
   uint32_t GetRequest(const std::string& endpoint,
                       std::vector<uint8_t>& response_buffer) const;
 
+  // Synchronous versions
+  // TODO: Only kept for compatibility, can be removed if needed
   bool StartupUpdateCheck(std::string* commit_hash, std::string* commit_date,
                           uint32_t* response_code);
 
   bool CheckForUpdates(bool stable, const std::string& branch,
                        std::string* commit_hash, std::string* date,
                        std::string* tag, uint32_t* response_code);
+
+  // Asynchronous versions
+  void CheckForUpdatesAsync(bool stable, const std::string& branch,
+                            UpdateCheckCallback callback);
+
+  void StartupUpdateCheckAsync(StartupUpdateCheckCallback callback);
 
   std::wstring RunPowershellCommand(const std::string& command) const;
 
@@ -89,6 +109,12 @@ class Updater {
  private:
   std::string owner_;
   std::string repo_;
+
+  // Store async operation futures (Prevent premature destruction)
+  std::vector<std::future<void>> async_operations_;
+
+  // Cleanup completed futures
+  void CleanupAsyncOperations();
 
   static size_t WriteResponceToMemoryCallback(void* contents, size_t size,
                                               size_t nmemb, void* userp) {

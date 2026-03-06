@@ -140,58 +140,60 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
         ImGui::Button(update_desc.c_str(), update_btn_size)) {
       auto_check_update_ = false;  // Check once
       checked_for_updates_ = true;
+      downloading_ = true;  // Use downloading_ as a "checking" indicator
 
-      update_available_ = updater_->CheckForUpdates(
-          stable_toggle_, XE_BUILD_BRANCH, &latest_commit_hash_,
-          &latest_commit_date_, &stable_release_tag_, &update_response_code_);
+      // Use async callback-based approach
+      updater_->CheckForUpdatesAsync(
+          stable_toggle_, XE_BUILD_BRANCH,
+          [this](bool update_available, const std::string& commit_hash,
+                 const std::string& commit_date, const std::string& tag,
+                 uint32_t response_code) {
+            update_available_ = update_available;
+            latest_commit_hash_ = commit_hash;
+            latest_commit_date_ = commit_date;
+            stable_release_tag_ = tag;
+            update_response_code_ = response_code;
+            downloading_ = false;  // Reset checking indicator
 
-      if (update_response_code_ != HTTP_STATUS_CODE::HTTP_OK) {
-        update_available_ = false;
-      }
-
-      if (update_available_) {
-        commit_messages_.clear();
-
-        uint32_t result = 0;
-
-        std::string commit_compare_status_ = "";
-
-        if (stable_toggle_) {
-          result = updater_->GetChangelogBetweenCommits(
-              XE_BUILD_COMMIT, stable_release_tag_, commit_compare_status_,
-              commit_messages_);
-        } else {
-          result = updater_->GetChangelogBetweenCommits(
-              XE_BUILD_COMMIT, latest_commit_hash_, commit_compare_status_,
-              commit_messages_);
-        }
-
-        if (commit_compare_status_ == "identical") {
-          update_available_ = false;
-          compare_status_ = COMPARE_STATE::IDENTICAL;
-        } else if (commit_compare_status_ == "ahead") {
-          compare_status_ = COMPARE_STATE::AHEAD;
-        } else if (commit_compare_status_ == "behind") {
-          compare_status_ = COMPARE_STATE::BEHIND;
-        } else if (commit_compare_status_ == "diverged") {
-          compare_status_ = COMPARE_STATE::DIVERGED;
-        }
-
-        if (result == HTTP_STATUS_CODE::HTTP_OK) {
-          if (compare_status_ == COMPARE_STATE::AHEAD ||
-              compare_status_ == COMPARE_STATE::BEHIND) {
-            if (!commit_messages_.empty()) {
-              changelog_.clear();
+            if (response_code != HTTP_STATUS_CODE::HTTP_OK) {
+              update_available_ = false;
+              return;
             }
 
-            for (const auto& message : commit_messages_) {
-              changelog_.append(fmt::format("- {}\n", message));
-            }
-          }
-        }
-      }
+            if (update_available_) {
+              commit_messages_.clear();
 
-      checked_for_updates_ = true;
+              std::string commit_compare_status_ = "";
+
+              if (stable_toggle_) {
+                updater_->GetChangelogBetweenCommits(
+                    XE_BUILD_COMMIT, stable_release_tag_,
+                    commit_compare_status_, commit_messages_);
+              } else {
+                updater_->GetChangelogBetweenCommits(
+                    XE_BUILD_COMMIT, latest_commit_hash_,
+                    commit_compare_status_, commit_messages_);
+              }
+
+              if (commit_compare_status_ == "identical") {
+                update_available_ = false;
+                compare_status_ = COMPARE_STATE::IDENTICAL;
+              } else if (commit_compare_status_ == "ahead") {
+                compare_status_ = COMPARE_STATE::AHEAD;
+              } else if (commit_compare_status_ == "behind") {
+                compare_status_ = COMPARE_STATE::BEHIND;
+              } else if (commit_compare_status_ == "diverged") {
+                compare_status_ = COMPARE_STATE::DIVERGED;
+              }
+
+              if (!commit_messages_.empty()) {
+                changelog_.clear();
+                for (const auto& message : commit_messages_) {
+                  changelog_.append(fmt::format("- {}\n", message));
+                }
+              }
+            }
+          });
     }
 
     ImGui::EndGroup();
@@ -249,6 +251,12 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
     ImGui::Spacing();
     ImGui::Separator();
     ImGui::Spacing();
+
+    // Show checking indicator while update check is in progress
+    if (downloading_ && !checked_for_updates_) {
+      ImGui::Text("Checking for updates...");
+      ImGui::Spacing();
+    }
 
     if (checked_for_updates_ && update_available_) {
       const uint32_t lines = 15;
