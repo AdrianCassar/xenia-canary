@@ -998,53 +998,94 @@ DECLARE_XAM_EXPORT1(NetDll_XNetGetEthernetLinkStatus, kNetworking,
 
 dword_result_t NetDll_XNetDnsLookup_entry(dword_t caller, lpstring_t host,
                                           dword_t event_handle,
-                                          lpdword_t pdns) {
-  XELOGI("DNS Lookup: {}", std::string(host));
+                                          lpdword_t dns_ptr) {
+  XELOGI("DNS Lookup: {}", host.value());
 
-  if (pdns) {
-    hostent* ent = gethostbyname(host);
-
-    auto dns_guest = kernel_memory()->SystemHeapAlloc(sizeof(XNDNS));
-    auto dns = kernel_memory()->TranslateVirtual<XNDNS*>(dns_guest);
-
-    if (ent == nullptr) {
-      XELOGI("DNS Lookup: Failed");
-#ifdef XE_PLATFORM_WIN32
-      dns->status = WSAGetLastError();
-#else
-      dns->status = (int32_t)X_WSAError::X_WSAENETDOWN;
-#endif
-    } else if (ent->h_addrtype != AF_INET) {
-      dns->status = (int32_t)X_WSAError::X_WSANO_DATA;
-    } else {
-      XELOGI("DNS Lookup: Success");
-      dns->status = 0;
-      int i = 0;
-      while (ent->h_addr_list[i] != nullptr && i < 8) {
-        dns->aina[i] = *reinterpret_cast<in_addr*>(ent->h_addr_list[i]);
-        i++;
-      }
-      dns->cina = i;
-    }
-
-    *pdns = dns_guest;
+  if (!dns_ptr) {
+    return static_cast<uint32_t>(X_WSAError::X_WSAEINVAL);
   }
 
-  xboxkrnl::xeNtSetEvent(event_handle, nullptr);
-  return 0;
+  const uint32_t dns_address = kernel_memory()->SystemHeapAlloc(sizeof(XNDNS));
+  XNDNS* dns = kernel_memory()->TranslateVirtual<XNDNS*>(dns_address);
+
+  dns->status = static_cast<uint32_t>(X_WSAError::X_WSAEINPROGRESS);
+
+  *dns_ptr = dns_address;
+
+  auto run = [=](std::stop_token stop_token) {
+    if (stop_token.stop_requested()) {
+      dns->status = X_ERROR_SUCCESS;
+      xboxkrnl::xeNtSetEvent(event_handle, nullptr);
+      return;
+    }
+
+    ADDRINFOA hints = {.ai_family = XSocket::X_AF_INET};
+    PADDRINFOA addr_info = {};
+
+    const int status = getaddrinfo(host, nullptr, &hints, &addr_info);
+
+    if (status) {
+      XELOGI("DNS Lookup: Failed");
+      dns->status = XSocket::GetLastWSAError();
+      xboxkrnl::xeNtSetEvent(event_handle, nullptr);
+      return;
+    }
+
+    XELOGI("DNS Lookup: Success");
+
+    uint32_t address_index = 0;
+    addrinfo* info = addr_info;
+
+    while (info && address_index < std::size(dns->aina) &&
+           !stop_token.stop_requested()) {
+      dns->aina[address_index] = *reinterpret_cast<in_addr*>(info->ai_addr);
+      info = addr_info->ai_next;
+      address_index++;
+    }
+
+    dns->cina = address_index;
+    dns->status = XSocket::GetLastWSAError();
+
+    xboxkrnl::xeNtSetEvent(event_handle, nullptr);
+  };
+
+  std::jthread dns_lookup_thread(run);
+
+  std::unique_lock lock(dns_lookup_mutex);
+  dns_lookup_threads[dns_address] = dns_lookup_thread.get_stop_source();
+
+  dns_lookup_thread.detach();
+
+  return X_ERROR_SUCCESS;
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetDnsLookup, kNetworking, kImplemented);
 
 dword_result_t NetDll_XNetDnsRelease_entry(dword_t caller,
-                                           pointer_t<XNDNS> dns) {
-  if (!dns) {
+                                           pointer_t<XNDNS> dns_ptr) {
+  if (!dns_ptr) {
     return static_cast<uint32_t>(X_WSAError::X_WSAEINVAL);
   }
 
-  kernel_memory()->SystemHeapFree(dns.guest_address());
-  return 0;
+  const uint32_t dns_address =
+      kernel_state()->memory()->HostToGuestVirtual(std::to_address(dns_ptr));
+
+  std::unique_lock lock(dns_lookup_mutex);
+
+  if (!dns_lookup_threads.contains(dns_address)) {
+    XELOGI("XNetDnsRelease: DNS already released {:08X}",
+           dns_ptr.guest_address());
+    return X_ERROR_SUCCESS;
+  }
+
+  dns_lookup_threads.at(dns_address).request_stop();
+
+  kernel_memory()->SystemHeapFree(dns_ptr.guest_address());
+
+  dns_lookup_threads.erase(dns_address);
+
+  return X_ERROR_SUCCESS;
 }
-DECLARE_XAM_EXPORT1(NetDll_XNetDnsRelease, kNetworking, kStub);
+DECLARE_XAM_EXPORT1(NetDll_XNetDnsRelease, kNetworking, kImplemented);
 
 dword_result_t NetDll_XNetQosServiceLookup_entry(dword_t caller, dword_t flags,
                                                  dword_t event_handle,
