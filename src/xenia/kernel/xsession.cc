@@ -1275,6 +1275,36 @@ void XSession::FillSessionProperties(
   result->properties_ptr = properties_ptr;
 }
 
+bool XSession::IsPresenceEnabled() const {
+  return local_details_.Flags & PRESENCE;
+}
+
+bool XSession::IsJoinViaPresenceEnabled() const {
+  return !(local_details_.Flags & JOIN_VIA_PRESENCE_DISABLED);
+}
+
+bool XSession::IsJoinViaPresenceFriendsOnly() const {
+  return local_details_.Flags & JOIN_VIA_PRESENCE_FRIENDS_ONLY;
+}
+
+bool XSession::IsJoinInProgressEnabled() const {
+  return !(local_details_.Flags & JOIN_IN_PROGRESS_DISABLED);
+}
+
+bool XSession::IsInvitesEnabled() const {
+  return !(local_details_.Flags & INVITES_DISABLED);
+}
+
+bool XSession::IsSessionStarted() const {
+  return static_cast<uint32_t>(local_details_.eState) &
+         static_cast<uint32_t>(XSESSION_STATE::INGAME);
+}
+
+bool XSession::IsSessionEnded() const {
+  return static_cast<uint32_t>(local_details_.eState) &
+         static_cast<uint32_t>(XSESSION_STATE::REPORTING);
+}
+
 void XSession::NotifySessionCreationWarning(uint32_t user_index) const {
   const xam::UserProfile* user_profile =
       kernel_state_->xam_state()->GetUserProfile(user_index);
