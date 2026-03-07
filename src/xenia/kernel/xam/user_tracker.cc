@@ -8,12 +8,14 @@
  */
 
 #include <algorithm>
+#include <vector>
 
 #include "xenia/emulator.h"
 #include "xenia/kernel/xam/user_profile.h"
 
 #include "third_party/fmt/include/fmt/format.h"
 #include "third_party/stb/stb_image.h"
+#include "xenia/app/discord/discord_presence.h"
 #include "xenia/base/threading.h"
 #include "xenia/kernel/XLiveAPI.h"
 #include "xenia/kernel/kernel_state.h"
@@ -29,6 +31,8 @@ DECLARE_int32(user_language);
 DECLARE_int32(user_country);
 
 DECLARE_int32(discord_presence_user_index);
+
+DECLARE_bool(discord);
 
 namespace xe {
 namespace kernel {
@@ -1553,6 +1557,46 @@ void UserTracker::PeriodicMaintenance(uint64_t xuid,
       kernel_state()->emulator()->on_presence_change(
           kernel_state()->emulator()->title_name(), updated_presence);
     }
+  }
+
+  const uint32_t user_index =
+      kernel_state()->xam_state()->GetUserIndexAssignedToProfileFromXUID(xuid);
+
+  // Discord invites
+  if (cvars::discord && cvars::discord_presence_user_index == user_index) {
+    const auto valid_session = user->FindValidInviteSession();
+
+    if (valid_session.has_value()) {
+      const auto& session = valid_session.value();
+
+      const XSESSION_LOCAL_DETAILS cached_session_details =
+          user->GetDiscordInviteSessionDetails();
+      const XSESSION_LOCAL_DETAILS session_details =
+          session->GetSessionDetails();
+
+      if (cached_session_details != session_details) {
+        const XSESSION_INFO session_info = session->GetSessionInfo();
+        const uint32_t party_size = session->GetMembersCount();
+        const uint32_t party_max = session->GetTotalMaxSlots();
+
+        kernel_state()->emulator()->on_session_change(
+            &session_info, party_size, party_max, user->GetOnlineXUID());
+        user->SetDiscordInviteSessionDetails(session_details);
+      }
+    } else {
+      const XSESSION_LOCAL_DETAILS cached_session_details =
+          user->GetDiscordInviteSessionDetails();
+      const XSESSION_LOCAL_DETAILS empty_session_details = {};
+
+      // Reset cached session details since there is no longer a valid invite
+      // session available.
+      if (cached_session_details != empty_session_details) {
+        kernel_state()->emulator()->on_session_change(nullptr, 0, 0, 0);
+        user->SetDiscordInviteSessionDetails(empty_session_details);
+      }
+    }
+
+    xe::discord::DiscordPresence::Update();
   }
 
   if (user->signin_state() != X_USER_SIGNIN_STATE::SignedInToLive ||
