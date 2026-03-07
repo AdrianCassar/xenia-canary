@@ -9,6 +9,9 @@
 
 #include "xenia/kernel/xam/user_profile.h"
 
+#include <cstring>
+#include <vector>
+
 #include "third_party/fmt/include/fmt/format.h"
 #include "xenia/emulator.h"
 #include "xenia/kernel/util/presence_string_builder.h"
@@ -16,6 +19,8 @@
 #include "xenia/kernel/util/xlast.h"
 #include "xenia/kernel/xam/friends_util.h"
 #include "xenia/kernel/xam/xdbf/gpd_info.h"
+#include "xenia/kernel/xnet.h"
+#include "xenia/kernel/xsession.h"
 
 #include "xenia/kernel/XLiveAPI.h"
 
@@ -520,6 +525,41 @@ bool UserProfile::IsPresenceStringUpdateAvailable() {
   }
 
   return current_presence != updated_presence;
+}
+
+bool UserProfile::IsSessionUpdateAvailable() {
+  XSESSION_INFO current_session_info = {};
+  int current_party_size = 0;
+  int current_party_max = 0;
+  bool has_joinable_session = false;
+
+  for (const auto& session : GetOwnedSessions()) {
+    if (session->IsHost() && session->IsCreated() &&
+        session->IsJoinViaPresenceEnabled() &&
+        !session->IsJoinViaPresenceFriendsOnly()) {
+      current_session_info = session->GetSessionInfo();
+      current_party_size = static_cast<int>(session->GetMembersCount());
+      current_party_max = static_cast<int>(session->GetMaxPublicSlots());
+      has_joinable_session = true;
+      break;
+    }
+  }
+
+  if (!has_joinable_session) {
+    return last_session_party_size_ != -1 || last_session_party_max_ != -1;
+  }
+
+  return std::memcmp(&current_session_info, &last_session_info_,
+                     sizeof(XSESSION_INFO)) != 0 ||
+         current_party_size != last_session_party_size_ ||
+         current_party_max != last_session_party_max_;
+}
+
+void UserProfile::SetLastSessionState(const XSESSION_INFO& session_info,
+                                      int party_size, int party_max) {
+  last_session_info_ = session_info;
+  last_session_party_size_ = party_size;
+  last_session_party_max_ = party_max;
 }
 
 bool UserProfile::BuildPresenceString(bool update,

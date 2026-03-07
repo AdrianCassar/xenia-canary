@@ -27,6 +27,8 @@
 #include "xenia/debug/ui/debug_window.h"
 #include "xenia/emulator.h"
 #include "xenia/kernel/xam/xam_module.h"
+#include "xenia/kernel/xam/xam_state.h"
+#include "xenia/ui/imgui_dialog.h"
 #include "xenia/ui/file_picker.h"
 #include "xenia/ui/window.h"
 #include "xenia/ui/window_listener.h"
@@ -63,6 +65,8 @@
 #include "third_party/fmt/include/fmt/format.h"
 
 #include "xenia/kernel/XLiveAPI.h"
+#include "xenia/kernel/util/net_utils.h"
+#include "xenia/xbox.h"
 #include "xenia/kernel/util/net_utils.h"
 
 DEFINE_string(apu, "any", "Audio system. Use: [any, nop, sdl, xaudio2]", "APU");
@@ -114,6 +118,8 @@ DEFINE_transient_bool(portable, true,
 DECLARE_bool(debug);
 
 DEFINE_bool(discord, true, "Enable Discord rich presence", "General");
+
+DECLARE_int32(discord_presence_user_index);
 
 DECLARE_bool(widescreen);
 
@@ -724,6 +730,45 @@ void EmulatorApp::EmulatorThread() {
                                                  xe::to_utf8(presence_string));
         }
       });
+
+  emulator_->on_session_change.AddListener(
+      [&](const xe::kernel::XSESSION_INFO* session_info, int party_size, int party_max,
+          uint64_t host_xuid) {
+        if (cvars::discord) {
+          discord::DiscordPresence::UpdateSession(
+              emulator_->title_id(), session_info, party_size, party_max,
+              host_xuid);
+        }
+      });
+
+  if (cvars::discord) {
+    discord::DiscordPresence::SetJoinRequestHandler(
+        [this](xe::kernel::X_INVITE_INFO invite) {
+          app_context().CallInUIThread([this, invite]() mutable {
+            const uint32_t current_title = emulator_->title_id();
+            if (current_title == 0 ||
+                invite.from_game_invite.get() != current_title) {
+              xe::ui::ImGuiDialog::ShowMessageBox(
+                  emulator_->imgui_drawer(), "Join failed",
+                  "User is playing a different game.");
+              return;
+            }
+            const uint32_t user_index = static_cast<uint32_t>(
+                cvars::discord_presence_user_index);
+            auto* profile = emulator_->kernel_state()
+                                ->xam_state()
+                                ->GetUserProfile(user_index);
+            if (!profile) {
+              return;
+            }
+            invite.xuid_invitee = profile->GetOnlineXUID();
+            profile->SetSelfInvite(invite);
+            emulator_->kernel_state()->BroadcastNotification(
+                kXNotificationLiveInviteAccepted,
+                user_index);
+          });
+        });
+  }
 
   emulator_->on_shader_storage_initialization.AddListener(
       [this](bool initializing) {

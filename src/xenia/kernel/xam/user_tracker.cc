@@ -8,6 +8,8 @@
  */
 
 #include <algorithm>
+#include <cstring>
+#include <vector>
 
 #include "xenia/emulator.h"
 #include "xenia/kernel/xam/user_profile.h"
@@ -23,6 +25,8 @@
 #include "xenia/kernel/xam/user_settings.h"
 #include "xenia/kernel/xam/user_tracker.h"
 #include "xenia/kernel/xam/xdbf/gpd_info.h"
+#include "xenia/kernel/xnet.h"
+#include "xenia/kernel/xsession.h"
 
 DECLARE_int32(user_language);
 
@@ -1552,6 +1556,34 @@ void UserTracker::PeriodicMaintenance(uint64_t xuid,
     if (cvars::discord_presence_user_index == user_index) {
       kernel_state()->emulator()->on_presence_change(
           kernel_state()->emulator()->title_name(), updated_presence);
+    }
+  }
+
+  const uint32_t user_index =
+      kernel_state()->xam_state()->GetUserIndexAssignedToProfileFromXUID(xuid);
+  if (cvars::discord_presence_user_index == user_index) {
+    if (user->IsSessionUpdateAvailable()) {
+      int party_size = 0;
+      int party_max = 0;
+      bool found = false;
+      for (const auto& session : user->GetOwnedSessions()) {
+        if (session->IsHost() && session->IsCreated() &&
+            session->IsJoinViaPresenceEnabled() &&
+            !session->IsJoinViaPresenceFriendsOnly()) {
+          const XSESSION_INFO session_info = session->GetSessionInfo();
+          party_size = static_cast<int>(session->GetMembersCount());
+          party_max = static_cast<int>(session->GetMaxPublicSlots());
+          kernel_state()->emulator()->on_session_change(
+              &session_info, party_size, party_max, user->GetOnlineXUID());
+          user->SetLastSessionState(session_info, party_size, party_max);
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        kernel_state()->emulator()->on_session_change(nullptr, 0, 0, 0);
+        user->SetLastSessionState(XSESSION_INFO{}, 0, 0);
+      }
     }
   }
 

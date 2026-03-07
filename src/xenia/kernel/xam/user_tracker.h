@@ -13,6 +13,7 @@
 #include <chrono>
 #include <set>
 #include <span>
+#include <string>
 
 #include "xenia/xbox.h"
 

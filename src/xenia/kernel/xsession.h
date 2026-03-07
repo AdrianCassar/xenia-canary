@@ -343,7 +343,18 @@ class XSession : public XObject {
     return (state_ & STATE_FLAGS_DELETED) == STATE_FLAGS_DELETED;
   }
 
+  bool IsJoinViaPresenceEnabled() const;
+
+  bool IsJoinViaPresenceFriendsOnly() const;
+
   uint64_t GetSessionID() const { return session_id_; };
+
+  uint32_t GetMaxPublicSlots() const {
+    return local_details_.MaxPublicSlots.get();
+  }
+
+  // Host session info for presence/join; valid when IsHost() && IsCreated().
+  XSESSION_INFO GetSessionInfo() const { return local_details_.sessionInfo; };
 
   // Gets XUID of the owner managing the local session
   uint64_t GetOwnerXUID() const { return owner_xuid_; };

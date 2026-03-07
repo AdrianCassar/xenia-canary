@@ -39,6 +39,14 @@ X_STATUS XSession::Initialize() {
   return X_STATUS_SUCCESS;
 }
 
+bool XSession::IsJoinViaPresenceEnabled() const {
+  return !(local_details_.Flags & JOIN_VIA_PRESENCE_DISABLED);
+}
+
+bool XSession::IsJoinViaPresenceFriendsOnly() const {
+  return (local_details_.Flags & JOIN_VIA_PRESENCE_FRIENDS_ONLY) != 0;
+}
+
 X_RESULT XSession::CreateSession(uint32_t user_index, uint8_t public_slots,
                                  uint8_t private_slots, uint32_t flags,
                                  uint32_t session_info_ptr,
