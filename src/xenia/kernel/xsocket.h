@@ -131,6 +131,7 @@ class XSocket : public XObject {
   uint64_t native_handle() const { return native_handle_; }
   uint16_t bound_port() const { return bound_port_; }
   Protocol protocol() const { return proto_; }
+  bool IsBound() const { return bound_; }
   bool IsVDPProtocol() const { return vdp_; }
   std::string GetProtocolUPnPString() const {
     if (proto_ == X_IPPROTO_UDP || proto_ == X_IPPROTO_VDP) {
