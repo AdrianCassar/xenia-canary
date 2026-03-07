@@ -19,8 +19,6 @@
 #include "xenia/kernel/util/xlast.h"
 #include "xenia/kernel/xam/friends_util.h"
 #include "xenia/kernel/xam/xdbf/gpd_info.h"
-#include "xenia/kernel/xnet.h"
-#include "xenia/kernel/xsession.h"
 
 #include "xenia/kernel/XLiveAPI.h"
 

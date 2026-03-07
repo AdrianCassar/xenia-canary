@@ -22,10 +22,10 @@
 #include "xenia/base/exception_handler.h"
 #include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/upnp.h"
-#include "xenia/kernel/xnet.h"
 #include "xenia/kernel/util/game_info_database.h"
 #include "xenia/kernel/util/network_adapter_manager.h"
 #include "xenia/kernel/util/xlast.h"
+#include "xenia/kernel/xnet.h"
 #include "xenia/memory.h"
 #include "xenia/patcher/patcher.h"
 #include "xenia/patcher/plugin_loader.h"
@@ -321,7 +321,8 @@ class Emulator {
   xe::Delegate<> on_exit;
   xe::Delegate<const std::string_view, const std::u16string_view>
       on_presence_change;
-  xe::Delegate<const kernel::XSESSION_INFO*, int, int, uint64_t> on_session_change;
+  xe::Delegate<const kernel::XSESSION_INFO*, uint32_t, uint32_t, uint64_t>
+      on_session_change;
 
  private:
   enum : uint64_t { EmulatorFlagDisclaimerAcknowledged = 1ULL << 0 };
