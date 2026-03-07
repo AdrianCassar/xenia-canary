@@ -414,11 +414,15 @@ struct XNKID {
   uint8_t ab[8];
   uint64_t as_uint64() { return *reinterpret_cast<uint64_t*>(&ab); }
   uint64_t as_uintBE64() { return xe::byte_swap(as_uint64()); }
+
+  bool operator==(const XNKID&) const = default;
 };
 static_assert_size(XNKID, 0x8);
 
 struct XNKEY {
   uint8_t ab[16];
+
+  bool operator==(const XNKEY&) const = default;
 };
 static_assert_size(XNKEY, 0x10);
 
@@ -433,6 +437,21 @@ struct SGADDR {
   xe::be<uint64_t> xbox_id;                     // Unique identifier of client machine account - machine id?
   uint8_t platform_type;
   uint8_t reserved[3];
+
+bool operator==(const SGADDR& other) const {
+  return std::tie(
+             ina.s_addr,
+             security_parameter_index,
+             xbox_id,
+             platform_type
+         ) ==
+         std::tie(
+             other.ina.s_addr,
+             other.security_parameter_index,
+             other.xbox_id,
+             other.platform_type
+         ) && std::equal(std::begin(reserved), std::end(reserved), std::begin(other.reserved));
+}
 };
 static_assert_size(SGADDR, 0x14);
 
@@ -447,6 +466,14 @@ struct XNADDR {
   xe::be<uint16_t> wPortOnline;  // Online port
   uint8_t abEnet[6];             // Ethernet MAC address
   SGADDR abOnline;               // Online identification
+
+  bool operator==(const XNADDR& other) const {
+    return std::tie(ina.s_addr, inaOnline.s_addr, wPortOnline, abOnline) ==
+               std::tie(other.ina.s_addr, other.inaOnline.s_addr,
+                        other.wPortOnline, other.abOnline) &&
+           std::equal(std::begin(abEnet), std::end(abEnet),
+                      std::begin(other.abEnet));
+  }
 };
 static_assert_size(XNADDR, 0x24);
 
@@ -456,6 +483,8 @@ struct XSESSION_INFO {
   XNKID sessionID;
   XNADDR hostAddress;
   XNKEY keyExchangeKey;
+
+  bool operator==(const XSESSION_INFO& rhs) const = default;
 };
 static_assert_size(XSESSION_INFO, 0x3C);
 
@@ -516,6 +545,8 @@ struct XSESSION_LOCAL_DETAILS {
   XSESSION_INFO sessionInfo;
   XNKID xnkidArbitration;
   xe::be<uint32_t> SessionMembers_ptr;
+
+  bool operator==(const XSESSION_LOCAL_DETAILS& rhs) const = default;
 };
 static_assert_size(XSESSION_LOCAL_DETAILS, 0x80);
 

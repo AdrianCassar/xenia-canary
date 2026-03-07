@@ -28,6 +28,7 @@
 #include "xenia/emulator.h"
 #include "xenia/kernel/xam/xam_module.h"
 #include "xenia/ui/file_picker.h"
+#include "xenia/ui/imgui_host_notification.h"
 #include "xenia/ui/window.h"
 #include "xenia/ui/window_listener.h"
 #include "xenia/ui/windowed_app.h"
@@ -133,7 +134,9 @@ DEFINE_transient_bool(portable, true,
 
 DECLARE_bool(debug);
 
-DEFINE_bool(discord, true, "Enable Discord rich presence", "General");
+DECLARE_bool(discord);
+
+DECLARE_int32(discord_presence_user_index);
 
 DECLARE_bool(widescreen);
 
@@ -762,6 +765,43 @@ void EmulatorApp::EmulatorThread() {
           discord::DiscordPresence::PlayingTitle(title,
                                                  xe::to_utf8(presence_string));
         }
+      });
+
+  emulator_->on_session_change.AddListener(
+      [this](const xe::kernel::XSESSION_INFO* session_info, uint32_t party_size,
+             uint32_t party_max, uint64_t host_xuid) {
+        discord::DiscordPresence::UpdateSession(emulator_->title_id(),
+                                                session_info, party_size,
+                                                party_max, host_xuid);
+      });
+
+  discord::DiscordPresence::SetJoinRequestHandler(
+      [this](xe::kernel::X_INVITE_INFO invite) {
+        const auto show_notification = [this](const std::string& title) {
+          app_context().CallInUIThread([this, title]() {
+            new xe::ui::HostNotificationWindow(
+                emulator_->imgui_drawer(), "Join Failed!", title.c_str(), 0);
+          });
+        };
+
+        if (invite.title_id != emulator_->title_id()) {
+          show_notification("User is playing a different game.");
+          return;
+        }
+
+        const uint32_t user_index = cvars::discord_presence_user_index;
+        kernel::xam::UserProfile* profile =
+            emulator_->kernel_state()->xam_state()->GetUserProfile(user_index);
+
+        if (!profile) {
+          show_notification("User not logged in.");
+          return;
+        }
+
+        invite.xuid_invitee = profile->GetOnlineXUID();
+        profile->SetSelfInvite(invite);
+        emulator_->kernel_state()->BroadcastNotification(
+            kXNotificationLiveInviteAccepted, user_index);
       });
 
   emulator_->on_shader_storage_initialization.AddListener(

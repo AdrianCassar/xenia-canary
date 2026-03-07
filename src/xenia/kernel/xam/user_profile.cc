@@ -522,6 +522,44 @@ bool UserProfile::IsPresenceStringUpdateAvailable() {
   return current_presence != updated_presence;
 }
 
+std::optional<object_ref<XSession>> UserProfile::FindValidInviteSession() {
+  object_ref<XSession> valid_session = nullptr;
+
+  for (const auto& session : GetOwnedSessions()) {
+    if (session->IsHost() && session->IsCreated() &&
+        session->IsXboxLiveSession() && session->IsInvitesEnabled() &&
+        session->GetMembersCount()) {
+      if (session->IsJoinInProgressEnabled()) {
+        valid_session = session;
+      } else if (!session->IsSessionStarted() || session->IsSessionEnded()) {
+        valid_session = session;
+      }
+
+      // Prioritize session with most slots.
+      if (valid_session) {
+        if (session->GetTotalMaxSlots() > valid_session->GetTotalMaxSlots()) {
+          valid_session = session;
+        }
+      }
+    }
+  }
+
+  if (!valid_session) {
+    return std::nullopt;
+  }
+
+  return valid_session;
+}
+
+void UserProfile::SetDiscordInviteSessionDetails(
+    const XSESSION_LOCAL_DETAILS& session_details) {
+  discord_invite_session_details_ = session_details;
+}
+
+XSESSION_LOCAL_DETAILS UserProfile::GetDiscordInviteSessionDetails() const {
+  return discord_invite_session_details_;
+}
+
 bool UserProfile::BuildPresenceString(bool update,
                                       std::u16string* presence_string) {
   bool completed = false;
