@@ -1865,9 +1865,11 @@ dword_result_t NetDll_closesocket_entry(dword_t caller, dword_t socket_handle) {
   if (upnp) {
     CleanupUPnPActions();
 
-    auto remove_port = upnp->RemovePortAsync(socket->bound_port(),
-                                             socket->GetProtocolUPnPString());
-    upnp_actions_.push_back(std::move(remove_port));
+    if (socket->IsBound()) {
+      auto remove_port = upnp->RemovePortAsync(socket->bound_port(),
+                                               socket->GetProtocolUPnPString());
+      upnp_actions_.push_back(std::move(remove_port));
+    }
   }
 
   // TODO: Absolutely delete this object. It is no longer valid after calling
