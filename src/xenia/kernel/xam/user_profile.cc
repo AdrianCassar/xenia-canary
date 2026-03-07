@@ -525,39 +525,30 @@ bool UserProfile::IsPresenceStringUpdateAvailable() {
   return current_presence != updated_presence;
 }
 
-bool UserProfile::IsSessionUpdateAvailable() {
+std::optional<object_ref<XSession>> UserProfile::IsSessionUpdateAvailable() {
   XSESSION_INFO current_session_info = {};
-  int current_party_size = 0;
-  int current_party_max = 0;
-  bool has_joinable_session = false;
+  object_ref<XSession> updated_session;
 
   for (const auto& session : GetOwnedSessions()) {
     if (session->IsHost() && session->IsCreated() &&
+        session->HasXboxLiveFeatureFlags() &&
         session->IsJoinViaPresenceEnabled() &&
         !session->IsJoinViaPresenceFriendsOnly()) {
       current_session_info = session->GetSessionInfo();
-      current_party_size = static_cast<int>(session->GetMembersCount());
-      current_party_max = static_cast<int>(session->GetMaxPublicSlots());
-      has_joinable_session = true;
+      updated_session = session;
       break;
     }
   }
 
-  if (!has_joinable_session) {
-    return last_session_party_size_ != -1 || last_session_party_max_ != -1;
+  if (std::memcmp(&current_session_info, &last_session_info_,
+                  sizeof(XSESSION_INFO)) != 0) {
+    return std::nullopt;
   }
-
-  return std::memcmp(&current_session_info, &last_session_info_,
-                     sizeof(XSESSION_INFO)) != 0 ||
-         current_party_size != last_session_party_size_ ||
-         current_party_max != last_session_party_max_;
+  return updated_session;
 }
 
-void UserProfile::SetLastSessionState(const XSESSION_INFO& session_info,
-                                      int party_size, int party_max) {
+void UserProfile::SetLastSessionState(const XSESSION_INFO& session_info) {
   last_session_info_ = session_info;
-  last_session_party_size_ = party_size;
-  last_session_party_max_ = party_max;
 }
 
 bool UserProfile::BuildPresenceString(bool update,

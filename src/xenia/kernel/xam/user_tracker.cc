@@ -1561,31 +1561,27 @@ void UserTracker::PeriodicMaintenance(uint64_t xuid,
       kernel_state()->xam_state()->GetUserIndexAssignedToProfileFromXUID(xuid);
 
   if (cvars::discord_presence_user_index == user_index) {
-    if (user->IsSessionUpdateAvailable()) {
-      bool found = false;
+    bool found = false;
 
-      for (const auto& session : user->GetOwnedSessions()) {
-        if (session->IsHost() && session->IsCreated() &&
-                session->HasXboxLiveFeatureFlags() &&
-                session->IsJoinViaPresenceEnabled() ||
-            !session->IsJoinViaPresenceFriendsOnly()) {
-          const XSESSION_INFO session_info = session->GetSessionInfo();
-          const uint32_t party_size = session->GetMembersCount();
-          const uint32_t party_max = session->GetMaxPublicSlots();
+    const auto updated_session = user->IsSessionUpdateAvailable();
 
-          kernel_state()->emulator()->on_session_change(
-              &session_info, party_size, party_max, user->GetOnlineXUID());
-          user->SetLastSessionState(session_info, party_size, party_max);
+    if (updated_session.has_value()) {
+      const auto& session = updated_session.value();
 
-          found = true;
-          break;
-        }
-      }
+      const XSESSION_INFO session_info = session->GetSessionInfo();
+      const uint32_t party_size = session->GetMembersCount();
+      const uint32_t party_max = session->GetMaxPublicSlots();
 
-      if (!found) {
-        kernel_state()->emulator()->on_session_change(nullptr, 0, 0, 0);
-        user->SetLastSessionState(XSESSION_INFO{}, 0, 0);
-      }
+      kernel_state()->emulator()->on_session_change(
+          &session_info, party_size, party_max, user->GetOnlineXUID());
+      user->SetLastSessionState(session_info);
+
+      found = true;
+    }
+
+    if (!found) {
+      kernel_state()->emulator()->on_session_change(nullptr, 0, 0, 0);
+      user->SetLastSessionState({});
     }
   }
 
