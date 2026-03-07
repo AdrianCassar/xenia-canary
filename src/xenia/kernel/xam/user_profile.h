@@ -218,6 +218,12 @@ class UserProfile {
   bool IsPresenceStringUpdateAvailable();
   bool BuildPresenceString(bool update, std::u16string* presence_string);
 
+  std::optional<object_ref<XSession>> FindValidInviteSession();
+  void SetDiscordInviteSessionDetails(
+      const XSESSION_LOCAL_DETAILS& session_details);
+
+  XSESSION_LOCAL_DETAILS GetDiscordInviteSessionDetails() const;
+
   void AddOwnedSession(object_ref<XSession> owned_session) {
     const auto& session_obj_ref =
         std::find_if(owned_sessions_.cbegin(), owned_sessions_.cend(),
@@ -274,6 +280,8 @@ class UserProfile {
 
   std::map<XTileType, std::vector<uint8_t>> profile_images_;
   std::u16string online_presence_desc_ = u"";
+
+  XSESSION_LOCAL_DETAILS discord_invite_session_details_ = {};
 
   GpdInfo* GetGpd(const uint32_t title_id);
   const GpdInfo* GetGpd(const uint32_t title_id) const;
