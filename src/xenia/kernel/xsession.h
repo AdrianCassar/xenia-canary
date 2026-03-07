@@ -358,7 +358,29 @@ class XSession : public XObject {
     return (state_ & STATE_FLAGS_DELETED) == STATE_FLAGS_DELETED;
   }
 
+  bool IsPresenceEnabled() const;
+
+  bool IsJoinViaPresenceEnabled() const;
+
+  bool IsJoinViaPresenceFriendsOnly() const;
+
+  bool IsJoinInProgressEnabled() const;
+
+  bool IsInvitesEnabled() const;
+
+  bool IsSessionStarted() const;
+
+  bool IsSessionEnded() const;
+
   uint64_t GetSessionID() const { return session_id_; };
+
+  uint32_t GetTotalMaxSlots() const {
+    return local_details_.MaxPublicSlots + local_details_.MaxPrivateSlots;
+  }
+
+  XSESSION_INFO GetSessionInfo() const { return local_details_.sessionInfo; };
+
+  XSESSION_LOCAL_DETAILS GetSessionDetails() const { return local_details_; };
 
   // Gets XUID of the owner managing the local session
   uint64_t GetOwnerXUID() const { return owner_xuid_; };
