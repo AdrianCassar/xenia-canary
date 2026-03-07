@@ -52,6 +52,7 @@ enum class X_WSAError : uint32_t {
   X_WSANO_DATA = 0x2AFC,
   X_WSANOTINITIALISED = 0x276D,
   X_WSAEADDRINUSE = 0x2740,
+  X_WSAEINPROGRESS = 0x2734,
 };
 
 /*
@@ -180,7 +181,7 @@ class XSocket : public XObject {
                               xe::be<uint32_t>* bytes_transferred, bool wait,
                               xe::be<uint32_t>* flags_ptr);
 
-  uint32_t GetLastWSAError() const;
+  static uint32_t GetLastWSAError();
 
   struct packet {
     // These values are in network byte order.

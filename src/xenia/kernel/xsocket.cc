@@ -666,7 +666,7 @@ X_STATUS XSocket::GetSockName(XSOCKADDR_IN* buf, int* buf_len) {
   return X_STATUS_SUCCESS;
 }
 
-uint32_t XSocket::GetLastWSAError() const {
+uint32_t XSocket::GetLastWSAError() {
   // Todo(Gliniak): Provide error mapping table
   // Xbox error codes might not match with what we receive from OS
 #ifdef XE_PLATFORM_WIN32
