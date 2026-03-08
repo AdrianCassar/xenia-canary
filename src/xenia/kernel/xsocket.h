@@ -19,7 +19,6 @@
 
 #ifdef XE_PLATFORM_WIN32
 // clang-format off
-#define _WINSOCK_DEPRECATED_NO_WARNINGS  // inet_addr
 #include "xenia/base/platform_win.h"
 #include <WS2tcpip.h>
 #include <WinSock2.h>
