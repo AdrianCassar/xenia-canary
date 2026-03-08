@@ -1604,10 +1604,6 @@ dword_result_t NetDll_XHttpCrackUrl_entry(
       R"(^([a-zA-Z]+)://(?:([^:@]+)(?::([^:@]*))?@)?([^/:]+)(?::(\d+))?((/[^?#]*)(\?[^#]*)?(#[^ ]*)?)?$)",
       std::regex_constants::icase);
 
-  const char* component_names[] = {"Full Match", "Protocol", "Username",
-                                   "Password",   "Host",     "Port",
-                                   "Path",       "Query"};
-
   std::smatch matches;
 
   auto ProcessComponent = [kernel_state = kernel_state()](
@@ -1626,7 +1622,8 @@ dword_result_t NetDll_XHttpCrackUrl_entry(
       char* result_src_ptr =
           kernel_state->memory()->TranslateVirtual<char*>(component_result_ptr);
 
-      std::memcpy(result_dst_ptr, result_src_ptr, size);
+      std::copy_n(result_src_ptr, size, result_dst_ptr);
+      result_dst_ptr[size] = '\0';  // Null terminator
       component_length_ptr = size;
     } else if (component_length_ptr) {
       component_ptr = component_result_ptr;
@@ -1665,8 +1662,10 @@ dword_result_t NetDll_XHttpCrackUrl_entry(
 
             url_components_ptr->scheme_length = scheme_length_out;
 
-            if (component_result && !url_components_ptr->scheme_ptr) {
-              url_components_ptr->scheme_ptr = scheme_ptr_out;
+            if (component_result) {
+              if (!url_components_ptr->scheme_ptr) {
+                url_components_ptr->scheme_ptr = scheme_ptr_out;
+              }
             } else {
               ret = false;
             }
@@ -1698,8 +1697,10 @@ dword_result_t NetDll_XHttpCrackUrl_entry(
 
             url_components_ptr->user_name_length = username_length_out;
 
-            if (component_result && !url_components_ptr->user_name_ptr) {
-              url_components_ptr->user_name_ptr = username_ptr_out;
+            if (component_result) {
+              if (!url_components_ptr->user_name_ptr) {
+                url_components_ptr->user_name_ptr = username_ptr_out;
+              }
             } else {
               ret = false;
             }
@@ -1713,8 +1714,10 @@ dword_result_t NetDll_XHttpCrackUrl_entry(
 
             url_components_ptr->password_length = password_length_out;
 
-            if (component_result && !url_components_ptr->password_ptr) {
-              url_components_ptr->password_ptr = password_ptr_out;
+            if (component_result) {
+              if (!url_components_ptr->password_ptr) {
+                url_components_ptr->password_ptr = password_ptr_out;
+              }
             } else {
               ret = false;
             }
@@ -1728,8 +1731,10 @@ dword_result_t NetDll_XHttpCrackUrl_entry(
 
             url_components_ptr->host_name_length = host_length_out;
 
-            if (component_result && !url_components_ptr->host_name_ptr) {
-              url_components_ptr->host_name_ptr = host_ptr_out;
+            if (component_result) {
+              if (!url_components_ptr->host_name_ptr) {
+                url_components_ptr->host_name_ptr = host_ptr_out;
+              }
             } else {
               ret = false;
             }
@@ -1754,8 +1759,10 @@ dword_result_t NetDll_XHttpCrackUrl_entry(
 
             url_components_ptr->url_path_length = path_length_out;
 
-            if (component_result && !url_components_ptr->url_path_ptr) {
-              url_components_ptr->url_path_ptr = path_ptr_out;
+            if (component_result) {
+              if (!url_components_ptr->url_path_ptr) {
+                url_components_ptr->url_path_ptr = path_ptr_out;
+              }
             } else {
               ret = false;
             }
@@ -1769,8 +1776,10 @@ dword_result_t NetDll_XHttpCrackUrl_entry(
 
             url_components_ptr->extra_info_length = extra_length_out;
 
-            if (component_result && !url_components_ptr->extra_info_ptr) {
-              url_components_ptr->extra_info_ptr = extra_ptr_out;
+            if (component_result) {
+              if (!url_components_ptr->extra_info_ptr) {
+                url_components_ptr->extra_info_ptr = extra_ptr_out;
+              }
             } else {
               ret = false;
             }
@@ -1778,7 +1787,11 @@ dword_result_t NetDll_XHttpCrackUrl_entry(
         }
       }
     }
+  } else {
+    ret = false;
   }
+
+  curl_url_cleanup(url);
 
   // Return after processing so the component length is set
   if (insufficient_buffer) {
