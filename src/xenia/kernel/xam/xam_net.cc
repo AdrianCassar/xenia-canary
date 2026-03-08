@@ -26,11 +26,7 @@
 #include "xenia/xbox.h"
 
 #ifdef XE_PLATFORM_WIN32
-// NOTE: must be included last as it expects windows.h to already be included.
-#define _WINSOCK_DEPRECATED_NO_WARNINGS  // inet_addr
-#include <WS2tcpip.h>                    // NOLINT(build/include_order)
-#include <comutil.h>
-#include <wrl/client.h>
+#include <WS2tcpip.h>
 #else
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -1870,11 +1866,16 @@ dword_result_t NetDll_inet_addr_entry(lpstring_t addr_ptr) {
     return -1;
   }
 
+#pragma warning(push)
+#pragma warning(    \
+    disable : 4996, \
+    justification : "Retain original functionality e.g. Input Notation")
   uint32_t addr = inet_addr(addr_ptr);
+#pragma warning(pop)
   // https://docs.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-inet_addr#return-value
   // Based on console research it seems like x360 uses old version of
   // inet_addr In case of empty string it return 0 instead of -1
-  if (addr == -1 && !addr_ptr.value().length()) {
+  if (addr == -1 && addr_ptr.value().empty()) {
     return 0;
   }
 

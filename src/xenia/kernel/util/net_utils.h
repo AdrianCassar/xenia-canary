@@ -17,14 +17,7 @@
 #include "xenia/base/platform.h"
 
 #ifdef XE_PLATFORM_WIN32
-// clang-format off
-// NOTE: must be included last as it expects windows.h to already be included.
-#define _WINSOCK_DEPRECATED_NO_WARNINGS  // inet_addr
-#include <WS2tcpip.h>                    // NOLINT(build/include_order)
-#include <winsock2.h>                    // NOLINT(build/include_order)
-
-#include <Iphlpapi.h>
-// clang-format on
+#include <ws2tcpip.h>
 #elif XE_PLATFORM_LINUX
 #include <arpa/inet.h>
 #endif
