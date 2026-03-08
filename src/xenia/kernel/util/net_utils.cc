@@ -20,6 +20,10 @@ DECLARE_bool(logging);
 // TODO(Adrian): This should be moved to XConfig once supported.
 DEFINE_string(mac_address, "", "Console MAC address. (Do not touch!)", "Live");
 
+#ifdef XE_PLATFORM_WIN32
+#include <WS2tcpip.h>
+#endif
+
 namespace xe {
 namespace kernel {
 

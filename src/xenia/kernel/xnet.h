@@ -18,7 +18,6 @@
 #include "xenia/kernel/xam/user_property.h"
 
 #ifdef XE_PLATFORM_WIN32
-#define _WINSOCK_DEPRECATED_NO_WARNINGS  // inet_addr
 // clang-format off
 #include "xenia/base/platform_win.h"
 // clang-format on
