@@ -541,7 +541,10 @@ std::optional<object_ref<XSession>> UserProfile::IsSessionUpdateAvailable() {
   }
 
   if (std::memcmp(&current_session_info, &last_session_info_,
-                  sizeof(XSESSION_INFO)) != 0) {
+                  sizeof(XSESSION_INFO)) == 0) {
+    return std::nullopt;
+  }
+  if (!updated_session) {
     return std::nullopt;
   }
   return updated_session;

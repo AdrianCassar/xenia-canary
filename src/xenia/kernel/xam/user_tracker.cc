@@ -16,6 +16,7 @@
 
 #include "third_party/fmt/include/fmt/format.h"
 #include "third_party/stb/stb_image.h"
+#include "xenia/app/discord/discord_presence.h"
 #include "xenia/base/threading.h"
 #include "xenia/kernel/XLiveAPI.h"
 #include "xenia/kernel/kernel_state.h"
@@ -1565,7 +1566,7 @@ void UserTracker::PeriodicMaintenance(uint64_t xuid,
 
     const auto updated_session = user->IsSessionUpdateAvailable();
 
-    if (updated_session.has_value()) {
+    if (updated_session.has_value() && updated_session.value()) {
       const auto& session = updated_session.value();
 
       const XSESSION_INFO session_info = session->GetSessionInfo();
@@ -1583,6 +1584,7 @@ void UserTracker::PeriodicMaintenance(uint64_t xuid,
       kernel_state()->emulator()->on_session_change(nullptr, 0, 0, 0);
       user->SetLastSessionState({});
     }
+    xe::discord::DiscordPresence::Update();
   }
 
   if (user->signin_state() != X_USER_SIGNIN_STATE::SignedInToLive ||

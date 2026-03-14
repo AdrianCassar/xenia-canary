@@ -26,24 +26,28 @@ extern "C" {
 namespace xe {
 namespace discord {
 
-void HandleDiscordReady(const DiscordUser* request) {}
-void HandleDiscordError(int errorCode, const char* message) {}
-void HandleDiscordJoinGame(const char* joinSecret) {
+static void HandleDiscordReady(const DiscordUser* request) {}
+static void HandleDiscordError(int errorCode, const char* message) {}
+static void HandleDiscordJoinGame(const char* joinSecret) {
   if (joinSecret) {
     DiscordPresence::ProcessJoinSecret(joinSecret);
   }
 }
-void HandleDiscordJoinRequest(const DiscordUser* request) {}
-void HandleDiscordSpectateGame(const char* spectateSecret) {}
 
 void DiscordPresence::Initialize() {
   DiscordEventHandlers handlers = {};
-  handlers.ready = &HandleDiscordReady;
-  handlers.errored = &HandleDiscordError;
-  handlers.joinGame = &HandleDiscordJoinGame;
-  handlers.joinRequest = &HandleDiscordJoinRequest;
-  handlers.spectateGame = &HandleDiscordSpectateGame;
-  Discord_Initialize("1193272084797849762", &handlers, 0, "");
+  handlers.ready = HandleDiscordReady;
+  handlers.errored = HandleDiscordError;
+  handlers.joinGame = HandleDiscordJoinGame;
+  Discord_Initialize("1193272084797849762", &handlers, 1, nullptr);
+  initialized_ = true;
+}
+
+void DiscordPresence::Update() {
+  if (!initialized_) {
+    return;
+  }
+  Discord_RunCallbacks();
 }
 
 void DiscordPresence::NotPlaying() {
@@ -53,7 +57,6 @@ void DiscordPresence::NotPlaying() {
   discordPresence.largeImageKey = "app";
   discordPresence.largeImageText = "Xenia Canary - Netplay";
   discordPresence.startTimestamp = time(0);
-  discordPresence.instance = 1;
   Discord_UpdatePresence(&discordPresence);
 }
 
@@ -190,7 +193,13 @@ std::optional<kernel::X_INVITE_INFO> DiscordPresence::DecodeJoinSecret(
   return invite_info;
 }
 
-void DiscordPresence::Shutdown() { Discord_Shutdown(); }
+void DiscordPresence::Shutdown() {
+  if (!initialized_) {
+    return;
+  }
+  initialized_ = false;
+  Discord_Shutdown();
+}
 
 }  // namespace discord
 }  // namespace xe

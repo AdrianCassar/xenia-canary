@@ -23,6 +23,7 @@ namespace discord {
 class DiscordPresence {
  public:
   static void Initialize();
+  static void Update();
   static void NotPlaying();
   static void PlayingTitle(const std::string_view game_title,
                            const std::string_view state);
@@ -44,6 +45,7 @@ class DiscordPresence {
  private:
   static void UpdatePresence();
 
+  inline static bool initialized_ = false;
   inline static std::string current_details_;
   inline static std::string current_state_;
   inline static std::string join_secret_;
