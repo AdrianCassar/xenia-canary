@@ -57,6 +57,7 @@ X_STATUS XSocket::Initialize(AddressFamily af, Type type, Protocol proto) {
   af_ = af;
   type_ = type;
   proto_ = proto;
+  vdp_ = false;
 
   if (!type) {
     if (proto == X_IPPROTO_UDP || proto == X_IPPROTO_VDP) {
