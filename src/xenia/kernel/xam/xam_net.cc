@@ -591,14 +591,14 @@ DECLARE_XAM_EXPORT2(NetDll_WSAWaitForMultipleEvents, kNetworking, kImplemented,
                     kBlocking);
 
 dword_result_t NetDll_WSACreateEvent_entry() {
-  XEvent* ev = new XEvent(kernel_state());
+  auto ev = object_ref<XEvent>(new XEvent(kernel_state()));
   ev->Initialize(true, false);
   return ev->handle();
 }
 DECLARE_XAM_EXPORT1(NetDll_WSACreateEvent, kNetworking, kImplemented);
 
 dword_result_t NetDll_WSACloseEvent_entry(dword_t event_handle) {
-  X_STATUS result = kernel_state()->object_table()->ReleaseHandle(event_handle);
+  X_STATUS result = xboxkrnl::NtClose(event_handle);
   if (XFAILED(result)) {
     uint32_t error = xboxkrnl::xeRtlNtStatusToDosError(result);
     XThread::SetLastError(error);
@@ -1886,7 +1886,7 @@ DECLARE_XAM_EXPORT1(NetDll_inet_addr, kNetworking, kImplemented);
 bool optEnable = true;
 dword_result_t NetDll_socket_entry(dword_t caller, dword_t af, dword_t type,
                                    dword_t protocol) {
-  XSocket* socket = new XSocket(kernel_state());
+  auto socket = object_ref<XSocket>(new XSocket(kernel_state()));
   X_STATUS result = socket->Initialize(XSocket::AddressFamily((uint32_t)af),
                                        XSocket::Type((uint32_t)type),
                                        XSocket::Protocol((uint32_t)protocol));
