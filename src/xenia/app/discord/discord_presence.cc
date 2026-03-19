@@ -69,16 +69,12 @@ void DiscordPresence::PlayingTitle(const std::string_view game_title,
   current_state_ =
       std::regex_replace(std::string(state), std::regex("\\n"), ", ");
   current_details_ = std::string(game_title);
-  join_secret_.clear();
-  party_id_.clear();
-  party_size_ = 0;
-  party_max_ = 0;
   UpdatePresence();
 }
 
 void DiscordPresence::UpdateSession(uint32_t title_id,
                                     const kernel::XSESSION_INFO* session_info,
-                                    int party_size, int party_max,
+                                    uint32_t party_size, uint32_t party_max,
                                     uint64_t host_xuid) {
   bool reset = false;
 
@@ -129,6 +125,7 @@ void DiscordPresence::UpdatePresence() {
   if (current_details_.empty()) {
     return;
   }
+
   DiscordRichPresence discordPresence = {};
   discordPresence.state = current_state_.c_str();
   discordPresence.details = current_details_.c_str();

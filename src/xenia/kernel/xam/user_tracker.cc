@@ -33,6 +33,8 @@ DECLARE_int32(user_country);
 
 DECLARE_int32(discord_presence_user_index);
 
+DECLARE_bool(discord);
+
 namespace xe {
 namespace kernel {
 namespace xam {
@@ -1561,29 +1563,47 @@ void UserTracker::PeriodicMaintenance(uint64_t xuid,
   const uint32_t user_index =
       kernel_state()->xam_state()->GetUserIndexAssignedToProfileFromXUID(xuid);
 
-  if (cvars::discord_presence_user_index == user_index) {
-    bool found = false;
+  if (cvars::discord && cvars::discord_presence_user_index == user_index) {
+    const auto valid_session = user->FindValidInviteSession();
 
-    const auto updated_session = user->IsSessionUpdateAvailable();
-
-    if (updated_session.has_value() && updated_session.value()) {
-      const auto& session = updated_session.value();
+    if (valid_session.has_value()) {
+      const auto& session = valid_session.value();
 
       const XSESSION_INFO session_info = session->GetSessionInfo();
+      const XSESSION_LOCAL_DETAILS session_details =
+          session->GetSessionDetails();
       const uint32_t party_size = session->GetMembersCount();
-      const uint32_t party_max = session->GetMaxPublicSlots();
+      const uint32_t party_max = session->GetTotalMaxSlots();
 
-      kernel_state()->emulator()->on_session_change(
-          &session_info, party_size, party_max, user->GetOnlineXUID());
-      user->SetLastSessionState(session_info);
+      XSESSION_INFO last_session_info = {};
+      XSESSION_LOCAL_DETAILS last_session_details = {};
+      user->GetLastSessionState(last_session_info, last_session_details);
 
-      found = true;
+      bool session_info_changed = session_info != last_session_info;
+      bool session_details_changed = session_details != last_session_details;
+
+      if (session_info_changed || session_details_changed) {
+        kernel_state()->emulator()->on_session_change(
+            &session_info, party_size, party_max, user->GetOnlineXUID());
+        user->SetLastSessionState(session_info, session_details);
+      }
+    } else {
+      const XSESSION_INFO session_info = {};
+      const XSESSION_LOCAL_DETAILS session_details = {};
+
+      XSESSION_INFO last_session_info = {};
+      XSESSION_LOCAL_DETAILS last_session_details = {};
+      user->GetLastSessionState(last_session_info, last_session_details);
+
+      bool session_info_changed = session_info != last_session_info;
+      bool session_details_changed = session_details != last_session_details;
+
+      if (session_info_changed || session_details_changed) {
+        kernel_state()->emulator()->on_session_change(nullptr, 0, 0, 0);
+        user->SetLastSessionState({}, {});
+      }
     }
 
-    if (!found) {
-      kernel_state()->emulator()->on_session_change(nullptr, 0, 0, 0);
-      user->SetLastSessionState({});
-    }
     xe::discord::DiscordPresence::Update();
   }
 

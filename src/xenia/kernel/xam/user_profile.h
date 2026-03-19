@@ -213,8 +213,12 @@ class UserProfile {
   bool IsPresenceStringUpdateAvailable();
   bool BuildPresenceString(bool update, std::u16string* presence_string);
 
-  std::optional<object_ref<XSession>> IsSessionUpdateAvailable();
-  void SetLastSessionState(const XSESSION_INFO& session_info);
+  std::optional<object_ref<XSession>> FindValidInviteSession();
+  void SetLastSessionState(const XSESSION_INFO& session_info,
+                           const XSESSION_LOCAL_DETAILS& session_details);
+
+  void GetLastSessionState(XSESSION_INFO& session_info,
+                           XSESSION_LOCAL_DETAILS& session_details) const;
 
   void AddOwnedSession(object_ref<XSession> owned_session) {
     const auto& session_obj_ref =
@@ -274,6 +278,7 @@ class UserProfile {
   std::u16string online_presence_desc_ = u"";
 
   XSESSION_INFO last_session_info_ = {};
+  XSESSION_LOCAL_DETAILS last_session_details_ = {};
 
   GpdInfo* GetGpd(const uint32_t title_id);
   const GpdInfo* GetGpd(const uint32_t title_id) const;

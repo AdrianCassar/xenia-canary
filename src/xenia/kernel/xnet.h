@@ -456,6 +456,10 @@ struct XSESSION_INFO {
   XNKID sessionID;
   XNADDR hostAddress;
   XNKEY keyExchangeKey;
+
+  bool operator==(const XSESSION_INFO& other) const {
+    return std::memcmp(this, &other, sizeof(XSESSION_INFO)) == 0;
+  }
 };
 static_assert_size(XSESSION_INFO, 0x3C);
 
@@ -516,6 +520,10 @@ struct XSESSION_LOCAL_DETAILS {
   XSESSION_INFO sessionInfo;
   XNKID xnkidArbitration;
   xe::be<uint32_t> SessionMembers_ptr;
+
+  bool operator==(const XSESSION_LOCAL_DETAILS& other) const {
+    return std::memcmp(this, &other, sizeof(XSESSION_LOCAL_DETAILS)) == 0;
+  }
 };
 static_assert_size(XSESSION_LOCAL_DETAILS, 0x80);
 

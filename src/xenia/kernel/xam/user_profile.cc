@@ -525,33 +525,46 @@ bool UserProfile::IsPresenceStringUpdateAvailable() {
   return current_presence != updated_presence;
 }
 
-std::optional<object_ref<XSession>> UserProfile::IsSessionUpdateAvailable() {
-  XSESSION_INFO current_session_info = {};
-  object_ref<XSession> updated_session;
+std::optional<object_ref<XSession>> UserProfile::FindValidInviteSession() {
+  object_ref<XSession> valid_session = nullptr;
 
   for (const auto& session : GetOwnedSessions()) {
     if (session->IsHost() && session->IsCreated() &&
-        session->HasXboxLiveFeatureFlags() &&
-        session->IsJoinViaPresenceEnabled() &&
-        !session->IsJoinViaPresenceFriendsOnly()) {
-      current_session_info = session->GetSessionInfo();
-      updated_session = session;
-      break;
+        session->HasXboxLiveFeatureFlags() && session->IsInvitesEnabled()) {
+      if (session->IsJoinInProgressEnabled()) {
+        valid_session = session;
+      } else if (!session->IsSessionStarted() || session->IsSessionEnded()) {
+        valid_session = session;
+      }
+
+      // Prioritize session with most slots.
+      if (valid_session) {
+        if (session->GetTotalMaxSlots() > valid_session->GetTotalMaxSlots()) {
+          valid_session = session;
+        }
+      }
     }
   }
 
-  if (std::memcmp(&current_session_info, &last_session_info_,
-                  sizeof(XSESSION_INFO)) == 0) {
+  if (!valid_session) {
     return std::nullopt;
   }
-  if (!updated_session) {
-    return std::nullopt;
-  }
-  return updated_session;
+
+  return valid_session;
 }
 
-void UserProfile::SetLastSessionState(const XSESSION_INFO& session_info) {
+void UserProfile::SetLastSessionState(
+    const XSESSION_INFO& session_info,
+    const XSESSION_LOCAL_DETAILS& session_details) {
   last_session_info_ = session_info;
+  last_session_details_ = session_details;
+}
+
+void UserProfile::GetLastSessionState(
+    XSESSION_INFO& session_info,
+    XSESSION_LOCAL_DETAILS& session_details) const {
+  session_info = last_session_info_;
+  session_details = last_session_details_;
 }
 
 bool UserProfile::BuildPresenceString(bool update,

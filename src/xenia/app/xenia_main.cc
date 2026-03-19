@@ -739,36 +739,31 @@ void EmulatorApp::EmulatorThread() {
         }
       });
 
-  if (cvars::discord) {
-    discord::DiscordPresence::SetJoinRequestHandler(
-        [this](xe::kernel::X_INVITE_INFO invite) {
-          app_context().CallInUIThread([this, invite]() mutable {
-            const uint32_t current_title = emulator_->title_id();
-            if (current_title == 0 || invite.title_id != current_title) {
-              new xe::ui::HostNotificationWindow(
-                  emulator_->imgui_drawer(), "Join failed",
-                  "User is playing a different game.", 0);
-              return;
-            }
+  discord::DiscordPresence::SetJoinRequestHandler(
+      [this](xe::kernel::X_INVITE_INFO invite) {
+        app_context().CallInUIThread([this, invite]() mutable {
+          if (invite.title_id != emulator_->title_id()) {
+            new xe::ui::HostNotificationWindow(
+                emulator_->imgui_drawer(), "Join failed",
+                "User is playing a different game.", 0);
+            return;
+          }
 
-            // Issue: It's not guaranteed discord_presence_user_index is host of
-            // session.
-            const uint32_t user_index = cvars::discord_presence_user_index;
-            kernel::xam::UserProfile* profile =
-                emulator_->kernel_state()->xam_state()->GetUserProfile(
-                    user_index);
+          const uint32_t user_index = cvars::discord_presence_user_index;
+          kernel::xam::UserProfile* profile =
+              emulator_->kernel_state()->xam_state()->GetUserProfile(
+                  user_index);
 
-            if (!profile) {
-              return;
-            }
+          if (!profile) {
+            return;
+          }
 
-            invite.xuid_invitee = profile->GetOnlineXUID();
-            profile->SetSelfInvite(invite);
-            emulator_->kernel_state()->BroadcastNotification(
-                kXNotificationLiveInviteAccepted, user_index);
-          });
+          invite.xuid_invitee = profile->GetOnlineXUID();
+          profile->SetSelfInvite(invite);
+          emulator_->kernel_state()->BroadcastNotification(
+              kXNotificationLiveInviteAccepted, user_index);
         });
-  }
+      });
 
   emulator_->on_shader_storage_initialization.AddListener(
       [this](bool initializing) {
