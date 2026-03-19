@@ -659,6 +659,7 @@ void ManagerDialog::OnDraw(ImGuiIO& io) {
   }
 
   if (!manager_opened_) {
+    Close();
     ImGui::CloseCurrentPopup();
     emulator_window_->ToggleFriendsDialog();
   }
