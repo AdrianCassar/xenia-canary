@@ -186,20 +186,14 @@ bool xeDrawCreateProfile(xe::ui::ImGuiDrawer* imgui_drawer, Emulator* emulator,
       }
     }
     std::ranges::fill(args.gamertag, '\0');
-    args.dialog_open = false;
+    ImGui::CloseCurrentPopup();
   }
   ImGui::EndDisabled();
   ImGui::SameLine();
 
   if (ImGui::Button("Cancel", half_width_btn)) {
     std::ranges::fill(args.gamertag, '\0');
-    args.dialog_open = false;
-  }
-
-  if (!args.dialog_open) {
     ImGui::CloseCurrentPopup();
-    ImGui::EndPopup();
-    return false;
   }
 
   ImGui::EndPopup();

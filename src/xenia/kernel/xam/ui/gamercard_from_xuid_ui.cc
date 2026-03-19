@@ -111,7 +111,7 @@ void GamercardFromXUIDUI::OnDraw(ImGuiIO& io) {
   if (ImGui::BeginPopupModal(title_.c_str(), &card_opened,
                              ImGuiWindowFlags_AlwaysAutoResize)) {
     if (ImGui::IsKeyPressed(ImGuiKey::ImGuiKey_GamepadFaceRight, false)) {
-      card_opened = false;
+      ImGui::CloseCurrentPopup();
     }
 
     xeDrawFriendContent(imgui_drawer(), profile_, gamerpic_texture, presence_,
