@@ -2053,7 +2053,11 @@ void EmulatorWindow::ToggleFriendsDialog() {
     disable_hotkeys_ = false;
     emulator_->kernel_state()->BroadcastNotification(kXNotificationSystemUI,
                                                      false);
-    friends_manager_dialog_.reset();
+    if (friends_manager_dialog_->IsClosing()) {
+      friends_manager_dialog_.release();
+    } else {
+      friends_manager_dialog_.reset();
+    }
     emulator_->kernel_state()->xam_state()->SetUIActive(false);
   }
 }
