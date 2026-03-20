@@ -113,21 +113,31 @@ std::optional<std::string> UPnP::DiscoverValidIGD() {
   std::optional<std::string> igd_desc_url;
 
   switch (status) {
-    case 1:
+    case UPNP_NO_IGD: {
+      XELOGW("No IGD found.");
+    } break;
+    case UPNP_CONNECTED_IGD: {
       igd_desc_url = device_list->descURL;
 
-      XELOGI("Found valid connected IGD: {} at {}", device_list->st,
+      XELOGI("Found valid and connected IGD: {} at {}", device_list->st,
              device_list->descURL);
-      break;
-    case 2:
+    } break;
+    case UPNP_PRIVATEIP_IGD: {
+      igd_desc_url = device_list->descURL;
+
+      XELOGI(
+          "Found valid and connected IGD but with a reserved address: {} at {}",
+          device_list->st, device_list->descURL);
+    } break;
+    case UPNP_DISCONNECTED_IGD: {
       XELOGW("Found valid IGD, but it reported as NOT connected.");
-      break;
-    case 3:
-      XELOGW("UPnP device found but not recognized as an IGD.");
-      break;
-    default:
+    } break;
+    case UPNP_UNKNOWN_DEVICE: {
+      XELOGW("UPnP device has been found but was not recognized as an IGD.");
+    } break;
+    default: {
       XELOGW("No valid IGD found (status: {}).", status);
-      break;
+    } break;
   }
 
   freeUPNPDevlist(device_list);
