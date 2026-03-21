@@ -1153,6 +1153,8 @@ X_RESULT XSession::GetSessionByIDs(Memory* memory, XNKID* session_ids_ptr,
   SEARCH_RESULTS* search_results =
       memory->TranslateVirtual<SEARCH_RESULTS*>(search_results_ptr);
 
+  std::memset(search_results, 0, results_buffer_size);
+
   search_results->results_ptr =
       reinterpret_cast<XSESSION_SEARCHRESULT*>(search_results + 1);
 
