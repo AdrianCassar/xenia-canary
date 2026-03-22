@@ -1060,6 +1060,12 @@ dword_result_t XamReadTileToTextureEx_entry(
 
     std::vector<uint8_t> gamerpic_icon = {};
 
+    // 5454084E
+    if (user_index == -1) {
+      extended_error = X_E_NO_SUCH_USER;
+      return X_ERROR_FUNCTION_FAILED;
+    }
+
     // Local user
     if (user_index < XUserMaxUserCount) {
       auto user = kernel_state()->xam_state()->GetUserProfile(user_index);
