@@ -1220,10 +1220,13 @@ bool UserTracker::UpdateUserGamerpic(uint64_t xuid, uint32_t title_id,
 
 std::optional<xam::GamerPictureKey> UserTracker::GetUserGamerpicSetting(
     uint64_t xuid) {
-  uint32_t setting_id =
-      static_cast<uint32_t>(xam::UserSettingId::XPROFILE_GAMERCARD_PICTURE_KEY);
-
   auto user = kernel_state()->xam_state()->GetUserProfile(xuid);
+  if (!user) {
+    return std::nullopt;
+  }
+
+  const uint32_t setting_id =
+      static_cast<uint32_t>(xam::UserSettingId::XPROFILE_GAMERCARD_PICTURE_KEY);
 
   const std::optional<UserSetting> gamerpic_setting =
       GetGpdSetting(user, xe::kernel::kDashboardID, setting_id);
