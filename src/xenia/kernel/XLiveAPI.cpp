@@ -160,6 +160,10 @@ void XLiveAPI::SetNetworkMode(uint32_t mode) {
   if (initialized_ != InitState::Pending) {
     initialized_ = InitState::Pending;
 
+    if (mode != NETWORK_MODE::OFFLINE) {
+      StartWhoamiAsync();
+    }
+
     Init();
   }
 }
