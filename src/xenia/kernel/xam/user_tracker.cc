@@ -405,7 +405,19 @@ std::u16string UserTracker::GetContextDescription(uint64_t xuid,
 
   const Property* context = GetProperty(xuid, id);
 
-  std::set<std::u16string, CompareEqualString> context_strings = {};
+  std::set<std::u16string, CaseInsensitive> context_strings = {};
+
+  auto insert_tidy_string =
+      [&context_strings](const std::u16string entry) mutable {
+        if (entry.empty()) {
+          return;
+        }
+
+        std::u16string tidy_entry = entry;
+        std::ranges::replace(tidy_entry, u'_', u' ');
+
+        context_strings.emplace(tidy_entry);
+      };
 
   switch (id) {
     case XCONTEXT_PRESENCE: {
@@ -414,10 +426,10 @@ std::u16string UserTracker::GetContextDescription(uint64_t xuid,
         return u"";
       }
 
-      context_strings.emplace(user->GetPresenceString());
+      insert_tidy_string(user->GetPresenceString());
     } break;
     case XCONTEXT_GAME_MODE: {
-      context_strings.emplace(GetContextGameModeLocalizedString(xuid));
+      insert_tidy_string(GetContextGameModeLocalizedString(xuid));
     } break;
     default: {
       uint16_t string_id = context_data->string_id;
@@ -426,7 +438,7 @@ std::u16string UserTracker::GetContextDescription(uint64_t xuid,
         return u"";
       }
 
-      context_strings.emplace(GetContextLocalizedString(xuid, id));
+      insert_tidy_string(GetContextLocalizedString(xuid, id));
 
       if (kernel_state()->emulator()->game_info_database()->HasXLast()) {
         auto context_query = kernel_state()
@@ -439,7 +451,7 @@ std::u16string UserTracker::GetContextDescription(uint64_t xuid,
             context_query->GetContextFriendlyName(context_data->id);
 
         if (friendly_name.has_value()) {
-          context_strings.emplace(xe::to_utf16(friendly_name.value()));
+          insert_tidy_string(xe::to_utf16(friendly_name.value()));
         }
       }
     } break;
@@ -477,7 +489,19 @@ std::u16string UserTracker::GetContextDescription(uint64_t xuid,
 }
 
 std::u16string UserTracker::GetPropertyDescription(uint32_t id) const {
-  std::set<std::u16string, CompareEqualString> property_strings = {};
+  std::set<std::u16string, CaseInsensitive> property_strings = {};
+
+  auto insert_tidy_string =
+      [&property_strings](const std::u16string entry) mutable {
+        if (entry.empty()) {
+          return;
+        }
+
+        std::u16string tidy_entry = entry;
+        std::ranges::replace(tidy_entry, u'_', u' ');
+
+        property_strings.emplace(tidy_entry);
+      };
 
   const auto& property_data = spa_data_->GetProperty(id);
   if (!property_data) {
@@ -497,7 +521,7 @@ std::u16string UserTracker::GetPropertyDescription(uint32_t id) const {
     std::u16string localized_string = xlast->GetLocalizedString(
         property_data->string_id, static_cast<XLanguage>(cvars::user_language));
 
-    property_strings.emplace(localized_string);
+    insert_tidy_string(localized_string);
 
     const auto property_query = xlast->GetPropertiesQuery();
 
@@ -505,7 +529,7 @@ std::u16string UserTracker::GetPropertyDescription(uint32_t id) const {
         property_query->GetPropertyFriendlyName(property_data->id);
 
     if (friendly_name.has_value()) {
-      property_strings.emplace(xe::to_utf16(friendly_name.value()));
+      insert_tidy_string(xe::to_utf16(friendly_name.value()));
     }
   }
 
