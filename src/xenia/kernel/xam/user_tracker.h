@@ -175,13 +175,13 @@ class UserTracker {
 
   const std::chrono::seconds periodic_maintenance_interval_ = 5s;
 
-  struct CompareEqualString {
-    bool operator()(std::u16string a, std::u16string b) const {
-      std::replace(a.begin(), a.end(), '_', ' ');
-      std::replace(b.begin(), b.end(), '_', ' ');
+  struct CaseInsensitive {
+    bool operator()(const std::u16string lhs, const std::u16string rhs) const {
+      std::u16string lhs_tidy = to_utf16(utf8::lower_ascii(xe::to_utf8(lhs)));
+      std::u16string rhs_tidy = to_utf16(utf8::lower_ascii(xe::to_utf8(rhs)));
 
-      return utf8::lower_ascii(xe::to_utf8(a)) !=
-             utf8::lower_ascii(xe::to_utf8(b));
+      return std::lexicographical_compare(lhs_tidy.cbegin(), lhs_tidy.cend(),
+                                          rhs_tidy.cbegin(), rhs_tidy.cend());
     }
   };
 };
