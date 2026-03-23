@@ -1056,7 +1056,16 @@ dword_result_t XamReadTileToTextureEx_entry(
 
     XTileType xtile_type = static_cast<XTileType>(tile_type.value());
 
-    size_t buffer_size = size_t(stride) * size_t(tile_height);
+    // 5454084E
+    size_t valid_tile_height = std::min<uint32_t>(64, tile_height);
+
+    assert_false(tile_height > 64);
+
+    if (fsmall) {
+      valid_tile_height = std::min<uint32_t>(32, tile_height);
+    }
+
+    const size_t buffer_size = size_t(stride) * valid_tile_height;
 
     std::vector<uint8_t> gamerpic_icon = {};
 
@@ -1123,6 +1132,9 @@ dword_result_t XamReadTileToTextureEx_entry(
       }
     }
 
+    std::fill_n(reinterpret_cast<uint8_t*>(buffer_ptr.host_address()),
+                buffer_size, 0);
+
     if (gamerpic_icon.empty()) {
       std::span<uint8_t> black_texture = std::span<uint8_t>(
           reinterpret_cast<uint8_t*>(buffer_ptr.host_address()), buffer_size);
@@ -1140,10 +1152,7 @@ dword_result_t XamReadTileToTextureEx_entry(
         gamerpic_icon.data(), static_cast<int>(gamerpic_icon.size()), &width,
         &height, &channels, STBI_rgb_alpha);
 
-    size_t icon_dimmension_size = width * height;
-    std::fill_n(reinterpret_cast<uint8_t*>(buffer_ptr.host_address()),
-                icon_dimmension_size * sizeof(uint32_t), 0);
-
+    const size_t icon_dimmension_size = size_t(width) * size_t(height);
     for (int i = 0; i < icon_dimmension_size; i++) {
       unsigned char* pixel = &imageData[i * sizeof(uint32_t)];
 
