@@ -1752,27 +1752,6 @@ void EmulatorWindow::SetNetworkMode(uint32_t mode) {
 
   switch (mode) {
     case xe::kernel::NETWORK_MODE::OFFLINE: {
-      mode_desc = "Offline";
-    } break;
-    case xe::kernel::NETWORK_MODE::LAN: {
-      mode_desc = "LAN/Systemlink";
-    } break;
-    case xe::kernel::NETWORK_MODE::XBOXLIVE: {
-      mode_desc = "Xbox Live";
-    } break;
-  }
-
-  if (cvars::network_mode == mode) {
-    app_context_.CallInUIThread([&]() {
-      new xe::ui::HostNotificationWindow(imgui_drawer(), "Network Mode",
-                                         mode_desc, 0);
-    });
-
-    return;
-  }
-
-  switch (mode) {
-    case xe::kernel::NETWORK_MODE::OFFLINE: {
       emulator_->kernel_state()->BroadcastNotification(
           kXNotificationLiveConnectionChanged, X_ONLINE_S_LOGON_DISCONNECTED);
 
@@ -1802,12 +1781,15 @@ void EmulatorWindow::SetNetworkMode(uint32_t mode) {
     } break;
   }
 
+  const std::string action =
+      cvars::network_mode == mode ? "Refreshed" : "Switched";
+
   app_context_.CallInUIThread([&]() {
-    new xe::ui::HostNotificationWindow(imgui_drawer(), "Network Mode",
-                                       mode_desc, 0);
+    new xe::ui::HostNotificationWindow(
+        imgui_drawer(), fmt::format("Network Mode - {}", action), mode_desc, 0);
   });
 
-  XELOGI("Switched Network Mode: {}", mode_desc);
+  XELOGI("{} Network Mode: {}", action, mode_desc);
 
   xe::kernel::XLiveAPI::SetNetworkMode(mode);
 }
