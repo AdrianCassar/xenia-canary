@@ -7,17 +7,14 @@
 ******************************************************************************
 */
 
-#include <cstring>
 #include <ctime>
 #include <regex>
-#include <vector>
 
 extern "C" {
 #include "third_party/FFmpeg/libavutil/base64.h"
 }
 
 #include "third_party/discord-rpc/include/discord_rpc.h"
-#include "third_party/fmt/include/fmt/format.h"
 
 #include "xenia/app/discord/discord_presence.h"
 #include "xenia/base/string.h"
@@ -79,9 +76,8 @@ void DiscordPresence::UpdateSession(uint32_t title_id,
   bool reset = false;
 
   if (session_info) {
-    // Join secret: full X_INVITE_INFO (xuid_invitee = 0, filled on join)
     kernel::X_INVITE_INFO invite = {};
-    invite.xuid_invitee = 0;
+    invite.xuid_invitee = 0;  // Filled on join
     invite.xuid_inviter = host_xuid;
     invite.title_id = title_id;
     invite.host_info = *session_info;

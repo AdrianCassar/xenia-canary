@@ -9,9 +9,6 @@
 
 #include "xenia/kernel/xam/user_profile.h"
 
-#include <cstring>
-#include <vector>
-
 #include "third_party/fmt/include/fmt/format.h"
 #include "xenia/emulator.h"
 #include "xenia/kernel/util/presence_string_builder.h"
@@ -530,7 +527,8 @@ std::optional<object_ref<XSession>> UserProfile::FindValidInviteSession() {
 
   for (const auto& session : GetOwnedSessions()) {
     if (session->IsHost() && session->IsCreated() &&
-        session->HasXboxLiveFeatureFlags() && session->IsInvitesEnabled()) {
+        session->HasXboxLiveFeatureFlags() && session->IsInvitesEnabled() &&
+        session->GetMembersCount()) {
       if (session->IsJoinInProgressEnabled()) {
         valid_session = session;
       } else if (!session->IsSessionStarted() || session->IsSessionEnded()) {
@@ -553,18 +551,13 @@ std::optional<object_ref<XSession>> UserProfile::FindValidInviteSession() {
   return valid_session;
 }
 
-void UserProfile::SetLastSessionState(
-    const XSESSION_INFO& session_info,
+void UserProfile::SetDiscordInviteSessionDetails(
     const XSESSION_LOCAL_DETAILS& session_details) {
-  last_session_info_ = session_info;
-  last_session_details_ = session_details;
+  discord_invite_session_details_ = session_details;
 }
 
-void UserProfile::GetLastSessionState(
-    XSESSION_INFO& session_info,
-    XSESSION_LOCAL_DETAILS& session_details) const {
-  session_info = last_session_info_;
-  session_details = last_session_details_;
+XSESSION_LOCAL_DETAILS UserProfile::GetDiscordInviteSessionDetails() const {
+  return discord_invite_session_details_;
 }
 
 bool UserProfile::BuildPresenceString(bool update,

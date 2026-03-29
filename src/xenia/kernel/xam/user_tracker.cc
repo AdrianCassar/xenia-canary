@@ -8,7 +8,6 @@
  */
 
 #include <algorithm>
-#include <cstring>
 #include <vector>
 
 #include "xenia/emulator.h"
@@ -1563,44 +1562,37 @@ void UserTracker::PeriodicMaintenance(uint64_t xuid,
   const uint32_t user_index =
       kernel_state()->xam_state()->GetUserIndexAssignedToProfileFromXUID(xuid);
 
+  // Discord invites
   if (cvars::discord && cvars::discord_presence_user_index == user_index) {
     const auto valid_session = user->FindValidInviteSession();
 
     if (valid_session.has_value()) {
       const auto& session = valid_session.value();
 
-      const XSESSION_INFO session_info = session->GetSessionInfo();
+      const XSESSION_LOCAL_DETAILS cached_session_details =
+          user->GetDiscordInviteSessionDetails();
       const XSESSION_LOCAL_DETAILS session_details =
           session->GetSessionDetails();
-      const uint32_t party_size = session->GetMembersCount();
-      const uint32_t party_max = session->GetTotalMaxSlots();
 
-      XSESSION_INFO last_session_info = {};
-      XSESSION_LOCAL_DETAILS last_session_details = {};
-      user->GetLastSessionState(last_session_info, last_session_details);
+      if (cached_session_details != session_details) {
+        const XSESSION_INFO session_info = session->GetSessionInfo();
+        const uint32_t party_size = session->GetMembersCount();
+        const uint32_t party_max = session->GetTotalMaxSlots();
 
-      bool session_info_changed = session_info != last_session_info;
-      bool session_details_changed = session_details != last_session_details;
-
-      if (session_info_changed || session_details_changed) {
         kernel_state()->emulator()->on_session_change(
             &session_info, party_size, party_max, user->GetOnlineXUID());
-        user->SetLastSessionState(session_info, session_details);
+        user->SetDiscordInviteSessionDetails(session_details);
       }
     } else {
-      const XSESSION_INFO session_info = {};
-      const XSESSION_LOCAL_DETAILS session_details = {};
+      const XSESSION_LOCAL_DETAILS cached_session_details =
+          user->GetDiscordInviteSessionDetails();
+      const XSESSION_LOCAL_DETAILS empty_session_details = {};
 
-      XSESSION_INFO last_session_info = {};
-      XSESSION_LOCAL_DETAILS last_session_details = {};
-      user->GetLastSessionState(last_session_info, last_session_details);
-
-      bool session_info_changed = session_info != last_session_info;
-      bool session_details_changed = session_details != last_session_details;
-
-      if (session_info_changed || session_details_changed) {
+      // Reset cached session details since there is no longer a valid invite
+      // session available.
+      if (cached_session_details != empty_session_details) {
         kernel_state()->emulator()->on_session_change(nullptr, 0, 0, 0);
-        user->SetLastSessionState({}, {});
+        user->SetDiscordInviteSessionDetails(empty_session_details);
       }
     }
 

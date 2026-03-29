@@ -10,9 +10,6 @@
 #ifndef XENIA_DISCORD_DISCORD_PRESENCE_H_
 #define XENIA_DISCORD_DISCORD_PRESENCE_H_
 
-#include <cstdint>
-#include <functional>
-#include <optional>
 #include <string>
 
 #include "xenia/kernel/xnet.h"

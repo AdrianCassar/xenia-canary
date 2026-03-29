@@ -65,7 +65,6 @@
 
 #include "xenia/kernel/XLiveAPI.h"
 #include "xenia/kernel/util/net_utils.h"
-#include "xenia/xbox.h"
 
 DEFINE_string(apu, "any", "Audio system. Use: [any, nop, sdl, xaudio2]", "APU");
 DEFINE_string(gpu, "any", "Graphics system. Use: [any, d3d12, vulkan, null]",
@@ -730,39 +729,40 @@ void EmulatorApp::EmulatorThread() {
       });
 
   emulator_->on_session_change.AddListener(
-      [&](const xe::kernel::XSESSION_INFO* session_info, uint32_t party_size,
-          uint32_t party_max, uint64_t host_xuid) {
-        if (cvars::discord) {
-          discord::DiscordPresence::UpdateSession(emulator_->title_id(),
-                                                  session_info, party_size,
-                                                  party_max, host_xuid);
-        }
+      [this](const xe::kernel::XSESSION_INFO* session_info, uint32_t party_size,
+             uint32_t party_max, uint64_t host_xuid) {
+        discord::DiscordPresence::UpdateSession(emulator_->title_id(),
+                                                session_info, party_size,
+                                                party_max, host_xuid);
       });
 
   discord::DiscordPresence::SetJoinRequestHandler(
       [this](xe::kernel::X_INVITE_INFO invite) {
-        app_context().CallInUIThread([this, invite]() mutable {
-          if (invite.title_id != emulator_->title_id()) {
+        const auto show_notification = [this](const std::string& title) {
+          app_context().CallInUIThread([this, title]() {
             new xe::ui::HostNotificationWindow(
-                emulator_->imgui_drawer(), "Join failed",
-                "User is playing a different game.", 0);
-            return;
-          }
+                emulator_->imgui_drawer(), "Join Failed!", title.c_str(), 0);
+          });
+        };
 
-          const uint32_t user_index = cvars::discord_presence_user_index;
-          kernel::xam::UserProfile* profile =
-              emulator_->kernel_state()->xam_state()->GetUserProfile(
-                  user_index);
+        if (invite.title_id != emulator_->title_id()) {
+          show_notification("User is playing a different game.");
+          return;
+        }
 
-          if (!profile) {
-            return;
-          }
+        const uint32_t user_index = cvars::discord_presence_user_index;
+        kernel::xam::UserProfile* profile =
+            emulator_->kernel_state()->xam_state()->GetUserProfile(user_index);
 
-          invite.xuid_invitee = profile->GetOnlineXUID();
-          profile->SetSelfInvite(invite);
-          emulator_->kernel_state()->BroadcastNotification(
-              kXNotificationLiveInviteAccepted, user_index);
-        });
+        if (!profile) {
+          show_notification("User not logged in.");
+          return;
+        }
+
+        invite.xuid_invitee = profile->GetOnlineXUID();
+        profile->SetSelfInvite(invite);
+        emulator_->kernel_state()->BroadcastNotification(
+            kXNotificationLiveInviteAccepted, user_index);
       });
 
   emulator_->on_shader_storage_initialization.AddListener(

@@ -363,7 +363,6 @@ class XSession : public XObject {
     return local_details_.MaxPublicSlots + local_details_.MaxPrivateSlots;
   }
 
-  // Host session info for presence/join; valid when IsHost() && IsCreated().
   XSESSION_INFO GetSessionInfo() const { return local_details_.sessionInfo; };
 
   XSESSION_LOCAL_DETAILS GetSessionDetails() const { return local_details_; };

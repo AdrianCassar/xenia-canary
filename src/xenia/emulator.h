@@ -25,7 +25,6 @@
 #include "xenia/kernel/util/game_info_database.h"
 #include "xenia/kernel/util/network_adapter_manager.h"
 #include "xenia/kernel/util/xlast.h"
-#include "xenia/kernel/xnet.h"
 #include "xenia/memory.h"
 #include "xenia/patcher/patcher.h"
 #include "xenia/patcher/plugin_loader.h"
