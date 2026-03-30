@@ -769,8 +769,9 @@ void TitleGamerpicBrowser::DrawGamerpicsBrowser(xe::kernel::GameTitle game,
           if (!IsCurrentGamerpic(game, gamerpic)) {
             new_gamerpic_ = gamerpic;
             update_gamerpic_ = true;
-            small_gamerpic_ = xe::kernel::XLiveAPI::DownloadGamerpicTileAsync(
-                game.id, gamerpic.small_tile_id);
+            small_gamerpic_ =
+                kernel_state_->GetXboxLiveAPI()->DownloadGamerpicTileAsync(
+                    game.id, gamerpic.small_tile_id);
           } else {
             XELOGI(fmt::format("{}: Skiping Gamerpic Update.", game.name));
           }
@@ -935,7 +936,7 @@ void TitleGamerpicBrowser::UpdateGamerpicIfRequested(
         // Profile settings are sent along with profile registration, therefore
         // it doesn't matter if this fails due to profile not existing on the
         // backend.
-        if (!kernel::XLiveAPI::SetUsersSettings(settings)) {
+        if (!kernel_state_->GetXboxLiveAPI()->SetUsersSettings(settings)) {
           XELOGW("Updating Backend Gamerpic Setting Failed!");
         }
 
@@ -1028,8 +1029,8 @@ xe::kernel::GameTitle TitleGamerpicBrowser::GetDashboardTitleResult(
 
 std::future<std::set<uint32_t>>
 TitleGamerpicBrowser::GetSupportedTitlesAsync() {
-  auto supported_titles = std::async(std::launch::async, []() {
-    return xe::kernel::XLiveAPI::GetSupportedGamerpicTitles();
+  auto supported_titles = std::async(std::launch::async, [this]() {
+    return kernel_state_->GetXboxLiveAPI()->GetSupportedGamerpicTitles();
   });
 
   return supported_titles;
@@ -1037,8 +1038,8 @@ TitleGamerpicBrowser::GetSupportedTitlesAsync() {
 
 std::future<xe::kernel::TitleGamerpicsObjectJSON>
 TitleGamerpicBrowser::LoadTitleAsync(uint32_t title_id) {
-  auto load_title = std::async(std::launch::async, [title_id]() {
-    return xe::kernel::XLiveAPI::GetTitleGamerpic(title_id);
+  auto load_title = std::async(std::launch::async, [this, title_id]() {
+    return kernel_state_->GetXboxLiveAPI()->GetTitleGamerpic(title_id);
   });
 
   return load_title;
@@ -1073,7 +1074,7 @@ xe::kernel::PageGamerpicsObjectJSON TitleGamerpicBrowser::LoadPage(
       content_types, std::size(title_type_filter_state_));
 
   std::optional<xe::kernel::PageGamerpicsObjectJSON> responce =
-      xe::kernel::XLiveAPI::GetGamerpicPage(
+      kernel_state_->GetXboxLiveAPI()->GetGamerpicPage(
           page_pos, per_page_, utf8::lower_ascii(content_types_query));
 
   if (!responce.has_value()) {
@@ -1148,7 +1149,7 @@ void TitleGamerpicBrowser::LoadGameImages(
   TitlesMap& new_images = *next_images;
 
   const auto images_to_process =
-      xe::kernel::XLiveAPI::GetMultiGameInfo(game_images_desc);
+      kernel_state_->GetXboxLiveAPI()->GetMultiGameInfo(game_images_desc);
 
   for (const auto& title : page_info.GetTitles()) {
     if (images_to_process.contains(title.id)) {
@@ -1263,7 +1264,7 @@ void TitleGamerpicBrowser::LoadGamerpics(
     GamerpicsMap& new_gamerpics = *next_gamerpics;
 
     const auto gamerpics_to_process =
-        xe::kernel::XLiveAPI::GetMultiGamerpics(cdn_parts);
+        kernel_state_->GetXboxLiveAPI()->GetMultiGamerpics(cdn_parts);
 
     for (const auto& gamerpic : std::ranges::subrange(begin, next_end)) {
       if (gamerpics_to_process.contains(gamerpic.big_tile_id)) {

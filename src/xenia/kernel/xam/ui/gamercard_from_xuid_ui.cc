@@ -31,7 +31,7 @@ GamercardFromXUIDUI::GamercardFromXUIDUI(xe::ui::ImGuiDrawer* imgui_drawer,
     assert_true(IsOnlineXUID(xuid_));
   }
 
-  if (!XLiveAPI::IsConnectedToServer()) {
+  if (!kernel_state()->GetXboxLiveAPI()->IsConnectedToServer()) {
     if (is_self) {
       presence_.Gamertag(profile_->name());
 
@@ -54,17 +54,19 @@ GamercardFromXUIDUI::GamercardFromXUIDUI(xe::ui::ImGuiDrawer* imgui_drawer,
       }
     }
   } else {
-    const auto presences = XLiveAPI::GetFriendsPresence({xuid_});
+    const auto presences =
+        kernel_state()->GetXboxLiveAPI()->GetFriendsPresence({xuid_});
 
-    immediate_gamerpic_ =
-        std::async(std::launch::async, [xuid, imgui_drawer]() {
-          const auto gamerpic = XLiveAPI::GetUserGamerpicTile(xuid, false);
+    immediate_gamerpic_ = std::async(std::launch::async, [xuid,
+                                                          imgui_drawer]() {
+      const auto gamerpic =
+          kernel_state()->GetXboxLiveAPI()->GetUserGamerpicTile(xuid, false);
 
-          std::shared_ptr<xe::ui::ImmediateTexture> shared_gamerpic =
-              std::move(imgui_drawer->LoadImGuiIcon({gamerpic}));
+      std::shared_ptr<xe::ui::ImmediateTexture> shared_gamerpic =
+          std::move(imgui_drawer->LoadImGuiIcon({gamerpic}));
 
-          return shared_gamerpic;
-        });
+      return shared_gamerpic;
+    });
 
     if (!presences->PlayersPresence().empty()) {
       presence_ = presences->PlayersPresence().front();

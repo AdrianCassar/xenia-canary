@@ -17,7 +17,7 @@
 #include "xenia/base/platform.h"
 
 #ifdef XE_PLATFORM_WIN32
-#include <ws2tcpip.h>
+#include <WS2tcpip.h>
 #elif XE_PLATFORM_LINUX
 #include <arpa/inet.h>
 #endif

@@ -18,7 +18,7 @@ namespace ui {
 ShowCommunitySessionsUI::ShowCommunitySessionsUI(
     xe::ui::ImGuiDrawer* imgui_drawer, UserProfile* profile)
     : XamDialog(imgui_drawer), profile_(profile) {
-  sessions_ = XLiveAPI::GetTitleSessions();
+  sessions_ = kernel_state()->GetXboxLiveAPI()->GetTitleSessions();
 }
 
 void ShowCommunitySessionsUI::OnDraw(ImGuiIO& io) {

@@ -11,13 +11,12 @@
 
 #include "third_party/fmt/include/fmt/format.h"
 #include "xenia/emulator.h"
+#include "xenia/kernel/XLiveAPI.h"
 #include "xenia/kernel/util/presence_string_builder.h"
 #include "xenia/kernel/util/shim_utils.h"
 #include "xenia/kernel/util/xlast.h"
 #include "xenia/kernel/xam/friends_util.h"
 #include "xenia/kernel/xam/xdbf/gpd_info.h"
-
-#include "xenia/kernel/XLiveAPI.h"
 
 namespace xe {
 namespace kernel {
