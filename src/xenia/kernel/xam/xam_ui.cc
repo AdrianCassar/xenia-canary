@@ -1713,7 +1713,9 @@ bool xeDrawSessionsContent(
     ImGui::Spacing();
 
     if (sessions_args.refresh_sessions || sessions_args.refresh_sessions_sync) {
-      auto run = [sessions]() { *sessions = XLiveAPI::GetTitleSessions(); };
+      auto run = [sessions]() {
+        *sessions = kernel_state()->GetXboxLiveAPI()->GetTitleSessions();
+      };
 
       if (sessions_args.refresh_sessions_sync) {
         run();

@@ -430,18 +430,19 @@ void ProfileConfigDialog::OnDraw(ImGuiIO& io) {
 
 void ManagerDialog::Initalize(ui::ImGuiDrawer* imgui_drawer,
                               uint32_t user_index) {
+  emulator_ = emulator_window_->emulator();
+
   const auto profile =
-      emulator_window_->emulator()->kernel_state()->xam_state()->GetUserProfile(
-          user_index);
+      emulator_->kernel_state()->xam_state()->GetUserProfile(user_index);
 
   if (!profile) {
     return;
   }
 
   friends_presence_ =
-      kernel::XLiveAPI::GetFriendsPresenceAsync(profile->xuid());
-  immediate_gamerpics_ =
-      kernel::XLiveAPI::GetFriendsGamerpicsAsync(profile->xuid(), imgui_drawer);
+      emulator_->GetXboxLiveAPI()->GetFriendsPresenceAsync(profile->xuid());
+  immediate_gamerpics_ = emulator_->GetXboxLiveAPI()->GetFriendsGamerpicsAsync(
+      profile->xuid(), imgui_drawer);
 }
 
 void ManagerDialog::OnDraw(ImGuiIO& io) {
@@ -449,7 +450,7 @@ void ManagerDialog::OnDraw(ImGuiIO& io) {
     manager_opened_ = true;
     ImGui::OpenPopup("Manager");
 
-    if (kernel::XLiveAPI::IsConnectedToServer()) {
+    if (emulator_->GetXboxLiveAPI()->IsConnectedToServer()) {
       friends_args.filter_offline = true;
     }
 
@@ -460,8 +461,7 @@ void ManagerDialog::OnDraw(ImGuiIO& io) {
   const uint32_t user_index = 0;
 
   auto profile =
-      emulator_window_->emulator()->kernel_state()->xam_state()->GetUserProfile(
-          user_index);
+      emulator_->kernel_state()->xam_state()->GetUserProfile(user_index);
 
   const bool is_profile_signed_in = profile == nullptr;
 
@@ -490,14 +490,14 @@ void ManagerDialog::OnDraw(ImGuiIO& io) {
     ImGui::SameLine();
 
     ImGui::BeginDisabled(is_profile_signed_in ||
-                         !kernel::XLiveAPI::IsConnectedToServer());
+                         !emulator_->GetXboxLiveAPI()->IsConnectedToServer());
     if (ImGui::Button("Sessions", btn_size)) {
       sessions_args.sessions_open = true;
       ImGui::OpenPopup("Sessions");
     }
     ImGui::EndDisabled();
 
-    if (kernel::XLiveAPI::xuid_mismatch) {
+    if (emulator_->GetXboxLiveAPI()->IsXUIDMismatched()) {
       ImVec2 button_pos = ImGui::GetCursorScreenPos();
       ImVec2 button_end =
           ImVec2(button_pos.x + btn_size.x, button_pos.y + btn_size.y);
@@ -547,9 +547,10 @@ void ManagerDialog::OnDraw(ImGuiIO& io) {
       friends_args.refresh_presence = false;
 
       friends_presence_ =
-          kernel::XLiveAPI::GetFriendsPresenceAsync(profile->xuid());
-      immediate_gamerpics_ = kernel::XLiveAPI::GetFriendsGamerpicsAsync(
-          profile->xuid(), imgui_drawer());
+          emulator_->GetXboxLiveAPI()->GetFriendsPresenceAsync(profile->xuid());
+      immediate_gamerpics_ =
+          emulator_->GetXboxLiveAPI()->GetFriendsGamerpicsAsync(profile->xuid(),
+                                                                imgui_drawer());
     }
 
     if (immediate_gamerpics_.valid()) {
@@ -618,7 +619,7 @@ void ManagerDialog::OnDraw(ImGuiIO& io) {
           xam_state->profile_manager()->LogoutMultiple(xuids);
         }
 
-        deleted_profiles = kernel::XLiveAPI::DeleteMyProfiles();
+        deleted_profiles = emulator_->GetXboxLiveAPI()->DeleteMyProfiles();
 
         open_deleted_profiles = true;
 
@@ -635,7 +636,7 @@ void ManagerDialog::OnDraw(ImGuiIO& io) {
     }
 
     if (open_deleted_profiles) {
-      kernel::XLiveAPI::xuid_mismatch = false;
+      emulator_->GetXboxLiveAPI()->SetXUIDMismatch(false);
 
       deletion_args.deleted_profiles_open = true;
       ImGui::OpenPopup("Deleted Profiles");
@@ -648,9 +649,8 @@ void ManagerDialog::OnDraw(ImGuiIO& io) {
       upnp_and_ports_args.first_draw = false;
     }
 
-    xe::kernel::xam::xeDrawUPnPAndPorts(
-        imgui_drawer(), upnp_and_ports_args,
-        emulator_window_->emulator()->GetUPnP());
+    xe::kernel::xam::xeDrawUPnPAndPorts(imgui_drawer(), upnp_and_ports_args,
+                                        emulator_->GetUPnP());
 
     ImGui::EndPopup();
   }

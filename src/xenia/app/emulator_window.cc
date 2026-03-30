@@ -33,6 +33,7 @@
 #include "xenia/gpu/command_processor.h"
 #include "xenia/gpu/graphics_system.h"
 #include "xenia/hid/input_system.h"
+#include "xenia/kernel/XLiveAPI.h"
 #include "xenia/kernel/xam/profile_manager.h"
 #include "xenia/kernel/xam/xam_module.h"
 #include "xenia/kernel/xam/xam_state.h"
@@ -45,8 +46,6 @@
 #include "xenia/ui/presenter.h"
 #include "xenia/ui/ui_event.h"
 #include "xenia/ui/virtual_key.h"
-
-#include "xenia/kernel/XLiveAPI.h"
 
 #include "version.h"
 
@@ -954,7 +953,8 @@ bool EmulatorWindow::Initialize() {
         MenuItem::Create(MenuItem::Type::kString, "&Status", "",
                          std::bind(&EmulatorWindow::NetplayStatus, this)));
 
-    for (std::string& api_address : xe::kernel::XLiveAPI::ParseAPIList()) {
+    for (std::string& api_address :
+         emulator()->GetXboxLiveAPI()->ParseAPIList()) {
       API_list_menu->AddChild(MenuItem::Create(
           MenuItem::Type::kString, api_address, "",
           std::bind(&EmulatorWindow::SetAPIAddress, this, api_address)));
@@ -1697,7 +1697,7 @@ void EmulatorWindow::ToggleFullscreen() {
 }
 
 void EmulatorWindow::SetAPIAddress(std::string api_address) {
-  if (xe::kernel::XLiveAPI::GetInitState() ==
+  if (emulator()->GetXboxLiveAPI()->GetInitState() ==
       xe::kernel::XLiveAPI::InitState::Pending) {
     app_context_.CallInUIThread([&]() {
       new xe::ui::HostNotificationWindow(imgui_drawer(), "API Address",
@@ -1710,13 +1710,13 @@ void EmulatorWindow::SetAPIAddress(std::string api_address) {
     });
   }
 
-  xe::kernel::XLiveAPI::SetAPIAddress(api_address);
+  emulator()->GetXboxLiveAPI()->SetAPIAddress(api_address);
 }
 
 void EmulatorWindow::SetNetworkInterfaceByGUID(std::string guid) {
   auto adapter_manager = emulator_->GetNetworkAdapterManager();
 
-  if (xe::kernel::XLiveAPI::GetInitState() ==
+  if (emulator()->GetXboxLiveAPI()->GetInitState() ==
       xe::kernel::XLiveAPI::InitState::Pending) {
     std::string interface_name = "Reset";
 
@@ -1791,7 +1791,7 @@ void EmulatorWindow::SetNetworkMode(uint32_t mode) {
 
   XELOGI("{} Network Mode: {}", action, mode_desc);
 
-  xe::kernel::XLiveAPI::SetNetworkMode(mode);
+  emulator()->GetXboxLiveAPI()->SetNetworkMode(mode);
 }
 
 void EmulatorWindow::UpdateCompletionNotification() {
@@ -2427,7 +2427,7 @@ void EmulatorWindow::NetplayStatus() {
                                     ? "(Default)"
                                     : "(Non Default)";
 
-    if (xe::kernel::XLiveAPI::GetInitState() !=
+    if (emulator()->GetXboxLiveAPI()->GetInitState() !=
             xe::kernel::XLiveAPI::InitState::Pending &&
         cvars::network_mode != xe::kernel::NETWORK_MODE::OFFLINE) {
       msg += fmt::format("Network Interface: {} - {}", adapter_name,
@@ -2456,13 +2456,13 @@ void EmulatorWindow::NetplayStatus() {
   msg += fmt::format("Network Mode: {}", network_mode);
   msg += "\n";
 
-  msg +=
-      "XLiveAPI Initialized: " +
-      xe::string_util::BoolToString(xe::kernel::XLiveAPI::GetInitState() ==
-                                    xe::kernel::XLiveAPI::InitState::Success);
+  msg += "XLiveAPI Initialized: " +
+         xe::string_util::BoolToString(
+             emulator()->GetXboxLiveAPI()->GetInitState() ==
+             xe::kernel::XLiveAPI::InitState::Success);
   msg += "\n";
 
-  if (xe::kernel::XLiveAPI::GetInitState() !=
+  if (emulator()->GetXboxLiveAPI()->GetInitState() !=
           xe::kernel::XLiveAPI::InitState::Pending &&
       cvars::upnp) {
     const auto upnp = emulator()->GetUPnP();
@@ -2479,18 +2479,18 @@ void EmulatorWindow::NetplayStatus() {
     msg += "\n";
   }
 
-  if (xe::kernel::XLiveAPI::GetInitState() !=
+  if (emulator()->GetXboxLiveAPI()->GetInitState() !=
       xe::kernel::XLiveAPI::InitState::Pending) {
     msg += "\n";
 
-    if (xe::kernel::XLiveAPI::GetInitState() !=
+    if (emulator()->GetXboxLiveAPI()->GetInitState() !=
         xe::kernel::XLiveAPI::InitState::Pending) {
-      if (xe::kernel::XLiveAPI::xuid_mismatch) {
+      if (emulator()->GetXboxLiveAPI()->IsXUIDMismatched()) {
         msg += "XUID mismatch expect unstable netplay!\n";
       }
     }
 
-    if (xe::kernel::XLiveAPI::GetInitState() ==
+    if (emulator()->GetXboxLiveAPI()->GetInitState() ==
         xe::kernel::XLiveAPI::InitState::Success) {
       msg += "Communication succeeded with api_address: " + cvars::api_address;
     } else {

@@ -17,6 +17,7 @@
 // clang-format on
 
 #include "xenia/base/logging.h"
+#include "xenia/kernel/XLiveAPI.h"
 #include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/util/net_utils.h"
 #include "xenia/kernel/util/network_adapter_manager.h"
@@ -41,8 +42,6 @@
 #include <sys/select.h>
 #include <sys/socket.h>
 #endif
-
-#include "xenia/kernel/XLiveAPI.h"
 
 DEFINE_bool(xhttp, false, "Toggles XHTTP.", "Live");
 
@@ -209,11 +208,12 @@ void Update_XNetStartupParams(XNetStartupParams& dest,
 
 dword_result_t NetDll_XNetStartup_entry(dword_t caller,
                                         pointer_t<XNetStartupParams> params) {
-  if (XLiveAPI::GetInitState() != XLiveAPI::InitState::Pending) {
+  if (kernel_state()->GetXboxLiveAPI()->GetInitState() !=
+      XLiveAPI::InitState::Pending) {
     return 0;
   }
 
-  XLiveAPI::Init();
+  kernel_state()->GetXboxLiveAPI()->Init();
 
   if (params) {
     assert_true(params->cfgSizeOfStruct == sizeof(XNetStartupParams));
@@ -385,7 +385,7 @@ dword_result_t NetDll_WSAStartup_entry(dword_t caller, word_t version,
   // NetDll_WSAStartup is called multiple times?
   XELOGI("NetDll_WSAStartup");
 
-  XLiveAPI::Init();
+  kernel_state()->GetXboxLiveAPI()->Init();
 
   // TODO(benvanik): abstraction layer needed.
   int ret = 0;
@@ -659,8 +659,9 @@ dword_result_t NetDll_XNetGetTitleXnAddr_entry(dword_t caller,
   // 415607D1, 4D5307E6
   // XNetStartup, WSAStartup, WSAStartupEx were not called before
   // XNetGetTitleXnAddr.
-  if (XLiveAPI::GetInitState() == XLiveAPI::InitState::Pending) {
-    XLiveAPI::Init();
+  if (kernel_state()->GetXboxLiveAPI()->GetInitState() ==
+      XLiveAPI::InitState::Pending) {
+    kernel_state()->GetXboxLiveAPI()->Init();
   }
 
   uint32_t status = 0;
@@ -769,7 +770,8 @@ dword_result_t NetDll_XNetServerToInAddr_entry(dword_t caller,
                                                pointer_t<in_addr> pina) {
   XELOGI("XNetServerToInAddr");
 
-  if (XLiveAPI::GetInitState() != XLiveAPI::InitState::Success) {
+  if (kernel_state()->GetXboxLiveAPI()->GetInitState() !=
+      XLiveAPI::InitState::Success) {
     return static_cast<uint32_t>(X_WSAError::X_WSANOTINITIALISED);
   }
 
@@ -862,7 +864,7 @@ dword_result_t NetDll_XNetXnAddrToInAddr_entry(dword_t caller,
     in_addr->s_addr = xn_addr->ina.s_addr;
   }
 
-  if (XLiveAPI::IsConnectedToServer()) {
+  if (kernel_state()->GetXboxLiveAPI()->IsConnectedToServer()) {
     in_addr->s_addr = xn_addr->inaOnline.s_addr;
   }
 
@@ -894,15 +896,20 @@ dword_result_t NetDll_XNetInAddrToXnAddr_entry(dword_t caller, dword_t in_addr,
 
   xn_addr->ina.s_addr = ntohl(in_addr);
   xn_addr->inaOnline.s_addr = ntohl(in_addr);
-  xn_addr->wPortOnline = XLiveAPI::GetPlayerPort();
+  xn_addr->wPortOnline = kernel_state()->GetXboxLiveAPI()->GetPlayerPort();
+  xn_addr->abOnline.platform_type = PLATFORM_TYPE::Xbox360;
+
+  const uint64_t cached_session_id =
+      kernel_state()->GetXboxLiveAPI()->GetSystemlinkID();
 
   // Find cached online IP?
   if (XLiveAPI::macAddressCache.find(xn_addr->inaOnline.s_addr) ==
       XLiveAPI::macAddressCache.end()) {
-    const auto player = XLiveAPI::FindPlayer(ip_to_string(xn_addr->inaOnline));
+    const auto player = kernel_state()->GetXboxLiveAPI()->FindPlayer(
+        ip_to_string(xn_addr->inaOnline));
 
     // FIXME
-    if (!XLiveAPI::systemlink_id || EXPLICIT_XBOXLIVE_KEY) {
+    if (!cached_session_id || EXPLICIT_XBOXLIVE_KEY) {
       IsValidXNKID(player->SessionID());
 
       if (player->SessionID()) {
@@ -941,8 +948,8 @@ dword_result_t NetDll_XNetInAddrToXnAddr_entry(dword_t caller, dword_t in_addr,
     xe::be<uint64_t> session_id = 0;
 
     // FIXME
-    if (XLiveAPI::systemlink_id) {
-      session_id = XLiveAPI::systemlink_id;
+    if (cached_session_id) {
+      session_id = cached_session_id;
     } else {
       session_id = XLiveAPI::sessionIdCache[xn_addr->inaOnline.s_addr];
     }
@@ -1233,11 +1240,13 @@ dword_result_t NetDll_XNetQosListen_entry(
     std::vector<uint8_t> qos_buffer(data_size);
     memcpy(qos_buffer.data(), data, data_size);
 
-    if (XLiveAPI::UpdateQoSCache(session_id, qos_buffer)) {
+    if (kernel_state()->GetXboxLiveAPI()->UpdateQoSCache(session_id,
+                                                         qos_buffer)) {
       XELOGI("XNetQosListen LISTEN_SET_DATA");
 
       auto run = [](uint64_t sessionId, std::vector<uint8_t> qosData) {
-        XLiveAPI::QoSPost(sessionId, qosData.data(), qosData.size());
+        kernel_state()->GetXboxLiveAPI()->QoSPost(sessionId, qosData.data(),
+                                                  qosData.size());
       };
 
       std::thread qos_thread(run, session_id, qos_buffer);
@@ -1358,7 +1367,7 @@ dword_result_t NetDll_XNetQosLookup_entry(
 
       if (i < shared_session_ids->size()) {
         const uint64_t session_id = shared_session_ids->at(i).as_uintBE64();
-        chunk = XLiveAPI::QoSGet(session_id);
+        chunk = kernel_state()->GetXboxLiveAPI()->QoSGet(session_id);
       }
 
       if (chunk.http_code == HTTP_STATUS_CODE::HTTP_OK) {
@@ -1442,8 +1451,8 @@ dword_result_t XamGetServiceEndpoint_entry(
 
   const std::string service_name = service_name_ptr.value();
 
-  std::string service_endpoint =
-      fmt::format("{}{}", XLiveAPI::GetApiAddress(), service_name);
+  std::string service_endpoint = fmt::format(
+      "{}{}", kernel_state()->GetXboxLiveAPI()->GetApiAddress(), service_name);
   const std::string fallback_service_endpoint =
       fmt::format("http://xbox.com/{}", service_name);
 
@@ -2542,7 +2551,8 @@ dword_result_t NetDll_XNetRegisterKey_entry(dword_t caller,
                                             pointer_t<XNKEY> exchange_key) {
   if (IsSystemlink(session_key->as_uintBE64())) {
     XELOGI("XNetRegisterKey: Systemlink");
-    XLiveAPI::systemlink_id = session_key->as_uintBE64();
+    kernel_state()->GetXboxLiveAPI()->SetSystemlinkID(
+        session_key->as_uintBE64());
     return 0;
   }
 
@@ -2566,12 +2576,14 @@ DECLARE_XAM_EXPORT1(NetDll_XNetRegisterKey, kNetworking, kStub);
 
 dword_result_t NetDll_XNetUnregisterKey_entry(dword_t caller,
                                               pointer_t<XNKID> session_key) {
-  if (XLiveAPI::systemlink_id) {
-    if (IsSystemlink(XLiveAPI::systemlink_id)) {
+  const uint64_t systemlink_id =
+      kernel_state()->GetXboxLiveAPI()->GetSystemlinkID();
+
+  if (systemlink_id) {
+    if (IsSystemlink(systemlink_id)) {
       XELOGI("XNetUnregisterKey: Systemlink");
     }
-
-    XLiveAPI::systemlink_id = 0;
+    kernel_state()->GetXboxLiveAPI()->SetSystemlinkID(0);
   }
 
   if (EXPLICIT_XBOXLIVE_KEY) {

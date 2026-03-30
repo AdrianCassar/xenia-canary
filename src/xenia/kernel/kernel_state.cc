@@ -120,6 +120,10 @@ uint32_t KernelState::title_id() const {
   return 0;
 }
 
+XLiveAPI* KernelState::GetXboxLiveAPI() const {
+  return emulator()->GetXboxLiveAPI();
+}
+
 bool KernelState::is_title_system_type(uint32_t title_id) {
   if (!title_id) {
     return true;

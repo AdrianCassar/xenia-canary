@@ -20,6 +20,7 @@
 #include "xenia/apu/audio_media_player.h"
 #include "xenia/base/delegate.h"
 #include "xenia/base/exception_handler.h"
+#include "xenia/kernel/XLiveAPI.h"
 #include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/upnp.h"
 #include "xenia/kernel/util/game_info_database.h"
@@ -185,6 +186,8 @@ class Emulator {
 
   kernel::UPnP* GetUPnP() { return upnp_.get(); }
   void ShutdownUPnP() { upnp_.reset(); }
+
+  kernel::XLiveAPI* GetXboxLiveAPI() { return xbox_live_api_.get(); }
 
   // Initializes the emulator and configures all components.
   // The given window is used for display and the provided functions are used
@@ -380,6 +383,7 @@ class Emulator {
   std::unique_ptr<kernel::util::GameInfoDatabase> game_info_database_;
   std::unique_ptr<kernel::NetworkAdapterManager> network_adapter_manager_;
   std::unique_ptr<kernel::UPnP> upnp_;
+  std::unique_ptr<kernel::XLiveAPI> xbox_live_api_;
 
   bool paused_;
   bool restoring_;

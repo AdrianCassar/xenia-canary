@@ -292,11 +292,12 @@ class XSession : public XObject {
   static X_RESULT GetWeightedSessions(KernelState* kernel_state,
                                       XGI_SESSION_SEARCH_WEIGHTED* search_data,
                                       uint32_t num_users);
-  static X_RESULT GetSessionByID(Memory* memory,
+  static X_RESULT GetSessionByID(KernelState* kernel_state,
                                  XGI_SESSION_SEARCH_BYID* search_data);
-  static X_RESULT GetSessionByIDs(Memory* memory,
+  static X_RESULT GetSessionByIDs(KernelState* kernel_state,
                                   XGI_SESSION_SEARCH_BYIDS* search_data);
-  static X_RESULT GetSessionByIDs(Memory* memory, XNKID* session_ids_ptr,
+  static X_RESULT GetSessionByIDs(KernelState* kernel_state,
+                                  XNKID* session_ids_ptr,
                                   uint32_t num_session_ids,
                                   uint32_t search_results_ptr,
                                   uint32_t results_buffer_size);

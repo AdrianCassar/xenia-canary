@@ -9,14 +9,13 @@
 
 #include "xenia/base/logging.h"
 #include "xenia/base/string_util.h"
+#include "xenia/kernel/XLiveAPI.h"
 #include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/util/shim_utils.h"
 #include "xenia/kernel/xam/xam_module.h"
 #include "xenia/kernel/xam/xam_private.h"
 #include "xenia/kernel/xenumerator.h"
 #include "xenia/xbox.h"
-
-#include "xenia/kernel/XLiveAPI.h"
 
 namespace xe {
 namespace kernel {
@@ -120,7 +119,7 @@ static uint32_t XTitleServerCreateEnumerator(
     return result;
   }
 
-  const auto servers = XLiveAPI::GetServers();
+  const auto servers = kernel_state()->GetXboxLiveAPI()->GetServers();
 
   for (const auto& server : servers) {
     X_TITLE_SERVER* item = e->AppendItem();

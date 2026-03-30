@@ -286,7 +286,7 @@ void GraphicsSystem::OnHostGpuLossFromAnyThread(
   if (host_gpu_loss_reported_.test_and_set(std::memory_order_relaxed)) {
     return;
   }
-  xe::kernel::XLiveAPI::DeleteAllSessionsByMac();
+  kernel_state()->GetXboxLiveAPI()->DeleteAllSessionsByMac();
   kernel_state()->xam_state()->StopPeriodicMaintenance();
   xe::FatalError("Graphics device lost (probably due to an internal error)");
 }

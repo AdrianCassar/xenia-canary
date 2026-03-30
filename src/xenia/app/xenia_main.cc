@@ -14,6 +14,8 @@
 #include <string>
 #include <thread>
 
+#include "third_party/fmt/include/fmt/format.h"
+
 // clang-format off
 // We want to include platform.h first to define NOMINMAX to prevent window.h
 // from defining the macros.
@@ -32,6 +34,8 @@
 #include "xenia/config.h"
 #include "xenia/debug/ui/debug_window.h"
 #include "xenia/emulator.h"
+#include "xenia/kernel/XLiveAPI.h"
+#include "xenia/kernel/util/net_utils.h"
 #include "xenia/kernel/xam/xam_module.h"
 #include "xenia/ui/file_picker.h"
 #include "xenia/ui/imgui_host_notification.h"
@@ -71,11 +75,6 @@
 #include "xenia/hid/winkey/winkey_hid.h"
 #include "xenia/hid/xinput/xinput_hid.h"
 #endif  // XE_PLATFORM_WIN32
-
-#include "third_party/fmt/include/fmt/format.h"
-
-#include "xenia/kernel/XLiveAPI.h"
-#include "xenia/kernel/util/net_utils.h"
 
 #if XE_PLATFORM_WIN32
 #define APU_OPTIONS "[any, nop, sdl, xaudio2]"
@@ -597,11 +596,12 @@ void EmulatorApp::OnDestroy() {
   emulator_->ShutdownUPnP();
 
   // Delete sessions on shutdown.
-  xe::kernel::XLiveAPI::DeleteAllSessionsByMac();
+  emulator_->GetXboxLiveAPI()->DeleteAllSessionsByMac();
+
+  emulator_->GetXboxLiveAPI()->~XLiveAPI();
 
   // Causes crash if multiplexing connections haven't finished.
-  // XLiveAPI should be a class which should destroy the multiplexing handles
-  // before cleanup.
+  // XLiveAPI should destroy the multiplexing handles before cleanup.
   // curl_global_cleanup();
 #pragma endregion
 

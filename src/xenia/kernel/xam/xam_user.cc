@@ -381,7 +381,8 @@ uint32_t XamUserReadProfileSettingsEx(uint32_t title_id, uint32_t user_index,
 
       if (!remote_user_setting_ids.empty()) {
         remote_user_settings =
-            XLiveAPI::GetUsersSettings(remote_user_setting_ids);
+            kernel_state()->GetXboxLiveAPI()->GetUsersSettings(
+                remote_user_setting_ids);
       }
     } else {
       const auto user_profile =
@@ -1119,11 +1120,17 @@ dword_result_t XamReadTileToTextureEx_entry(
       const uint32_t gamerpic_id = fsmall ? small_tile_id : big_tile_id;
 
       if (!IsGamerPictureAvatar(title_id) && !IsGamerPictureCustom(title_id)) {
-        if (XLiveAPI::cached_gamerpics.contains(gamerpic_id)) {
-          gamerpic_icon = XLiveAPI::cached_gamerpics.at(gamerpic_id);
+        const auto gamerpic_data =
+            kernel_state()->GetXboxLiveAPI()->GetCachedGamerpic(gamerpic_id);
+
+        if (gamerpic_data.has_value()) {
+          gamerpic_icon = gamerpic_data.value();
         } else {
-          gamerpic_icon = XLiveAPI::DownloadGamerpicTile(title_id, gamerpic_id);
-          XLiveAPI::cached_gamerpics[gamerpic_id] = gamerpic_icon;
+          gamerpic_icon =
+              kernel_state()->GetXboxLiveAPI()->DownloadGamerpicTile(
+                  title_id, gamerpic_id);
+          kernel_state()->GetXboxLiveAPI()->AddCachedGamerpic(gamerpic_id,
+                                                              gamerpic_icon);
         }
       } else {
         // We do not support avatar or custom gamerpics.
