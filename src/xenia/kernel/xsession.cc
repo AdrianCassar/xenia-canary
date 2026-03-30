@@ -178,7 +178,8 @@ X_RESULT XSession::CreateHostSession(XSESSION_INFO* session_info,
   session_data.num_slots_private = private_slots;
   session_data.flags = flags;
 
-  const uint64_t systemlink_id = XLiveAPI::systemlink_id;
+  const uint64_t systemlink_id =
+      kernel_state()->GetXboxLiveAPI()->GetSystemlinkID();
 
   if (HasOfflineFlags()) {
     XELOGI("Creating an offline session");
@@ -194,7 +195,7 @@ X_RESULT XSession::CreateHostSession(XSESSION_INFO* session_info,
       session_id_ = systemlink_id;
     } else {
       session_id_ = GenerateSessionId(XNKID_SYSTEM_LINK);
-      XLiveAPI::systemlink_id = session_id_;
+      kernel_state()->GetXboxLiveAPI()->SetSystemlinkID(session_id_);
     }
   } else if (HasXboxLiveFeatureFlags()) {
     XELOGI("Creating xbox live session");
@@ -202,7 +203,8 @@ X_RESULT XSession::CreateHostSession(XSESSION_INFO* session_info,
 
     NotifySessionCreationWarning(user_index);
 
-    XLiveAPI::XSessionCreate(session_id_, &session_data);
+    kernel_state()->GetXboxLiveAPI()->XSessionCreate(session_id_,
+                                                     &session_data);
   } else {
     assert_always();
   }
@@ -241,7 +243,8 @@ X_RESULT XSession::JoinExistingSession(XSESSION_INFO* session_info) {
     assert_always();
   }
 
-  const auto session = XLiveAPI::XSessionGet(session_id_);
+  const auto session =
+      kernel_state()->GetXboxLiveAPI()->XSessionGet(session_id_);
 
   // Begin XNetRegisterKey?
 
@@ -262,7 +265,7 @@ X_RESULT XSession::DeleteSession(XGI_SESSION_STATE* state) {
   state_ |= STATE_FLAGS_DELETED;
 
   if (IsHost() && HasXboxLiveFeatureFlags()) {
-    XLiveAPI::DeleteSession(session_id_);
+    kernel_state()->GetXboxLiveAPI()->DeleteSession(session_id_);
   }
 
   kernel_state()->xam_state()->user_tracker()->RemoveOwnedSession(
@@ -395,7 +398,7 @@ X_RESULT XSession::JoinSession(XGI_SESSION_MANAGE* data) {
   local_details_.ReturnedMemberCount = GetMembersCount();
 
   if (!members.empty() && IsHost() && HasXboxLiveFeatureFlags()) {
-    XLiveAPI::SessionJoinRemote(session_id_, members);
+    kernel_state()->GetXboxLiveAPI()->SessionJoinRemote(session_id_, members);
   } else if (!members.empty() && !HasOfflineFlags()) {
     // To improve XNetInAddrToXnAddr stability each members session id
     // must match host. This is a workaround and should be fixed properly.
@@ -405,7 +408,7 @@ X_RESULT XSession::JoinSession(XGI_SESSION_MANAGE* data) {
     const auto keys = std::views::keys(members);
     std::set<uint64_t> xuids{keys.begin(), keys.end()};
 
-    XLiveAPI::SessionPreJoin(session_id_, xuids);
+    kernel_state()->GetXboxLiveAPI()->SessionPreJoin(session_id_, xuids);
   }
 
   // XamUserAddRecentPlayer -> XPresenceSubscribe
@@ -529,7 +532,7 @@ X_RESULT XSession::LeaveSession(XGI_SESSION_MANAGE* data) {
   local_details_.ReturnedMemberCount = GetMembersCount();
 
   if (!xuids.empty() && IsHost() && HasXboxLiveFeatureFlags()) {
-    XLiveAPI::SessionLeaveRemote(session_id_, xuids);
+    kernel_state()->GetXboxLiveAPI()->SessionLeaveRemote(session_id_, xuids);
   }
 
   return X_ERROR_SUCCESS;
@@ -589,7 +592,7 @@ X_RESULT XSession::ModifySession(XGI_SESSION_MODIFY* data) {
   PrintSessionDetails();
 
   if (IsHost() && HasXboxLiveFeatureFlags()) {
-    XLiveAPI::SessionModify(session_id_, &modify);
+    kernel_state()->GetXboxLiveAPI()->SessionModify(session_id_, &modify);
   }
 
   return X_ERROR_SUCCESS;
@@ -653,7 +656,8 @@ X_RESULT XSession::MigrateHost(XGI_SESSION_MIGRATE* data) {
     // return X_E_FAIL;
   }
 
-  const auto result = XLiveAPI::XSessionMigration(session_id_, data);
+  const auto result =
+      kernel_state()->GetXboxLiveAPI()->XSessionMigration(session_id_, data);
 
   if (!result->SessionID_UInt()) {
     XELOGI("Session Migration Failed");
@@ -692,7 +696,8 @@ X_RESULT XSession::RegisterArbitration(XGI_SESSION_ARBITRATION* data) {
       kernel_state_->memory()->TranslateVirtual<XSESSION_REGISTRATION_RESULTS*>(
           data->results_ptr);
 
-  const auto result = XLiveAPI::XSessionArbitration(session_id_);
+  const auto result =
+      kernel_state()->GetXboxLiveAPI()->XSessionArbitration(session_id_);
 
   const uint32_t registrants_ptr =
       kernel_state_->memory()->SystemHeapAlloc(static_cast<uint32_t>(
@@ -916,8 +921,8 @@ X_RESULT XSession::FlushStats() {
 
   // TODO: Check who flushes stats each peer or just host?
   if (IsHost()) {
-    const bool flushed =
-        XLiveAPI::SessionFlushStats(session_id_, stats_to_flush);
+    const bool flushed = kernel_state()->GetXboxLiveAPI()->SessionFlushStats(
+        session_id_, stats_to_flush);
 
     // If flush is successful then remove cached stats
     if (flushed) {
@@ -948,8 +953,8 @@ X_RESULT XSession::EndSession(XGI_SESSION_STATE* state) {
 
   // Post the remaining cached stats
   if (stats_enabled) {
-    const bool flushed =
-        XLiveAPI::SessionFlushStats(session_id_, cached_stats_properties_);
+    const bool flushed = kernel_state()->GetXboxLiveAPI()->SessionFlushStats(
+        session_id_, cached_stats_properties_);
 
     if (flushed) {
       cached_stats_properties_.clear();
@@ -968,7 +973,8 @@ X_RESULT XSession::GetSessions(KernelState* kernel_state,
     return X_ONLINE_E_SESSION_INSUFFICIENT_BUFFER;
   }
 
-  const auto sessions = XLiveAPI::SessionSearch(search_data, num_users);
+  const auto sessions =
+      kernel_state->GetXboxLiveAPI()->SessionSearch(search_data, num_users);
 
   const uint32_t session_count = std::min<int32_t>(
       search_data->num_results, static_cast<uint32_t>(sessions.size()));
@@ -986,7 +992,7 @@ X_RESULT XSession::GetSessions(KernelState* kernel_state,
     session_ids_ptr[i] = id;
   }
 
-  GetSessionByIDs(kernel_state->memory(), session_ids_ptr, session_count,
+  GetSessionByIDs(kernel_state, session_ids_ptr, session_count,
                   search_data->search_results_ptr,
                   search_data->results_buffer_size);
 
@@ -1050,7 +1056,8 @@ X_RESULT XSession::GetSessions(KernelState* kernel_state,
     std::vector<xam::Property> properties = {};
 
     const auto all_properties =
-        XLiveAPI::SessionPropertiesGet(sessions.at(i)->SessionID_UInt());
+        kernel_state->GetXboxLiveAPI()->SessionPropertiesGet(
+            sessions.at(i)->SessionID_UInt());
 
     for (const auto& property : all_properties) {
       if (property.IsContext()) {
@@ -1098,7 +1105,7 @@ X_RESULT XSession::GetWeightedSessions(
   return GetSessions(kernel_state, &search_data, num_users);
 }
 
-X_RESULT XSession::GetSessionByID(Memory* memory,
+X_RESULT XSession::GetSessionByID(KernelState* kernel_state,
                                   XGI_SESSION_SEARCH_BYID* search_data) {
   if (!search_data->results_buffer_size) {
     search_data->results_buffer_size = sizeof(XSESSION_SEARCHRESULT);
@@ -1112,14 +1119,14 @@ X_RESULT XSession::GetSessionByID(Memory* memory,
 
   const uint32_t session_count = 1;
 
-  GetSessionByIDs(memory, &search_data->session_id, session_count,
+  GetSessionByIDs(kernel_state, &search_data->session_id, session_count,
                   search_data->search_results_ptr,
                   search_data->results_buffer_size);
 
   return X_ERROR_SUCCESS;
 }
 
-X_RESULT XSession::GetSessionByIDs(Memory* memory,
+X_RESULT XSession::GetSessionByIDs(KernelState* kernel_state,
                                    XGI_SESSION_SEARCH_BYIDS* search_data) {
   if (!search_data->results_buffer_size) {
     search_data->results_buffer_size =
@@ -1137,22 +1144,24 @@ X_RESULT XSession::GetSessionByIDs(Memory* memory,
     return X_ERROR_INVALID_PARAMETER;
   }
 
-  XNKID* session_ids_ptr =
-      memory->TranslateVirtual<XNKID*>(search_data->session_ids_ptr);
+  XNKID* session_ids_ptr = kernel_state->memory()->TranslateVirtual<XNKID*>(
+      search_data->session_ids_ptr);
 
-  GetSessionByIDs(memory, session_ids_ptr, search_data->num_session_ids,
+  GetSessionByIDs(kernel_state, session_ids_ptr, search_data->num_session_ids,
                   search_data->search_results_ptr,
                   search_data->results_buffer_size);
 
   return X_ERROR_SUCCESS;
 }
 
-X_RESULT XSession::GetSessionByIDs(Memory* memory, XNKID* session_ids_ptr,
+X_RESULT XSession::GetSessionByIDs(KernelState* kernel_state,
+                                   XNKID* session_ids_ptr,
                                    uint32_t num_session_ids,
                                    uint32_t search_results_ptr,
                                    uint32_t results_buffer_size) {
   SEARCH_RESULTS* search_results =
-      memory->TranslateVirtual<SEARCH_RESULTS*>(search_results_ptr);
+      kernel_state->memory()->TranslateVirtual<SEARCH_RESULTS*>(
+          search_results_ptr);
 
   std::memset(search_results, 0, results_buffer_size);
 
@@ -1160,7 +1169,8 @@ X_RESULT XSession::GetSessionByIDs(Memory* memory, XNKID* session_ids_ptr,
       reinterpret_cast<XSESSION_SEARCHRESULT*>(search_results + 1);
 
   const uint32_t session_search_result_ptr =
-      memory->HostToGuestVirtual(std::to_address(search_results->results_ptr));
+      kernel_state->memory()->HostToGuestVirtual(
+          std::to_address(search_results->results_ptr));
 
   uint32_t result_index = 0;
 
@@ -1169,7 +1179,8 @@ X_RESULT XSession::GetSessionByIDs(Memory* memory, XNKID* session_ids_ptr,
 
     IsValidXNKID(session_id);
 
-    const auto session = XLiveAPI::XSessionGet(session_id);
+    const auto session =
+        kernel_state->GetXboxLiveAPI()->XSessionGet(session_id);
 
     // Skip setting contexts and properties in such case.
     if (!session.HostAddress().empty()) {

@@ -143,6 +143,7 @@ Emulator::Emulator(const std::filesystem::path& command_line,
     }
   }
 
+  xbox_live_api_ = std::make_unique<kernel::XLiveAPI>();
   network_adapter_manager_ = std::make_unique<kernel::NetworkAdapterManager>();
   upnp_ = std::make_unique<kernel::UPnP>();
 
@@ -1340,7 +1341,7 @@ bool Emulator::ExceptionCallback(Exception* ex) {
     });
   }
 
-  xe::kernel::XLiveAPI::DeleteAllSessionsByMac();
+  GetXboxLiveAPI()->DeleteAllSessionsByMac();
   kernel_state()->xam_state()->StopPeriodicMaintenance();
 
   // Now suspend ourself (we should be a guest thread).
@@ -1685,7 +1686,7 @@ X_STATUS Emulator::CompleteLaunch(const std::filesystem::path& path,
     upnp_->Start();
   }
 
-  kernel::XLiveAPI::StartWhoamiAsync();
+  GetXboxLiveAPI()->StartWhoamiAsync();
   kernel_state()->xam_state()->StartPeriodicMaintenance();
 
   return X_STATUS_SUCCESS;

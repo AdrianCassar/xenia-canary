@@ -35,7 +35,8 @@ void CreateProfileUI::Initalize() {
   if (gamerpic_key.has_value()) {
     create_profile_args_.gamerpic_key = gamerpic_key;
     create_profile_args_.downloaded_gamerpics =
-        XLiveAPI::DownloadCompleteGamerpic(gamerpic_key.value());
+        kernel_state()->GetXboxLiveAPI()->DownloadCompleteGamerpic(
+            gamerpic_key.value());
   }
 }
 
