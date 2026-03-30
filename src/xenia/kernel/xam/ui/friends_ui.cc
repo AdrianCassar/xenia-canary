@@ -17,9 +17,11 @@ namespace ui {
 
 FriendsUI::FriendsUI(xe::ui::ImGuiDrawer* imgui_drawer, UserProfile* profile)
     : XamDialog(imgui_drawer), profile_(profile) {
-  friends_presence_ = XLiveAPI::GetFriendsPresenceAsync(profile->xuid());
+  friends_presence_ = kernel_state()->GetXboxLiveAPI()->GetFriendsPresenceAsync(
+      profile->xuid());
   immediate_gamerpics_ =
-      XLiveAPI::GetFriendsGamerpicsAsync(profile->xuid(), imgui_drawer);
+      kernel_state()->GetXboxLiveAPI()->GetFriendsGamerpicsAsync(
+          profile->xuid(), imgui_drawer);
 }
 
 // TODO(Adrian): Move into a separate function so draw can be reused with dialog
@@ -31,7 +33,7 @@ void FriendsUI::OnDraw(ImGuiIO& io) {
 
     ImGui::OpenPopup("Friends");
 
-    if (XLiveAPI::IsConnectedToServer()) {
+    if (kernel_state()->GetXboxLiveAPI()->IsConnectedToServer()) {
       args.filter_offline = true;
     }
   }
@@ -43,9 +45,12 @@ void FriendsUI::OnDraw(ImGuiIO& io) {
   }
 
   if (args.refresh_presence) {
-    friends_presence_ = XLiveAPI::GetFriendsPresenceAsync(profile_->xuid());
+    friends_presence_ =
+        kernel_state()->GetXboxLiveAPI()->GetFriendsPresenceAsync(
+            profile_->xuid());
     immediate_gamerpics_ =
-        XLiveAPI::GetFriendsGamerpicsAsync(profile_->xuid(), imgui_drawer());
+        kernel_state()->GetXboxLiveAPI()->GetFriendsGamerpicsAsync(
+            profile_->xuid(), imgui_drawer());
     args.refresh_presence = false;
   }
 

@@ -75,6 +75,12 @@ using namespace rapidjson;
 namespace xe {
 namespace kernel {
 
+XLiveAPI::XLiveAPI() {}
+
+XLiveAPI::~XLiveAPI() {
+  // TODO(Adrian): Cleanup libcurl multiplexing handles.
+}
+
 void XLiveAPI::IpGetConsoleXnAddr(XNADDR* XnAddr_ptr) {
   memset(XnAddr_ptr, 0, sizeof(XNADDR));
 
@@ -83,11 +89,12 @@ void XLiveAPI::IpGetConsoleXnAddr(XNADDR* XnAddr_ptr) {
 
   const bool is_WAN_routing = adapter_manager->IsSelectedAdapterWANRouting();
   const auto adapter_local_ip = adapter_manager->GetSelectedAdapterLocalIP();
+  const auto xbl_api = kernel_state()->GetXboxLiveAPI();
 
   if (cvars::network_mode != NETWORK_MODE::OFFLINE) {
-    if (IsConnectedToServer() && is_WAN_routing) {
-      XnAddr_ptr->ina = OnlineIP().sin_addr;
-      XnAddr_ptr->inaOnline = OnlineIP().sin_addr;
+    if (xbl_api->IsConnectedToServer() && is_WAN_routing) {
+      XnAddr_ptr->ina = xbl_api->OnlineIP().sin_addr;
+      XnAddr_ptr->inaOnline = xbl_api->OnlineIP().sin_addr;
     } else {
       XnAddr_ptr->ina = adapter_local_ip.sin_addr;
       XnAddr_ptr->inaOnline = adapter_local_ip.sin_addr;
@@ -95,7 +102,7 @@ void XLiveAPI::IpGetConsoleXnAddr(XNADDR* XnAddr_ptr) {
   }
 
   if (cvars::network_mode == NETWORK_MODE::XBOXLIVE) {
-    XnAddr_ptr->wPortOnline = GetPlayerPort();
+    XnAddr_ptr->wPortOnline = xbl_api->GetPlayerPort();
   }
 
   XnAddr_ptr->abOnline.platform_type = PLATFORM_TYPE::Xbox360;
@@ -121,7 +128,7 @@ void XLiveAPI::GetXnAddrFromSessionObject(SessionObjectJSON session,
   XnAddr_ptr->abOnline.platform_type = PLATFORM_TYPE::Xbox360;
 }
 
-std::vector<std::string> XLiveAPI::ParseAPIList() {
+std::vector<std::string> XLiveAPI::ParseAPIList() const {
   if (cvars::api_list.empty()) {
     OVERRIDE_string(api_list, default_public_server_ + ",");
   }
@@ -184,7 +191,8 @@ std::string XLiveAPI::GetApiAddress() {
       ParseDelimitedList(cvars::api_address, 1);
 
   if (api_addresses.empty()) {
-    cvars::api_address = default_local_server_;
+    cvars::api_address =
+        kernel_state()->GetXboxLiveAPI()->GetDefaultLocalServer();
   } else {
     cvars::api_address = api_addresses.front();
   }
@@ -272,18 +280,20 @@ void XLiveAPI::Init() {
   DeleteAllSessions();
 }
 
-XLiveAPI::InitState XLiveAPI::GetInitState() { return initialized_; }
+XLiveAPI::InitState XLiveAPI::GetInitState() const { return initialized_; }
 
 // If online NAT open, otherwise strict.
-uint32_t XLiveAPI::GetNatType() {
+uint32_t XLiveAPI::GetNatType() const {
   return IsConnectedToServer() ? X_NAT_TYPE::NAT_OPEN : X_NAT_TYPE::NAT_STRICT;
 }
 
-bool XLiveAPI::IsConnectedToServer() { return OnlineIP().sin_addr.s_addr != 0; }
+bool XLiveAPI::IsConnectedToServer() const {
+  return OnlineIP().sin_addr.s_addr != 0;
+}
 
-uint16_t XLiveAPI::GetPlayerPort() { return 36000; }
+uint16_t XLiveAPI::GetPlayerPort() const { return 36000; }
 
-int8_t XLiveAPI::GetVersionStatus() { return version_status; }
+int8_t XLiveAPI::GetVersionStatus() const { return version_status_; }
 
 void XLiveAPI::clearXnaddrCache() {
   sessionIdCache.clear();
@@ -292,7 +302,7 @@ void XLiveAPI::clearXnaddrCache() {
 
 // Request data from the server
 std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::Get(std::string endpoint,
-                                                      const uint32_t timeout) {
+                                                      uint32_t timeout) {
   response_data chunk = {};
   CURL* curl_handle = curl_easy_init();
   CURLcode result;
@@ -568,8 +578,9 @@ std::vector<HTTPResponseObjectJSON> XLiveAPI::GetMulti(
   std::vector<HTTPResponseObjectJSON> responces = {};
 
   // Re-order the responses in the order we requested based on the URL.
-  // If more than two URLs are equal then technically the wrong response could
-  // be found, but the data returned would be equal.
+  // If more than or two URLs are equal then technically the wrong response
+  // could be found, there's a chance the data returned could be different
+  // depending on the endpoint.
   for (const std::string url : urls) {
     for (const auto& responce : random_ordered_responces) {
       if (url == responce.first) {
@@ -583,7 +594,7 @@ std::vector<HTTPResponseObjectJSON> XLiveAPI::GetMulti(
 }
 
 void XLiveAPI::StartWhoamiAsync() {
-  whoami_result_ = std::async(std::launch::async, &XLiveAPI::Getwhoami);
+  whoami_result_ = std::async(std::launch::async, &XLiveAPI::Getwhoami, this);
 }
 
 // Check connection to xenia web server.
@@ -761,11 +772,11 @@ std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::RegisterPlayer(
   // Check for erroneous profile lookup
   if (player_lookup->XUID() != player.XUID()) {
     XELOGI("XLiveAPI:: {} XUID mismatch!", player.Gamertag());
-    xuid_mismatch = true;
+    xuid_mismatch_ = true;
 
     // assert_always();
   } else {
-    xuid_mismatch = false;
+    xuid_mismatch_ = false;
   }
 
   return response;
@@ -822,8 +833,8 @@ std::unique_ptr<PlayerObjectJSON> XLiveAPI::FindPlayer(std::string ip) {
 
 bool XLiveAPI::UpdateQoSCache(const uint64_t sessionId,
                               const std::vector<uint8_t> qos_payload) {
-  if (qos_payload_cache[sessionId] != qos_payload) {
-    qos_payload_cache[sessionId] = qos_payload;
+  if (qos_payload_cache_[sessionId] != qos_payload) {
+    qos_payload_cache_[sessionId] = qos_payload;
 
     XELOGI("Updated QoS Cache.");
     return true;
@@ -1177,7 +1188,7 @@ void XLiveAPI::DeleteSession(uint64_t sessionId) {
   }
 
   clearXnaddrCache();
-  qos_payload_cache.erase(sessionId);
+  qos_payload_cache_.erase(sessionId);
 }
 
 void XLiveAPI::DeleteAllSessionsByMac() {
@@ -1369,8 +1380,8 @@ std::vector<X_TITLE_SERVER> XLiveAPI::GetServers() {
   std::string endpoint = BuildEndpoint(
       fmt::format("title/{:08X}/servers", kernel_state()->title_id()));
 
-  if (xlsp_servers_cached) {
-    return xlsp_servers;
+  if (xlsp_servers_cached_) {
+    return xlsp_servers_;
   }
 
   std::unique_ptr<HTTPResponseObjectJSON> response = Get(endpoint);
@@ -1379,10 +1390,10 @@ std::vector<X_TITLE_SERVER> XLiveAPI::GetServers() {
     XELOGE("GetServers error message: {}", response->Message());
     assert_always();
 
-    return xlsp_servers;
+    return xlsp_servers_;
   }
 
-  xlsp_servers_cached = true;
+  xlsp_servers_cached_ = true;
 
   Document doc;
   doc.Parse(response->RawResponse().response);
@@ -1400,10 +1411,10 @@ std::vector<X_TITLE_SERVER> XLiveAPI::GetServers() {
       strcpy(server.server_description, description.c_str());
     }
 
-    xlsp_servers.push_back(server);
+    xlsp_servers_.push_back(server);
   }
 
-  return xlsp_servers;
+  return xlsp_servers_;
 }
 
 std::unique_ptr<ServicesObjectJSON> XLiveAPI::GetServices() {
@@ -1889,7 +1900,7 @@ std::vector<uint8_t> XLiveAPI::GetUserGamerpicTile(uint64_t xuid,
   settings_ids[xuid][xe::kernel::kDashboardID].push_back(
       xam::UserSettingId::XPROFILE_GAMERCARD_PICTURE_KEY);
 
-  const auto settings = kernel::XLiveAPI::GetUsersSettings(settings_ids);
+  const auto settings = GetUsersSettings(settings_ids);
 
   uint32_t setting_id =
       static_cast<uint32_t>(xam::UserSettingId::XPROFILE_GAMERCARD_PICTURE_KEY);
@@ -2096,8 +2107,8 @@ std::vector<uint8_t> XLiveAPI::DownloadGamerpicTile(uint32_t title_id,
 
 std::future<std::vector<uint8_t>> XLiveAPI::DownloadGamerpicTileAsync(
     uint32_t title_id, uint32_t tile_id) {
-  auto gamerpic = std::async(std::launch::async, [title_id, tile_id]() {
-    return xe::kernel::XLiveAPI::DownloadGamerpicTile(title_id, tile_id);
+  auto gamerpic = std::async(std::launch::async, [this, title_id, tile_id]() {
+    return DownloadGamerpicTile(title_id, tile_id);
   });
 
   return gamerpic;
@@ -2158,7 +2169,7 @@ std::map<uint64_t, std::vector<uint8_t>> XLiveAPI::GetMultiGamerpicsFromXUIDs(
 
 std::shared_future<gamerpics_pair> XLiveAPI::DownloadCompleteGamerpic(
     xam::GamerPictureKey gamerpic_key) {
-  auto gamerpic = std::async(std::launch::async, [gamerpic_key]() {
+  auto gamerpic = std::async(std::launch::async, [this, gamerpic_key]() {
     std::vector<std::string> cdn_parts = {};
 
     const std::string big_gamerpic_cdn =
@@ -2239,9 +2250,9 @@ XLiveAPI::GetFriendsGamerpicsAsync(uint64_t xuid,
     return {};
   }
 
-  return std::async(std::launch::async, [user_profile, imgui_drawer]() {
-    const auto gamerpics = kernel::XLiveAPI::GetMultiGamerpicsFromXUIDs(
-        user_profile->GetFriendsXUIDs());
+  return std::async(std::launch::async, [this, user_profile, imgui_drawer]() {
+    const auto gamerpics =
+        GetMultiGamerpicsFromXUIDs(user_profile->GetFriendsXUIDs());
 
     std::map<uint64_t, std::shared_ptr<xe::ui::ImmediateTexture>>
         immediate_gamerpics = {};
@@ -2287,8 +2298,8 @@ std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::PraseResponse(
 
 std::future<std::vector<FriendPresenceObjectJSON>>
 XLiveAPI::GetFriendsPresenceAsync(uint64_t xuid) {
-  return std::async(std::launch::async,
-                    [xuid]() { return XLiveAPI::GetAllFriendsPresence(xuid); });
+  return std::async(std::launch::async, &XLiveAPI::GetAllFriendsPresence, this,
+                    xuid);
 }
 
 // TODO(Adrian): Take advantage of periodic maintenance.
@@ -2363,7 +2374,7 @@ std::map<uint64_t, FriendPresenceObjectJSON> XLiveAPI::GetOnlineFriendsPresence(
   std::map<uint64_t, FriendPresenceObjectJSON> peer_presences = {};
 
   const auto friends_presence_responce =
-      XLiveAPI::GetFriendsPresence(user_profile->GetFriendsXUIDs());
+      GetFriendsPresence(user_profile->GetFriendsXUIDs());
 
   const auto& friends_presence = friends_presence_responce->PlayersPresence();
 
