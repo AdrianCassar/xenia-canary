@@ -680,7 +680,7 @@ X_HRESULT XLiveBaseApp::XOnlineQuerySearch(uint32_t buffer_ptr) {
   QUERY_SEARCH_RESULT* results_ptr =
       unmarshaller.Results<QUERY_SEARCH_RESULT>();
 
-  const auto services = XLiveAPI::GetServices();
+  const auto services = kernel_state()->GetXboxLiveAPI()->GetServices();
 
   results_ptr->total_results =
       static_cast<uint32_t>(services->QuerySearchResults().size());
@@ -826,7 +826,7 @@ X_HRESULT XLiveBaseApp::XOnlineQuerySearch(uint32_t buffer_ptr) {
 // Check whether XLSP services are available
 X_HRESULT XLiveBaseApp::XOnlineGetServiceInfo(uint32_t serviceid,
                                               uint32_t serviceinfo) {
-  if (!XLiveAPI::IsConnectedToServer()) {
+  if (!kernel_state()->GetXboxLiveAPI()->IsConnectedToServer()) {
     return X_ONLINE_E_LOGON_NOT_LOGGED_ON;
   }
 
@@ -839,7 +839,7 @@ X_HRESULT XLiveBaseApp::XOnlineGetServiceInfo(uint32_t serviceid,
 
   std::memset(service_info_ptr, 0, sizeof(X_ONLINE_SERVICE_INFO));
 
-  const auto services = XLiveAPI::GetServices();
+  const auto services = kernel_state()->GetXboxLiveAPI()->GetServices();
 
   for (const auto& service_info : services->ServicesResults()) {
     if (service_info.id == serviceid) {
@@ -1012,8 +1012,8 @@ X_HRESULT XLiveBaseApp::XInviteGetAcceptedInfo(uint32_t buffer_ptr,
   // Reset self invite
   user_profile->SetSelfInvite({});
 
-  const auto presence =
-      XLiveAPI::GetFriendsPresence({invite_info->xuid_inviter});
+  const auto presence = kernel_state()->GetXboxLiveAPI()->GetFriendsPresence(
+      {invite_info->xuid_inviter});
 
   uint64_t session_id = 0;
 
@@ -1029,7 +1029,8 @@ X_HRESULT XLiveBaseApp::XInviteGetAcceptedInfo(uint32_t buffer_ptr,
     return X_ONLINE_E_SESSION_NOT_FOUND;
   }
 
-  const auto session = XLiveAPI::XSessionGet(session_id);
+  const auto session =
+      kernel_state()->GetXboxLiveAPI()->XSessionGet(session_id);
 
   if (!session.SessionID_UInt()) {
     new xe::ui::HostNotificationWindow(
@@ -1049,7 +1050,7 @@ X_HRESULT XLiveBaseApp::XInviteGetAcceptedInfo(uint32_t buffer_ptr,
     }
   }
 
-  XLiveAPI::SessionPreJoin(session_id, local_members);
+  kernel_state()->GetXboxLiveAPI()->SessionPreJoin(session_id, local_members);
 
   Uint64toXNKID(session.SessionID_UInt(), &invite_info->host_info.sessionID);
   GenerateIdentityExchangeKey(&invite_info->host_info.keyExchangeKey);
@@ -1337,7 +1338,8 @@ X_HRESULT XLiveBaseApp::XStorageEnumerate(uint32_t buffer_ptr) {
         unmarshaller.MaxResultsToReturn(), available_to_return_items);
 
     const auto enumeration_result =
-        XLiveAPI::XStorageEnumerate(enumeration_path, max_items);
+        kernel_state()->GetXboxLiveAPI()->XStorageEnumerate(enumeration_path,
+                                                            max_items);
 
     const auto& enumerated_files = enumeration_result.first;
     enumerated_backend = enumeration_result.second;
@@ -1348,7 +1350,8 @@ X_HRESULT XLiveBaseApp::XStorageEnumerate(uint32_t buffer_ptr) {
 
       // Path must use /
       std::u16string backend_item_path = xe::to_utf16(
-          std::format("{}{}", XLiveAPI::GetApiAddress(), entry.FilePath()));
+          std::format("{}{}", kernel_state()->GetXboxLiveAPI()->GetApiAddress(),
+                      entry.FilePath()));
 
       char16_t* item_path_ptr =
           std::to_address(items_path_name_array_ptr +
@@ -1656,7 +1659,7 @@ X_HRESULT XLiveBaseApp::XStorageDelete(uint32_t buffer_ptr) {
        facility_type != X_STORAGE_FACILITY::FACILITY_PER_USER_TITLE);
 
   if (route_backend) {
-    bool deleted = XLiveAPI::XStorageDelete(item_path);
+    bool deleted = kernel_state()->GetXboxLiveAPI()->XStorageDelete(item_path);
     result = deleted ? X_E_SUCCESS : X_E_FAIL;
   }
 
@@ -1730,7 +1733,7 @@ X_HRESULT XLiveBaseApp::XStorageDownloadToMemory(uint32_t buffer_ptr,
 
   if (route_backend) {
     const std::vector<uint8_t> buffer =
-        XLiveAPI::XStorageDownload(item_to_download);
+        kernel_state()->GetXboxLiveAPI()->XStorageDownload(item_to_download);
 
     if (!buffer.empty()) {
       if (buffer.size() > download_buffer.size_bytes()) {
@@ -1861,7 +1864,8 @@ X_HRESULT XLiveBaseApp::XStorageUploadFromMemory(uint32_t buffer_ptr) {
 
   if (route_backend) {
     X_STORAGE_UPLOAD_RESULT uploaded_result =
-        XLiveAPI::XStorageUpload(upload_file_path, upload_buffer);
+        kernel_state()->GetXboxLiveAPI()->XStorageUpload(upload_file_path,
+                                                         upload_buffer);
 
     switch (uploaded_result) {
       case X_STORAGE_UPLOAD_RESULT::UPLOADED:
@@ -1980,8 +1984,8 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
   std::string backend_server_path_str;
   std::string symlink_path;
 
-  std::string backend_domain_prefix =
-      fmt::format("{}xstorage", XLiveAPI::GetApiAddress());
+  std::string backend_domain_prefix = fmt::format(
+      "{}xstorage", kernel_state()->GetXboxLiveAPI()->GetApiAddress());
 
   std::string storage_type;
 
@@ -2091,7 +2095,8 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
         std::filesystem::path(backend_server_path_str).parent_path().string();
 
     X_STORAGE_BUILD_SERVER_PATH_RESULT build_result =
-        XLiveAPI::XStorageBuildServerPath(create_valid_path);
+        kernel_state()->GetXboxLiveAPI()->XStorageBuildServerPath(
+            create_valid_path);
 
     if (build_result == X_STORAGE_BUILD_SERVER_PATH_RESULT::Created ||
         build_result == X_STORAGE_BUILD_SERVER_PATH_RESULT::Found) {
@@ -2268,7 +2273,10 @@ X_HRESULT XLiveBaseApp::XUserFindUsers(uint32_t buffer_ptr) {
   }
 
   if (!find_users.empty()) {
-    auto resolved = XLiveAPI::GetFindUsers(find_users)->GetResolvedUsers();
+    auto resolved = kernel_state()
+                        ->GetXboxLiveAPI()
+                        ->GetFindUsers(find_users)
+                        ->GetResolvedUsers();
 
     resolved_users.insert(resolved_users.end(), resolved.begin(),
                           resolved.end());
@@ -2324,8 +2332,8 @@ std::string XLiveBaseApp::ConvertServerPathToXStorageSymlink(
     std::string server_path) {
   std::string symlink_path = server_path;
 
-  std::string backend_domain_prefix =
-      fmt::format("{}xstorage/", XLiveAPI::GetApiAddress());
+  std::string backend_domain_prefix = fmt::format(
+      "{}xstorage/", kernel_state()->GetXboxLiveAPI()->GetApiAddress());
 
   std::string location = symlink_path.substr(backend_domain_prefix.size());
 
@@ -2342,8 +2350,8 @@ std::string XLiveBaseApp::ConvertXStorageSymlinkToServerPath(
   server_path = symlink_path_string.substr(xstorage_symboliclink.size());
   server_path = utf8::fix_path_separators(server_path, '/');
 
-  std::string backend_domain_prefix =
-      fmt::format("{}xstorage", XLiveAPI::GetApiAddress());
+  std::string backend_domain_prefix = fmt::format(
+      "{}xstorage", kernel_state()->GetXboxLiveAPI()->GetApiAddress());
 
   server_path = std::format("{}/{}", backend_domain_prefix, server_path);
 

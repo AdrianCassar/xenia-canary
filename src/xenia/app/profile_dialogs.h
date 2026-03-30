@@ -75,6 +75,7 @@ class ManagerDialog final : public ui::ImGuiDialog {
   bool manager_opened_ = false;
   uint64_t selected_xuid_ = 0;
   uint64_t removed_xuid_ = 0;
+  Emulator* emulator_;
   xe::kernel::xam::ui::FriendsContentArgs friends_args = {};
   xe::kernel::xam::ui::SessionsContentArgs sessions_args = {};
   xe::kernel::xam::ui::MyDeletedProfilesArgs deletion_args = {};

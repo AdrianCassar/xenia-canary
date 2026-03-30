@@ -19,6 +19,7 @@
 #include "xenia/base/bit_map.h"
 #include "xenia/cpu/backend/backend.h"
 #include "xenia/cpu/export_resolver.h"
+#include "xenia/kernel/XLiveAPI.h"
 #include "xenia/kernel/kernel.h"
 #include "xenia/kernel/smc.h"
 #include "xenia/kernel/util/kernel_fwd.h"
@@ -199,6 +200,8 @@ class KernelState {
   void InitXmpVolumePatch();
 
   XConfig* xconfig() const { return xconfig_.get(); }
+
+  XLiveAPI* GetXboxLiveAPI() const;
 
   std::bitset<4> GetConnectedUsers() const;
 

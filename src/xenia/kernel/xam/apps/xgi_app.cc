@@ -233,7 +233,7 @@ X_HRESULT XgiApp::ExecuteDispatchMessage(uint32_t message, uint32_t buffer_ptr,
       }
 
       std::unique_ptr<LeaderboardObjectJSON> leaderboards =
-          XLiveAPI::LeaderboardsFind(*data);
+          kernel_state()->GetXboxLiveAPI()->LeaderboardsFind(*data);
 
       const X_USER_STATS_READ_RESULTS& read_results =
           leaderboards->GetReadStatsResults();
@@ -441,7 +441,7 @@ X_HRESULT XgiApp::ExecuteDispatchMessage(uint32_t message, uint32_t buffer_ptr,
           data->user_index, data->num_slots_public, data->num_slots_private,
           data->flags, data->session_info_ptr, data->nonce_ptr);
 
-      XLiveAPI::clearXnaddrCache();
+      kernel_state()->GetXboxLiveAPI()->clearXnaddrCache();
       return result;
     }
     case 0x000B0011: {
@@ -479,7 +479,7 @@ X_HRESULT XgiApp::ExecuteDispatchMessage(uint32_t message, uint32_t buffer_ptr,
       }
 
       const auto result = session->JoinSession(data);
-      XLiveAPI::clearXnaddrCache();
+      kernel_state()->GetXboxLiveAPI()->clearXnaddrCache();
       return result;
     }
     case 0x000B0013: {
@@ -498,7 +498,7 @@ X_HRESULT XgiApp::ExecuteDispatchMessage(uint32_t message, uint32_t buffer_ptr,
       }
 
       const auto result = session->LeaveSession(data);
-      XLiveAPI::clearXnaddrCache();
+      kernel_state()->GetXboxLiveAPI()->clearXnaddrCache();
 
       return result;
     }
@@ -566,7 +566,7 @@ X_HRESULT XgiApp::ExecuteDispatchMessage(uint32_t message, uint32_t buffer_ptr,
       XGI_SESSION_SEARCH_BYID* data =
           reinterpret_cast<XGI_SESSION_SEARCH_BYID*>(buffer);
 
-      return XSession::GetSessionByID(memory_, data);
+      return XSession::GetSessionByID(kernel_state_, data);
     }
     case 0x000B0060: {
       assert_true(!buffer_length ||
@@ -576,7 +576,7 @@ X_HRESULT XgiApp::ExecuteDispatchMessage(uint32_t message, uint32_t buffer_ptr,
       XGI_SESSION_SEARCH_BYIDS* data =
           reinterpret_cast<XGI_SESSION_SEARCH_BYIDS*>(buffer);
 
-      const X_RESULT result = XSession::GetSessionByIDs(memory_, data);
+      const X_RESULT result = XSession::GetSessionByIDs(kernel_state_, data);
 
       SEARCH_RESULTS* search_results =
           memory_->TranslateVirtual<SEARCH_RESULTS*>(data->search_results_ptr);

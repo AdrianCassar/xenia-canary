@@ -1463,8 +1463,8 @@ void UserTracker::RefershFriendsAndSubscribersPresence(uint64_t xuid) const {
                  std::inserter(friends_and_subscribed_xuids,
                                friends_and_subscribed_xuids.cbegin()));
 
-  const auto presences =
-      XLiveAPI::GetFriendsPresence(friends_and_subscribed_xuids);
+  const auto presences = kernel_state()->GetXboxLiveAPI()->GetFriendsPresence(
+      friends_and_subscribed_xuids);
 
   const auto presence_sync_state =
       IsPresenceOutOfSync(xuid, presences->PlayersPresence());
@@ -1635,7 +1635,8 @@ void UserTracker::PeriodicMaintenance(uint64_t xuid,
   }
 
   if (user->signin_state() != X_USER_SIGNIN_STATE::SignedInToLive ||
-      XLiveAPI::GetInitState() != XLiveAPI::InitState::Success) {
+      kernel_state()->GetXboxLiveAPI()->GetInitState() !=
+          XLiveAPI::InitState::Success) {
     return;
   }
 
@@ -1645,7 +1646,7 @@ void UserTracker::PeriodicMaintenance(uint64_t xuid,
   }
 
   if (presence_string_update_available) {
-    XLiveAPI::SetPresence({user->xuid()});
+    kernel_state()->GetXboxLiveAPI()->SetPresence({user->xuid()});
   }
 
   if (HasOwnedSessions(xuid)) {
@@ -1662,8 +1663,8 @@ void UserTracker::PeriodicMaintenance(uint64_t xuid,
           continue;
         }
 
-        if (XLiveAPI::SessionPropertiesSet(session->GetSessionID(),
-                                           user->xuid())) {
+        if (kernel_state()->GetXboxLiveAPI()->SessionPropertiesSet(
+                session->GetSessionID(), user->xuid())) {
           session->CacheLiveProperties(user->properties_);
         }
       }
