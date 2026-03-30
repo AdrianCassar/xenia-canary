@@ -19,6 +19,7 @@
 #include "xenia/base/bit_map.h"
 #include "xenia/cpu/backend/backend.h"
 #include "xenia/cpu/export_resolver.h"
+#include "xenia/kernel/XLiveAPI.h"
 #include "xenia/kernel/kernel.h"
 #include "xenia/kernel/smc.h"
 #include "xenia/kernel/util/kernel_fwd.h"
@@ -197,6 +198,8 @@ class KernelState {
   xam::ContentManager* content_manager() const {
     return xam_state()->content_manager();
   }
+
+  XLiveAPI* GetXboxLiveAPI() const;
 
   std::bitset<4> GetConnectedUsers() const;
 
