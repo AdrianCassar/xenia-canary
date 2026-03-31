@@ -57,8 +57,9 @@ enum class X_WSAError : uint32_t {
 /*
  * Option flags per-socket.
  */
-#define SO_MARKINSECURE 0x5801  // bool TRUE for insecure
-#define SO_PRIVATE 0x5802       // bool TRUE for private
+#define SO_MARKINSECURE 0x5801   // bool TRUE for insecure
+#define SO_PRIVATE 0x5802        // bool TRUE for private
+#define SO_GRANTINSECURE 0x5803  // bool TRUE for insecure
 
 struct XSOCKADDR {
   xe::be<uint16_t> address_family;
@@ -199,11 +200,11 @@ class XSocket : public XObject {
   XSocket(KernelState* kernel_state, uint64_t native_handle);
   uint64_t native_handle_ = -1;
 
-  AddressFamily af_;    // Address family
-  Type type_;           // Type (DGRAM/Stream/etc)
-  Protocol proto_;      // Protocol (TCP/UDP/etc)
-  bool vdp_;            // VDP Protocol
-  bool secure_ = true;  // Secure socket (encryption enabled)
+  AddressFamily af_;     // Address family
+  Type type_;            // Type (DGRAM/Stream/etc)
+  Protocol proto_;       // Protocol (TCP/UDP/etc)
+  bool vdp_;             // VDP Protocol
+  bool secure_ = false;  // Secure socket (encryption enabled)
 
   bool bound_ = false;  // Explicitly bound to an IP address?
 
