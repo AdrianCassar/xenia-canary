@@ -148,8 +148,8 @@ X_STATUS XSocket::GetOption(uint32_t level, uint32_t optname, void* optval_ptr,
 
 int XSocket::SetOption(uint32_t level, uint32_t optname, void* optval_ptr,
                        uint32_t optlen) {
-  if (level == 0xFFFF &&
-      (optname == SO_MARKINSECURE || optname == SO_PRIVATE)) {
+  if (level == 0xFFFF && (optname == SO_MARKINSECURE || optname == SO_PRIVATE ||
+                          optname == SO_GRANTINSECURE)) {
     // Disable socket encryption
     secure_ = false;
     return X_ERROR_SUCCESS;
