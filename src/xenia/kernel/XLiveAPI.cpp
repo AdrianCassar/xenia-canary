@@ -152,8 +152,12 @@ void XLiveAPI::SetAPIAddress(std::string address) {
 void XLiveAPI::SetNetworkMode(uint32_t mode) {
   OVERRIDE_int32(network_mode, mode);
 
-  if (mode == NETWORK_MODE::OFFLINE && IsConnectedToServer()) {
-    DeleteAllSessionsByMac();
+  if (mode == NETWORK_MODE::OFFLINE) {
+    if (IsConnectedToServer()) {
+      DeleteAllSessionsByMac();
+    }
+
+    online_ip_ = {};
   }
 
   // Initialize Server
