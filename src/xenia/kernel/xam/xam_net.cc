@@ -1491,6 +1491,11 @@ dword_result_t XampXAuthStartup_entry(pointer_t<XAUTH_SETTINGS> setttings) {
 }
 DECLARE_XAM_EXPORT1(XampXAuthStartup, kNetworking, kStub);
 
+// Returns whether insecure sockets are allowed e.g. SO_GRANTINSECURE
+// 58411457
+dword_result_t XampXAuthIsLocalSocketAllowed_entry() { return true; }
+DECLARE_XAM_EXPORT1(XampXAuthIsLocalSocketAllowed, kNetworking, kStub);
+
 void XampXAuthShutdown_entry(lpdword_t unkn) {
   *unkn = 1;
 
