@@ -199,6 +199,7 @@ class XSocket : public XObject {
  private:
   XSocket(KernelState* kernel_state, uint64_t native_handle);
   uint64_t native_handle_ = -1;
+  bool socket_closed_ = false;
 
   AddressFamily af_;     // Address family
   Type type_;            // Type (DGRAM/Stream/etc)
