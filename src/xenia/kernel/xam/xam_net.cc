@@ -1932,8 +1932,6 @@ dword_result_t NetDll_closesocket_entry(dword_t caller, dword_t socket_handle) {
     }
   }
 
-  // TODO: Absolutely delete this object. It is no longer valid after calling
-  // closesocket.
   socket->Close();
   socket->ReleaseHandle();
   return 0;
