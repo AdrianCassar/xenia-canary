@@ -649,27 +649,27 @@ bool XSocket::QueuePacket(uint32_t src_ip, uint16_t src_port,
   return true;
 }
 
-X_STATUS XSocket::GetPeerName(XSOCKADDR_IN* buf, int* buf_len) {
-  sockaddr addr = buf->to_host();
+X_STATUS XSocket::GetPeerName(XSOCKADDR_IN* name, int* name_len) {
+  sockaddr addr = name->to_host();
 
-  int ret = getpeername(native_handle_, &addr, (socklen_t*)buf_len);
+  int ret = getpeername(native_handle_, &addr, name_len);
   if (ret < 0) {
     return X_STATUS_UNSUCCESSFUL;
   }
 
-  buf->to_guest(&addr);
+  name->to_guest(&addr);
   return X_STATUS_SUCCESS;
 }
 
-X_STATUS XSocket::GetSockName(XSOCKADDR_IN* buf, int* buf_len) {
-  sockaddr addr = buf->to_host();
+X_STATUS XSocket::GetSockName(XSOCKADDR_IN* name, int* name_len) {
+  sockaddr addr = name->to_host();
 
-  int ret = getsockname(native_handle_, &addr, (socklen_t*)buf_len);
+  int ret = getsockname(native_handle_, &addr, name_len);
   if (ret < 0) {
     return X_STATUS_UNSUCCESSFUL;
   }
 
-  buf->to_guest(&addr);
+  name->to_guest(&addr);
   return X_STATUS_SUCCESS;
 }
 
