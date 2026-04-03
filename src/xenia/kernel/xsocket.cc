@@ -263,6 +263,9 @@ X_STATUS XSocket::Connect(const XSOCKADDR_IN* name, int name_len) {
     return X_STATUS_UNSUCCESSFUL;
   }
 
+  bound_port_ = sa_in.address_port;
+  bound_ = true;
+
   return X_STATUS_SUCCESS;
 }
 
@@ -285,10 +288,12 @@ X_STATUS XSocket::Bind(const XSOCKADDR_IN* name, int name_len) {
   bound_port_ = sa_in.address_port;
 
   if (!bound_port_) {
-    XSOCKADDR_IN sa = *name;
+    sockaddr_in sock_name = {};
+    int sock_name_len = sizeof(sockaddr);
 
-    if (!GetSockName(&sa, &name_len)) {
-      bound_port_ = sa.address_port;
+    if (!getsockname(native_handle_, reinterpret_cast<sockaddr*>(&sock_name),
+                     &sock_name_len)) {
+      bound_port_ = xe::byte_swap(sock_name.sin_port);
     }
   }
 
@@ -333,6 +338,15 @@ object_ref<XSocket> XSocket::Accept(XSOCKADDR_IN* name, int* name_len) {
   socket->type_ = type_;
   socket->proto_ = proto_;
   socket->vdp_ = vdp_;
+
+  sockaddr_in sock_name = {};
+  int sock_name_len = sizeof(sockaddr);
+
+  if (!getsockname(socket_handle, reinterpret_cast<sockaddr*>(&sock_name),
+                   &sock_name_len)) {
+    socket->bound_port_ = xe::byte_swap(sock_name.sin_port);
+    socket->bound_ = true;
+  }
 
   return socket;
 }
