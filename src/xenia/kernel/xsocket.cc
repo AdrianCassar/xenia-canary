@@ -357,7 +357,6 @@ int XSocket::Recv(uint8_t* buf, uint32_t buf_len, uint32_t flags) {
   return recv(native_handle_, reinterpret_cast<char*>(buf), buf_len, flags);
 }
 
-// TCP ignores from and from_len.
 int XSocket::RecvFrom(uint8_t* buf, uint32_t buf_len, uint32_t flags,
                       XSOCKADDR_IN* from, socklen_t* from_len) {
   sockaddr sa = {};
@@ -368,6 +367,13 @@ int XSocket::RecvFrom(uint8_t* buf, uint32_t buf_len, uint32_t flags,
 
   int ret = recvfrom(native_handle_, reinterpret_cast<char*>(buf), buf_len,
                      flags, from ? &sa : nullptr, from_len);
+
+  // TCP ignores from and from_len.
+  // 555307EE expects port even with TCP, include IP anyway.
+  if (proto_ == X_IPPROTO_TCP) {
+    socklen_t peer_addar_len = sizeof(sockaddr);
+    getpeername(native_handle_, &sa, &peer_addar_len);
+  }
 
   if (from) {
     from->to_guest(&sa);
