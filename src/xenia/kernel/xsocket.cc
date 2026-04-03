@@ -51,7 +51,11 @@ XSocket::XSocket(KernelState* kernel_state)
 XSocket::XSocket(KernelState* kernel_state, uint64_t native_handle)
     : XObject(kernel_state, kObjectType), native_handle_(native_handle) {}
 
-XSocket::~XSocket() { Close(); }
+XSocket::~XSocket() {
+  if (!socket_closed_) {
+    Close();
+  }
+}
 
 X_STATUS XSocket::Initialize(AddressFamily af, Type type, Protocol proto) {
   af_ = af;
@@ -110,6 +114,8 @@ X_STATUS XSocket::Close() {
   if (ret != 0) {
     return X_STATUS_UNSUCCESSFUL;
   }
+
+  socket_closed_ = true;
 
   return X_STATUS_SUCCESS;
 }
