@@ -122,6 +122,9 @@ typedef uint32_t X_HRESULT;
                                   : (static_cast<X_HRESULT>(((x) & 0xFFFF) | (X_FACILITY_WIN32 << 16) | \
                                     0x80000000L)))
 
+#define X_HRESULT_FACILITY(hr) (((hr) >> 16) & 0x1fff)
+#define X_WIN32_FROM_HRESULT(hr) (X_HRESULT_FACILITY(hr) == X_FACILITY_WIN32 ? ((hr) & 0xFFFF) : hr)
+
 #define X_E_FALSE                               static_cast<X_HRESULT>(0x80000000L)
 #define X_E_SUCCESS                             X_HRESULT_FROM_WIN32(X_ERROR_SUCCESS)
 #define X_E_ACCESS_DENIED                       X_HRESULT_FROM_WIN32(X_ERROR_ACCESS_DENIED)

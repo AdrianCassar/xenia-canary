@@ -551,7 +551,10 @@ int XSocket::PollWSASendTo(bool wait, WSASendToData send_async_data) {
       XELOGI("WSASendTo failed with error {}", XWSAGetLastError());
     }
 
+    // send_async_data.overlapped->internal =
+    //     X_HRESULT_FROM_WIN32(XWSAGetLastError());
     send_async_data.overlapped->internal = XWSAGetLastError();
+    // send_async_data.overlapped->internal_high = buffers[0].len;
   } else if (result == 0) {
     send_async_data.overlapped->internal =
         static_cast<uint32_t>(X_WSA_ERROR::X_WSA_NO_ERROR);
@@ -560,11 +563,9 @@ int XSocket::PollWSASendTo(bool wait, WSASendToData send_async_data) {
     *send_async_data.num_bytes_sent = bytes_sent;
   }
 
-  if (wait) {
-    if (send_async_data.overlapped->event_handle) {
-      xboxkrnl::xeNtSetEvent(send_async_data.overlapped->event_handle, nullptr);
-    }
-  }
+  send_async_data.overlapped->offset = 0;
+
+  xboxkrnl::xeNtSetEvent(send_async_data.overlapped->event_handle, nullptr);
 
   send_cv_.notify_all();
 
@@ -596,10 +597,6 @@ int XSocket::WSASendTo(XWSABUF* buffers, uint32_t num_buffers,
   send_async_data.to = to_ptr;
   send_async_data.to_len = to_len;
 
-  if (!overlapped_ptr) {
-    XELOGD("{}:: without overlapped_ptr!", __func__);
-  }
-
   // Wait for PollWSASendTo to finish writing to overlapped_ptr
   std::unique_lock socket_lock = std::unique_lock(send_socket_mutex_);
 
@@ -629,18 +626,12 @@ int XSocket::WSASendTo(XWSABUF* buffers, uint32_t num_buffers,
   X_WSA_ERROR wsa_error =
       (X_WSA_ERROR)send_async_data.overlapped->internal.get();
 
-  if (!overlapped_ptr && wsa_error == X_WSA_ERROR::X_WSAEWOULDBLOCK) {
-    XWSASetLastError(X_WSA_ERROR::X_WSAEWOULDBLOCK);
-    return result;
-  }
-
   XWSASetLastError(wsa_error);
 
   if (overlapped_ptr && wsa_error == X_WSA_ERROR::X_WSAEWOULDBLOCK) {
     if (!send_polling_task_.valid()) {
-      if (overlapped_ptr->event_handle) {
-        xboxkrnl::xeNtClearEvent(overlapped_ptr->event_handle);
-      }
+      // Not needed?
+      // xboxkrnl::xeNtClearEvent(overlapped_ptr->event_handle);
 
       send_polling_task_ =
           std::async(std::launch::async, &XSocket::PollWSASendTo, this, true,
@@ -692,7 +683,7 @@ int XSocket::WSAPollRead(bool wait, X_WSA_ERROR* error) {
 
     if (cancel_overlapped_) {
       if (error) {
-        *error = X_WSA_ERROR::X_WSA_OPERATION_ABORTED;
+        *error = X_WSA_ERROR::X_WSA_OPERATION_ABORTED;  // X_WSAECANCELLED?
         activity = X_SOCKET_ERROR;
       }
     }
@@ -766,23 +757,29 @@ int XSocket::PollWSARecvFrom(bool wait, WSARecvFromData receive_async_data) {
       receive_async_data.buffers->buf_ptr);
   recv_buffer.len = receive_async_data.buffers->len;
 
-  sockaddr* saddr = nullptr;
+  sockaddr saddr = {};
 
   if (receive_async_data.from) {
-    saddr = new sockaddr();
+    saddr = receive_async_data.from->to_host();
   }
 
   DWORD bytes_received = 0;
   DWORD flags = 0;
 
-  result =
-      ::WSARecvFrom(native_handle_, &recv_buffer,
-                    receive_async_data.num_buffers, &bytes_received, &flags,
-                    saddr, &receive_async_data.from_len, nullptr, nullptr);
+  result = ::WSARecvFrom(native_handle_, &recv_buffer,
+                         receive_async_data.num_buffers, &bytes_received,
+                         &flags, receive_async_data.from ? &saddr : nullptr,
+                         &receive_async_data.from_len, nullptr, nullptr);
 
-  if (saddr) {
-    receive_async_data.from->to_guest(saddr);
-    delete saddr;
+  if (receive_async_data.from) {
+    // Copy behavior from recvfrom.
+    // Verified on console.
+    if (proto_ == X_IPPROTO_TCP) {
+      socklen_t peer_addar_len = sizeof(sockaddr);
+      getpeername(native_handle_, &saddr, &peer_addar_len);
+    }
+
+    receive_async_data.from->to_guest(&saddr);
   }
 
   if (result == X_SOCKET_ERROR) {
@@ -791,7 +788,10 @@ int XSocket::PollWSARecvFrom(bool wait, WSARecvFromData receive_async_data) {
       XELOGI("WSARecvFrom failed with error {}", XWSAGetLastError());
     }
 
+    // X_STATUS_PENDING?
     receive_async_data.overlapped->internal = XWSAGetLastError();
+    // receive_async_data.overlapped->internal =
+    //     X_HRESULT_FROM_WIN32(XWSAGetLastError());
   } else if (result == 0) {
     receive_async_data.overlapped->internal =
         static_cast<uint32_t>(X_WSA_ERROR::X_WSA_NO_ERROR);
@@ -804,12 +804,7 @@ int XSocket::PollWSARecvFrom(bool wait, WSARecvFromData receive_async_data) {
 
   receive_async_data.overlapped->offset = flags;
 
-  if (wait) {
-    if (receive_async_data.overlapped->event_handle) {
-      xboxkrnl::xeNtSetEvent(receive_async_data.overlapped->event_handle,
-                             nullptr);
-    }
-  }
+  xboxkrnl::xeNtSetEvent(receive_async_data.overlapped->event_handle, nullptr);
 
   receive_cv_.notify_all();
 
@@ -847,10 +842,6 @@ int XSocket::WSARecvFrom(XWSABUF* buffers, uint32_t num_buffers,
   receive_async_data.from = from_ptr;
   receive_async_data.from_len = *fromlen_ptr;
 
-  if (!overlapped_ptr) {
-    XELOGD("{}:: without overlapped_ptr!", __func__);
-  }
-
   // Wait for PollWSARecvFrom to finish writing to overlapped_ptr
   std::unique_lock socket_lock = std::unique_lock(receive_socket_mutex_);
 
@@ -882,18 +873,12 @@ int XSocket::WSARecvFrom(XWSABUF* buffers, uint32_t num_buffers,
   X_WSA_ERROR wsa_error =
       (X_WSA_ERROR)receive_async_data.overlapped->internal.get();
 
-  if (!overlapped_ptr && wsa_error == X_WSA_ERROR::X_WSAEWOULDBLOCK) {
-    XWSASetLastError(X_WSA_ERROR::X_WSAEWOULDBLOCK);
-    return result;
-  }
-
   XWSASetLastError(wsa_error);
 
   if (overlapped_ptr && wsa_error == X_WSA_ERROR::X_WSAEWOULDBLOCK) {
     if (!receive_polling_task_.valid()) {
-      if (overlapped_ptr->event_handle) {
-        xboxkrnl::xeNtClearEvent(overlapped_ptr->event_handle);
-      }
+      // Not needed?
+      // xboxkrnl::xeNtClearEvent(overlapped_ptr->event_handle);
 
       receive_polling_task_ =
           std::async(std::launch::async, &XSocket::PollWSARecvFrom, this, true,
@@ -941,13 +926,24 @@ bool XSocket::WSAGetOverlappedResult(XWSAOVERLAPPED* overlapped_ptr,
     return false;
   }
 
-  // Win32 returns true in such case so we can assume and copy this behavior.
+  const uint32_t overlapped_address =
+      kernel_state()->memory()->HostToGuestVirtual(
+          std::to_address(overlapped_ptr));
+
+  if (cancelled_overlapped_io_.contains(overlapped_address)) {
+    XELOGD("{}:: Operation Cancelled!", __func__);
+    X_WSA_ERROR internal_result =
+        X_WSA_ERROR(X_WIN32_FROM_HRESULT(overlapped_ptr->internal.get()));
+    XWSASetLastError(internal_result);
+    return false;
+  }
+
   // 4D530808 does this.
   if (!pending_overlapped_io_.contains(overlapped_ptr)) {
     XELOGI("Overlap not in operation!");
 
-    *bytes_transferred = 0;
-    *flags_ptr = 0;
+    *bytes_transferred = overlapped_ptr->internal_high;
+    *flags_ptr = overlapped_ptr->offset;
 
     return true;
   }
@@ -968,58 +964,59 @@ bool XSocket::WSAGetOverlappedResult(XWSAOVERLAPPED* overlapped_ptr,
     }
   }
 
-  X_WSA_ERROR wsa_error = (X_WSA_ERROR)overlapped_ptr->internal.get();
+  // Read result after wait is completed if any.
+  X_WSA_ERROR internal_result =
+      X_WSA_ERROR(X_WIN32_FROM_HRESULT(overlapped_ptr->internal.get()));
 
-  switch (wsa_error) {
+  bool valid_hresult =
+      X_HRESULT_FACILITY(overlapped_ptr->internal.get()) == X_FACILITY_WIN32;
+
+  // If result is invalid HRESULT then recover it.
+  // if (!valid_hresult) {
+  //   internal_result = X_WSA_ERROR(XThread::GetLastError());
+  // }
+
+  switch (internal_result) {
+    case X_WSA_ERROR::X_WSA_NO_ERROR: {
+      if (cvars::logging) {
+        if (io_type) {
+          XELOGI("{}:: WSASendTo bytes sent {} with status {}!", __func__,
+                 overlapped_ptr->internal_high.get(),
+                 overlapped_ptr->internal.get());
+        } else {
+          XELOGI("{}:: WSARecvFrom bytes received {} with status {}!", __func__,
+                 overlapped_ptr->internal_high.get(),
+                 overlapped_ptr->internal.get());
+        }
+      }
+
+      if (overlapped_ptr->internal_high == 0) {
+        XELOGI("{}:: 0 bytes sent!", __func__);
+        XWSASetLastError(X_WSA_ERROR::X_WSA_IO_INCOMPLETE);
+        return false;
+      }
+
+      *bytes_transferred = overlapped_ptr->internal_high;
+      *flags_ptr = overlapped_ptr->offset;
+
+      return true;
+    } break;
     case X_WSA_ERROR::X_WSA_OPERATION_ABORTED: {
       XELOGD("{}:: Operation Aborted!", __func__);
-      XWSASetLastError(X_WSA_ERROR::X_WSA_OPERATION_ABORTED);
-      return false;
-    } break;
-    case X_WSA_ERROR::X_WSAECANCELLED: {
-      XELOGD("{}:: Operation Cancelled!", __func__);
-      XWSASetLastError(X_WSA_ERROR::X_WSAECANCELLED);
-      return false;
+      XWSASetLastError(internal_result);
     } break;
     case X_WSA_ERROR::X_WSAEWOULDBLOCK: {
       XWSASetLastError(X_WSA_ERROR::X_WSA_IO_INCOMPLETE);
-      return false;
     } break;
-    default:
+    default: {
+      XWSASetLastError(internal_result);
+      XELOGI("{}:: failed with error code {}", __func__,
+             overlapped_ptr->internal.get());
       break;
-  }
-
-  if (cvars::logging) {
-    if (io_type) {
-      XELOGI("{}:: WSASendTo bytes sent {} with status {}!", __func__,
-             overlapped_ptr->internal_high.get(),
-             overlapped_ptr->internal.get());
-    } else {
-      XELOGI("{}:: WSARecvFrom bytes received {} with status {}!", __func__,
-             overlapped_ptr->internal_high.get(),
-             overlapped_ptr->internal.get());
     }
   }
 
-  if (static_cast<uint32_t>(wsa_error) == 0) {
-    if (overlapped_ptr->internal_high == 0) {
-      XELOGI("{}:: 0 bytes sent!", __func__);
-      XWSASetLastError(X_WSA_ERROR::X_WSA_IO_INCOMPLETE);
-      return false;
-    }
-
-    *bytes_transferred = overlapped_ptr->internal_high;
-    *flags_ptr = overlapped_ptr->offset;
-  } else {
-    XELOGI("{}:: failed with error code {}", __func__,
-           overlapped_ptr->internal.get());
-
-    // What error should be set here?
-    XWSASetLastError(X_WSA_ERROR::X_WSA_IO_INCOMPLETE);
-    return false;
-  }
-
-  return true;
+  return false;
 }
 
 int XSocket::WSACancelOverlappedIO() {
@@ -1038,17 +1035,21 @@ int XSocket::WSACancelOverlappedIO() {
   }
 
   for (auto& [overlapped_ptr, type] : pending_overlapped_io_) {
-    if (overlapped_ptr->event_handle) {
-      xboxkrnl::xeNtSetEvent(overlapped_ptr->event_handle, nullptr);
-    }
+    xboxkrnl::xeNtSetEvent(overlapped_ptr->event_handle, nullptr);
 
     overlapped_ptr->internal =
-        static_cast<uint32_t>(X_WSA_ERROR::X_WSAECANCELLED);
+        X_HRESULT_FROM_WIN32(uint32_t(X_WSA_ERROR::X_WSAECANCELLED));
+
+    const uint32_t overlapped_address =
+        kernel_state()->memory()->HostToGuestVirtual(
+            std::to_address(overlapped_ptr));
+
+    cancelled_overlapped_io_.insert(overlapped_address);
   }
 
   pending_overlapped_io_.clear();
 
-  XWSASetLastError(X_WSA_ERROR::X_WSAECANCELLED);
+  XWSASetLastError(X_WSA_ERROR::X_WSA_NO_ERROR);
 
   return 0;
 }
@@ -1189,14 +1190,17 @@ bool XSocket::XWSAIsKnownError(X_WSA_ERROR wsa_error) {
 }
 
 uint32_t XSocket::XWSAGetLastError() {
+  uint32_t last_error = 0;
+
 #ifdef XE_PLATFORM_WIN32
-  const uint32_t last_error = WSAGetLastError();
+  last_error = WSAGetLastError();
+#else
+  last_error = errno;
+#endif
 
   bool known = XWSAIsKnownError(static_cast<X_WSA_ERROR>(last_error));
 
   return last_error;
-#endif
-  return errno;
 }
 
 void XSocket::XWSASetLastError(X_WSA_ERROR error) const {
