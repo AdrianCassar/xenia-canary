@@ -13,6 +13,7 @@
 #include <cstring>
 #include <future>
 #include <queue>
+#include <set>
 
 #include "xenia/base/byte_order.h"
 #include "xenia/kernel/xobject.h"
@@ -116,9 +117,9 @@ struct XWSABUF {
 static_assert_size(XWSABUF, 0x8);
 
 struct XWSAOVERLAPPED {
-  xe::be<uint32_t> internal;       // Status Code
-  xe::be<uint32_t> internal_high;  // The amount of bytes sent/recv
-  xe::be<uint32_t> offset;         // Flags maybe?
+  xe::be<uint32_t> internal;       // Status/Error Codes HRESULT
+  xe::be<uint32_t> internal_high;  // Transfer
+  xe::be<uint32_t> offset;         // Flags
   xe::be<uint32_t> offset_high;
   xe::be<uint32_t> event_handle;
 };
@@ -286,6 +287,7 @@ class XSocket : public XObject {
 
   // True is WSASendTo, false is WSARecvFrom
   std::map<XWSAOVERLAPPED*, bool> pending_overlapped_io_;
+  std::set<uint32_t> cancelled_overlapped_io_;
 
   int WSAPollWrite(bool wait, X_WSA_ERROR* error);
 
