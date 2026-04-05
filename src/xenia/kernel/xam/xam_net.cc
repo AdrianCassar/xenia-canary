@@ -607,8 +607,6 @@ dword_result_t NetDll_WSACancelOverlappedIO_entry(dword_t caller,
 
   int ret = socket->WSACancelOverlappedIO();
 
-  XThread::SetLastError(socket->XWSAGetLastError());
-
   return ret;
 }
 DECLARE_XAM_EXPORT1(NetDll_WSACancelOverlappedIO, kNetworking, kImplemented)
