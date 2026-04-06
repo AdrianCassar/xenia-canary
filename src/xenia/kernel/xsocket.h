@@ -37,6 +37,7 @@
 
 namespace xe {
 namespace kernel {
+// https://learn.microsoft.com/en-us/windows/win32/winsock/windows-sockets-error-codes-2
 enum class X_WSA_ERROR : uint32_t {
   X_WSA_NO_ERROR = 0,
   X_WSA_INVALID_PARAMETER = 87,
@@ -247,6 +248,9 @@ class XSocket : public XObject {
   bool QueuePacket(uint32_t src_ip, uint16_t src_port, const uint8_t* buf,
                    size_t len);
 
+  std::mutex send_socket_mutex_;
+  std::mutex receive_socket_mutex_;
+
  private:
   XSocket(KernelState* kernel_state, uint64_t native_handle);
   uint64_t native_handle_ = X_INVALID_SOCKET;
@@ -272,14 +276,7 @@ class XSocket : public XObject {
   std::queue<uint8_t*> incoming_packets_;
 
   std::future<int> send_polling_task_;
-  std::mutex send_completion_mutex_;
-  std::condition_variable send_cv_;
-  std::mutex send_socket_mutex_;
-
   std::future<int> receive_polling_task_;
-  std::mutex receive_completion_mutex_;
-  std::condition_variable receive_cv_;
-  std::mutex receive_socket_mutex_;
 
   uint16_t GetImplicitlyBoundPort() const;
 
