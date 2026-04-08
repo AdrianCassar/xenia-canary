@@ -108,11 +108,13 @@ int XSocket::Close() {
     // Wait for PollWSARecvFrom to return before closing
     if (receive_polling_task_.valid()) {
       receive_polling_task_.wait();
+      receive_polling_task_ = {};
     }
 
     // Wait for PollWSAWSASend to return before closing
     if (send_polling_task_.valid()) {
       send_polling_task_.wait();
+      send_polling_task_ = {};
     }
   }
 
@@ -621,18 +623,6 @@ int XSocket::WSASendTo(XWSABUF* buffers, uint32_t num_buffers,
       send_polling_task_ =
           std::async(std::launch::async, &XSocket::PollWSASendTo, this, true,
                      send_async_data);
-    } else {
-      std::future_status status = send_polling_task_.wait_for(0ms);
-
-      if (status == std::future_status::ready) {
-        uint32_t result = send_polling_task_.get();
-
-        if (result == X_SOCKET_ERROR &&
-            wsa_error != X_WSA_ERROR::X_WSAEWOULDBLOCK) {
-          XELOGI("{} Async:: failed with error code {}", __func__,
-                 static_cast<uint32_t>(wsa_error));
-        }
-      }
     }
 
     XWSASetLastError(X_WSA_ERROR::X_WSA_IO_PENDING);
@@ -854,18 +844,6 @@ int XSocket::WSARecvFrom(XWSABUF* buffers, uint32_t num_buffers,
       receive_polling_task_ =
           std::async(std::launch::async, &XSocket::PollWSARecvFrom, this, true,
                      receive_async_data);
-    } else {
-      std::future_status status = receive_polling_task_.wait_for(0ms);
-
-      if (status == std::future_status::ready) {
-        uint32_t result = receive_polling_task_.get();
-
-        if (result == X_SOCKET_ERROR &&
-            wsa_error != X_WSA_ERROR::X_WSAEWOULDBLOCK) {
-          XELOGI("{} Async:: failed with error code {}", __func__,
-                 static_cast<uint32_t>(wsa_error));
-        }
-      }
     }
 
     XWSASetLastError(X_WSA_ERROR::X_WSA_IO_PENDING);
@@ -921,21 +899,39 @@ bool XSocket::WSAGetOverlappedResult(XWSAOVERLAPPED* overlapped_ptr,
 
   bool io_type = pending_overlapped_io_[overlapped_ptr];
 
-  if (wait) {
-    if (io_type) {
-      XELOGI("{}:: WSASendTo blocking until completion!", __func__);
-      if (send_polling_task_.valid()) {
+  if (io_type) {
+    std::lock_guard lock(send_socket_mutex_);
+
+    if (send_polling_task_.valid()) {
+      if (wait) {
+        XELOGI("{}:: WSASendTo blocking until completion!", __func__);
         send_polling_task_.wait();
+      } else if (send_polling_task_.wait_for(0ms) !=
+                 std::future_status::ready) {
+        XWSASetLastError(X_WSA_ERROR::X_WSA_IO_INCOMPLETE);
+        return false;
       }
-    } else {
-      XELOGI("{}:: WSARecvFrom Blocking until completion!", __func__);
-      if (receive_polling_task_.valid()) {
+
+      int32_t result = send_polling_task_.get();
+    }
+  } else {
+    std::lock_guard lock(receive_socket_mutex_);
+
+    if (receive_polling_task_.valid()) {
+      if (wait) {
+        XELOGI("{}:: WSARecvFrom Blocking until completion!", __func__);
         receive_polling_task_.wait();
+      } else if (receive_polling_task_.wait_for(0ms) !=
+                 std::future_status::ready) {
+        XWSASetLastError(X_WSA_ERROR::X_WSA_IO_INCOMPLETE);
+        return false;
       }
+
+      int32_t result = receive_polling_task_.get();
     }
   }
 
-  // Read result after wait is completed if any.
+  // Read result after future is ready.
   X_WSA_ERROR internal_result =
       X_WSA_ERROR(X_WIN32_FROM_HRESULT(overlapped_ptr->internal.get()));
 
@@ -959,12 +955,6 @@ bool XSocket::WSAGetOverlappedResult(XWSAOVERLAPPED* overlapped_ptr,
                  overlapped_ptr->internal_high.get(),
                  overlapped_ptr->internal.get());
         }
-      }
-
-      if (overlapped_ptr->internal_high == 0) {
-        XELOGI("{}:: 0 bytes sent!", __func__);
-        XWSASetLastError(X_WSA_ERROR::X_WSA_IO_INCOMPLETE);
-        return false;
       }
 
       *bytes_transferred = overlapped_ptr->internal_high;
@@ -999,11 +989,13 @@ int XSocket::WSACancelOverlappedIO() {
     // Wait for PollWSARecvFrom to cancel
     if (receive_polling_task_.valid()) {
       receive_polling_task_.wait();
+      receive_polling_task_ = {};
     }
 
     // Wait for PollWSAWSASend to cancel
     if (send_polling_task_.valid()) {
       send_polling_task_.wait();
+      send_polling_task_ = {};
     }
   }
 
