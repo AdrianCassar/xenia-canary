@@ -275,8 +275,8 @@ class XSocket : public XObject {
   std::mutex incoming_packet_mutex_;
   std::queue<uint8_t*> incoming_packets_;
 
-  std::future<int> send_polling_task_;
-  std::future<int> receive_polling_task_;
+  std::future<int32_t> send_polling_task_;
+  std::future<int32_t> receive_polling_task_;
 
   uint16_t GetImplicitlyBoundPort() const;
 
