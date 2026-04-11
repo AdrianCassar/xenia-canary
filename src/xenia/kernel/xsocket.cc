@@ -439,7 +439,8 @@ int XSocket::WSAPollWrite(bool wait, X_WSA_ERROR* error) {
 
     if (cancel_overlapped_) {
       if (error) {
-        *error = X_WSA_ERROR::X_WSA_OPERATION_ABORTED;
+        *error = X_WSA_ERROR::X_WSAECANCELLED;
+        // *error = X_HRESULT_FROM_WIN32( X_WSA_ERROR::X_WSAECANCELLED);
         activity = X_SOCKET_ERROR;
       }
     }
@@ -641,9 +642,9 @@ int XSocket::WSASendTo(XWSABUF* buffers, uint32_t num_buffers,
     XELOGI("{}:: failed with error code {}", __func__,
            static_cast<uint32_t>(wsa_error));
 
-    if (wsa_error == X_WSA_ERROR::X_WSA_OPERATION_ABORTED) {
-      XELOGD("{}:: Operation Aborted!", __func__);
-      XWSASetLastError(X_WSA_ERROR::X_WSA_OPERATION_ABORTED);
+    if (wsa_error == X_WSA_ERROR::X_WSAECANCELLED) {
+      XELOGD("{}:: Operation Cancelled!", __func__);
+      XWSASetLastError(X_WSA_ERROR::X_WSAECANCELLED);
     }
   }
 
@@ -663,7 +664,8 @@ int XSocket::WSAPollRead(bool wait, X_WSA_ERROR* error) {
 
     if (cancel_overlapped_) {
       if (error) {
-        *error = X_WSA_ERROR::X_WSA_OPERATION_ABORTED;  // X_WSAECANCELLED?
+        *error = X_WSA_ERROR::X_WSAECANCELLED;
+        // *error = X_HRESULT_FROM_WIN32( X_WSA_ERROR::X_WSAECANCELLED);
         activity = X_SOCKET_ERROR;
       }
     }
@@ -871,9 +873,9 @@ int XSocket::WSARecvFrom(XWSABUF* buffers, uint32_t num_buffers,
     XELOGI("{}:: failed with error code {}", __func__,
            static_cast<uint32_t>(wsa_error));
 
-    if (wsa_error == X_WSA_ERROR::X_WSA_OPERATION_ABORTED) {
-      XELOGD("{}:: Operation Aborted!", __func__);
-      XWSASetLastError(X_WSA_ERROR::X_WSA_OPERATION_ABORTED);
+    if (wsa_error == X_WSA_ERROR::X_WSAECANCELLED) {
+      XELOGD("{}:: Operation Cancelled!", __func__);
+      XWSASetLastError(X_WSA_ERROR::X_WSAECANCELLED);
     }
   }
 
@@ -977,8 +979,8 @@ bool XSocket::WSAGetOverlappedResult(XWSAOVERLAPPED* overlapped_ptr,
 
       return true;
     } break;
-    case X_WSA_ERROR::X_WSA_OPERATION_ABORTED: {
-      XELOGD("{}:: Operation Aborted!", __func__);
+    case X_WSA_ERROR::X_WSAECANCELLED: {
+      XELOGD("{}:: Operation Cancelled!", __func__);
       XWSASetLastError(internal_result);
     } break;
     case X_WSA_ERROR(X_STATUS_PENDING):
