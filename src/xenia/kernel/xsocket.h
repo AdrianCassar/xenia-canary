@@ -129,7 +129,6 @@ static_assert_size(XWSAOVERLAPPED, 0x14);
 struct WSASendToData {
   std::shared_ptr<XWSABUF[]> buffers;
   uint32_t num_buffers;
-  uint32_t* num_bytes_sent;
   XSOCKADDR_IN* to;
   int to_len;
   XWSAOVERLAPPED* overlapped;
@@ -138,10 +137,10 @@ struct WSASendToData {
 struct WSARecvFromData {
   std::shared_ptr<XWSABUF> buffers;
   uint32_t num_buffers;
-  uint32_t* num_bytes_recv;
-  uint32_t* flags;
+  xe::be<uint32_t>* num_bytes_recv;
+  xe::be<uint32_t>* flags;
   XSOCKADDR_IN* from;
-  int from_len;
+  xe::be<uint32_t>* from_len;
   XWSAOVERLAPPED* overlapped;
 };
 
@@ -288,7 +287,8 @@ class XSocket : public XObject {
 
   int WSAPollWrite(bool wait, X_WSA_ERROR* error);
 
-  int PollWSASendTo(bool wait, WSASendToData send_async_data);
+  int PollWSASendTo(bool wait, WSASendToData send_async_data,
+                    uint32_t* num_bytes_sent);
 
   int WSAPollRead(bool wait, X_WSA_ERROR* error);
 
