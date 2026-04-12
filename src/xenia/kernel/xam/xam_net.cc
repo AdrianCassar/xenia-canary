@@ -1897,11 +1897,11 @@ dword_result_t NetDll_socket_entry(dword_t caller, dword_t af, dword_t type,
                                        XSocket::Type((uint32_t)type),
                                        XSocket::Protocol((uint32_t)protocol));
   if (XFAILED(result)) {
-    socket->Release();
+    socket->ReleaseHandle();
 
-    XThread::SetLastError(socket->GetLastWSAError());
+    XThread::SetLastError(XSocket::GetLastWSAError());
     XELOGE("NetDll_socket: failed with error {:08X}",
-           socket->GetLastWSAError());
+           XSocket::GetLastWSAError());
     return -1;
   }
 
