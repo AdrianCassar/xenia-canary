@@ -283,6 +283,8 @@ class XSocket : public XObject {
 
   // True is WSASendTo, false is WSARecvFrom
   std::map<XWSAOVERLAPPED*, bool> pending_overlapped_io_;
+  std::mutex map_mutex_;
+
   std::set<uint32_t> cancelled_overlapped_io_;
 
   int WSAPollWrite(bool wait, X_WSA_ERROR* error);
