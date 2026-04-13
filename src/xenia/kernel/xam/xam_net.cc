@@ -2055,7 +2055,7 @@ dword_result_t NetDll_bind_entry(dword_t caller, dword_t socket_handle,
 
   const auto upnp = kernel_state()->emulator()->GetUPnP();
 
-  uint16_t upnp_internal_port = name->address_port;
+  uint16_t upnp_internal_port = upnp->GetMappedBindPort(name->address_port);
 
   if (upnp) {
     const uint16_t mapped_internal_port =
