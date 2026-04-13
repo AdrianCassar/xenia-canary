@@ -170,6 +170,12 @@ struct XNQOSLISTENSTATS {
 };
 static_assert_size(XNQOSLISTENSTATS, 0x1C);
 
+struct X_TIMEVAL {
+  xe::be<long> tv_sec;
+  xe::be<long> tv_usec;
+};
+static_assert_size(X_TIMEVAL, 0x8);
+
 // Initialize sockaddr to its default state
 static void InitalizeSockaddr(XSOCKADDR_IN* sockaddr_ptr) {
   if (sockaddr_ptr) {
@@ -2145,15 +2151,15 @@ DECLARE_XAM_EXPORT1(NetDll_accept, kNetworking, kImplemented);
 
 struct x_fd_set {
   xe::be<uint32_t> fd_count;
-  xe::be<uint32_t> fd_array[64];
+  xe::be<uint32_t> fd_array[X_FD_SETSIZE];
 };
 
 struct host_set {
   uint32_t count;
-  object_ref<XSocket> sockets[64];
+  object_ref<XSocket> sockets[X_FD_SETSIZE];
 
   void Load(const x_fd_set* guest_set) {
-    assert_true(guest_set->fd_count < 64);
+    assert_true(guest_set->fd_count < X_FD_SETSIZE);
 
     count = guest_set->fd_count;
     for (uint32_t i = 0; i < count; ++i) {
@@ -2217,7 +2223,7 @@ int_result_t NetDll_select_entry(dword_t caller, dword_t nfds,
                                  pointer_t<x_fd_set> readfds,
                                  pointer_t<x_fd_set> writefds,
                                  pointer_t<x_fd_set> exceptfds,
-                                 lpvoid_t timeout_ptr) {
+                                 pointer_t<X_TIMEVAL> timeout_ptr) {
   host_set host_readfds = {0};
   fd_set native_readfds = {0};
   if (readfds) {
@@ -2252,18 +2258,24 @@ int_result_t NetDll_select_entry(dword_t caller, dword_t nfds,
     host_exceptfds.Store(&native_exceptfds);
   }
   timeval* timeout_in = nullptr;
-  timeval timeout;
+  timeval timeout = {};
   if (timeout_ptr) {
-    timeout = {static_cast<int32_t>(timeout_ptr.as_array<int32_t>()[0]),
-               static_cast<int32_t>(timeout_ptr.as_array<int32_t>()[1])};
+    timeout = {timeout_ptr->tv_sec, timeout_ptr->tv_usec};
     Clock::ScaleGuestDurationTimeval(
         reinterpret_cast<int32_t*>(&timeout.tv_sec),
         reinterpret_cast<int32_t*>(&timeout.tv_usec));
     timeout_in = &timeout;
   }
-  int ret = select(nfds, readfds ? &native_readfds : nullptr,
-                   writefds ? &native_writefds : nullptr,
-                   exceptfds ? &native_exceptfds : nullptr, timeout_in);
+
+  const int handles_count =
+      select(nfds, readfds ? &native_readfds : nullptr,
+             writefds ? &native_writefds : nullptr,
+             exceptfds ? &native_exceptfds : nullptr, timeout_in);
+
+  if (handles_count == X_SOCKET_ERROR) {
+    XThread::SetLastError(XSocket::GetLastWSAError());
+  }
+
   if (readfds) {
     host_readfds.UpdateFrom(&native_readfds);
     host_readfds.Store(readfds);
@@ -2279,7 +2291,7 @@ int_result_t NetDll_select_entry(dword_t caller, dword_t nfds,
 
   // TODO(gibbed): modify ret to be what's actually copied to the guest
   // fd_sets?
-  return ret;
+  return handles_count;
 }
 DECLARE_XAM_EXPORT1(NetDll_select, kNetworking, kImplemented);
 
@@ -2409,7 +2421,7 @@ DECLARE_XAM_EXPORT1(NetDll_WSAEventSelect, kNetworking, kImplemented);
 dword_result_t NetDll___WSAFDIsSet_entry(dword_t socket_handle,
                                          pointer_t<x_fd_set> fd_set) {
   const uint8_t max_fd_count =
-      std::min((uint32_t)fd_set->fd_count, uint32_t(64));
+      std::min((uint32_t)fd_set->fd_count, uint32_t(X_FD_SETSIZE));
   for (uint8_t i = 0; i < max_fd_count; i++) {
     if (fd_set->fd_array[i] == socket_handle) {
       return 1;

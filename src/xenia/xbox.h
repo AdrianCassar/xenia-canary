@@ -139,6 +139,7 @@ typedef uint32_t X_HRESULT;
 // Sockets/networking.
 #define X_INVALID_SOCKET (uint32_t)(~0)
 #define X_SOCKET_ERROR (uint32_t)(-1)
+#define X_FD_SETSIZE 64
 
 // clang-format on
 enum X_FILE_ATTRIBUTES : uint32_t {
