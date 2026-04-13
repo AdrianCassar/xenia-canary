@@ -557,6 +557,7 @@ void ImGuiDrawer::SetImmediateDrawer(ImmediateDrawer* new_immediate_drawer) {
     GetIO().Fonts->TexID = reinterpret_cast<ImTextureID>(nullptr);
     font_texture_.reset();
 
+    loading_tile_icon_.reset();
     notification_icon_textures_.clear();
   }
   immediate_drawer_ = new_immediate_drawer;
