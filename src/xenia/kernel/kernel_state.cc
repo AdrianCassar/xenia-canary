@@ -1087,13 +1087,8 @@ void KernelState::RegisterNotifyListener(XNotifyListener* listener) {
             ? X_ONLINE_S_LOGON_CONNECTION_ESTABLISHED
             : X_ONLINE_S_LOGON_DISCONNECTED;
 
-    const uint32_t ethernet_link_state =
-        cvars::network_mode == NETWORK_MODE::OFFLINE ? 0 : 1;
-
     listener->EnqueueNotification(kXNotificationLiveConnectionChanged,
                                   live_connection_state);
-    listener->EnqueueNotification(kXNotificationLiveLinkStateChanged,
-                                  ethernet_link_state);
   }
 
   if (!has_notified_xmp_startup_ && listener->mask() & kXNotifyXmp) {
