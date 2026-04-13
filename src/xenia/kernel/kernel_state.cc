@@ -1067,13 +1067,8 @@ void KernelState::RegisterNotifyListener(XNotifyListener* listener) {
             ? X_ONLINE_S_LOGON_CONNECTION_ESTABLISHED
             : X_ONLINE_S_LOGON_DISCONNECTED;
 
-    const uint32_t ethernet_link_state =
-        cvars::network_mode == NETWORK_MODE::OFFLINE ? 0 : 1;
-
     listener->EnqueueNotification(kXNotificationLiveConnectionChanged,
                                   live_connection_state);
-    listener->EnqueueNotification(kXNotificationLiveLinkStateChanged,
-                                  ethernet_link_state);
   }
 
   // 4E4D07ED, 58410869. Fixes creating Xbox Live sessions.
