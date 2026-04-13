@@ -2144,7 +2144,11 @@ dword_result_t NetDll_accept_entry(dword_t caller, dword_t socket_handle,
   if (!new_socket) {
     XThread::SetLastError(socket->GetLastWSAError());
     return -1;
+  } else if (addr_ptr && !cvars::log_mask_ips) {
+    XELOGI("NetDll_accept: {}:{}({})", ip_to_string(addr_ptr->address_ip),
+           addr_ptr->address_port.get(), socket->GetProtocolUPnPString());
   }
+
   return new_socket->handle();
 }
 DECLARE_XAM_EXPORT1(NetDll_accept, kNetworking, kImplemented);
@@ -2308,7 +2312,11 @@ dword_result_t NetDll_recv_entry(dword_t caller, dword_t socket_handle,
   int ret = socket->Recv(buf_ptr, buf_len, flags);
   if (ret < 0) {
     XThread::SetLastError(socket->GetLastWSAError());
+  } else if (ret >= 0 && !cvars::log_mask_ips) {
+    XELOGI("NetDll_recv: Received {} bytes from: Any:{}({})", ret,
+           socket->bound_port(), socket->GetProtocolUPnPString());
   }
+
   return ret;
 }
 DECLARE_XAM_EXPORT1(NetDll_recv, kNetworking, kImplemented);
@@ -2360,7 +2368,11 @@ dword_result_t NetDll_send_entry(dword_t caller, dword_t socket_handle,
   int ret = socket->Send(buf_ptr, buf_len, flags);
   if (ret < 0) {
     XThread::SetLastError(socket->GetLastWSAError());
+  } else if (ret >= 0 && !cvars::log_mask_ips) {
+    XELOGI("NetDll_send: Send {} bytes to: Any:{}({})", ret,
+           socket->bound_port(), socket->GetProtocolUPnPString());
   }
+
   return ret;
 }
 DECLARE_XAM_EXPORT1(NetDll_send, kNetworking, kImplemented);
