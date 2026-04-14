@@ -261,8 +261,10 @@ void UserTracker::AddDefaultProperties(uint64_t xuid) {
   Property GAMER_SIGMA = Property(
       XPROPERTY_GAMER_SIGMA, static_cast<double>(X_STATS_SKILL_SIGMA_DEFAULT));
 
-  AddProperty(xuid, &PUID);  // Required - 58410AC2 sets this manually
-  AddProperty(xuid, &GAMER_HOST_NAME);  // Required
+  // Required - 58410A59 expects this property first, otherwise crashes.
+  AddProperty(xuid, &GAMER_HOST_NAME);
+  // Required - 58410AC2 sets this manually
+  AddProperty(xuid, &PUID);
   AddProperty(xuid, &GAMER_NAME);
   AddProperty(xuid, &GAMER_ZONE);
   AddProperty(xuid, &GAMER_COUNTRY);
