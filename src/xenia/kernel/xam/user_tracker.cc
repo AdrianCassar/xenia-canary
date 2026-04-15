@@ -261,6 +261,8 @@ void UserTracker::AddDefaultProperties(uint64_t xuid) {
   Property GAMER_SIGMA = Property(
       XPROPERTY_GAMER_SIGMA, static_cast<double>(X_STATS_SKILL_SIGMA_DEFAULT));
 
+  // Normally matchmaking query returns would handle ordering.
+
   // Required - 58410A59 expects this property first, otherwise crashes.
   AddProperty(xuid, &GAMER_HOST_NAME);
   // Required - 58410AC2 sets this manually
@@ -290,44 +292,46 @@ void UserTracker::AddDefaultContexts(uint64_t xuid) {
   Property GAME_MODE = Property(XCONTEXT_GAME_MODE, static_cast<uint32_t>(0));
   Property GAME_TYPE = Property(XCONTEXT_GAME_TYPE, static_cast<uint32_t>(0));
 
-  if (kernel_state()->emulator()->game_info_database()->HasXLast()) {
-    const util::XLast* xlast =
-        kernel_state()->emulator()->game_info_database()->GetXLast();
+  const util::XLast* xlast =
+      kernel_state()->emulator()->game_info_database()->GetXLast();
 
-    bool initialize_all_contexts = false;
-
-    // Initialize all contexts to default values
-    if (initialize_all_contexts) {
-      for (const uint32_t& context_id :
-           xlast->GetContextsQuery()->GetContextsIDs()) {
-        std::optional<uint32_t> default_value =
-            xlast->GetContextsQuery()->GetContextDefaultValue(context_id);
-
-        if (default_value.has_value()) {
-          Property prop = Property(context_id, default_value.value());
-
-          AddProperty(xuid, &prop);
-        }
-      }
-    }
-
+  if (xlast) {
     // System contexts
-    std::optional<uint32_t> game_mode_default =
-        xlast->GetGameModeQuery()->GetGameModeDefaultValue();
     std::optional<uint32_t> game_type_default =
         xlast->GetContextsQuery()->GetContextDefaultValue(XCONTEXT_GAME_TYPE);
-
-    if (game_mode_default.has_value()) {
-      GAME_MODE = Property(XCONTEXT_GAME_MODE, game_mode_default.value());
-    }
+    std::optional<uint32_t> game_mode_default =
+        xlast->GetGameModeQuery()->GetGameModeDefaultValue();
 
     if (game_type_default.has_value()) {
       GAME_TYPE = Property(XCONTEXT_GAME_TYPE, game_type_default.value());
     }
+
+    if (game_mode_default.has_value()) {
+      GAME_MODE = Property(XCONTEXT_GAME_MODE, game_mode_default.value());
+    }
   }
 
-  AddProperty(xuid, &GAME_MODE);
+  // Ordered!
+  // Normally matchmaking query returns would handle ordering.
   AddProperty(xuid, &GAME_TYPE);
+  AddProperty(xuid, &GAME_MODE);
+
+  bool initialize_all_contexts = false;
+
+  // Initialize all contexts to default values
+  if (xlast && initialize_all_contexts) {
+    for (const uint32_t& context_id :
+         xlast->GetContextsQuery()->GetContextsIDs()) {
+      std::optional<uint32_t> default_value =
+          xlast->GetContextsQuery()->GetContextDefaultValue(context_id);
+
+      if (default_value.has_value()) {
+        Property prop = Property(context_id, default_value.value());
+
+        AddProperty(xuid, &prop);
+      }
+    }
+  }
 }
 
 std::u16string UserTracker::GetContextLocalizedString(uint64_t xuid,
