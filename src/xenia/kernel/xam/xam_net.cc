@@ -9,6 +9,13 @@
 
 #include <random>
 
+// clang-format off
+// We want to include platform.h first to define NOMINMAX to prevent window.h
+// from defining the macros.
+#include "xenia/base/platform.h"
+#include "third_party/libcurl/include/curl/curl.h"
+// clang-format on
+
 #include "xenia/base/logging.h"
 #include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/util/net_utils.h"

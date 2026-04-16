@@ -19,7 +19,7 @@
 
 #ifdef XE_PLATFORM_WIN32
 // clang-format off
-#include "xenia/base/platform_win.h"
+#include "xenia/base/platform.h"
 #include <WS2tcpip.h>
 #include <WinSock2.h>
 // clang-format on

@@ -9,6 +9,13 @@
 
 #include "third_party/rapidcsv/src/rapidcsv.h"
 
+// clang-format off
+// We want to include platform.h first to define NOMINMAX to prevent window.h
+// from defining the macros.
+#include "xenia/base/platform.h"
+#include "third_party/libcurl/include/curl/curl.h"
+// clang-format on
+
 #include "xenia/base/cvar.h"
 #include "xenia/base/logging.h"
 #include "xenia/base/string_util.h"

@@ -14,8 +14,6 @@
 #include <span>
 #include <unordered_set>
 
-#include "third_party/libcurl/include/curl/curl.h"
-
 #include "xenia/base/byte_order.h"
 #include "xenia/kernel/upnp.h"
 #include "xenia/kernel/util/net_utils.h"

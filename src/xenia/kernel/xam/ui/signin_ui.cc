@@ -9,7 +9,6 @@
 
 #include <memory>
 
-#include "xenia/kernel/xam/ui/create_profile_ui.h"
 #include "xenia/kernel/xam/ui/signin_ui.h"
 
 #include "xenia/kernel/XLiveAPI.h"
