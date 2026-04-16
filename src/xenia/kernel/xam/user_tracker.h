@@ -177,8 +177,10 @@ class UserTracker {
 
   struct CaseInsensitive {
     bool operator()(const std::u16string lhs, const std::u16string rhs) const {
-      std::u16string lhs_tidy = to_utf16(utf8::lower_ascii(xe::to_utf8(lhs)));
-      std::u16string rhs_tidy = to_utf16(utf8::lower_ascii(xe::to_utf8(rhs)));
+      const std::u16string lhs_tidy =
+          to_utf16(utf8::lower_ascii(xe::to_utf8(lhs)));
+      const std::u16string rhs_tidy =
+          to_utf16(utf8::lower_ascii(xe::to_utf8(rhs)));
 
       return std::lexicographical_compare(lhs_tidy.cbegin(), lhs_tidy.cend(),
                                           rhs_tidy.cbegin(), rhs_tidy.cend());
