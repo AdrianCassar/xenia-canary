@@ -370,6 +370,7 @@ int XSocket::RecvFrom(uint8_t* buf, uint32_t buf_len, uint32_t flags,
 
   // TCP ignores from and from_len.
   // 555307EE expects port even with TCP, include IP anyway.
+  // Verified on console.
   if (proto_ == X_IPPROTO_TCP) {
     socklen_t peer_addar_len = sizeof(sockaddr);
     getpeername(native_handle_, &sa, &peer_addar_len);
