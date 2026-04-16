@@ -16,9 +16,15 @@
 #include "xenia/kernel/xnet.h"
 
 #include "third_party/fmt/include/fmt/format.h"
-#include "third_party/libcurl/include/curl/curl.h"
 #include "third_party/rapidjson/include/rapidjson/document.h"
 #include "third_party/rapidjson/include/rapidjson/rapidjson.h"
+
+// clang-format off
+// We want to include platform.h first to define NOMINMAX to prevent window.h
+// from defining the macros.
+#include "xenia/base/platform.h"
+#include "third_party/libcurl/include/curl/curl.h"
+// clang-format on
 
 #include "version.h"
 #include "xenia/app/updater.h"

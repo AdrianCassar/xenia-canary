@@ -10,7 +10,6 @@
 #include "xenia/app/emulator_window.h"
 
 #include "third_party/imgui/imgui.h"
-#include "third_party/libcurl/include/curl/curl.h"
 #include "third_party/stb/stb_image_write.h"
 #if defined(__clang__)
 #pragma clang diagnostic push
