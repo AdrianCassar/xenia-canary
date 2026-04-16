@@ -418,7 +418,7 @@ std::u16string UserTracker::GetContextDescription(uint64_t xuid,
   std::set<std::u16string, CaseInsensitive> context_strings = {};
 
   auto insert_tidy_string =
-      [&context_strings](const std::u16string entry) mutable {
+      [&context_strings](const std::u16string& entry) mutable {
         if (entry.empty()) {
           return;
         }
@@ -502,7 +502,7 @@ std::u16string UserTracker::GetPropertyDescription(uint32_t id) const {
   std::set<std::u16string, CaseInsensitive> property_strings = {};
 
   auto insert_tidy_string =
-      [&property_strings](const std::u16string entry) mutable {
+      [&property_strings](const std::u16string& entry) mutable {
         if (entry.empty()) {
           return;
         }
