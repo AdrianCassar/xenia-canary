@@ -18,6 +18,9 @@
 
 DECLARE_bool(upnp);
 
+DEFINE_bool(shuffle_properties, false,
+            "Shuffle properties and contexts returns.", "Live");
+
 namespace xe {
 namespace kernel {
 
@@ -1243,11 +1246,46 @@ void XSession::FillSessionContext(
     xam::XUSER_CONTEXT& filter_context = filter_contexts_ptr[i];
   }
 
+  auto rng = std::default_random_engine{};
+
+  if (cvars::shuffle_properties) {
+    std::ranges::shuffle(contexts, rng);
+  }
+
   uint32_t i = 0;
-  for (const auto& context : contexts) {
-    contexts_to_get[i].context_id = context.GetPropertyId().value;
-    contexts_to_get[i].value = context.get_data()->data.u32;
-    i++;
+
+  if (matchmaking_query) {
+    auto returns = matchmaking_query->GetReturns(matchmaking_index);
+
+    if (cvars::shuffle_properties) {
+      std::ranges::shuffle(returns, rng);
+    }
+
+    for (const uint32_t context_id : returns) {
+      auto it = std::find_if(contexts.cbegin(), contexts.cend(),
+                             [context_id](const xam::Property ctx) {
+                               return context_id == ctx.GetPropertyId().value;
+                             });
+
+      if (it != contexts.cend()) {
+        const xam::Property context = *it;
+
+        contexts_to_get[i].context_id = context.GetPropertyId().value;
+        contexts_to_get[i].value = context.get_data()->data.u32;
+        i++;
+      } else {
+        if (xam::UserData::get_type(context_id) ==
+            xam::X_USER_DATA_TYPE::CONTEXT) {
+          XELOGI("Missing Context ID: {:08X}", context_id);
+        }
+      }
+    }
+  } else {
+    for (const auto& context : contexts) {
+      contexts_to_get[i].context_id = context.GetPropertyId().value;
+      contexts_to_get[i].value = context.get_data()->data.u32;
+      i++;
+    }
   }
 
   result->contexts_ptr = context_ptr;
@@ -1279,15 +1317,78 @@ void XSession::FillSessionProperties(
     xam::XUSER_PROPERTY& filter_property = filter_properties_ptr[i];
   }
 
+  auto rng = std::default_random_engine{};
+
+  if (cvars::shuffle_properties) {
+    std::ranges::shuffle(properties, rng);
+  }
+
   uint32_t i = 0;
-  for (const auto& property : properties) {
-    if (property.requires_additional_data()) {
-      properties_to_set[i].data.data.unicode.ptr = memory->SystemHeapAlloc(
-          static_cast<uint32_t>(property.get_data()->data.unicode.size));
+
+  if (matchmaking_query) {
+    auto returns = matchmaking_query->GetReturns(matchmaking_index);
+
+    const std::set<uint32_t> default_system_matchmaking_properties = {
+        XPROPERTY_GAMER_PUID, XPROPERTY_GAMER_HOSTNAME};
+
+    auto gamer_host_name = std::find_if(
+        returns.cbegin(), returns.cend(), [](const uint32_t property_id) {
+          return XPROPERTY_GAMER_HOSTNAME == property_id;
+        });
+
+    auto host_xuid = std::find_if(returns.cbegin(), returns.cend(),
+                                  [](const uint32_t property_id) {
+                                    return XPROPERTY_GAMER_PUID == property_id;
+                                  });
+
+    if (gamer_host_name == returns.cend()) {
+      XELOGI("Inserting XPROPERTY_GAMER_HOSTNAME into returns!");
+      returns.push_back(XPROPERTY_GAMER_HOSTNAME);
     }
 
-    property.WriteToGuest(&properties_to_set[i]);
-    i++;
+    if (gamer_host_name == returns.cend()) {
+      XELOGI("Inserting XPROPERTY_GAMER_PUID into returns!");
+      returns.push_back(XPROPERTY_GAMER_PUID);
+    }
+
+    if (cvars::shuffle_properties) {
+      std::ranges::shuffle(returns, rng);
+    }
+
+    for (const uint32_t property_id : returns) {
+      auto it =
+          std::find_if(properties.cbegin(), properties.cend(),
+                       [property_id](const xam::Property property) {
+                         return property_id == property.GetPropertyId().value;
+                       });
+
+      if (it != properties.cend()) {
+        const xam::Property property = *it;
+
+        if (property.requires_additional_data()) {
+          properties_to_set[i].data.data.unicode.ptr = memory->SystemHeapAlloc(
+              static_cast<uint32_t>(property.get_data()->data.unicode.size));
+        }
+
+        property.WriteToGuest(&properties_to_set[i]);
+        i++;
+      } else {
+        if (xam::UserData::get_type(property_id) !=
+            xam::X_USER_DATA_TYPE::CONTEXT) {
+          XELOGI("Missing Property ID: {:08X}", property_id);
+        }
+      }
+    }
+  } else {
+    for (const auto& property : properties) {
+      if (property.requires_additional_data()) {
+        properties_to_set[i].data.data.unicode.ptr = memory->SystemHeapAlloc(
+            static_cast<uint32_t>(property.get_data()->data.unicode.size));
+      }
+
+      property.WriteToGuest(&properties_to_set[i]);
+      i++;
+    }
   }
 
   result->properties_ptr = properties_ptr;
