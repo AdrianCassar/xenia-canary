@@ -260,7 +260,7 @@ dword_result_t NetDll_XNetStartupEx_entry(dword_t caller,
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetStartupEx, kNetworking, kImplemented);
 
-dword_result_t NetDll_XNetCleanup_entry(dword_t caller, lpvoid_t params) {
+dword_result_t NetDll_XNetCleanup_entry(dword_t caller) {
   auto xam = kernel_state()->GetKernelModule<XamModule>("xam.xex");
   // auto xnet = xam->xnet();
   // xam->set_xnet(nullptr);
