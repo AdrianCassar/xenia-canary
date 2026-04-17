@@ -250,10 +250,10 @@ void UserTracker::AddDefaultProperties(uint64_t xuid) {
   Property GAMER_ZONE = Property(
       XPROPERTY_GAMER_ZONE,
       static_cast<int32_t>(GAMERCARD_ZONE_OPTIONS::GAMERCARD_ZONE_PRO));
-  Property GAMER_COUNTRY =
-      Property(XPROPERTY_GAMER_COUNTRY, cvars::user_country);
-  Property GAMER_LANGUAGE =
-      Property(XPROPERTY_GAMER_LANGUAGE, cvars::user_language);
+  Property GAMER_COUNTRY = Property(XPROPERTY_GAMER_COUNTRY,
+                                    static_cast<int32_t>(user->GetLanguage()));
+  Property GAMER_LANGUAGE = Property(XPROPERTY_GAMER_LANGUAGE,
+                                     static_cast<int32_t>(user->GetCountry()));
   Property PLATFORM_TYPE = Property(
       XPROPERTY_PLATFORM_TYPE, static_cast<int32_t>(PLATFORM_TYPE::Xbox360));
   Property GAMER_MU = Property(XPROPERTY_GAMER_MU,
@@ -271,11 +271,12 @@ void UserTracker::AddDefaultProperties(uint64_t xuid) {
   AddProperty(xuid, &GAMER_ZONE);
   AddProperty(xuid, &GAMER_COUNTRY);
   AddProperty(xuid, &GAMER_LANGUAGE);
-  AddProperty(xuid, &PLATFORM_TYPE);
 
   // 4D5307D5 does not expect these in XSessionSearch results.
   AddProperty(xuid, &GAMER_MU);
   AddProperty(xuid, &GAMER_SIGMA);
+
+  AddProperty(xuid, &PLATFORM_TYPE);
 }
 
 void UserTracker::AddDefaultContexts() {
