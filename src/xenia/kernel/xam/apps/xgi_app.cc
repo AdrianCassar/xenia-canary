@@ -306,6 +306,13 @@ X_HRESULT XgiApp::ExecuteDispatchMessage(uint32_t message, uint32_t buffer_ptr,
       const XGI_XUSER_SET_CONTEXT* xgi_context =
           reinterpret_cast<const XGI_XUSER_SET_CONTEXT*>(buffer);
 
+      const bool is_property =
+          xam::UserData::get_type(xgi_context->context.context_id) !=
+          xam::X_USER_DATA_TYPE::CONTEXT;
+
+      // 555307F0
+      assert_false(is_property);
+
       XELOGD("XGIUserSetContext({:08X}, ID: {:08X}, Value: {:08X})",
              xgi_context->user_index.get(),
              xgi_context->context.context_id.get(),
