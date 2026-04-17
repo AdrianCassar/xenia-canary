@@ -250,6 +250,8 @@ void UserTracker::AddDefaultProperties(uint64_t xuid) {
   Property GAMER_ZONE = Property(
       XPROPERTY_GAMER_ZONE,
       static_cast<int32_t>(GAMERCARD_ZONE_OPTIONS::GAMERCARD_ZONE_PRO));
+  Property GAMER_RATING = Property(XPROPERTY_GAMER_RATING,
+                                   static_cast<float>(0));  // Keep value <= 51?
   Property GAMER_COUNTRY = Property(XPROPERTY_GAMER_COUNTRY,
                                     static_cast<int32_t>(user->GetLanguage()));
   Property GAMER_LANGUAGE = Property(XPROPERTY_GAMER_LANGUAGE,
@@ -268,6 +270,7 @@ void UserTracker::AddDefaultProperties(uint64_t xuid) {
   // Required - 58410AC2 sets this manually
   AddProperty(xuid, &PUID);
   AddProperty(xuid, &GAMER_NAME);
+  AddProperty(xuid, &GAMER_RATING);
   AddProperty(xuid, &GAMER_ZONE);
   AddProperty(xuid, &GAMER_COUNTRY);
   AddProperty(xuid, &GAMER_LANGUAGE);
