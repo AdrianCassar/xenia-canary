@@ -596,6 +596,7 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
 #endif  //  DEBUG
 
   if (!updater_opened_) {
+    Close();
     ImGui::CloseCurrentPopup();
     emulator_window_->ToggleUpdaterDialog();
   }
@@ -807,6 +808,7 @@ void UpdaterCompletionDialog::OnDraw(ImGuiIO& io) {
   }
 
   if (!updater_completion_opened_) {
+    Close();
     ImGui::CloseCurrentPopup();
     emulator_window_->ToggleCompletionDialog();
   }

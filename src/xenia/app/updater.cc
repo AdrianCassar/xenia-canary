@@ -12,9 +12,6 @@
 #include <iostream>
 #include <string>
 
-// math.h and curl.h conflict so we include it first
-#include "xenia/kernel/xnet.h"
-
 #include "third_party/fmt/include/fmt/format.h"
 #include "third_party/rapidjson/include/rapidjson/document.h"
 #include "third_party/rapidjson/include/rapidjson/rapidjson.h"
@@ -29,6 +26,7 @@
 #include "version.h"
 #include "xenia/app/updater.h"
 #include "xenia/base/logging.h"
+#include "xenia/kernel/xnet.h"
 
 namespace xe {
 namespace app {
@@ -56,10 +54,11 @@ uint32_t Updater::GetRequest(const std::string& endpoint,
   curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
 
   result = curl_easy_perform(curl);
-  curl_easy_cleanup(curl);
 
   long response_code = 0;
   curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
+
+  curl_easy_cleanup(curl);
 
   if (result != CURLE_OK && response_code == 0) {
     response_code = -1;
