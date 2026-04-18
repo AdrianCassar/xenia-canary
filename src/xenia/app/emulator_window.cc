@@ -2046,7 +2046,11 @@ void EmulatorWindow::ToggleUpdaterDialog() {
     disable_hotkeys_ = false;
     emulator_->kernel_state()->BroadcastNotification(kXNotificationSystemUI,
                                                      false);
-    updater_dialog_.reset();
+    if (updater_dialog_->IsClosing()) {
+      updater_dialog_.release();
+    } else {
+      updater_dialog_.reset();
+    }
     emulator_->kernel_state()->xam_state()->is_xam_dialog_present_.store(false);
   }
 }
@@ -2069,7 +2073,11 @@ void EmulatorWindow::ToggleCompletionDialog() {
     disable_hotkeys_ = false;
     emulator_->kernel_state()->BroadcastNotification(kXNotificationSystemUI,
                                                      false);
-    updater_completion_dialog_.reset();
+    if (updater_completion_dialog_->IsClosing()) {
+      updater_completion_dialog_.release();
+    } else {
+      updater_completion_dialog_.reset();
+    }
     emulator_->kernel_state()->xam_state()->is_xam_dialog_present_.store(false);
   }
 }
