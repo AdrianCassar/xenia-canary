@@ -41,7 +41,7 @@ class UpdaterDialog final : public ui::ImGuiDialog {
     Initialize();
   }
 
-  ~UpdaterDialog() { download_cancelled_ = true; }
+  ~UpdaterDialog();
 
  protected:
   void OnDraw(ImGuiIO& io) override;
@@ -58,16 +58,15 @@ class UpdaterDialog final : public ui::ImGuiDialog {
   bool updater_opened_ = false;
   bool auto_check_update_ = false;
   std::shared_ptr<Updater> updater_ = nullptr;
-  uint32_t download_response_code_ = 0;
   std::future<CheckForUpdateInfo> update_available_future_;
-  CheckForUpdateInfo update_check_result_;
+  CheckForUpdateInfo update_check_result_ = {};
   std::future<ChangelogInfo> changelog_info_future_;
-  ChangelogInfo changelog_result_;
+  ChangelogInfo changelog_result_ = {};
   std::future<uint32_t> download_future_;
-  uint32_t download_result_;
+  uint32_t download_response_code_ = 0;
+  std::atomic<bool> cancel_request = false;
   bool checked_for_updates_ = false;
-  bool download_pending = false;
-  bool downloading_ = false;
+  bool download_startup_pending = false;
   std::atomic<float> download_progress_ = 0.0f;
   bool downloaded_ = false;
   bool downloaded_failed_ = false;
@@ -77,8 +76,7 @@ class UpdaterDialog final : public ui::ImGuiDialog {
   bool show_in_use_warning_dialog_ = false;
   bool replace_file_ = false;
   bool stable_toggle_ = false;
-  std::filesystem::path downloaded_file_path_;
-  bool download_cancelled_ = false;
+  std::filesystem::path downloaded_file_path_ = "";
   std::string artifact_name_ = "";
   std::string changelog_ = "";
   COMPARE_STATE compare_status_ = COMPARE_STATE::IDENTICAL;

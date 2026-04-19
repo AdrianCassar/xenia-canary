@@ -217,6 +217,12 @@ EmulatorWindow::~EmulatorWindow() {
   ShutdownGraphicsSystemPresenterPainting();
 }
 
+void EmulatorWindow::ShutdownUpdaterDialog() {
+  // Cancel checking for updates.
+  cancel_request = true;
+  updater_dialog_.reset();
+}
+
 ui::Presenter* EmulatorWindow::GetGraphicsSystemPresenter() const {
   gpu::GraphicsSystem* graphics_system = emulator_->graphics_system();
   return graphics_system ? graphics_system->presenter() : nullptr;
@@ -293,21 +299,17 @@ void EmulatorWindow::OnEmulatorInitialized() {
   bool should_check_update = cvars::auto_check_updates &&
                              !(cvar::updated_arg_present && cvar::updated);
 
+  auto callback = [this](CheckForUpdateInfo update_info) {
+    if (update_info.update_available) {
+      app_context_.CallInUIThread([this, update_info]() {
+        ShowUpdateAvailableDialog(update_info.metadata.commit_hash,
+                                  update_info.metadata.commit_date);
+      });
+    }
+  };
+
   if (should_check_update) {
-    update_info_ = updater_->StartupUpdateCheckAsync();
-
-    std::jthread([this]() {
-      update_info_.wait();
-
-      const auto& update_info = update_info_.get();
-
-      if (update_info.update_available) {
-        app_context_.CallInUIThread([this, update_info]() {
-          ShowUpdateAvailableDialog(update_info.metadata.commit_hash,
-                                    update_info.metadata.commit_date);
-        });
-      }
-    }).detach();
+    update_info_ = updater_->StartupUpdateCheckAsync(cancel_request, callback);
   }
 #endif
 }

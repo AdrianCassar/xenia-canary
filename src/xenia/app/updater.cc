@@ -40,7 +40,8 @@ Updater::Updater(const std::string& owner, const std::string& repo)
     : owner_(owner), repo_(repo) {}
 
 uint32_t Updater::GetRequest(const std::string& endpoint,
-                             std::vector<uint8_t>& response_buffer) const {
+                             std::vector<uint8_t>& response_buffer,
+                             std::atomic<bool>& cancel_flag) const {
   CURL* curl;
   CURLcode result;
 
@@ -56,7 +57,18 @@ uint32_t Updater::GetRequest(const std::string& endpoint,
   curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response_buffer);
   curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
 
+  ProgressCallbackData callback_data = {.cancelled = &cancel_flag};
+
+  // Enable progress callback getting called
+  curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
+  curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &callback_data);
+  curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, CurlProgressCallback);
+
   result = curl_easy_perform(curl);
+
+  if (result == CURLE_ABORTED_BY_CALLBACK) {
+    XELOGI("Cancelled Request!");
+  }
 
   long response_code = 0;
   curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
@@ -73,7 +85,7 @@ uint32_t Updater::GetRequest(const std::string& endpoint,
 // Using this function will reduce the chances of API rate limits from GitHub.
 // Only supports default branch and release builds.
 CheckForUpdateInfo Updater::CheckForUpdatesViaXeniaManagerDatabase(
-    bool stable) const {
+    bool stable, std::atomic<bool>& cancel_flag) const {
   const std::string endpoint =
       "https://xenia-manager.github.io/database/data/version.json";
 
@@ -81,7 +93,7 @@ CheckForUpdateInfo Updater::CheckForUpdatesViaXeniaManagerDatabase(
 
   // Perform HTTP GET
   std::vector<uint8_t> response_buffer;
-  const uint32_t result = GetRequest(endpoint, response_buffer);
+  const uint32_t result = GetRequest(endpoint, response_buffer, cancel_flag);
 
   update_info.metadata.response_code = result;
 
@@ -166,43 +178,53 @@ CheckForUpdateInfo Updater::CheckForUpdatesViaXeniaManagerDatabase(
   return update_info;
 }
 
-std::future<CheckForUpdateInfo> Updater::StartupUpdateCheckAsync() const {
+std::future<CheckForUpdateInfo> Updater::StartupUpdateCheckAsync(
+    std::atomic<bool>& cancel_flag,
+    std::function<void(CheckForUpdateInfo)> callback) const {
   auto checking_for_updates =
-      std::async(std::launch::async, &Updater::StartupUpdateCheck, this);
+      std::async(std::launch::async, &Updater::StartupUpdateCheck, this,
+                 std::ref(cancel_flag), callback);
 
   return checking_for_updates;
 }
 
-CheckForUpdateInfo Updater::StartupUpdateCheck() const {
+CheckForUpdateInfo Updater::StartupUpdateCheck(
+    std::atomic<bool>& cancel_flag,
+    std::function<void(CheckForUpdateInfo)> callback) const {
   CheckForUpdateInfo update_info =
-      CheckForUpdatesViaXeniaManagerDatabase(false);
+      CheckForUpdatesViaXeniaManagerDatabase(false, cancel_flag);
 
   if (update_info.metadata.response_code != HTTP_STATUS_CODE::HTTP_OK) {
-    update_info = CheckForUpdates(false, XE_BUILD_BRANCH);
+    update_info = CheckForUpdates(false, XE_BUILD_BRANCH, cancel_flag);
   }
+
+  callback(update_info);
 
   return update_info;
 }
 
 std::future<CheckForUpdateInfo> Updater::CheckForUpdatesAsync(
-    bool stable, const std::string& branch) const {
-  auto checking_for_updates = std::async(
-      std::launch::async, &Updater::CheckForUpdates, this, stable, branch);
+    bool stable, const std::string& branch,
+    std::atomic<bool>& cancel_flag) const {
+  auto checking_for_updates =
+      std::async(std::launch::async, &Updater::CheckForUpdates, this, stable,
+                 branch, std::ref(cancel_flag));
 
   return checking_for_updates;
 }
 
-CheckForUpdateInfo Updater::CheckForUpdates(bool stable,
-                                            const std::string& branch) const {
+CheckForUpdateInfo Updater::CheckForUpdates(
+    bool stable, const std::string& branch,
+    std::atomic<bool>& cancel_flag) const {
   CheckForUpdateInfo update_info = {};
   ChangelogInfo changelog_info = {};
 
   bool update_available = false;
 
   if (stable) {
-    update_info.metadata = GetLatestReleaseCommitHash();
+    update_info.metadata = GetLatestReleaseCommitHash(cancel_flag);
   } else {
-    update_info.metadata = GetLatestCommitHash(branch);
+    update_info.metadata = GetLatestCommitHash(branch, cancel_flag);
   }
 
   if (update_info.metadata.response_code != HTTP_STATUS_CODE::HTTP_OK) {
@@ -212,8 +234,8 @@ CheckForUpdateInfo Updater::CheckForUpdates(bool stable,
 
   if (stable) {
     // Either get commit hash from tag or compare commits to get state
-    changelog_info =
-        GetChangelogBetweenCommits(XE_BUILD_COMMIT, update_info.metadata.tag);
+    changelog_info = GetChangelogBetweenCommits(
+        XE_BUILD_COMMIT, update_info.metadata.tag, cancel_flag);
 
     if (update_info.metadata.response_code != HTTP_STATUS_CODE::HTTP_OK) {
       update_info.update_available = false;
@@ -286,7 +308,8 @@ bool Updater::IsAnotherInstanceRunning() const {
 }
 #endif
 
-UpdateMetadata Updater::GetLatestCommitHash(const std::string& branch) const {
+UpdateMetadata Updater::GetLatestCommitHash(
+    const std::string& branch, std::atomic<bool>& cancel_flag) const {
   UpdateMetadata update_metadata = {};
 
   std::vector<uint8_t> response_buffer = {};
@@ -295,12 +318,11 @@ UpdateMetadata Updater::GetLatestCommitHash(const std::string& branch) const {
       "https://api.github.com/repos/{}/{}/commits?sha={}&per_page=1", owner_,
       repo_, branch);
 
-  uint32_t response_code = GetRequest(endpoint, response_buffer);
+  uint32_t response_code = GetRequest(endpoint, response_buffer, cancel_flag);
 
   update_metadata.response_code = response_code;
 
   if (response_code != HTTP_STATUS_CODE::HTTP_OK) {
-    update_metadata.response_code = response_code;
     return update_metadata;
   }
 
@@ -354,7 +376,8 @@ UpdateMetadata Updater::GetLatestCommitHash(const std::string& branch) const {
   return update_metadata;
 }
 
-UpdateMetadata Updater::GetLatestReleaseCommitHash() const {
+UpdateMetadata Updater::GetLatestReleaseCommitHash(
+    std::atomic<bool>& cancel_flag) const {
   UpdateMetadata update_metadata = {};
 
   std::vector<uint8_t> response_buffer = {};
@@ -362,12 +385,11 @@ UpdateMetadata Updater::GetLatestReleaseCommitHash() const {
   const std::string endpoint = fmt::format(
       "https://api.github.com/repos/{}/{}/releases/latest", owner_, repo_);
 
-  uint32_t response_code = GetRequest(endpoint, response_buffer);
+  uint32_t response_code = GetRequest(endpoint, response_buffer, cancel_flag);
 
   update_metadata.response_code = response_code;
 
   if (response_code != HTTP_STATUS_CODE::HTTP_OK) {
-    update_metadata.response_code = response_code;
     return update_metadata;
   }
 
@@ -416,12 +438,12 @@ std::string Updater::FormatDate(const std::string& iso_date) const {
 std::future<uint32_t> Updater::DownloadLatestNightlyArtifactAsync(
     const std::string& workflow_file, const std::string& branch,
     const std::string& artifact_name, const std::string& output_path,
-    std::function<void(double, double)> progress_callback,
-    std::function<bool()> cancel_check) {
+    std::atomic<bool>& cancel_flag,
+    std::function<void(double, double)> progress_callback) {
   auto download_nightly =
       std::async(std::launch::async, &Updater::DownloadLatestNightlyArtifact,
                  this, workflow_file, branch, artifact_name, output_path,
-                 progress_callback, cancel_check);
+                 std::ref(cancel_flag), progress_callback);
 
   return download_nightly;
 }
@@ -429,36 +451,36 @@ std::future<uint32_t> Updater::DownloadLatestNightlyArtifactAsync(
 uint32_t Updater::DownloadLatestNightlyArtifact(
     const std::string& workflow_file, const std::string& branch,
     const std::string& artifact_name, const std::string& output_path,
-    std::function<void(double, double)> progress_callback,
-    std::function<bool()> cancel_check) const {
+    std::atomic<bool>& cancel_flag,
+    std::function<void(double, double)> progress_callback) const {
   const std::string endpoint =
       fmt::format("https://nightly.link/{}/{}/workflows/{}/{}/{}", owner_,
                   repo_, workflow_file, branch, artifact_name);
 
-  return DownloadFile(endpoint, output_path, progress_callback, cancel_check);
+  return DownloadFile(endpoint, output_path, cancel_flag, progress_callback);
 }
 
 std::future<uint32_t> Updater::DownloadLatestReleaseAsync(
     const std::string& asset_name, const std::string& output_path,
-    std::function<void(double, double)> progress_callback,
-    std::function<bool()> cancel_check) {
-  auto download_release =
-      std::async(std::launch::async, &Updater::DownloadLatestRelease, this,
-                 asset_name, output_path, progress_callback, cancel_check);
+    std::atomic<bool>& cancel_flag,
+    std::function<void(double, double)> progress_callback) {
+  auto download_release = std::async(
+      std::launch::async, &Updater::DownloadLatestRelease, this, asset_name,
+      output_path, std::ref(cancel_flag), progress_callback);
 
   return download_release;
 }
 
 uint32_t Updater::DownloadLatestRelease(
     const std::string& asset_name, const std::string& output_path,
-    std::function<void(double, double)> progress_callback,
-    std::function<bool()> cancel_check) const {
+    std::atomic<bool>& cancel_flag,
+    std::function<void(double, double)> progress_callback) const {
   std::vector<uint8_t> response_buffer = {};
 
   const std::string endpoint = fmt::format(
       "https://api.github.com/repos/{}/{}/releases/latest", owner_, repo_);
 
-  uint32_t response_code = GetRequest(endpoint, response_buffer);
+  uint32_t response_code = GetRequest(endpoint, response_buffer, cancel_flag);
 
   if (response_code != HTTP_STATUS_CODE::HTTP_OK) {
     return response_code;
@@ -495,97 +517,40 @@ uint32_t Updater::DownloadLatestRelease(
     return -1;
   }
 
-  return DownloadFile(asset_url, output_path, progress_callback, cancel_check);
-}
-
-uint32_t Updater::DownloadFile(const std::string& file_endpoint,
-                               const std::string& output_path) const {
-  std::vector<uint8_t> response_buffer = {};
-
-  uint32_t response_code = GetRequest(file_endpoint, response_buffer);
-
-  if (response_code != HTTP_STATUS_CODE::HTTP_OK) {
-    return response_code;
-  }
-
-  std::ofstream out_file(output_path, std::ios::binary);
-
-  if (!out_file) {
-    XELOGE("Failed to open output file: {}", output_path);
-    return -1;
-  }
-
-  out_file.write(reinterpret_cast<char*>(response_buffer.data()),
-                 response_buffer.size());
-
-  out_file.close();
-
-  return response_code;
-}
-
-struct ProgressCallbackData {
-  std::function<void(double, double)> progress_callback;
-  std::function<bool()> cancel_check;
-  std::atomic<bool>* cancelled;
-};
-
-static int CurlProgressCallback(void* clientp, curl_off_t dltotal,
-                                curl_off_t dlnow, curl_off_t ultotal,
-                                curl_off_t ulnow) {
-  auto* callback_data = static_cast<ProgressCallbackData*>(clientp);
-
-  // Check atomic cancellation flag first
-  // Should be safe even if callback_data is stale??
-  if (callback_data->cancelled && callback_data->cancelled->load()) {
-    return 1;  // 1 = abort transfer
-  }
-
-  if (callback_data->cancel_check && callback_data->cancel_check()) {
-    return 1;  // 1 = abort transfer
-  }
-
-  if (callback_data->progress_callback) {
-    callback_data->progress_callback((double)dlnow, (double)dltotal);
-  }
-  return 0;  // 0 = continue, else abort transfer
+  return DownloadFile(asset_url, output_path, cancel_flag, progress_callback);
 }
 
 uint32_t Updater::DownloadFile(
     const std::string& file_endpoint, const std::string& output_path,
-    std::function<void(double, double)> progress_callback,
-    std::function<bool()> cancel_check) const {
+    std::atomic<bool>& cancel_flag,
+    std::function<void(double, double)> progress_callback) const {
   std::vector<uint8_t> response_buffer = {};
 
   CURL* curl = curl_easy_init();
-  if (!curl) return -1;
+
+  if (!curl) {
+    return -1;
+  }
 
   FILE* fp = fopen(output_path.c_str(), "wb");
+
   if (!fp) {
     curl_easy_cleanup(curl);
     return -1;
   }
 
-  // Atomic Cancellation flag
-  std::atomic<bool> cancelled(false);
-
-  // Prepare callback data
-  // Using unique_ptr to ensure proper lifetime management
-  auto callback_data = std::make_unique<ProgressCallbackData>();
-  callback_data->progress_callback = progress_callback;
-  callback_data->cancel_check = cancel_check;
-  callback_data->cancelled = &cancelled;
+  ProgressCallbackData callback_data = {.progress_callback = progress_callback,
+                                        .cancelled = &cancel_flag};
 
   curl_easy_setopt(curl, CURLOPT_URL, file_endpoint.c_str());
   curl_easy_setopt(curl, CURLOPT_USERAGENT, "xenia-canary");
   curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
   curl_easy_setopt(curl, CURLOPT_WRITEDATA, fp);
-  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, nullptr);
 
-  // Download progress tracking
-  curl_easy_setopt(curl, CURLOPT_NOPROGRESS,
-                   0L);  // Must be set to 0 for XFERINFOFUNCTION
+  // Enable progress callback getting called
+  curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
+  curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &callback_data);
   curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, CurlProgressCallback);
-  curl_easy_setopt(curl, CURLOPT_XFERINFODATA, callback_data.get());
 
   // Timeout options to prevent hanging on slow/stalled connections
   curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, 1024L);  // 1 KB/s
@@ -593,23 +558,16 @@ uint32_t Updater::DownloadFile(
 
   CURLcode result = curl_easy_perform(curl);
 
-  // Set cancellation flag before cleanup to signal callback to return
-  // immediately
-  cancelled.store(true);
-
   fclose(fp);
 
   long response_code = 0;
   curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
 
-  // Clean up callback data before curl cleanup to prevent dangling pointer
-  callback_data.reset();
   curl_easy_cleanup(curl);
 
   if (result == CURLE_ABORTED_BY_CALLBACK) {
-    // Download was cancelled by user
-    XELOGI("Download cancelled by user");
-    return 0;  // Return 0 to indicate clean cancellation
+    XELOGI("Download cancelled!");
+    return -1;
   }
 
   if (result != CURLE_OK && response_code == 0) {
@@ -620,6 +578,7 @@ uint32_t Updater::DownloadFile(
 }
 
 ChangelogInfo Updater::GetRecentCommitMessages(const std::string& branch,
+                                               std::atomic<bool>& cancel_flag,
                                                uint32_t count) const {
   ChangelogInfo changelog_info = {};
   std::vector<uint8_t> response_buffer = {};
@@ -628,7 +587,7 @@ ChangelogInfo Updater::GetRecentCommitMessages(const std::string& branch,
       "https://api.github.com/repos/{}/{}/commits?sha={}&per_page={}", owner_,
       repo_, branch, count);
 
-  uint32_t response_code = GetRequest(endpoint, response_buffer);
+  uint32_t response_code = GetRequest(endpoint, response_buffer, cancel_flag);
 
   if (response_code != HTTP_STATUS_CODE::HTTP_OK) {
     changelog_info.response_code = response_code;
@@ -663,16 +622,18 @@ ChangelogInfo Updater::GetRecentCommitMessages(const std::string& branch,
 }
 
 std::future<ChangelogInfo> Updater::GetChangelogBetweenCommitsAsync(
-    const std::string& base_commit, const std::string& head_commit) const {
+    const std::string& base_commit, const std::string& head_commit,
+    std::atomic<bool>& cancel_flag) const {
   auto changelog =
       std::async(std::launch::async, &Updater::GetChangelogBetweenCommits, this,
-                 base_commit, head_commit);
+                 base_commit, head_commit, std::ref(cancel_flag));
 
   return changelog;
 }
 
 ChangelogInfo Updater::GetChangelogBetweenCommits(
-    const std::string& base_commit, const std::string& head_commit) const {
+    const std::string& base_commit, const std::string& head_commit,
+    std::atomic<bool>& cancel_flag) const {
   ChangelogInfo changelog_info = {};
   std::vector<uint8_t> response_buffer = {};
 
@@ -680,7 +641,7 @@ ChangelogInfo Updater::GetChangelogBetweenCommits(
       fmt::format("https://api.github.com/repos/{}/{}/compare/{}...{}", owner_,
                   repo_, base_commit, head_commit);
 
-  uint32_t response_code = GetRequest(endpoint, response_buffer);
+  uint32_t response_code = GetRequest(endpoint, response_buffer, cancel_flag);
 
   if (response_code != HTTP_STATUS_CODE::HTTP_OK) {
     changelog_info.response_code = response_code;

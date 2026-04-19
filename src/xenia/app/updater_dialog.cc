@@ -81,7 +81,7 @@ void UpdaterDialog::ToggleStableState() {
   // Download state reset
   downloaded_ = false;
   downloaded_failed_ = false;
-  downloading_ = false;
+  download_startup_pending = false;
   applying_update_failed_ = false;
   hide_download_button_ = false;
   download_progress_ = 0.0f;
@@ -92,8 +92,34 @@ void UpdaterDialog::Initialize() {
   if (auto_check_update_) {
     auto_check_update_ = false;  // Check once
 
-    update_available_future_ =
-        updater_->CheckForUpdatesAsync(stable_toggle_, XE_BUILD_BRANCH);
+    update_available_future_ = updater_->CheckForUpdatesAsync(
+        stable_toggle_, XE_BUILD_BRANCH, cancel_request);
+  }
+}
+
+UpdaterDialog::~UpdaterDialog() {
+  if (download_future_.valid() && !downloaded_) {
+    cancel_request = true;
+  }
+
+  if (cancel_request) {
+    // Wait for the partially downloaded file to no longer be in use.
+    download_future_.wait();
+
+    // Delete the partially downloaded file if download was cancelled
+    std::error_code ec;
+
+    if (!downloaded_file_path_.empty() &&
+        std::filesystem::exists(downloaded_file_path_, ec)) {
+      std::filesystem::remove(downloaded_file_path_, ec);
+    }
+
+    if (ec) {
+      XELOGE(
+          "Failed to delete partially downloaded file after "
+          "cancellation {}: {}",
+          artifact_name_, ec.message());
+    }
   }
 }
 
@@ -135,6 +161,7 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
     ImGui::EndPopup();
   }
 #else
+
     ImGui::BeginGroup();
 
     std::string update_desc = stable_toggle_ ? "Check for Stable Updates"
@@ -143,10 +170,13 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
     ImVec2 update_btn_size = ImVec2(update_lbl_size.x + btn_width_padding,
                                     update_lbl_size.y + btn_height_padding);
 
+    ImGui::BeginDisabled(update_available_future_.valid() ||
+                         changelog_info_future_.valid());
     if (ImGui::Button(update_desc.c_str(), update_btn_size)) {
-      update_available_future_ =
-          updater_->CheckForUpdatesAsync(stable_toggle_, XE_BUILD_BRANCH);
+      update_available_future_ = updater_->CheckForUpdatesAsync(
+          stable_toggle_, XE_BUILD_BRANCH, cancel_request);
     }
+    ImGui::EndDisabled();
 
     if (update_available_future_.valid()) {
       if (update_available_future_.wait_for(0ms) == std::future_status::ready) {
@@ -157,10 +187,12 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
         if (update_check_result_.update_available) {
           if (stable_toggle_) {
             changelog_info_future_ = updater_->GetChangelogBetweenCommitsAsync(
-                XE_BUILD_COMMIT, update_check_result_.metadata.tag);
+                XE_BUILD_COMMIT, update_check_result_.metadata.tag,
+                cancel_request);
           } else {
             changelog_info_future_ = updater_->GetChangelogBetweenCommitsAsync(
-                XE_BUILD_COMMIT, update_check_result_.metadata.commit_hash);
+                XE_BUILD_COMMIT, update_check_result_.metadata.commit_hash,
+                cancel_request);
           }
         }
       }
@@ -306,7 +338,7 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
 
       ImGui::Spacing();
 
-      if (downloading_) {
+      if (download_future_.valid()) {
         ImGui::Separator();
 
         ImGui::ProgressBar(download_progress_, ImVec2(-1.0f, 0.0f));
@@ -328,25 +360,12 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
       if (downloaded_failed_) {
         ImGui::Separator();
 
-        std::string dl_failed_desc = "Downloading update failed, try again!";
+        std::string dl_failed_desc = "Download failed try again!";
+        std::string error_code = fmt::format(
+            "Error Code: {}", static_cast<int32_t>(download_response_code_));
 
-        ImVec2 dl_lbl_size = ImGui::CalcTextSize(dl_failed_desc.c_str());
         ImGui::Text(dl_failed_desc.c_str());
-
-        switch (download_response_code_) {
-          case HTTP_STATUS_CODE::HTTP_FORBIDDEN: {
-            ImGui::Spacing();
-            ImGui::Text("You're rate limited from GitHub, try again later.");
-            ImGui::Spacing();
-          } break;
-          default: {
-            std::string error_code =
-                fmt::format("Error Code: {}",
-                            static_cast<int32_t>(download_response_code_));
-
-            ImGui::Text(error_code.c_str());
-          } break;
-        }
+        ImGui::Text(error_code.c_str());
       }
 
       if (!hide_download_button_) {
@@ -373,12 +392,13 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
             ImGui::OpenPopup("Replace");
           }
 
-          download_pending = true;
+          download_startup_pending = true;
         }
       }
 
-      if (download_pending && !downloaded_ && !downloading_ &&
-          !show_replace_dialog_ && !downloaded_file_path_.empty()) {
+      if (download_startup_pending && !downloaded_ &&
+          !download_future_.valid() && !show_replace_dialog_ &&
+          !downloaded_file_path_.empty()) {
         const bool exists = std::filesystem::exists(downloaded_file_path_);
 
         if (!exists || exists && replace_file_) {
@@ -388,31 +408,28 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
             }
           };
 
-          auto cancel_check = [this]() { return download_cancelled_; };
-
           if (stable_toggle_) {
             download_future_ = updater_->DownloadLatestReleaseAsync(
-                artifact_name_, downloaded_file_path_.string(), callback,
-                cancel_check);
+                artifact_name_, downloaded_file_path_.string(), cancel_request,
+                callback);
           } else {
             download_future_ = updater_->DownloadLatestNightlyArtifactAsync(
                 "Windows_build", XE_BUILD_BRANCH, artifact_name_,
-                downloaded_file_path_.string(), callback, cancel_check);
+                downloaded_file_path_.string(), cancel_request, callback);
           }
 
-          downloading_ = true;
           hide_download_button_ = true;
+          downloaded_ = false;
+          downloaded_failed_ = false;
         } else {
           replace_file_ = false;
         }
 
-        download_pending = false;
+        download_startup_pending = false;
       }
 
       if (download_future_.valid()) {
         if (download_future_.wait_for(0ms) == std::future_status::ready) {
-          downloading_ = false;
-
           download_response_code_ = download_future_.get();
 
           if (download_response_code_ == HTTP_STATUS_CODE::HTTP_OK) {
@@ -424,6 +441,7 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
             hide_download_button_ = false;
             downloaded_file_path_.clear();
             download_progress_ = 0.0f;
+            replace_file_ = false;
           }
         }
       }
@@ -611,25 +629,6 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
 #endif  //  DEBUG
 
   if (!updater_opened_) {
-    download_cancelled_ = true;
-
-    // Delete the partially downloaded file if download was cancelled
-    if (downloading_ && !downloaded_) {
-      std::error_code ec;
-
-      if (!downloaded_file_path_.empty() &&
-          std::filesystem::exists(downloaded_file_path_, ec)) {
-        std::filesystem::remove(downloaded_file_path_, ec);
-      }
-
-      if (ec) {
-        XELOGE(
-            "Failed to delete partially downloaded file after "
-            "cancellation {}: {}",
-            artifact_name_, ec.message());
-      }
-    }
-
     Close();
     ImGui::CloseCurrentPopup();
     emulator_window_->ToggleUpdaterDialog();
