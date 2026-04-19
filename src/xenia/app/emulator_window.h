@@ -329,7 +329,7 @@ class EmulatorWindow {
   bool initializing_shader_storage_ = false;
 
   std::shared_ptr<Updater> updater_;
-  std::atomic<bool> update_found_ = false;
+  std::shared_future<CheckForUpdateInfo> update_info_;
 
   std::unique_ptr<DisplayConfigDialog> display_config_dialog_;
 

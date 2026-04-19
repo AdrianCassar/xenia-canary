@@ -288,25 +288,26 @@ void EmulatorWindow::OnEmulatorInitialized() {
     Gamepad_HotKeys_Listener->set_name("Gamepad HotKeys Listener");
   }
 
-// Check for updates
+  // Check for updates
 #if !defined(DEBUG) && !defined(XE_BUILD_IS_PR)
-  bool should_update = cvars::auto_check_updates &&
-                       !(cvar::updated_arg_present && cvar::updated);
+  bool should_check_update = cvars::auto_check_updates &&
+                             !(cvar::updated_arg_present && cvar::updated);
 
-  if (should_update) {
-    // Use async callback-based approach for non-blocking update check
-    updater_->StartupUpdateCheckAsync(
-        [this](bool update_found, const std::string& commit,
-               const std::string& date, uint32_t response) {
-          // Store the result for use in UpdaterDialog
-          update_found_.store(update_found);
-          if (update_found) {
-            // Schedule UI update on main thread
-            app_context_.CallInUIThread([this, commit, date]() {
-              ShowUpdateAvailableDialog(commit, date);
-            });
-          }
+  if (should_check_update) {
+    update_info_ = updater_->StartupUpdateCheckAsync();
+
+    std::jthread([this]() {
+      update_info_.wait();
+
+      const auto& update_info = update_info_.get();
+
+      if (update_info.update_available) {
+        app_context_.CallInUIThread([this, update_info]() {
+          ShowUpdateAvailableDialog(update_info.metadata.commit_hash,
+                                    update_info.metadata.commit_date);
         });
+      }
+    }).detach();
   }
 #endif
 }
@@ -1837,10 +1838,13 @@ void EmulatorWindow::ToggleFriendsDialog() {
 
 void EmulatorWindow::ToggleUpdaterDialog() {
   if (!updater_dialog_) {
+    const bool auto_check_update =
+        update_info_.valid() ? update_info_.get().update_available : false;
+
     disable_hotkeys_ = true;
     emulator_->kernel_state()->BroadcastNotification(kXNotificationSystemUI, 1);
     updater_dialog_ = std::make_unique<UpdaterDialog>(
-        updater_, update_found_.load(), imgui_drawer_.get(), this);
+        updater_, auto_check_update, imgui_drawer_.get(), this);
     emulator_->kernel_state()->xam_state()->xam_dialogs_shown_++;
   } else {
     disable_hotkeys_ = false;
