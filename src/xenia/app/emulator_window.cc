@@ -2564,35 +2564,6 @@ xe::X_STATUS EmulatorWindow::RunTitle(
 
   disable_hotkeys_ = false;
 
-  if (profile_config_dialog_) {
-    profile_config_dialog_.reset();
-    emulator_->kernel_state()->xam_state()->xam_dialogs_shown_--;
-  }
-
-  if (gamerpic_browser_dialog_) {
-    gamerpic_browser_dialog_.reset();
-    emulator_->kernel_state()->xam_state()->xam_dialogs_shown_--;
-  }
-
-  if (display_config_dialog_) {
-    display_config_dialog_.reset();
-  }
-
-  if (friends_manager_dialog_) {
-    friends_manager_dialog_.reset();
-    emulator_->kernel_state()->xam_state()->xam_dialogs_shown_--;
-  }
-
-  if (updater_dialog_) {
-    updater_dialog_.reset();
-    emulator_->kernel_state()->xam_state()->xam_dialogs_shown_--;
-  }
-
-  if (updater_completion_dialog_) {
-    updater_completion_dialog_.reset();
-    emulator_->kernel_state()->xam_state()->xam_dialogs_shown_--;
-  }
-
   ClearDialogs();
 
   if (result) {
