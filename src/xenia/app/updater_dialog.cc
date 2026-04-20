@@ -401,7 +401,7 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
           !downloaded_file_path_.empty()) {
         const bool exists = std::filesystem::exists(downloaded_file_path_);
 
-        if (!exists || exists && replace_file_) {
+        if (!exists || replace_file_) {
           auto callback = [this](double now, double total) {
             if (total > 0.0) {
               download_progress_ = static_cast<float>(now / total);

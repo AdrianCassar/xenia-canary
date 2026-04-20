@@ -532,20 +532,14 @@ uint32_t Updater::DownloadFile(
     return -1;
   }
 
-  FILE* fp = fopen(output_path.c_str(), "wb");
-
-  if (!fp) {
-    curl_easy_cleanup(curl);
-    return -1;
-  }
-
   ProgressCallbackData callback_data = {.progress_callback = progress_callback,
                                         .cancelled = &cancel_flag};
 
   curl_easy_setopt(curl, CURLOPT_URL, file_endpoint.c_str());
   curl_easy_setopt(curl, CURLOPT_USERAGENT, "xenia-canary");
   curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-  curl_easy_setopt(curl, CURLOPT_WRITEDATA, fp);
+  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteResponceToMemoryCallback);
+  curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response_buffer);
 
   // Enable progress callback getting called
   curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
@@ -557,8 +551,6 @@ uint32_t Updater::DownloadFile(
   curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, 30L);     // 30 seconds
 
   CURLcode result = curl_easy_perform(curl);
-
-  fclose(fp);
 
   long response_code = 0;
   curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
@@ -572,6 +564,19 @@ uint32_t Updater::DownloadFile(
 
   if (result != CURLE_OK && response_code == 0) {
     response_code = -1;
+  }
+
+  if (!response_buffer.empty() && response_code == HTTP_STATUS_CODE::HTTP_OK) {
+    auto file = std::ofstream(output_path.c_str(), std::ios::binary);
+
+    if (file) {
+      if (file.is_open()) {
+        file.write(reinterpret_cast<const char*>(response_buffer.data()),
+                   response_buffer.size());
+      }
+
+      file.close();
+    }
   }
 
   return response_code;
