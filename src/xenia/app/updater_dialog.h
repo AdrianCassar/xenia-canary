@@ -58,11 +58,11 @@ class UpdaterDialog final : public ui::ImGuiDialog {
   bool updater_opened_ = false;
   bool auto_check_update_ = false;
   std::shared_ptr<Updater> updater_ = nullptr;
-  std::future<CheckForUpdateInfo> update_available_future_;
+  std::future<CheckForUpdateInfo> update_available_future_ = {};
   CheckForUpdateInfo update_check_result_ = {};
-  std::future<ChangelogInfo> changelog_info_future_;
+  std::future<ChangelogInfo> changelog_info_future_ = {};
   ChangelogInfo changelog_result_ = {};
-  std::future<uint32_t> download_future_;
+  std::future<uint32_t> download_future_ = {};
   uint32_t download_response_code_ = 0;
   std::atomic<bool> cancel_request = false;
   bool checked_for_updates_ = false;
@@ -80,7 +80,7 @@ class UpdaterDialog final : public ui::ImGuiDialog {
   std::string artifact_name_ = "";
   std::string changelog_ = "";
   COMPARE_STATE compare_status_ = COMPARE_STATE::IDENTICAL;
-  EmulatorWindow* emulator_window_;
+  EmulatorWindow* emulator_window_ = nullptr;
 };
 
 class UpdaterCompletionDialog final : public ui::ImGuiDialog {

@@ -27,23 +27,23 @@ struct UpdateMetadata {
   std::string tag;
   std::string published_date;
   std::string commit_date;
-  uint32_t response_code;
+  uint32_t response_code = 0;
 };
 
 struct CheckForUpdateInfo {
   UpdateMetadata metadata;
-  bool update_available;
+  bool update_available = false;
 };
 
 struct CommitMessages {
   std::vector<std::string> messages;
   std::string status;
-  bool success;
+  bool success = false;
 };
 
 struct ChangelogInfo {
   CommitMessages messages;
-  uint32_t response_code;
+  uint32_t response_code = 0;
 };
 
 class Updater {
@@ -160,14 +160,16 @@ class Updater {
 
     // Check atomic cancellation flag first
     if (callback_data->cancelled && callback_data->cancelled->load()) {
-      return 1;  // 1 = abort transfer
+      // Abort Transfer
+      return 1;
     }
 
     if (callback_data->progress_callback) {
       callback_data->progress_callback((double)dlnow, (double)dltotal);
     }
 
-    return 0;  // 0 = continue, else abort transfer
+    // Continue downloading
+    return 0;
   }
 };
 }  // namespace app
