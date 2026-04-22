@@ -72,25 +72,57 @@ bool UpdaterDialog::ToggleButton(const char* str_id, bool* v) {
 
 void UpdaterDialog::ToggleStableState() {
   // Reset current data if toggled
-  update_response_code_ = 0;
+  update_check_result_ = {};
+  changelog_result_ = {};
   download_response_code_ = 0;
   checked_for_updates_ = false;
-  update_available_ = false;
   replace_file_ = false;
   compare_status_ = COMPARE_STATE::IDENTICAL;
-  latest_commit_hash_ = "";
-  latest_commit_date_ = "";
-  stable_release_tag_ = "";
   changelog_.clear();
 
   // Download state reset
   downloaded_ = false;
   downloaded_failed_ = false;
-  downloading_ = false;
+  download_startup_pending = false;
   applying_update_failed_ = false;
   hide_download_button_ = false;
   download_progress_ = 0.0f;
   downloaded_file_path_.clear();
+}
+
+void UpdaterDialog::Initialize() {
+  if (auto_check_update_) {
+    auto_check_update_ = false;  // Check once
+
+    update_available_future_ = updater_->CheckForUpdatesAsync(
+        stable_toggle_, XE_BUILD_BRANCH, cancel_request);
+  }
+}
+
+UpdaterDialog::~UpdaterDialog() {
+  if (download_future_.valid() && !downloaded_) {
+    cancel_request = true;
+  }
+
+  if (cancel_request) {
+    // Wait for the partially downloaded file to no longer be in use.
+    download_future_.wait();
+
+    // Delete the partially downloaded file if download was cancelled
+    std::error_code ec;
+
+    if (!downloaded_file_path_.empty() &&
+        std::filesystem::exists(downloaded_file_path_, ec)) {
+      std::filesystem::remove(downloaded_file_path_, ec);
+    }
+
+    if (ec) {
+      XELOGE(
+          "Failed to delete partially downloaded file after "
+          "cancellation {}: {}",
+          artifact_name_, ec.message());
+    }
+  }
 }
 
 void UpdaterDialog::OnDraw(ImGuiIO& io) {
@@ -108,7 +140,8 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
   ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
 
 #ifndef DEBUG
-  if (changelog_.empty() || (checked_for_updates_ && !update_available_)) {
+  if (changelog_.empty() ||
+      (checked_for_updates_ && !update_check_result_.update_available)) {
     ImGui::SetNextWindowSizeConstraints(ImVec2(300, -1), ImVec2(300, -1));
   } else {
     // Using -1 for y with SetWindowFontScale causes Separator to appear thin.
@@ -130,6 +163,7 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
     ImGui::EndPopup();
   }
 #else
+
     ImGui::BeginGroup();
 
     std::string update_desc = stable_toggle_ ? "Check for Stable Updates"
@@ -138,62 +172,58 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
     ImVec2 update_btn_size = ImVec2(update_lbl_size.x + btn_width_padding,
                                     update_lbl_size.y + btn_height_padding);
 
-    if (auto_check_update_ ||
-        ImGui::Button(update_desc.c_str(), update_btn_size)) {
-      auto_check_update_ = false;  // Check once
-      checked_for_updates_ = true;
+    ImGui::BeginDisabled(update_available_future_.valid() ||
+                         changelog_info_future_.valid());
+    if (ImGui::Button(update_desc.c_str(), update_btn_size)) {
+      update_available_future_ = updater_->CheckForUpdatesAsync(
+          stable_toggle_, XE_BUILD_BRANCH, cancel_request);
+    }
+    ImGui::EndDisabled();
 
-      update_available_ = updater_->CheckForUpdates(
-          stable_toggle_, XE_BUILD_BRANCH, &latest_commit_hash_,
-          &latest_commit_date_, &stable_release_tag_, &update_response_code_);
+    if (update_available_future_.valid()) {
+      if (update_available_future_.wait_for(0ms) == std::future_status::ready) {
+        checked_for_updates_ = true;
 
-      if (update_response_code_ != HTTP_STATUS_CODE::HTTP_OK) {
-        update_available_ = false;
-      }
+        update_check_result_ = update_available_future_.get();
 
-      if (update_available_) {
-        commit_messages_.clear();
-
-        uint32_t result = 0;
-
-        std::string commit_compare_status_ = "";
-
-        if (stable_toggle_) {
-          result = updater_->GetChangelogBetweenCommits(
-              XE_BUILD_COMMIT, stable_release_tag_, commit_compare_status_,
-              commit_messages_);
-        } else {
-          result = updater_->GetChangelogBetweenCommits(
-              XE_BUILD_COMMIT, latest_commit_hash_, commit_compare_status_,
-              commit_messages_);
-        }
-
-        if (commit_compare_status_ == "identical") {
-          update_available_ = false;
-          compare_status_ = COMPARE_STATE::IDENTICAL;
-        } else if (commit_compare_status_ == "ahead") {
-          compare_status_ = COMPARE_STATE::AHEAD;
-        } else if (commit_compare_status_ == "behind") {
-          compare_status_ = COMPARE_STATE::BEHIND;
-        } else if (commit_compare_status_ == "diverged") {
-          compare_status_ = COMPARE_STATE::DIVERGED;
-        }
-
-        if (result == HTTP_STATUS_CODE::HTTP_OK) {
-          if (compare_status_ == COMPARE_STATE::AHEAD ||
-              compare_status_ == COMPARE_STATE::BEHIND) {
-            if (!commit_messages_.empty()) {
-              changelog_.clear();
-            }
-
-            for (const auto& message : commit_messages_) {
-              changelog_.append(fmt::format("- {}\n", message));
-            }
+        if (update_check_result_.update_available) {
+          if (stable_toggle_) {
+            changelog_info_future_ = updater_->GetChangelogBetweenCommitsAsync(
+                XE_BUILD_COMMIT, update_check_result_.metadata.tag,
+                cancel_request);
+          } else {
+            changelog_info_future_ = updater_->GetChangelogBetweenCommitsAsync(
+                XE_BUILD_COMMIT, update_check_result_.metadata.commit_hash,
+                cancel_request);
           }
         }
       }
+    }
 
-      checked_for_updates_ = true;
+    if (changelog_info_future_.valid()) {
+      if (changelog_info_future_.wait_for(0ms) == std::future_status::ready) {
+        changelog_result_ = changelog_info_future_.get();
+
+        const std::vector<std::string> commit_messages =
+            changelog_result_.messages.messages;
+
+        if (changelog_result_.messages.status == "identical") {
+          compare_status_ = COMPARE_STATE::IDENTICAL;
+        } else if (changelog_result_.messages.status == "ahead") {
+          compare_status_ = COMPARE_STATE::AHEAD;
+        } else if (changelog_result_.messages.status == "behind") {
+          compare_status_ = COMPARE_STATE::BEHIND;
+        } else if (changelog_result_.messages.status == "diverged") {
+          compare_status_ = COMPARE_STATE::DIVERGED;
+        }
+
+        if (!commit_messages.empty()) {
+          changelog_.clear();
+          for (const auto& message : commit_messages) {
+            changelog_.append(fmt::format("- {}\n", message));
+          }
+        }
+      }
     }
 
     ImGui::EndGroup();
@@ -252,7 +282,13 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
     ImGui::Separator();
     ImGui::Spacing();
 
-    if (checked_for_updates_ && update_available_) {
+    if (update_available_future_.valid() || changelog_info_future_.valid()) {
+      ImGui::Text("Checking for updates...");
+      ImGui::Spacing();
+    }
+
+    if (checked_for_updates_ && update_check_result_.update_available &&
+        !update_available_future_.valid() && !changelog_info_future_.valid()) {
       const uint32_t lines = 15;
       float height = ImGui::GetTextLineHeight() * lines;
 
@@ -289,19 +325,22 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
         }
 
         ImGui::TextLinkOpenURL(
-            fmt::format("Release {} details", stable_release_tag_).c_str(),
+            fmt::format("Release {} details", update_check_result_.metadata.tag)
+                .c_str(),
             "https://github.com/AdrianCassar/xenia-canary/releases/latest");
 
         ImGui::Spacing();
       }
 
-      if (!latest_commit_date_.empty()) {
-        ImGui::Text(fmt::format("Build Date: {}", latest_commit_date_).c_str());
+      if (!update_check_result_.metadata.commit_date.empty()) {
+        ImGui::Text(fmt::format("Build Date: {}",
+                                update_check_result_.metadata.commit_date)
+                        .c_str());
       }
 
       ImGui::Spacing();
 
-      if (downloading_) {
+      if (download_future_.valid()) {
         ImGui::Separator();
 
         ImGui::ProgressBar(download_progress_, ImVec2(-1.0f, 0.0f));
@@ -323,33 +362,21 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
       if (downloaded_failed_) {
         ImGui::Separator();
 
-        std::string dl_failed_desc = "Downloading update failed, try again!";
+        std::string dl_failed_desc = "Download failed try again!";
+        std::string error_code = fmt::format(
+            "Error Code: {}", static_cast<int32_t>(download_response_code_));
 
-        ImVec2 dl_lbl_size = ImGui::CalcTextSize(dl_failed_desc.c_str());
         ImGui::Text(dl_failed_desc.c_str());
-
-        switch (download_response_code_) {
-          case HTTP_STATUS_CODE::HTTP_FORBIDDEN: {
-            ImGui::Spacing();
-            ImGui::Text("You're rate limited from GitHub, try again later.");
-            ImGui::Spacing();
-          } break;
-          default: {
-            std::string error_code =
-                fmt::format("Error Code: {}",
-                            static_cast<int32_t>(download_response_code_));
-
-            ImGui::Text(error_code.c_str());
-          } break;
-        }
+        ImGui::Text(error_code.c_str());
       }
 
       if (!hide_download_button_) {
         ImGui::Separator();
 
         std::string dl_lbl =
-            stable_toggle_ ? fmt::format("Download {}", stable_release_tag_)
-                           : "Download";
+            stable_toggle_
+                ? fmt::format("Download {}", update_check_result_.metadata.tag)
+                : "Download";
 
         ImVec2 dl_lbl_size = ImGui::CalcTextSize(dl_lbl.c_str());
         ImVec2 dl_btn_size = ImVec2(dl_lbl_size.x + btn_width_padding,
@@ -360,62 +387,70 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
         if (ImGui::Button(dl_lbl.c_str(), dl_btn_size)) {
           downloaded_file_path_ =
               xe::filesystem::GetExecutableFolder() / artifact_name_;
-        }
 
-        if (!downloaded_file_path_.empty()) {
           if (std::filesystem::exists(downloaded_file_path_) &&
-              !replace_file_ && !show_replace_dialog_) {
+              !replace_file_) {
             show_replace_dialog_ = true;
             ImGui::OpenPopup("Replace");
           }
 
-          if (!show_replace_dialog_) {
-            auto run = [this]() {
-              auto callback = [this](double now, double total) {
-                if (total > 0.0) {
-                  download_progress_ = static_cast<float>(now / total);
-                }
-              };
+          download_startup_pending = true;
+        }
+      }
 
-              if (stable_toggle_) {
-                download_response_code_ = updater_->DownloadLatestRelease(
-                    std::string(artifact_name_), downloaded_file_path_.string(),
-                    callback);
-              } else {
-                download_response_code_ =
-                    updater_->DownloadLatestNightlyArtifact(
-                        "Orchestrator", XE_BUILD_BRANCH,
-                        std::string(artifact_name_),
-                        downloaded_file_path_.string(), callback);
-              }
+      if (download_startup_pending && !downloaded_ &&
+          !download_future_.valid() && !show_replace_dialog_ &&
+          !downloaded_file_path_.empty()) {
+        const bool exists = std::filesystem::exists(downloaded_file_path_);
 
-              if (download_response_code_ == HTTP_STATUS_CODE::HTTP_OK) {
-                downloaded_ = true;
-              } else {
-                // If download failed show download button again to retry
-                downloaded_ = false;
-                downloaded_failed_ = true;
-                hide_download_button_ = false;
-                downloaded_file_path_ = "";
-              }
+        if (!exists || replace_file_) {
+          auto callback = [this](double now, double total) {
+            if (total > 0.0) {
+              download_progress_ = static_cast<float>(now / total);
+            }
+          };
 
-              downloading_ = false;
-              download_progress_ = 0.0f;
-            };
+          if (stable_toggle_) {
+            download_future_ = updater_->DownloadLatestReleaseAsync(
+                artifact_name_, downloaded_file_path_.string(), cancel_request,
+                callback);
+          } else {
+            download_future_ = updater_->DownloadLatestNightlyArtifactAsync(
+                "Orchestrator", XE_BUILD_BRANCH, artifact_name_,
+                downloaded_file_path_.string(), cancel_request, callback);
+          }
 
-            std::thread download = std::thread(run);
-            download.detach();
+          hide_download_button_ = true;
+          downloaded_ = false;
+          downloaded_failed_ = false;
+        } else {
+          replace_file_ = false;
+        }
 
-            hide_download_button_ = true;
-            downloaded_failed_ = false;
-            downloading_ = true;
+        download_startup_pending = false;
+      }
+
+      if (download_future_.valid()) {
+        if (download_future_.wait_for(0ms) == std::future_status::ready) {
+          download_response_code_ = download_future_.get();
+
+          if (download_response_code_ == HTTP_STATUS_CODE::HTTP_OK) {
+            downloaded_ = true;
+          } else {
+            // If download failed show download button again to retry
+            downloaded_ = false;
+            downloaded_failed_ = true;
+            hide_download_button_ = false;
+            downloaded_file_path_.clear();
+            download_progress_ = 0.0f;
+            replace_file_ = false;
           }
         }
       }
 
       ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
       ImGui::SetNextWindowSizeConstraints(ImVec2(300, -1), ImVec2(300, -1));
-      if (ImGui::BeginPopupModal("Replace", nullptr,
+      if (ImGui::BeginPopupModal("Replace", &show_replace_dialog_,
                                  ImGuiWindowFlags_AlwaysAutoResize |
                                      ImGuiWindowFlags_NoMove |
                                      ImGuiWindowFlags_NoScrollbar)) {
@@ -438,7 +473,6 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
 
         if (ImGui::Button(yes_lbl.c_str(), yes_btn_size)) {
           replace_file_ = true;
-          show_replace_dialog_ = false;
           ImGui::CloseCurrentPopup();
         }
 
@@ -450,9 +484,7 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
             ImVec2(btn_width, cancel_lbl_size.y + btn_height_padding);
 
         if (ImGui::Button(cancel_lbl.c_str(), cancel_btn_size)) {
-          downloaded_file_path_ = "";
-          show_replace_dialog_ = false;
-
+          downloaded_file_path_.clear();
           ImGui::CloseCurrentPopup();
         }
 
@@ -543,8 +575,8 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
           ImGui::Spacing();
         }
       }
-    } else if (checked_for_updates_ && !update_available_) {
-      switch (update_response_code_) {
+    } else if (checked_for_updates_ && !update_check_result_.update_available) {
+      switch (update_check_result_.metadata.response_code) {
         case HTTP_STATUS_CODE::HTTP_OK: {
           ImGui::Spacing();
           ImGui::Text("You're using latest build.");
@@ -579,8 +611,10 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
           ImGui::Spacing();
         } break;
         default: {
-          std::string error_code = fmt::format(
-              "Error Code: {}", static_cast<int32_t>(update_response_code_));
+          std::string error_code =
+              fmt::format("Error Code: {}",
+                          static_cast<int32_t>(
+                              update_check_result_.metadata.response_code));
 
           ImGui::Spacing();
           ImGui::Text("Failed to check for updates!");

@@ -58,6 +58,8 @@ class EmulatorWindow {
 
   virtual ~EmulatorWindow();
 
+  void ShutdownUpdaterDialog();
+
   static std::unique_ptr<EmulatorWindow> Create(
       Emulator* emulator, ui::WindowedAppContext& app_context, uint32_t width,
       uint32_t height);
@@ -339,8 +341,9 @@ class EmulatorWindow {
   std::string base_title_;
   bool initializing_shader_storage_ = false;
 
-  Updater* updater_;
-  bool update_found_ = false;
+  std::shared_ptr<Updater> updater_;
+  std::shared_future<CheckForUpdateInfo> update_info_;
+  std::atomic<bool> cancel_request;
 
   std::unique_ptr<DisplayConfigDialog> display_config_dialog_;
   std::unique_ptr<ConsoleSettingsDialog> console_settings_dialog_;

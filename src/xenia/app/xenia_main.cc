@@ -599,6 +599,9 @@ void EmulatorApp::OnDestroy() {
   // The profiler needs to shut down before the graphics context.
   Profiler::Shutdown();
 
+  // TODO(Adrian): Close all dialogs in use by emulator window.
+  emulator_window_->ShutdownUpdaterDialog();
+
 #pragma region NetplayCleanup
   emulator_->ShutdownUPnP();
 
