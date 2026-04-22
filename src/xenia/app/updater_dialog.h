@@ -26,7 +26,7 @@ constexpr std::string_view linux_artifact_name_ =
 
 class UpdaterDialog final : public ui::ImGuiDialog {
  public:
-  UpdaterDialog(Updater* updater, bool auto_check_update,
+  UpdaterDialog(std::shared_ptr<Updater> updater, bool auto_check_update,
                 ui::ImGuiDrawer* imgui_drawer, EmulatorWindow* emulator_window)
       : ui::ImGuiDialog(imgui_drawer), emulator_window_(emulator_window) {
     updater_ = updater;
@@ -37,7 +37,11 @@ class UpdaterDialog final : public ui::ImGuiDialog {
 #elif XE_PLATFORM_LINUX
     artifact_name_ = linux_artifact_name_;
 #endif
+
+    Initialize();
   }
+
+  ~UpdaterDialog();
 
  protected:
   void OnDraw(ImGuiIO& io) override;
@@ -47,17 +51,23 @@ class UpdaterDialog final : public ui::ImGuiDialog {
 
   void ToggleStableState();
 
+  void Initialize();
+
   enum class COMPARE_STATE { IDENTICAL, AHEAD, BEHIND, DIVERGED };
 
   bool updater_opened_ = false;
   bool auto_check_update_ = false;
-  Updater* updater_ = nullptr;
-  uint32_t update_response_code_ = 0;
+  std::shared_ptr<Updater> updater_ = nullptr;
+  std::future<CheckForUpdateInfo> update_available_future_ = {};
+  CheckForUpdateInfo update_check_result_ = {};
+  std::future<ChangelogInfo> changelog_info_future_ = {};
+  ChangelogInfo changelog_result_ = {};
+  std::future<uint32_t> download_future_ = {};
   uint32_t download_response_code_ = 0;
-  bool update_available_ = false;
+  std::atomic<bool> cancel_request = false;
   bool checked_for_updates_ = false;
-  bool downloading_ = false;
-  float download_progress_ = 0.0f;
+  bool download_startup_pending = false;
+  std::atomic<float> download_progress_ = 0.0f;
   bool downloaded_ = false;
   bool downloaded_failed_ = false;
   bool applying_update_failed_ = false;
@@ -66,15 +76,11 @@ class UpdaterDialog final : public ui::ImGuiDialog {
   bool show_in_use_warning_dialog_ = false;
   bool replace_file_ = false;
   bool stable_toggle_ = false;
-  std::filesystem::path downloaded_file_path_;
+  std::filesystem::path downloaded_file_path_ = "";
   std::string artifact_name_ = "";
-  std::string latest_commit_hash_ = "";
-  std::string latest_commit_date_ = "";
-  std::string stable_release_tag_ = "";
   std::string changelog_ = "";
   COMPARE_STATE compare_status_ = COMPARE_STATE::IDENTICAL;
-  std::vector<std::string> commit_messages_ = {};
-  EmulatorWindow* emulator_window_;
+  EmulatorWindow* emulator_window_ = nullptr;
 };
 
 class UpdaterCompletionDialog final : public ui::ImGuiDialog {
