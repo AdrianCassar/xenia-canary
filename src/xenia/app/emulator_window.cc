@@ -206,7 +206,7 @@ EmulatorWindow::EmulatorWindow(Emulator* emulator,
                 XE_BUILD_BRANCH "@" XE_BUILD_COMMIT_SHORT " on " XE_BUILD_DATE
                 ")";
 
-  updater_ = new Updater("AdrianCassar", "xenia-canary");
+  updater_ = std::make_shared<Updater>("AdrianCassar", "xenia-canary");
 
   LoadRecentlyLaunchedTitles();
 }
@@ -226,6 +226,12 @@ std::unique_ptr<EmulatorWindow> EmulatorWindow::Create(
 EmulatorWindow::~EmulatorWindow() {
   // Notify the ImGui drawer that the immediate drawer is being destroyed.
   ShutdownGraphicsSystemPresenterPainting();
+}
+
+void EmulatorWindow::ShutdownUpdaterDialog() {
+  // Cancel checking for updates.
+  cancel_request = true;
+  updater_dialog_.reset();
 }
 
 ui::Presenter* EmulatorWindow::GetGraphicsSystemPresenter() const {
@@ -299,27 +305,22 @@ void EmulatorWindow::OnEmulatorInitialized() {
     Gamepad_HotKeys_Listener->set_name("Gamepad HotKeys Listener");
   }
 
-// Check for updates
+  // Check for updates
 #if !defined(DEBUG) && !defined(XE_BUILD_IS_PR)
-  bool should_update = cvars::auto_check_updates &&
-                       !(cvar::updated_arg_present && cvar::updated);
+  bool should_check_update = cvars::auto_check_updates &&
+                             !(cvar::updated_arg_present && cvar::updated);
 
-  auto run = [=, this]() {
-    std::string commit, date, tag;
-    uint32_t response = 0;
-
-    update_found_ = updater_->StartupUpdateCheck(&commit, &date, &response);
-
-    if (update_found_) {
-      app_context_.CallInUIThread(
-          [this, commit, date]() { ShowUpdateAvailableDialog(commit, date); });
+  auto callback = [this](CheckForUpdateInfo update_info) {
+    if (update_info.update_available) {
+      app_context_.CallInUIThread([this, update_info]() {
+        ShowUpdateAvailableDialog(update_info.metadata.commit_hash,
+                                  update_info.metadata.commit_date);
+      });
     }
   };
 
-  if (should_update) {
-    std::thread check_for_updates = std::thread(run);
-
-    check_for_updates.detach();
+  if (should_check_update) {
+    update_info_ = updater_->StartupUpdateCheckAsync(cancel_request, callback);
   }
 #endif
 }
@@ -1884,10 +1885,13 @@ void EmulatorWindow::ToggleFriendsDialog() {
 
 void EmulatorWindow::ToggleUpdaterDialog() {
   if (!updater_dialog_) {
+    const bool auto_check_update =
+        update_info_.valid() ? update_info_.get().update_available : false;
+
     disable_hotkeys_ = true;
     emulator_->kernel_state()->BroadcastNotification(kXNotificationSystemUI, 1);
     updater_dialog_ = std::make_unique<UpdaterDialog>(
-        updater_, update_found_, imgui_drawer_.get(), this);
+        updater_, auto_check_update, imgui_drawer_.get(), this);
     emulator_->kernel_state()->xam_state()->xam_dialogs_shown_++;
   } else {
     disable_hotkeys_ = false;
