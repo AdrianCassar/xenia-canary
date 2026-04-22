@@ -13,11 +13,39 @@
 #include <cstdint>
 #include <filesystem>
 #include <functional>
+#include <future>
 #include <string>
 #include <vector>
 
+#include "third_party/libcurl/include/curl/system.h"
+
 namespace xe {
 namespace app {
+
+struct UpdateMetadata {
+  std::string commit_hash;
+  std::string tag;
+  std::string published_date;
+  std::string commit_date;
+  uint32_t response_code = 0;
+};
+
+struct CheckForUpdateInfo {
+  UpdateMetadata metadata;
+  bool update_available = false;
+};
+
+struct CommitMessages {
+  std::vector<std::string> messages;
+  std::string status;
+  bool success = false;
+};
+
+struct ChangelogInfo {
+  CommitMessages messages;
+  uint32_t response_code = 0;
+};
+
 class Updater {
  public:
   Updater(const std::string& owner, const std::string& repo);
@@ -26,58 +54,80 @@ class Updater {
   bool UpdateAndRestart(const std::filesystem::path& zip_path);
 
   uint32_t GetRequest(const std::string& endpoint,
-                      std::vector<uint8_t>& response_buffer) const;
+                      std::vector<uint8_t>& response_buffer,
+                      std::atomic<bool>& cancel_flag) const;
 
-  bool StartupUpdateCheck(std::string* commit_hash, std::string* commit_date,
-                          uint32_t* response_code);
+  CheckForUpdateInfo CheckForUpdatesViaXeniaManagerDatabase(
+      bool stable, std::atomic<bool>& cancel_flag) const;
 
-  bool CheckForUpdates(bool stable, const std::string& branch,
-                       std::string* commit_hash, std::string* date,
-                       std::string* tag, uint32_t* response_code);
+  std::future<CheckForUpdateInfo> StartupUpdateCheckAsync(
+      std::atomic<bool>& cancel_flag,
+      std::function<void(CheckForUpdateInfo)> callback) const;
+
+  CheckForUpdateInfo StartupUpdateCheck(
+      std::atomic<bool>& cancel_flag,
+      std::function<void(CheckForUpdateInfo)> callback) const;
+
+  std::future<CheckForUpdateInfo> CheckForUpdatesAsync(
+      bool stable, const std::string& branch,
+      std::atomic<bool>& cancel_flag) const;
+
+  CheckForUpdateInfo CheckForUpdates(bool stable, const std::string& branch,
+                                     std::atomic<bool>& cancel_flag) const;
 
   std::wstring RunPowershellCommand(const std::string& command) const;
 
   bool IsAnotherInstanceRunning() const;
 
-  uint32_t GetLatestCommitHash(const std::string& branch,
-                               std::string* commit_hash,
-                               std::string* commit_date);
+  UpdateMetadata GetLatestCommitHash(const std::string& branch,
+                                     std::atomic<bool>& cancel_flag) const;
 
-  uint32_t GetLatestReleaseCommitHash(std::string* commit_hash,
-                                      std::string* tag,
-                                      std::string* published_date);
+  UpdateMetadata GetLatestReleaseCommitHash(
+      std::atomic<bool>& cancel_flag) const;
 
   std::string FormatDate(const std::string& iso_date) const;
+
+  std::future<uint32_t> DownloadLatestNightlyArtifactAsync(
+      const std::string& workflow_file, const std::string& branch,
+      const std::string& artifact_name, const std::string& output_path,
+      std::atomic<bool>& cancel_flag,
+      std::function<void(double, double)> progress_callback);
 
   uint32_t DownloadLatestNightlyArtifact(
       const std::string& workflow_file, const std::string& branch,
       const std::string& artifact_name, const std::string& output_path,
+      std::atomic<bool>& cancel_flag,
       std::function<void(double, double)> progress_callback) const;
+
+  std::future<uint32_t> DownloadLatestReleaseAsync(
+      const std::string& asset_name, const std::string& output_path,
+      std::atomic<bool>& cancel_flag,
+      std::function<void(double, double)> progress_callback);
 
   uint32_t DownloadLatestRelease(
       const std::string& asset_name, const std::string& output_path,
+      std::atomic<bool>& cancel_flag,
       std::function<void(double, double)> progress_callback) const;
-
-  uint32_t DownloadFile(const std::string& file_endpoint,
-                        const std::string& output_path) const;
 
   uint32_t DownloadFile(
       const std::string& file_endpoint, const std::string& output_path,
+      std::atomic<bool>& cancel_flag,
       std::function<void(double, double)> progress_callback) const;
 
-  uint32_t GetRecentCommitMessages(const std::string& branch,
-                                   std::vector<std::string>& messages,
-                                   std::string& status,
-                                   uint32_t count = 5) const;
+  ChangelogInfo GetRecentCommitMessages(const std::string& branch,
+                                        std::atomic<bool>& cancel_flag,
+                                        uint32_t count = 5) const;
 
-  uint32_t GetChangelogBetweenCommits(const std::string& base_commit,
-                                      const std::string& head_commit,
-                                      std::string& status,
-                                      std::vector<std::string>& messages) const;
+  std::future<ChangelogInfo> GetChangelogBetweenCommitsAsync(
+      const std::string& base_commit, const std::string& head_commit,
+      std::atomic<bool>& cancel_flag) const;
 
-  bool ParseCommitMessages(std::vector<uint8_t>& response_buffer,
-                           std::vector<std::string>& messages,
-                           std::string& status) const;
+  ChangelogInfo GetChangelogBetweenCommits(
+      const std::string& base_commit, const std::string& head_commit,
+      std::atomic<bool>& cancel_flag) const;
+
+  CommitMessages ParseCommitMessages(
+      const std::vector<uint8_t>& response_buffer) const;
 
   const std::string GetOwner() const { return owner_; }
 
@@ -95,6 +145,31 @@ class Updater {
 
     buffer->insert(buffer->end(), dataPtr, dataPtr + total_size);
     return total_size;
+  }
+
+  struct ProgressCallbackData {
+    std::function<void(double, double)> progress_callback;
+    std::atomic<bool>* cancelled;
+  };
+
+  static int CurlProgressCallback(void* clientp, curl_off_t dltotal,
+                                  curl_off_t dlnow, curl_off_t ultotal,
+                                  curl_off_t ulnow) {
+    const ProgressCallbackData* callback_data =
+        static_cast<ProgressCallbackData*>(clientp);
+
+    // Check atomic cancellation flag first
+    if (callback_data->cancelled && callback_data->cancelled->load()) {
+      // Abort Transfer
+      return 1;
+    }
+
+    if (callback_data->progress_callback) {
+      callback_data->progress_callback((double)dlnow, (double)dltotal);
+    }
+
+    // Continue downloading
+    return 0;
   }
 };
 }  // namespace app

@@ -6,10 +6,13 @@
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
+#include <algorithm>
+#include <atomic>
 #include <filesystem>
 #include <fstream>
 #include <functional>
 #include <iostream>
+#include <memory>
 #include <string>
 
 #include "third_party/fmt/include/fmt/format.h"
@@ -37,7 +40,8 @@ Updater::Updater(const std::string& owner, const std::string& repo)
     : owner_(owner), repo_(repo) {}
 
 uint32_t Updater::GetRequest(const std::string& endpoint,
-                             std::vector<uint8_t>& response_buffer) const {
+                             std::vector<uint8_t>& response_buffer,
+                             std::atomic<bool>& cancel_flag) const {
   CURL* curl;
   CURLcode result;
 
@@ -53,7 +57,18 @@ uint32_t Updater::GetRequest(const std::string& endpoint,
   curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response_buffer);
   curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
 
+  ProgressCallbackData callback_data = {.cancelled = &cancel_flag};
+
+  // Enable progress callback getting called
+  curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
+  curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &callback_data);
+  curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, CurlProgressCallback);
+
   result = curl_easy_perform(curl);
+
+  if (result == CURLE_ABORTED_BY_CALLBACK) {
+    XELOGI("Cancelled Request!");
+  }
 
   long response_code = 0;
   curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
@@ -67,40 +82,37 @@ uint32_t Updater::GetRequest(const std::string& endpoint,
   return response_code;
 }
 
-bool Updater::StartupUpdateCheck(std::string* commit_hash,
-                                 std::string* commit_date,
-                                 uint32_t* response_code) {
+// Using this function will reduce the chances of API rate limits from GitHub.
+// Only supports default branch and release builds.
+CheckForUpdateInfo Updater::CheckForUpdatesViaXeniaManagerDatabase(
+    bool stable, std::atomic<bool>& cancel_flag) const {
   const std::string endpoint =
       "https://xenia-manager.github.io/database/data/version.json";
 
-  const std::string _func_ = __func__;
-  auto fallback = [&, _func_](const char* reason) {
-    XELOGW("{}: {}, falling back to GitHub API", _func_, reason);
-    std::string tag;
-    return CheckForUpdates(false, XE_BUILD_BRANCH, commit_hash, commit_date,
-                           &tag, response_code);
-  };
+  CheckForUpdateInfo update_info = {};
 
   // Perform HTTP GET
   std::vector<uint8_t> response_buffer;
-  uint32_t result = GetRequest(endpoint, response_buffer);
+  const uint32_t result = GetRequest(endpoint, response_buffer, cancel_flag);
 
-  if (response_code) {
-    *response_code = result;
-  }
+  update_info.metadata.response_code = result;
+
   if (result != HTTP_STATUS_CODE::HTTP_OK) {
-    return fallback(
-        fmt::format("endpoint request failed with HTTP {}", result).c_str());
+    XELOGI("endpoint request failed with HTTP {}", result);
+    return update_info;
   }
 
   // Parse JSON
-  const std::string response_data(response_buffer.begin(),
-                                  response_buffer.end());
+  const std::string response_data(response_buffer.cbegin(),
+                                  response_buffer.cend());
+
   rapidjson::Document document;
   document.Parse(response_data.c_str());
 
   if (document.HasParseError() || !document.IsObject()) {
-    return fallback("JSON parse error or invalid root");
+    XELOGI("JSON parse error or invalid root");
+    update_info.metadata.response_code = -1;
+    return update_info;
   }
 
   // Navigate JSON
@@ -110,85 +122,134 @@ bool Updater::StartupUpdateCheck(std::string* commit_hash,
                                                                : nullptr;
   };
 
+  std::string build_type = "nightly";
+
+  if (stable) {
+    build_type = "stable";
+  }
+
   const rapidjson::Value* xenia = get_object(document, "xenia");
   const rapidjson::Value* netplay =
       xenia ? get_object(*xenia, "netplay") : nullptr;
-  const rapidjson::Value* nightly =
-      netplay ? get_object(*netplay, "nightly") : nullptr;
+  const rapidjson::Value* build =
+      netplay ? get_object(*netplay, build_type.c_str()) : nullptr;
 
-  if (!nightly) {
-    return fallback("missing 'xenia.netplay.nightly' object");
+  if (!build) {
+    XELOGI("missing 'xenia.netplay.build' object");
+    update_info.metadata.response_code = -1;
+    return update_info;
   }
 
-  if (!nightly->HasMember("commit_sha") ||
-      !(*nightly)["commit_sha"].IsString()) {
-    return fallback("missing 'commit_sha'");
+  std::string latest_commit;
+
+  if (!stable) {
+    if (!build->HasMember("commit_sha") || !(*build)["commit_sha"].IsString()) {
+      XELOGI("missing 'commit_sha'");
+      update_info.metadata.response_code = -1;
+      return update_info;
+    }
+
+    latest_commit = (*build)["commit_sha"].GetString();
   }
 
   // Extract values
-  const std::string latest_commit = (*nightly)["commit_sha"].GetString();
+  const std::string tag_name = (*build)["tag_name"].GetString();
   const std::string latest_date =
-      (nightly->HasMember("date") && (*nightly)["date"].IsString())
-          ? FormatDate((*nightly)["date"].GetString())
+      (build->HasMember("date") && (*build)["date"].IsString())
+          ? FormatDate((*build)["date"].GetString())
           : "";
 
-  if (commit_hash) {
-    *commit_hash = latest_commit;
-  }
-  if (commit_date) {
-    *commit_date = latest_date;
+  update_info.metadata.commit_hash = latest_commit;
+  update_info.metadata.commit_date = latest_date;
+  update_info.metadata.tag = tag_name;
+  update_info.update_available = latest_commit != XE_BUILD_COMMIT;
+
+  if (update_info.update_available) {
+    XELOGI("Update Available!");
+  } else {
+    XELOGI("Build is up to date!");
   }
 
-  bool update_available = latest_commit != XE_BUILD_COMMIT;
-  XELOGI("{}: current={}, latest={}, date={}", __func__, XE_BUILD_COMMIT,
-         latest_commit, latest_date);
+  if (!latest_commit.empty()) {
+    XELOGI("Updater: Current={}, Latest={}, Date={}", XE_BUILD_COMMIT_SHORT,
+           latest_commit.substr(0, 10), latest_date);
+  }
 
-  return update_available;
+  return update_info;
 }
 
-bool Updater::CheckForUpdates(bool stable, const std::string& branch,
-                              std::string* commit_hash, std::string* date,
-                              std::string* tag, uint32_t* response_code) {
-  uint32_t result = 0;
+std::future<CheckForUpdateInfo> Updater::StartupUpdateCheckAsync(
+    std::atomic<bool>& cancel_flag,
+    std::function<void(CheckForUpdateInfo)> callback) const {
+  auto checking_for_updates =
+      std::async(std::launch::async, &Updater::StartupUpdateCheck, this,
+                 std::ref(cancel_flag), callback);
+
+  return checking_for_updates;
+}
+
+CheckForUpdateInfo Updater::StartupUpdateCheck(
+    std::atomic<bool>& cancel_flag,
+    std::function<void(CheckForUpdateInfo)> callback) const {
+  CheckForUpdateInfo update_info =
+      CheckForUpdatesViaXeniaManagerDatabase(false, cancel_flag);
+
+  if (update_info.metadata.response_code != HTTP_STATUS_CODE::HTTP_OK) {
+    update_info = CheckForUpdates(false, XE_BUILD_BRANCH, cancel_flag);
+  }
+
+  callback(update_info);
+
+  return update_info;
+}
+
+std::future<CheckForUpdateInfo> Updater::CheckForUpdatesAsync(
+    bool stable, const std::string& branch,
+    std::atomic<bool>& cancel_flag) const {
+  auto checking_for_updates =
+      std::async(std::launch::async, &Updater::CheckForUpdates, this, stable,
+                 branch, std::ref(cancel_flag));
+
+  return checking_for_updates;
+}
+
+CheckForUpdateInfo Updater::CheckForUpdates(
+    bool stable, const std::string& branch,
+    std::atomic<bool>& cancel_flag) const {
+  CheckForUpdateInfo update_info = {};
+  ChangelogInfo changelog_info = {};
 
   bool update_available = false;
 
   if (stable) {
-    result = GetLatestReleaseCommitHash(nullptr, tag, date);
+    update_info.metadata = GetLatestReleaseCommitHash(cancel_flag);
   } else {
-    result = GetLatestCommitHash(branch, commit_hash, date);
+    update_info.metadata = GetLatestCommitHash(branch, cancel_flag);
   }
 
-  if (response_code) {
-    *response_code = result;
-  }
-
-  if (result != HTTP_STATUS_CODE::HTTP_OK) {
-    return false;
+  if (update_info.metadata.response_code != HTTP_STATUS_CODE::HTTP_OK) {
+    update_info.update_available = false;
+    return update_info;
   }
 
   if (stable) {
-    std::string commit_compare_status;
-    std::vector<std::string> commit_messages;
-
     // Either get commit hash from tag or compare commits to get state
-    result = GetChangelogBetweenCommits(XE_BUILD_COMMIT, *tag,
-                                        commit_compare_status, commit_messages);
+    changelog_info = GetChangelogBetweenCommits(
+        XE_BUILD_COMMIT, update_info.metadata.tag, cancel_flag);
 
-    if (response_code) {
-      *response_code = result;
+    if (update_info.metadata.response_code != HTTP_STATUS_CODE::HTTP_OK) {
+      update_info.update_available = false;
+      return update_info;
     }
 
-    if (result != HTTP_STATUS_CODE::HTTP_OK) {
-      return false;
-    }
-
-    update_available = commit_compare_status != "identical";
+    update_available = changelog_info.messages.status != "identical";
   } else {
-    update_available = *commit_hash != XE_BUILD_COMMIT;
+    update_available = update_info.metadata.commit_hash != XE_BUILD_COMMIT;
   }
 
-  return update_available;
+  update_info.update_available = update_available;
+
+  return update_info;
 }
 
 #ifdef XE_PLATFORM_WIN32
@@ -247,12 +308,9 @@ bool Updater::IsAnotherInstanceRunning() const {
 }
 #endif
 
-uint32_t Updater::GetLatestCommitHash(const std::string& branch,
-                                      std::string* commit_hash,
-                                      std::string* commit_date) {
-  if (!commit_hash) {
-    return -1;
-  }
+UpdateMetadata Updater::GetLatestCommitHash(
+    const std::string& branch, std::atomic<bool>& cancel_flag) const {
+  UpdateMetadata update_metadata = {};
 
   std::vector<uint8_t> response_buffer = {};
 
@@ -260,10 +318,12 @@ uint32_t Updater::GetLatestCommitHash(const std::string& branch,
       "https://api.github.com/repos/{}/{}/commits?sha={}&per_page=1", owner_,
       repo_, branch);
 
-  uint32_t response_code = GetRequest(endpoint, response_buffer);
+  uint32_t response_code = GetRequest(endpoint, response_buffer, cancel_flag);
+
+  update_metadata.response_code = response_code;
 
   if (response_code != HTTP_STATUS_CODE::HTTP_OK) {
-    return response_code;
+    return update_metadata;
   }
 
   const std::string response_data =
@@ -273,23 +333,27 @@ uint32_t Updater::GetLatestCommitHash(const std::string& branch,
   document.Parse(response_data.c_str());
 
   if (document.HasParseError()) {
-    return -1;
+    update_metadata.response_code = -1;
+    return update_metadata;
   }
 
   if (!document.IsArray() || document.Empty()) {
-    return -1;
+    update_metadata.response_code = -1;
+    return update_metadata;
   }
 
   const auto& commits = document.GetArray();
 
   if (commits.Empty()) {
-    return -1;
+    update_metadata.response_code = -1;
+    return update_metadata;
   }
 
   const auto& commit = commits[0];
 
   if (!commit.HasMember("sha") || !commit["sha"].IsString()) {
-    return -1;
+    update_metadata.response_code = -1;
+    return update_metadata;
   }
 
   std::string commit_date_ = "Unknown";
@@ -305,27 +369,28 @@ uint32_t Updater::GetLatestCommitHash(const std::string& branch,
     }
   }
 
-  *commit_hash = commit["sha"].GetString();
+  update_metadata.commit_hash = commit["sha"].GetString();
+  update_metadata.commit_date = FormatDate(commit_date_).c_str();
+  update_metadata.response_code = response_code;
 
-  if (commit_date) {
-    *commit_date = FormatDate(commit_date_).c_str();
-  }
-
-  return response_code;
+  return update_metadata;
 }
 
-uint32_t Updater::GetLatestReleaseCommitHash(std::string* commit_hash,
-                                             std::string* tag,
-                                             std::string* published_date) {
+UpdateMetadata Updater::GetLatestReleaseCommitHash(
+    std::atomic<bool>& cancel_flag) const {
+  UpdateMetadata update_metadata = {};
+
   std::vector<uint8_t> response_buffer = {};
 
   const std::string endpoint = fmt::format(
       "https://api.github.com/repos/{}/{}/releases/latest", owner_, repo_);
 
-  uint32_t response_code = GetRequest(endpoint, response_buffer);
+  uint32_t response_code = GetRequest(endpoint, response_buffer, cancel_flag);
+
+  update_metadata.response_code = response_code;
 
   if (response_code != HTTP_STATUS_CODE::HTTP_OK) {
-    return response_code;
+    return update_metadata;
   }
 
   const std::string response_data =
@@ -335,31 +400,26 @@ uint32_t Updater::GetLatestReleaseCommitHash(std::string* commit_hash,
   document.Parse(response_data.c_str());
 
   if (document.HasParseError()) {
-    return -1;
+    update_metadata.response_code = -1;
+    return update_metadata;
   }
 
   if (document.HasMember("tag_name") && document["tag_name"].IsString()) {
-    if (tag) {
-      *tag = document["tag_name"].GetString();
-    }
+    update_metadata.tag = document["tag_name"].GetString();
   }
 
   if (document.HasMember("published_at") &&
       document["published_at"].IsString()) {
-    if (published_date) {
-      *published_date =
-          FormatDate(document["published_at"].GetString()).c_str();
-    }
+    update_metadata.published_date =
+        FormatDate(document["published_at"].GetString()).c_str();
   }
 
   if (document.HasMember("target_commitish") &&
       document["target_commitish"].IsString()) {
-    if (commit_hash) {
-      *commit_hash = document["target_commitish"].GetString();
-    }
+    update_metadata.commit_hash = document["target_commitish"].GetString();
   }
 
-  return response_code;
+  return update_metadata;
 }
 
 std::string Updater::FormatDate(const std::string& iso_date) const {
@@ -375,26 +435,52 @@ std::string Updater::FormatDate(const std::string& iso_date) const {
   return fmt::format("{:%b %d, %Y}", time);
 }
 
+std::future<uint32_t> Updater::DownloadLatestNightlyArtifactAsync(
+    const std::string& workflow_file, const std::string& branch,
+    const std::string& artifact_name, const std::string& output_path,
+    std::atomic<bool>& cancel_flag,
+    std::function<void(double, double)> progress_callback) {
+  auto download_nightly =
+      std::async(std::launch::async, &Updater::DownloadLatestNightlyArtifact,
+                 this, workflow_file, branch, artifact_name, output_path,
+                 std::ref(cancel_flag), progress_callback);
+
+  return download_nightly;
+}
+
 uint32_t Updater::DownloadLatestNightlyArtifact(
     const std::string& workflow_file, const std::string& branch,
     const std::string& artifact_name, const std::string& output_path,
+    std::atomic<bool>& cancel_flag,
     std::function<void(double, double)> progress_callback) const {
   const std::string endpoint =
       fmt::format("https://nightly.link/{}/{}/workflows/{}/{}/{}", owner_,
                   repo_, workflow_file, branch, artifact_name);
 
-  return DownloadFile(endpoint, output_path, progress_callback);
+  return DownloadFile(endpoint, output_path, cancel_flag, progress_callback);
+}
+
+std::future<uint32_t> Updater::DownloadLatestReleaseAsync(
+    const std::string& asset_name, const std::string& output_path,
+    std::atomic<bool>& cancel_flag,
+    std::function<void(double, double)> progress_callback) {
+  auto download_release = std::async(
+      std::launch::async, &Updater::DownloadLatestRelease, this, asset_name,
+      output_path, std::ref(cancel_flag), progress_callback);
+
+  return download_release;
 }
 
 uint32_t Updater::DownloadLatestRelease(
     const std::string& asset_name, const std::string& output_path,
+    std::atomic<bool>& cancel_flag,
     std::function<void(double, double)> progress_callback) const {
   std::vector<uint8_t> response_buffer = {};
 
   const std::string endpoint = fmt::format(
       "https://api.github.com/repos/{}/{}/releases/latest", owner_, repo_);
 
-  uint32_t response_code = GetRequest(endpoint, response_buffer);
+  uint32_t response_code = GetRequest(endpoint, response_buffer, cancel_flag);
 
   if (response_code != HTTP_STATUS_CODE::HTTP_OK) {
     return response_code;
@@ -431,103 +517,86 @@ uint32_t Updater::DownloadLatestRelease(
     return -1;
   }
 
-  return DownloadFile(asset_url, output_path, progress_callback);
-}
-
-uint32_t Updater::DownloadFile(const std::string& file_endpoint,
-                               const std::string& output_path) const {
-  std::vector<uint8_t> response_buffer = {};
-
-  uint32_t response_code = GetRequest(file_endpoint, response_buffer);
-
-  if (response_code != HTTP_STATUS_CODE::HTTP_OK) {
-    return response_code;
-  }
-
-  std::ofstream out_file(output_path, std::ios::binary);
-
-  if (!out_file) {
-    XELOGE("Failed to open output file: {}", output_path);
-    return -1;
-  }
-
-  out_file.write(reinterpret_cast<char*>(response_buffer.data()),
-                 response_buffer.size());
-
-  out_file.close();
-
-  return response_code;
-}
-
-static int CurlProgressCallback(void* clientp, curl_off_t dltotal,
-                                curl_off_t dlnow, curl_off_t ultotal,
-                                curl_off_t ulnow) {
-  auto* progress_callback =
-      reinterpret_cast<std::function<void(double, double)>*>(clientp);
-  if (progress_callback && *progress_callback) {
-    (*progress_callback)((double)dlnow, (double)dltotal);
-  }
-  return 0;  // 0 = continue, else abort transfer
+  return DownloadFile(asset_url, output_path, cancel_flag, progress_callback);
 }
 
 uint32_t Updater::DownloadFile(
     const std::string& file_endpoint, const std::string& output_path,
+    std::atomic<bool>& cancel_flag,
     std::function<void(double, double)> progress_callback) const {
   std::vector<uint8_t> response_buffer = {};
 
   CURL* curl = curl_easy_init();
+
   if (!curl) {
     return -1;
   }
 
-  FILE* fp = fopen(output_path.c_str(), "wb");
-  if (!fp) {
-    curl_easy_cleanup(curl);
-    return -1;
-  }
+  ProgressCallbackData callback_data = {.progress_callback = progress_callback,
+                                        .cancelled = &cancel_flag};
 
   curl_easy_setopt(curl, CURLOPT_URL, file_endpoint.c_str());
   curl_easy_setopt(curl, CURLOPT_USERAGENT, "xenia-canary");
   curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-  curl_easy_setopt(curl, CURLOPT_WRITEDATA, fp);
-  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, nullptr);
+  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteResponceToMemoryCallback);
+  curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response_buffer);
 
-  // Download progress tracking
-  curl_easy_setopt(curl, CURLOPT_NOPROGRESS,
-                   0L);  // Must be set to 0 for XFERINFOFUNCTION
+  // Enable progress callback getting called
+  curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
+  curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &callback_data);
   curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, CurlProgressCallback);
-  curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &progress_callback);
+
+  // Timeout options to prevent hanging on slow/stalled connections
+  curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, 1024L);  // 1 KB/s
+  curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, 30L);     // 30 seconds
 
   CURLcode result = curl_easy_perform(curl);
-
-  fclose(fp);
 
   long response_code = 0;
   curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
 
   curl_easy_cleanup(curl);
 
+  if (result == CURLE_ABORTED_BY_CALLBACK) {
+    XELOGI("Download cancelled!");
+    return -1;
+  }
+
   if (result != CURLE_OK && response_code == 0) {
     response_code = -1;
+  }
+
+  if (!response_buffer.empty() && response_code == HTTP_STATUS_CODE::HTTP_OK) {
+    auto file = std::ofstream(output_path.c_str(), std::ios::binary);
+
+    if (file) {
+      if (file.is_open()) {
+        file.write(reinterpret_cast<const char*>(response_buffer.data()),
+                   response_buffer.size());
+      }
+
+      file.close();
+    }
   }
 
   return response_code;
 }
 
-uint32_t Updater::GetRecentCommitMessages(const std::string& branch,
-                                          std::vector<std::string>& messages,
-                                          std::string& status,
-                                          uint32_t count) const {
+ChangelogInfo Updater::GetRecentCommitMessages(const std::string& branch,
+                                               std::atomic<bool>& cancel_flag,
+                                               uint32_t count) const {
+  ChangelogInfo changelog_info = {};
   std::vector<uint8_t> response_buffer = {};
 
   const std::string endpoint = fmt::format(
       "https://api.github.com/repos/{}/{}/commits?sha={}&per_page={}", owner_,
       repo_, branch, count);
 
-  uint32_t response_code = GetRequest(endpoint, response_buffer);
+  uint32_t response_code = GetRequest(endpoint, response_buffer, cancel_flag);
 
   if (response_code != HTTP_STATUS_CODE::HTTP_OK) {
-    return response_code;
+    changelog_info.response_code = response_code;
+    return changelog_info;
   }
 
   const std::string response_data =
@@ -541,47 +610,70 @@ uint32_t Updater::GetRecentCommitMessages(const std::string& branch,
   std::memcpy(response_buffer.data(), json_wrapper.c_str(),
               json_wrapper.size());
 
-  bool result = ParseCommitMessages(response_buffer, messages, status);
+  CommitMessages commit_messages = ParseCommitMessages(response_buffer);
 
-  if (!result) {
-    return -1;
+  if (!commit_messages.success) {
+    changelog_info.response_code = -1;
+    return changelog_info;
   }
 
-  std::reverse(messages.begin(), messages.end());
+  std::reverse(commit_messages.messages.begin(),
+               commit_messages.messages.end());
 
-  return response_code;
+  changelog_info.messages = commit_messages;
+  changelog_info.response_code = response_code;
+
+  return changelog_info;
 }
 
-uint32_t Updater::GetChangelogBetweenCommits(
+std::future<ChangelogInfo> Updater::GetChangelogBetweenCommitsAsync(
     const std::string& base_commit, const std::string& head_commit,
-    std::string& status, std::vector<std::string>& messages) const {
+    std::atomic<bool>& cancel_flag) const {
+  auto changelog =
+      std::async(std::launch::async, &Updater::GetChangelogBetweenCommits, this,
+                 base_commit, head_commit, std::ref(cancel_flag));
+
+  return changelog;
+}
+
+ChangelogInfo Updater::GetChangelogBetweenCommits(
+    const std::string& base_commit, const std::string& head_commit,
+    std::atomic<bool>& cancel_flag) const {
+  ChangelogInfo changelog_info = {};
   std::vector<uint8_t> response_buffer = {};
 
   const std::string endpoint =
       fmt::format("https://api.github.com/repos/{}/{}/compare/{}...{}", owner_,
                   repo_, base_commit, head_commit);
 
-  uint32_t response_code = GetRequest(endpoint, response_buffer);
+  uint32_t response_code = GetRequest(endpoint, response_buffer, cancel_flag);
 
   if (response_code != HTTP_STATUS_CODE::HTTP_OK) {
-    return response_code;
+    changelog_info.response_code = response_code;
+    return changelog_info;
   }
 
   // Max 250 commits returned by compare API
-  bool result = ParseCommitMessages(response_buffer, messages, status);
+  CommitMessages commit_messages = ParseCommitMessages(response_buffer);
 
-  if (!result) {
-    return -1;
+  if (!commit_messages.success) {
+    changelog_info.response_code = -1;
+    return changelog_info;
   }
 
-  std::reverse(messages.begin(), messages.end());
+  std::reverse(commit_messages.messages.begin(),
+               commit_messages.messages.end());
 
-  return response_code;
+  changelog_info.messages = commit_messages;
+  changelog_info.response_code = response_code;
+
+  return changelog_info;
 }
 
-bool Updater::ParseCommitMessages(std::vector<uint8_t>& response_buffer,
-                                  std::vector<std::string>& messages,
-                                  std::string& status) const {
+CommitMessages Updater::ParseCommitMessages(
+    const std::vector<uint8_t>& response_buffer) const {
+  CommitMessages data = {};
+
   const std::string response_data =
       std::string(response_buffer.cbegin(), response_buffer.cend());
 
@@ -589,32 +681,37 @@ bool Updater::ParseCommitMessages(std::vector<uint8_t>& response_buffer,
   document.Parse(response_data.c_str());
 
   if (document.HasParseError()) {
-    return false;
+    data.success = false;
+    return data;
   }
 
   if (!document.IsObject() || !document.HasMember("commits")) {
     XELOGE("Invalid JSON or no commits array to parse.");
-    return false;
+    data.success = false;
+    return data;
   }
 
   const auto& commits = document["commits"];
 
   if (document.HasMember("status")) {
-    status = document["status"].GetString();
+    data.status = document["status"].GetString();
   }
 
   if (!commits.IsArray()) {
-    return false;
+    data.success = false;
+    return data;
   }
 
   for (const auto& commit : commits.GetArray()) {
     if (commit.HasMember("commit") && commit["commit"].HasMember("message")) {
       std::string msg = commit["commit"]["message"].GetString();
-      messages.push_back(msg);
+      data.messages.push_back(msg);
     }
   }
 
-  return true;
+  data.success = true;
+
+  return data;
 }
 
 bool Updater::UpdateAndRestart(const std::filesystem::path& zip_path) {
