@@ -2179,10 +2179,16 @@ struct host_set {
         count = i;
         break;
       }
+
       // Convert from Xenia -> native
       auto socket =
           kernel_state()->object_table()->LookupObject<XSocket>(socket_handle);
-      assert_not_null(socket);
+
+      if (!socket) {
+        count = i;
+        break;
+      }
+
       sockets[i] = socket;
     }
   }
@@ -2190,24 +2196,31 @@ struct host_set {
   void Store(x_fd_set* guest_set) {
     guest_set->fd_count = 0;
     for (uint32_t i = 0; i < count; ++i) {
-      auto socket = sockets[i];
-      guest_set->fd_array[guest_set->fd_count++] = socket->handle();
+      const object_ref<XSocket>& socket = sockets[i];
+      if (socket) {
+        guest_set->fd_array[guest_set->fd_count++] = socket->handle();
+      }
     }
   }
 
   void Store(fd_set* native_set) {
     FD_ZERO(native_set);
     for (uint32_t i = 0; i < count; ++i) {
-      FD_SET(sockets[i]->native_handle(), native_set);
+      const object_ref<XSocket>& socket = sockets[i];
+      if (socket) {
+        FD_SET(socket->native_handle(), native_set);
+      }
     }
   }
 
   void UpdateFrom(fd_set* native_set) {
     uint32_t new_count = 0;
     for (uint32_t i = 0; i < count; ++i) {
-      auto socket = sockets[i];
-      if (FD_ISSET(socket->native_handle(), native_set)) {
-        sockets[new_count++] = socket;
+      const object_ref<XSocket>& socket = sockets[i];
+      if (socket) {
+        if (FD_ISSET(socket->native_handle(), native_set)) {
+          sockets[new_count++] = socket;
+        }
       }
     }
     count = new_count;
