@@ -17,7 +17,7 @@ if(XE_TARGET_X86_64)
   )
 endif()
 target_link_libraries(xenia-kernel PUBLIC
-  aes_128 fmt zlib-ng pugixml miniupnpc::miniupnpc xenia-apu xenia-base xenia-cpu xenia-hid xenia-vfs xenia-app-discord
+  aes_128 fmt zlib-ng pugixml miniupnpc::miniupnpc xenia-apu xenia-base xenia-cpu xenia-hid xenia-vfs xenia-avatars xenia-app-discord
 )
 
 target_link_libraries(xenia-kernel PUBLIC
