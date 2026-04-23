@@ -11,6 +11,7 @@
 
 #include "xenia/kernel/kernel_state.h"
 
+#include "xenia/avatars/asset_pack.h"
 #include "xenia/base/byte_stream.h"
 #include "xenia/base/logging.h"
 #include "xenia/emulator.h"
@@ -67,6 +68,8 @@ KernelState::KernelState(Emulator* emulator)
   xconfig_ =
       std::make_unique<XConfig>(emulator->storage_root() / "xconfig.settings");
   nui_ = std::make_unique<NUIController>();
+  avatar_asset_pack_ = std::make_unique<avatars::AssetPack>();
+  legacy_avatar_asset_pack_ = std::make_unique<avatars::AssetPack>();
 
   InitializeKernelGuestGlobals();
   kernel_version_ = KernelVersion(cvars::kernel_build_version);
