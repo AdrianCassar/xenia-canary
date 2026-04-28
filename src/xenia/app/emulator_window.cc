@@ -942,59 +942,14 @@ bool EmulatorWindow::Initialize() {
 
   // Netplay menu.
   auto Netplay_menu = MenuItem::Create(MenuItem::Type::kPopup, "&Netplay");
-  auto API_list_menu =
-      MenuItem::Create(MenuItem::Type::kPopup, "&API Addresses");
-  auto Network_interfaces_menu =
-      MenuItem::Create(MenuItem::Type::kPopup, "&Network Interfaces");
-  auto Network_mode_menu =
-      MenuItem::Create(MenuItem::Type::kPopup, "&Network Mode");
   {
-    Netplay_menu->AddChild(
-        MenuItem::Create(MenuItem::Type::kString, "&Status", "",
-                         std::bind(&EmulatorWindow::NetplayStatus, this)));
+    Netplay_menu->AddChild(MenuItem::Create(
+        MenuItem::Type::kString, "&Status", "",
+        std::bind(&EmulatorWindow::ToggleNetplayStatusDialog, this)));
 
-    for (std::string& api_address :
-         emulator()->GetXboxLiveAPI()->ParseAPIList()) {
-      API_list_menu->AddChild(MenuItem::Create(
-          MenuItem::Type::kString, api_address, "",
-          std::bind(&EmulatorWindow::SetAPIAddress, this, api_address)));
-    }
-
-    Network_interfaces_menu->AddChild(MenuItem::Create(
-        MenuItem::Type::kString, "Reset Network Interface", "",
-        std::bind(&EmulatorWindow::SetNetworkInterfaceByGUID, this, "")));
-
-    Network_interfaces_menu->AddChild(
-        MenuItem::Create(MenuItem::Type::kSeparator));
-
-    const auto adapter_manager = emulator_->GetNetworkAdapterManager();
-
-    for (const auto& adapter : adapter_manager->GetAdapters()) {
-      const std::string guid = adapter.AdapterName;
-      const std::string interface_name =
-          adapter_manager->GetAdapterFriendlyName(adapter);
-
-      Network_interfaces_menu->AddChild(MenuItem::Create(
-          MenuItem::Type::kString, interface_name, "",
-          std::bind(&EmulatorWindow::SetNetworkInterfaceByGUID, this, guid)));
-    }
-
-    Network_mode_menu->AddChild(
-        MenuItem::Create(MenuItem::Type::kString, "Offline", "",
-                         std::bind(&EmulatorWindow::SetNetworkMode, this,
-                                   xe::kernel::NETWORK_MODE::OFFLINE)));
-    Network_mode_menu->AddChild(
-        MenuItem::Create(MenuItem::Type::kString, "LAN/Systemlink", "",
-                         std::bind(&EmulatorWindow::SetNetworkMode, this,
-                                   xe::kernel::NETWORK_MODE::LAN)));
-    Network_mode_menu->AddChild(
-        MenuItem::Create(MenuItem::Type::kString, "Xbox Live", "",
-                         std::bind(&EmulatorWindow::SetNetworkMode, this,
-                                   xe::kernel::NETWORK_MODE::XBOXLIVE)));
-
-    Netplay_menu->AddChild(std::move(API_list_menu));
-    Netplay_menu->AddChild(std::move(Network_interfaces_menu));
-    Netplay_menu->AddChild(std::move(Network_mode_menu));
+    Netplay_menu->AddChild(MenuItem::Create(
+        MenuItem::Type::kString, "&Settings", "",
+        std::bind(&EmulatorWindow::ToggleNetplaySettingsDialog, this)));
 
     Netplay_menu->AddChild(MenuItem::Create(
         MenuItem::Type::kString, "&Manager", "",
@@ -1005,19 +960,6 @@ bool EmulatorWindow::Initialize() {
     Netplay_menu->AddChild(MenuItem::Create(
         MenuItem::Type::kString, "&Update Checker",
         std::bind(&EmulatorWindow::ToggleUpdaterDialog, this)));
-
-    Netplay_menu->AddChild(MenuItem::Create(
-        MenuItem::Type::kString,
-        "Check for Updates on Startup (Enable/Disable)", [this]() {
-          OVERRIDE_bool(auto_check_updates, !cvars::auto_check_updates);
-          std::string title_text = "Startup Update Check";
-          std::string message = cvars::auto_check_updates
-                                    ? "Auto-check for updates enabled."
-                                    : "Auto-check for updates disabled.";
-
-          new xe::ui::HostNotificationWindow(imgui_drawer(), title_text,
-                                             message, 0, 9);
-        }));
   }
   main_menu->AddChild(std::move(Netplay_menu));
 
@@ -1696,102 +1638,8 @@ void EmulatorWindow::ToggleFullscreen() {
   SetFullscreen(!window_->IsFullscreen());
 }
 
-void EmulatorWindow::SetAPIAddress(std::string api_address) {
-  if (emulator()->GetXboxLiveAPI()->GetInitState() ==
-      xe::kernel::XLiveAPI::InitState::Pending) {
-    app_context_.CallInUIThread([&]() {
-      new xe::ui::HostNotificationWindow(imgui_drawer(), "API Address",
-                                         api_address, 0);
-    });
-  } else {
-    app_context_.CallInUIThread([&]() {
-      new xe::ui::HostNotificationWindow(imgui_drawer(), "API Address",
-                                         "Failed - In-Game", 0);
-    });
-  }
-
-  emulator()->GetXboxLiveAPI()->SetAPIAddress(api_address);
-}
-
-void EmulatorWindow::SetNetworkInterfaceByGUID(std::string guid) {
-  auto adapter_manager = emulator_->GetNetworkAdapterManager();
-
-  if (emulator()->GetXboxLiveAPI()->GetInitState() ==
-      xe::kernel::XLiveAPI::InitState::Pending) {
-    std::string interface_name = "Reset";
-
-    if (!guid.empty()) {
-      const auto adapter = adapter_manager->GetAdapterFromGUID(guid);
-
-      if (adapter.has_value()) {
-        interface_name =
-            adapter_manager->GetAdapterFriendlyName(adapter.value());
-      }
-    }
-
-    app_context_.CallInUIThread([&]() {
-      new xe::ui::HostNotificationWindow(imgui_drawer(), "Network Interface",
-                                         interface_name, 0);
-    });
-  } else {
-    app_context_.CallInUIThread([&]() {
-      new xe::ui::HostNotificationWindow(imgui_drawer(), "Network Interface",
-                                         "Failed - In-Game", 0);
-    });
-  }
-
-  adapter_manager->SetSelectedAdapterGUID(guid);
-
-  if (guid.empty()) {
-    adapter_manager->RefreshNetworkAdapters();
-  }
-}
-
-void EmulatorWindow::SetNetworkMode(uint32_t mode) {
-  std::string mode_desc = "";
-
-  switch (mode) {
-    case xe::kernel::NETWORK_MODE::OFFLINE: {
-      emulator_->kernel_state()->BroadcastNotification(
-          kXNotificationLiveConnectionChanged, X_ONLINE_S_LOGON_DISCONNECTED);
-
-      emulator_->kernel_state()->BroadcastNotification(
-          kXNotificationLiveLinkStateChanged, 0);
-
-      mode_desc = "Offline";
-    } break;
-    case xe::kernel::NETWORK_MODE::LAN: {
-      emulator_->kernel_state()->BroadcastNotification(
-          kXNotificationLiveConnectionChanged, X_ONLINE_S_LOGON_DISCONNECTED);
-
-      emulator_->kernel_state()->BroadcastNotification(
-          kXNotificationLiveLinkStateChanged, 1);
-
-      mode_desc = "LAN/Systemlink";
-    } break;
-    case xe::kernel::NETWORK_MODE::XBOXLIVE: {
-      emulator_->kernel_state()->BroadcastNotification(
-          kXNotificationLiveConnectionChanged,
-          X_ONLINE_S_LOGON_CONNECTION_ESTABLISHED);
-
-      emulator_->kernel_state()->BroadcastNotification(
-          kXNotificationLiveLinkStateChanged, 1);
-
-      mode_desc = "Xbox Live";
-    } break;
-  }
-
-  const std::string action =
-      cvars::network_mode == mode ? "Refreshed" : "Switched";
-
-  app_context_.CallInUIThread([&]() {
-    new xe::ui::HostNotificationWindow(
-        imgui_drawer(), fmt::format("Network Mode - {}", action), mode_desc, 0);
-  });
-
-  XELOGI("{} Network Mode: {}", action, mode_desc);
-
-  emulator()->GetXboxLiveAPI()->SetNetworkMode(mode);
+void EmulatorWindow::SetAutoCheckForUpdates(bool state) {
+  OVERRIDE_bool(auto_check_updates, state);
 }
 
 void EmulatorWindow::UpdateCompletionNotification() {
@@ -1919,6 +1767,44 @@ void EmulatorWindow::ToggleCompletionDialog() {
       updater_completion_dialog_.release();
     } else {
       updater_completion_dialog_.reset();
+    }
+    emulator_->kernel_state()->xam_state()->xam_dialogs_shown_--;
+  }
+}
+
+void EmulatorWindow::ToggleNetplaySettingsDialog() {
+  if (!netplay_settings_dialog_) {
+    disable_hotkeys_ = true;
+    emulator_->kernel_state()->BroadcastNotification(kXNotificationSystemUI, 1);
+    netplay_settings_dialog_ = std::make_unique<NetplaySettingsDialog>(
+        imgui_drawer_.get(), this, emulator_->GetNetworkAdapterManager());
+    emulator_->kernel_state()->xam_state()->xam_dialogs_shown_++;
+  } else {
+    disable_hotkeys_ = false;
+    emulator_->kernel_state()->BroadcastNotification(kXNotificationSystemUI, 0);
+    if (netplay_settings_dialog_->IsClosing()) {
+      netplay_settings_dialog_.release();
+    } else {
+      netplay_settings_dialog_.reset();
+    }
+    emulator_->kernel_state()->xam_state()->xam_dialogs_shown_--;
+  }
+}
+
+void EmulatorWindow::ToggleNetplayStatusDialog() {
+  if (!netplay_status_dialog_) {
+    disable_hotkeys_ = true;
+    emulator_->kernel_state()->BroadcastNotification(kXNotificationSystemUI, 1);
+    netplay_status_dialog_ = std::make_unique<NetplayStatusDialog>(
+        imgui_drawer_.get(), this, emulator_->GetNetworkAdapterManager());
+    emulator_->kernel_state()->xam_state()->xam_dialogs_shown_++;
+  } else {
+    disable_hotkeys_ = false;
+    emulator_->kernel_state()->BroadcastNotification(kXNotificationSystemUI, 0);
+    if (netplay_status_dialog_->IsClosing()) {
+      netplay_status_dialog_.release();
+    } else {
+      netplay_status_dialog_.reset();
     }
     emulator_->kernel_state()->xam_state()->xam_dialogs_shown_--;
   }
@@ -2406,103 +2292,6 @@ void EmulatorWindow::CycleReadbackResolve() {
   }
 }
 
-void EmulatorWindow::NetplayStatus() {
-  std::string msg = "";
-
-  msg += "API Address: " + cvars::api_address;
-  msg += "\n";
-
-  const auto adapter_manager = emulator_->GetNetworkAdapterManager();
-
-  const std::string adapter_name = adapter_manager->GetSelectedAdapterName();
-
-  if (adapter_name.empty()) {
-    if (cvars::network_guid.empty()) {
-      msg += fmt::format("Network Interface: Unspecified Network");
-    } else {
-      msg += fmt::format("Network Interface GUID: {}", cvars::network_guid);
-    }
-  } else {
-    std::string WAN_interface = adapter_manager->IsSelectedAdapterWANRouting()
-                                    ? "(Default)"
-                                    : "(Non Default)";
-
-    if (emulator()->GetXboxLiveAPI()->GetInitState() !=
-            xe::kernel::XLiveAPI::InitState::Pending &&
-        cvars::network_mode != xe::kernel::NETWORK_MODE::OFFLINE) {
-      msg += fmt::format("Network Interface: {} - {}", adapter_name,
-                         WAN_interface);
-    } else {
-      msg += fmt::format("Network Interface: {}", adapter_name);
-    }
-  }
-
-  msg += "\n";
-
-  std::string network_mode = "";
-
-  switch (cvars::network_mode) {
-    case xe::kernel::NETWORK_MODE::OFFLINE: {
-      network_mode = "Offline";
-    } break;
-    case xe::kernel::NETWORK_MODE::LAN: {
-      network_mode = "Systemlink";
-    } break;
-    case xe::kernel::NETWORK_MODE::XBOXLIVE: {
-      network_mode = "Xbox Live";
-    } break;
-  }
-
-  msg += fmt::format("Network Mode: {}", network_mode);
-  msg += "\n";
-
-  msg += "XLiveAPI Initialized: " +
-         xe::string_util::BoolToString(
-             emulator()->GetXboxLiveAPI()->GetInitState() ==
-             xe::kernel::XLiveAPI::InitState::Success);
-  msg += "\n";
-
-  if (emulator()->GetXboxLiveAPI()->GetInitState() !=
-          xe::kernel::XLiveAPI::InitState::Pending &&
-      cvars::upnp) {
-    const auto upnp = emulator()->GetUPnP();
-
-    if (upnp && upnp->IsActive()) {
-      msg += "UPnP: Device found";
-    } else {
-      msg += "UPnP: Device search failed";
-    }
-
-    msg += "\n";
-  } else {
-    msg += "UPnP: " + xe::string_util::BoolToString(cvars::upnp);
-    msg += "\n";
-  }
-
-  if (emulator()->GetXboxLiveAPI()->GetInitState() !=
-      xe::kernel::XLiveAPI::InitState::Pending) {
-    msg += "\n";
-
-    if (emulator()->GetXboxLiveAPI()->GetInitState() !=
-        xe::kernel::XLiveAPI::InitState::Pending) {
-      if (emulator()->GetXboxLiveAPI()->IsXUIDMismatched()) {
-        msg += "XUID mismatch expect unstable netplay!\n";
-      }
-    }
-
-    if (emulator()->GetXboxLiveAPI()->GetInitState() ==
-        xe::kernel::XLiveAPI::InitState::Success) {
-      msg += "Communication succeeded with api_address: " + cvars::api_address;
-    } else {
-      msg += "Communication failed with api_address: " + cvars::api_address;
-    }
-  }
-
-  imgui_drawer_.get()->ClearDialogs();
-  xe::ui::ImGuiDialog::ShowMessageBox(imgui_drawer_.get(), "Netplay Status",
-                                      msg);
-}
-
 void EmulatorWindow::DisplayHotKeysConfig() {
   std::string msg = "";
   std::string msg_passthru = "";
@@ -2646,6 +2435,16 @@ xe::X_STATUS EmulatorWindow::RunTitle(
 
   if (updater_completion_dialog_) {
     updater_completion_dialog_.reset();
+    emulator_->kernel_state()->xam_state()->xam_dialogs_shown_--;
+  }
+
+  if (netplay_settings_dialog_) {
+    netplay_settings_dialog_.reset();
+    emulator_->kernel_state()->xam_state()->xam_dialogs_shown_--;
+  }
+
+  if (netplay_status_dialog_) {
+    netplay_status_dialog_.reset();
     emulator_->kernel_state()->xam_state()->xam_dialogs_shown_--;
   }
 

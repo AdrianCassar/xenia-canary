@@ -14,6 +14,7 @@
 #include <string>
 
 #include "xenia/app/gamerpic_browser.h"
+#include "xenia/app/netplay_settings_dialog.h"
 #include "xenia/app/profile_dialogs.h"
 #include "xenia/app/updater.h"
 #include "xenia/app/updater_dialog.h"
@@ -93,9 +94,7 @@ class EmulatorWindow {
   void UpdateTitle();
   void SetFullscreen(bool fullscreen);
   void ToggleFullscreen();
-  void SetAPIAddress(std::string address);
-  void SetNetworkInterfaceByGUID(std::string guid);
-  void SetNetworkMode(uint32_t mode);
+  void SetAutoCheckForUpdates(const bool state);
   void SetInitializingShaderStorage(bool initializing);
 
   void TakeScreenshot();
@@ -111,6 +110,8 @@ class EmulatorWindow {
   void ToggleFriendsDialog();
   void ToggleUpdaterDialog();
   void ToggleCompletionDialog();
+  void ToggleNetplaySettingsDialog();
+  void ToggleNetplayStatusDialog();
   void SetHotkeysState(bool enabled) { disable_hotkeys_ = !enabled; }
 
   // Types of button functions for hotkeys.
@@ -302,7 +303,6 @@ class EmulatorWindow {
   void GamepadHotKeys();
   void ToggleGPUSetting(gpu::GPUSetting setting);
   void CycleReadbackResolve();
-  void NetplayStatus();
   void DisplayHotKeysConfig();
 
   static std::string CanonicalizeFileExtension(
@@ -352,6 +352,10 @@ class EmulatorWindow {
   std::unique_ptr<UpdaterDialog> updater_dialog_;
 
   std::unique_ptr<UpdaterCompletionDialog> updater_completion_dialog_;
+
+  std::unique_ptr<NetplaySettingsDialog> netplay_settings_dialog_;
+
+  std::unique_ptr<NetplayStatusDialog> netplay_status_dialog_;
 
   std::vector<RecentTitleEntry> recently_launched_titles_;
 };
