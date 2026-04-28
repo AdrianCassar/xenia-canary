@@ -14,7 +14,6 @@
 #include <optional>
 #include <vector>
 
-#include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/util/net_utils.h"
 
 #ifdef XE_PLATFORM_WIN32

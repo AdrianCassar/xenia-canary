@@ -19,6 +19,7 @@
 #include "xenia/base/jpeg_utils.h"
 #include "xenia/base/logging.h"
 #include "xenia/base/png_utils.h"
+#include "xenia/base/system.h"
 #include "xenia/kernel/XLiveAPI.h"
 #include "xenia/kernel/xam/friends_util.h"
 #include "xenia/kernel/xam/user_data.h"
@@ -199,8 +200,12 @@ void TitleGamerpicBrowser::OnDraw(ImGuiIO& io) {
 
       ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetColumnWidth() -
                            actual_source_size.x);
-      ImGui::TextLinkOpenURL(lbl_actual_source.c_str(),
-                             lbl_actual_source.c_str());
+
+      // We need to use a separate thread otherwise window will freeze.
+      if (ImGui::TextLink(lbl_actual_source.c_str())) {
+        std::jthread open_link(LaunchWebBrowser, lbl_actual_source);
+        open_link.detach();
+      }
       ImGui::SetCursorPos(pos);
 
       ImGui::NewLine();
