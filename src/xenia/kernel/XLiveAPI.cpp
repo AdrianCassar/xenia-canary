@@ -57,6 +57,8 @@ DEFINE_bool(
     "Store user data on backend (not recommended), otherwise fallback locally.",
     "Live");
 
+DEFINE_bool(xhttp, false, "Toggles XHTTP.", "Live");
+
 DEFINE_int32(discord_presence_user_index, 0,
              "User profile index used for Discord rich presence [0, 3].",
              "Live");
@@ -157,6 +159,49 @@ std::vector<std::string> XLiveAPI::ParseAPIList() const {
   return api_addresses;
 }
 
+void XLiveAPI::AddAPIAddress(std::string address) const {
+  if (address.back() != '/') {
+    address.push_back('/');
+  }
+
+  std::vector<std::string> api_addresses = ParseAPIList();
+
+  auto it = std::find(api_addresses.begin(), api_addresses.end(), address);
+
+  if (it == api_addresses.end()) {
+    api_addresses.push_back(address);
+
+    cvars::api_list = BuildCSVFromVector(api_addresses);
+    OVERRIDE_string(api_list, cvars::api_list);
+  }
+}
+
+void XLiveAPI::RemoveAPIAddress(std::string address) const {
+  if (initialized_ != InitState::Pending) {
+    return;
+  }
+
+  if (cvars::api_address == default_public_server_) {
+    return;
+  }
+
+  std::vector<std::string> api_addresses = ParseAPIList();
+
+  auto it = std::find(api_addresses.begin(), api_addresses.end(), address);
+
+  if (it != api_addresses.end()) {
+    api_addresses.erase(it);
+  }
+
+  cvars::api_list = BuildCSVFromVector(api_addresses);
+
+  if (cvars::api_address == address) {
+    OVERRIDE_string(api_address, default_public_server_);
+  }
+
+  OVERRIDE_string(api_list, cvars::api_list);
+}
+
 void XLiveAPI::SetAPIAddress(std::string address) {
   if (initialized_ == InitState::Pending) {
     OVERRIDE_string(api_address, address);
@@ -185,6 +230,10 @@ void XLiveAPI::SetNetworkMode(uint32_t mode) {
     Init();
   }
 }
+
+void XLiveAPI::SetLogging(bool state) const { OVERRIDE_bool(logging, state); }
+
+void XLiveAPI::SetXHttp(bool state) const { OVERRIDE_bool(xhttp, state); }
 
 std::string XLiveAPI::GetApiAddress() {
   std::vector<std::string> api_addresses =

@@ -43,7 +43,7 @@
 #include <sys/socket.h>
 #endif
 
-DEFINE_bool(xhttp, false, "Toggles XHTTP.", "Live");
+DECLARE_bool(xhttp);
 
 DECLARE_bool(logging);
 
