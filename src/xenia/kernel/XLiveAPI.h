@@ -74,11 +74,17 @@ class XLiveAPI {
 
   std::vector<std::string> ParseAPIList() const;
 
+  void AddAPIAddress(std::string address) const;
+
+  void RemoveAPIAddress(std::string api_address) const;
+
   void SetAPIAddress(std::string address);
 
-  void SetNetworkInterfaceByGUID(std::string guid);
-
   void SetNetworkMode(uint32_t mode);
+
+  void SetLogging(bool state) const;
+
+  void SetXHttp(bool state) const;
 
   static std::string GetApiAddress();
 
