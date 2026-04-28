@@ -107,10 +107,11 @@ bool xeDrawCreateProfile(xe::ui::ImGuiDrawer* imgui_drawer, Emulator* emulator,
 
   ImGui::TextUnformatted("Gamertag:");
 
-  bool enter_pressed = false;
+  const bool enter_pressed =
+      ImGui::InputText("##Gamertag", args.gamertag, sizeof(args.gamertag),
+                       ImGuiInputTextFlags_EnterReturnsTrue);
 
-  if (enter_pressed = ImGui::InputText("##Gamertag", args.gamertag,
-                                       sizeof(args.gamertag))) {
+  if (ImGui::IsItemEdited() || enter_pressed) {
     args.valid_gamertag =
         profile_manager->IsGamertagValid(std::string(args.gamertag));
   }
@@ -120,7 +121,8 @@ bool xeDrawCreateProfile(xe::ui::ImGuiDrawer* imgui_drawer, Emulator* emulator,
   ImGui::EndGroup();
 
   ImGui::BeginDisabled(!args.valid_gamertag);
-  if (ImGui::Button("Create", half_width_btn) || enter_pressed) {
+  if (ImGui::Button("Create", half_width_btn) ||
+      (enter_pressed && args.valid_gamertag)) {
     bool autologin = (profile_manager->GetAccountCount() == 0);
 
     uint32_t reserved_flags = 0;
