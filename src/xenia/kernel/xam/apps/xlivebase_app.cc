@@ -1783,8 +1783,6 @@ X_HRESULT XLiveBaseApp::XStorageDownloadToMemory(uint32_t buffer_ptr,
       open_result = output_file->ReadSync(
           {file_data.data(), output_file->entry()->size()}, 0, &bytes_read);
 
-      output_file->Destroy();
-
       if (!open_result) {
         if (bytes_read > unmarshaller.BufferSize()) {
           XELOGI("{}: Provided file size {}b is larger than expected {}b",
@@ -1814,6 +1812,8 @@ X_HRESULT XLiveBaseApp::XStorageDownloadToMemory(uint32_t buffer_ptr,
           *extended_error = X_ONLINE_E_STORAGE_FILE_NOT_FOUND;
         }
       }
+
+      output_file->Destroy();
     } else {
       XELOGI("{}: {} doesn't exist!", __func__, filename);
       result = X_ERROR_FUNCTION_FAILED;
