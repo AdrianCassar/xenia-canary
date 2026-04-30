@@ -34,6 +34,8 @@ class DiscordPresence {
       std::function<void(kernel::X_INVITE_INFO)> handler);
   static void Shutdown();
 
+  static void SetDiscordState(const bool state);
+
   // Called by the Discord SDK when user requests to join; decodes and
   // invokes the registered handler. Public so the C callback can call it.
   static void ProcessJoinSecret(const char* join_secret);

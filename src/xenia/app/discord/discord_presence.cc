@@ -61,6 +61,10 @@ void DiscordPresence::NotPlaying() {
 
 void DiscordPresence::PlayingTitle(const std::string_view game_title,
                                    const std::string_view state) {
+  if (!initialized_) {
+    return;
+  }
+
   if (!start_time) {
     start_time = time(0);
   }
@@ -194,6 +198,10 @@ void DiscordPresence::Shutdown() {
   }
   initialized_ = false;
   Discord_Shutdown();
+}
+
+void DiscordPresence::SetDiscordState(bool state) {
+  OVERRIDE_bool(discord, state);
 }
 
 }  // namespace discord
