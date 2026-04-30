@@ -8,6 +8,7 @@
  */
 
 #include "xenia/app/netplay_settings_dialog.h"
+#include "xenia/app/discord/discord_presence.h"
 #include "xenia/app/emulator_window.h"
 #include "xenia/base/logging.h"
 #include "xenia/base/system.h"
@@ -21,6 +22,10 @@ DECLARE_bool(logging);
 DECLARE_bool(auto_check_updates);
 
 DECLARE_string(api_address);
+
+DECLARE_bool(discord);
+
+DECLARE_int32(discord_presence_user_index);
 
 namespace xe {
 namespace app {
@@ -245,6 +250,10 @@ void NetplaySettingsDialog::OnDraw(ImGuiIO& io) {
       xlive_api->SetXHttp(xhttp_);
     }
 
+    if (ImGui::Checkbox("Discord Presence", &discord_)) {
+      ActivateDiscordState(discord_);
+    }
+
     ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
     ImGui::SetNextWindowSizeConstraints(ImVec2(225, 90), ImVec2(225, 90));
     if (ImGui::BeginPopupModal("Remove API Address", nullptr,
@@ -442,6 +451,34 @@ void xe::app::NetplaySettingsDialog::InitializeCheckboxSettings() {
   xhttp_ = cvars::xhttp;
   auto_check_for_updates_ = cvars::auto_check_updates;
   logging_ = cvars::logging;
+  discord_ = cvars::discord;
+}
+
+void NetplaySettingsDialog::ActivateDiscordState(bool state) {
+  const auto emulator = emulator_window_->emulator();
+  const auto kernel_state = emulator->kernel_state();
+
+  discord::DiscordPresence::SetDiscordState(state);
+
+  if (cvars::discord) {
+    discord::DiscordPresence::Initialize();
+
+    if (emulator->is_title_open()) {
+      const auto user = kernel_state->xam_state()->GetUserProfile(
+          uint32_t(cvars::discord_presence_user_index));
+
+      if (user) {
+        discord::DiscordPresence::PlayingTitle(
+            emulator->title_name(), xe::to_utf8(user->GetPresenceString()));
+      }
+    } else {
+      discord::DiscordPresence::NotPlaying();
+    }
+
+    discord::DiscordPresence::Update();
+  } else {
+    discord::DiscordPresence::Shutdown();
+  }
 }
 
 void NetplayStatusDialog::OnDraw(ImGuiIO& io) {
