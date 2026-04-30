@@ -51,7 +51,7 @@ DECLARE_bool(log_mask_ips);
 
 DECLARE_int32(network_mode);
 
-DECLARE_bool(xlink_kai_systemlink_hack);
+DECLARE_bool(bind_interface);
 
 enum XNET_QOS {
   LISTEN_ENABLE = 0x01,
@@ -846,13 +846,21 @@ dword_result_t NetDll_XNetXnAddrToInAddr_entry(dword_t caller,
                                                pointer_t<XNADDR> xn_addr,
                                                pointer_t<XNKID> xid,
                                                pointer_t<in_addr> in_addr) {
-  if (in_addr) {
-    in_addr->s_addr = 0;
-  }
+  in_addr.Zero();
 
+  // 494707E4
   if (GetConsoleMacAddress() == MacAddress(xn_addr->abEnet)) {
     XELOGI("Resolving XNetXnAddrToInAddr to LOOPBACK!");
-    in_addr->s_addr = xe::byte_swap(LOOPBACK);
+
+    if (cvars::bind_interface) {
+      const auto network_adapter =
+          kernel_state()->emulator()->GetNetworkAdapterManager();
+
+      in_addr->s_addr =
+          network_adapter->GetSelectedAdapterLocalIP().sin_addr.s_addr;
+    } else {
+      in_addr->s_addr = xe::byte_swap(LOOPBACK);
+    }
 
     return X_ERROR_SUCCESS;
   }
@@ -860,7 +868,7 @@ dword_result_t NetDll_XNetXnAddrToInAddr_entry(dword_t caller,
   if (kernel_state()
           ->emulator()
           ->GetNetworkAdapterManager()
-          ->IsConnectedToLAN()) {
+          ->IsInterfaceSelected()) {
     in_addr->s_addr = xn_addr->ina.s_addr;
   }
 
@@ -2054,13 +2062,8 @@ dword_result_t NetDll_bind_entry(dword_t caller, dword_t socket_handle,
   const auto network_adapter =
       kernel_state()->emulator()->GetNetworkAdapterManager();
 
-  const std::string local_ip = network_adapter->GetSelectedAdapterLocalIP_Str();
-
-  if (!network_adapter->IsSelectedAdapterWANRouting() &&
-      cvars::xlink_kai_systemlink_hack) {
-    // Force socket to bind to the IP of the selected interface
-    name->address_ip = network_adapter->GetSelectedAdapterLocalIP().sin_addr;
-  }
+  const std::string local_ip =
+      network_adapter->GetSelectedAdapterLocalIPString();
 
   X_STATUS status = socket->Bind(name, namelen);
   if (XFAILED(status)) {

@@ -13,15 +13,17 @@
 #include "xenia/base/logging.h"
 #include "xenia/base/system.h"
 
-DECLARE_bool(upnp);
-
-DECLARE_bool(xhttp);
-
-DECLARE_bool(logging);
+DECLARE_string(api_address);
 
 DECLARE_bool(auto_check_updates);
 
-DECLARE_string(api_address);
+DECLARE_bool(bind_interface);
+
+DECLARE_bool(xhttp);
+
+DECLARE_bool(upnp);
+
+DECLARE_bool(logging);
 
 DECLARE_bool(discord);
 
@@ -173,6 +175,9 @@ void NetplaySettingsDialog::OnDraw(ImGuiIO& io) {
 
     ImGui::SetNextItemWidth(window_width);
 
+    // If we allow changing network interface while title is running then we
+    // have to simulate disconnecting and reconnecting network to reinitialize
+    // our own XNADDR?
     ImGui::BeginDisabled(!updatable);
     if (ImGui::BeginCombo("##Network Interfaces",
                           selected_network_interface_item_)) {
@@ -204,8 +209,7 @@ void NetplaySettingsDialog::OnDraw(ImGuiIO& io) {
 
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled) &&
         !updatable) {
-      ImGui::SetTooltip(
-          "Changing network interface while playing isn't supported!");
+      ImGui::SetTooltip("Hot swapping network interface is not allowed!");
     }
 
     const std::string refresh_desc = "Refresh";
@@ -215,6 +219,7 @@ void NetplaySettingsDialog::OnDraw(ImGuiIO& io) {
         ImVec2(btn_width, refresh_desc_lbl_size.y + btn_height_padding);
 
     if (ImGui::Button(refresh_desc.c_str(), refresh_desc_btn_size)) {
+      network_adapter_manager_->Initialize();
       RefreshInterfaces();
     }
 
@@ -226,9 +231,26 @@ void NetplaySettingsDialog::OnDraw(ImGuiIO& io) {
     ImVec2 reset_btn_size =
         ImVec2(btn_width, reset_lbl_size.y + btn_height_padding);
 
+    ImGui::BeginDisabled(!updatable);
     if (ImGui::Button(reset_desc.c_str(), reset_btn_size)) {
-      network_adapter_manager_->SetSelectedAdapterGUID("");
+      network_adapter_manager_->SelectBestInterface();
       RefreshInterfaces();
+    }
+    ImGui::EndDisabled();
+
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled) &&
+        !updatable) {
+      ImGui::SetTooltip("Hot swapping network interface is not allowed!");
+    }
+
+    ImGui::BeginDisabled(!updatable);
+    if (ImGui::Checkbox("Bind Interface", &bind_interface_)) {
+      xlive_api->SetBindInterface(bind_interface_);
+    }
+    ImGui::EndDisabled();
+
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+      ImGui::SetTooltip("Useful for network Tunnels/VPNs e.g. XLink Kai");
     }
 
     ImGui::Spacing();
@@ -412,8 +434,6 @@ void NetplaySettingsDialog::UpdateSelectedInterfaceItemAndIndex() {
 }
 
 void NetplaySettingsDialog::RefreshInterfaces() {
-  network_adapter_manager_->RefreshNetworkAdapters();
-
   network_interfaces_.clear();
   network_interface_guids_.clear();
 
@@ -452,6 +472,7 @@ void xe::app::NetplaySettingsDialog::InitializeCheckboxSettings() {
   auto_check_for_updates_ = cvars::auto_check_updates;
   logging_ = cvars::logging;
   discord_ = cvars::discord;
+  bind_interface_ = cvars::bind_interface;
 }
 
 void NetplaySettingsDialog::ActivateDiscordState(bool state) {
@@ -518,24 +539,26 @@ void NetplayStatusDialog::OnDraw(ImGuiIO& io) {
 
     if (is_pending) {
       xlive_api_state = "XLiveAPI Initialized: Pending Initialization";
-      upnp_state = "UPnP: Pending Initialization";
       api_server_state = "API Server: Pending Initialization";
     } else {
       xlive_api_state = fmt::format("XLiveAPI Initialized: {}",
                                     is_success ? "True" : "False");
-
-      if (cvars::upnp) {
-        const auto upnp = emulator->GetUPnP();
-
-        if (upnp && upnp->IsActive()) {
-          upnp_state = "UPnP: Device found";
-        } else {
-          upnp_state = "UPnP: Device search failed";
-        }
-      }
-
       api_server_state = fmt::format("Communication {} with API address:",
                                      is_success ? "succeeded" : "failed");
+    }
+
+    if (cvars::upnp) {
+      const auto upnp = emulator->GetUPnP();
+
+      if (is_pending) {
+        upnp_state = "UPnP: Pending Initialization";
+      } else if (upnp && upnp->IsActive()) {
+        upnp_state = "UPnP: Device found";
+      } else {
+        upnp_state = "UPnP: Device search failed";
+      }
+    } else {
+      upnp_state = "UPnP: Disabled";
     }
 
     ImGui::Text(xlive_api_state.c_str());

@@ -63,8 +63,6 @@ class MacAddress {
   uint8_t mac_address_[MacAddressSize] = {};
 };
 
-sockaddr_in WinsockGetLocalIP();
-
 std::string ip_to_string(in_addr addr);
 std::string ip_to_string(sockaddr_in sockaddr);
 sockaddr_in ip_to_sockaddr(std::string ip_str);

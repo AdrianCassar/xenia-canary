@@ -12,6 +12,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <vector>
 
 #include "xenia/kernel/util/net_utils.h"
@@ -31,14 +32,21 @@ class NetworkAdapterManager {
  public:
   NetworkAdapterManager();
 
-  void RefreshNetworkAdapters();
+  void Initialize();
+
+  void SelectBestInterface();
 
   void SetSelectedAdapterGUID(const std::string guid);
 
   std::string GetSelectedAdapaterGUID() const;
 
+  std::string GetSelectedAdapterDesciption() const;
+
   std::optional<IP_ADAPTER_ADDRESSES> GetAdapterFromGUID(
       const std::string guid) const;
+
+  std::optional<IP_ADAPTER_ADDRESSES> GetAdapterFromIfIndex(
+      int32_t IfIndex) const;
 
   std::string GetAdapterFriendlyName(const IP_ADAPTER_ADDRESSES adapter) const;
 
@@ -52,9 +60,7 @@ class NetworkAdapterManager {
 
   sockaddr_in GetSelectedAdapterLocalIP() const { return local_ip_; }
 
-  std::string GetSelectedAdapterLocalIP_Str() const {
-    return ip_to_string(local_ip_);
-  };
+  std::string GetSelectedAdapterLocalIPString() const;
 
   const std::vector<IP_ADAPTER_ADDRESSES>& GetAdapters() const {
     return adapter_addresses_;
@@ -62,16 +68,25 @@ class NetworkAdapterManager {
 
   bool IsSelectedAdapterWANRouting() const { return is_WAN_routing_; }
 
-  bool IsConnectedToLAN() const { return local_ip_.sin_addr.s_addr != 0; }
+  bool IsInterfaceSelected() const;
 
  private:
   void ResetSelectedAdapter();
-  std::vector<IP_ADAPTER_ADDRESSES> DiscoverNetworkAdapters();
-  bool UpdateNetworkInterface(sockaddr_in local_ip,
-                              IP_ADAPTER_ADDRESSES adapter);
 
-  void AutoSelectNetworkAdapter(
-      const std::vector<IP_ADAPTER_ADDRESSES> adapters);
+  std::vector<IP_ADAPTER_ADDRESSES> DiscoverNetworkAdapters();
+
+  bool UpdateNetworkInterface(const IP_ADAPTER_ADDRESSES adapter);
+
+  int32_t GetBestInterfaceIfIndex();
+
+  bool IsInterfaceWANRouting(const sockaddr_in interface_addr);
+
+  std::optional<sockaddr_in> GetInterfaceIPFromIfIndex(
+      const int32_t IfIndex) const;
+
+  bool SelectSavedNetworkAdapter();
+
+  void AutoSelectNetworkAdapter(const int32_t best_interface_IfIndex);
 
   // Adapter addresses buffer
   std::vector<uint8_t> adapter_addresses_data_;
@@ -79,9 +94,11 @@ class NetworkAdapterManager {
   // Pointer to adapter_addresses_data_.data()
   std::vector<IP_ADAPTER_ADDRESSES> adapter_addresses_;
 
-  bool is_WAN_routing_;
+  int32_t best_interface_IfIndex_ = -1;
 
-  sockaddr_in local_ip_;
+  sockaddr_in local_ip_ = {};
+
+  bool is_WAN_routing_ = false;
 };
 
 }  // namespace kernel

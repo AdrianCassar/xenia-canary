@@ -13,10 +13,6 @@
 #include "xenia/base/logging.h"
 #include "xenia/kernel/util/net_utils.h"
 
-DECLARE_string(network_guid);
-
-DECLARE_bool(logging);
-
 // TODO(Adrian): This should be moved to XConfig once supported.
 DEFINE_string(mac_address, "", "Console MAC address. (Do not touch!)", "Live");
 
@@ -69,47 +65,6 @@ std::string MacAddress::to_printable_form() const {
                   mac_address_[1], mac_address_[2], mac_address_[3],
                   mac_address_[4], mac_address_[5]);
   return mac;
-}
-
-sockaddr_in WinsockGetLocalIP() {
-  sockaddr_in localAddr{};
-
-#ifdef XE_PLATFORM_WIN32
-  SOCKET sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-
-  if (sock == INVALID_SOCKET) {
-    return localAddr;
-  }
-
-  // Connect the socket to a remote address
-  sockaddr_in remoteAddr{};
-  remoteAddr.sin_family = AF_INET;
-  remoteAddr.sin_port = htons(80);
-
-  // Google DNS
-  inet_pton(AF_INET, "8.8.8.8", &remoteAddr.sin_addr);
-
-  sockaddr* remoteAddr_ptr = reinterpret_cast<sockaddr*>(&remoteAddr);
-
-  if (connect(sock, remoteAddr_ptr, sizeof(remoteAddr)) == SOCKET_ERROR) {
-    closesocket(sock);
-    return localAddr;
-  }
-
-  sockaddr* localAddr_ptr = reinterpret_cast<sockaddr*>(&localAddr);
-  int addrSize = sizeof(localAddr);
-
-  if (getsockname(sock, localAddr_ptr, &addrSize) == SOCKET_ERROR) {
-    closesocket(sock);
-    return localAddr;
-  }
-
-  closesocket(sock);
-
-  return localAddr;
-#else
-  return localAddr;
-#endif  // XE_PLATFORM_WIN32
 }
 
 std::string ip_to_string(in_addr addr) {

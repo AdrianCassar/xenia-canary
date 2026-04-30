@@ -42,10 +42,8 @@ DEFINE_int32(network_mode, 2,
              "Network mode types: 0 - Offline, 1 - Systemlink, 2 - Xbox Live.",
              "Live");
 
-DEFINE_bool(xlink_kai_systemlink_hack, false,
-            "Enable hacks for XLink Kai support. May break some games. See: "
-            "https://www.teamxlink.co.uk/wiki/Xenia_Support",
-            "Live");
+DEFINE_bool(bind_interface, false,
+            "Useful for network Tunnels/VPNs e.g. XLink Kai.", "Live");
 
 DEFINE_bool(xstorage_backend, true,
             "Request XStorage content from backend and fallback locally, "
@@ -234,6 +232,10 @@ void XLiveAPI::SetNetworkMode(uint32_t mode) {
 void XLiveAPI::SetLogging(bool state) const { OVERRIDE_bool(logging, state); }
 
 void XLiveAPI::SetXHttp(bool state) const { OVERRIDE_bool(xhttp, state); }
+
+void XLiveAPI::SetBindInterface(bool state) const {
+  OVERRIDE_bool(bind_interface, state);
+}
 
 std::string XLiveAPI::GetApiAddress() {
   std::vector<std::string> api_addresses =
