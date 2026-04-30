@@ -56,6 +56,8 @@ class NetplaySettingsDialog final : public ui::ImGuiDialog {
 
   void InitializeCheckboxSettings();
 
+  void ActivateDiscordState(const bool state);
+
   bool dialog_opened_ = false;
 
   int selected_interface_index_ = 0;
@@ -75,6 +77,7 @@ class NetplaySettingsDialog final : public ui::ImGuiDialog {
   bool xhttp_ = false;
   bool logging_ = false;
   bool auto_check_for_updates_ = false;
+  bool discord_ = false;
 
   EmulatorWindow* emulator_window_ = nullptr;
   kernel::NetworkAdapterManager* network_adapter_manager_ = nullptr;
