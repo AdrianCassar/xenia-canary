@@ -150,6 +150,8 @@ Emulator::Emulator(const std::filesystem::path& command_line,
   network_adapter_manager_ = std::make_unique<kernel::NetworkAdapterManager>();
   upnp_ = std::make_unique<kernel::UPnP>();
 
+  network_adapter_manager_->Initialize();
+
   if (cvars::upnp) {
     upnp_->Initialize();
   }

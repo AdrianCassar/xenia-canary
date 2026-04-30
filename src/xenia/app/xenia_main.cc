@@ -563,8 +563,6 @@ bool EmulatorApp::OnInitialize() {
            static_cast<uint32_t>(status));
   }
 
-  kernel::CreateConsoleMacAddress();
-
   // Create the emulator but don't initialize so we can setup the window.
   emulator_ =
       std::make_unique<Emulator>("", storage_root, content_root, cache_root);

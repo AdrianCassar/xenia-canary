@@ -42,10 +42,8 @@ DEFINE_int32(network_mode, 2,
              "Network mode types: 0 - Offline, 1 - Systemlink, 2 - Xbox Live.",
              "Live");
 
-DEFINE_bool(xlink_kai_systemlink_hack, false,
-            "Enable hacks for XLink Kai support. May break some games. See: "
-            "https://www.teamxlink.co.uk/wiki/Xenia_Support",
-            "Live");
+DEFINE_bool(bind_interface, false,
+            "Useful for network Tunnels/VPNs e.g. XLink Kai.", "Live");
 
 DEFINE_bool(xstorage_backend, true,
             "Request XStorage content from backend and fallback locally, "
@@ -62,8 +60,6 @@ DEFINE_bool(xhttp, false, "Toggles XHTTP.", "Live");
 DEFINE_int32(discord_presence_user_index, 0,
              "User profile index used for Discord rich presence [0, 3].",
              "Live");
-
-DECLARE_string(mac_address);
 
 using namespace rapidjson;
 
@@ -234,6 +230,10 @@ void XLiveAPI::SetNetworkMode(uint32_t mode) {
 void XLiveAPI::SetLogging(bool state) const { OVERRIDE_bool(logging, state); }
 
 void XLiveAPI::SetXHttp(bool state) const { OVERRIDE_bool(xhttp, state); }
+
+void XLiveAPI::SetBindInterface(bool state) const {
+  OVERRIDE_bool(bind_interface, state);
+}
 
 std::string XLiveAPI::GetApiAddress() {
   std::vector<std::string> api_addresses =
@@ -723,7 +723,7 @@ std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::RegisterPlayer(
     return response;
   }
 
-  if (cvars::mac_address.empty()) {
+  if (GetConsoleMacAddress().to_uint64() == 0) {
     XELOGE("Cancelled registering profile!");
     return response;
   }
@@ -1108,7 +1108,8 @@ std::unique_ptr<SessionObjectJSON> XLiveAPI::XSessionMigration(
 
   doc.AddMember("xuid", xuid_str, doc.GetAllocator());
   doc.AddMember("hostAddress", OnlineIP_str(), doc.GetAllocator());
-  doc.AddMember("macAddress", cvars::mac_address, doc.GetAllocator());
+  doc.AddMember("macAddress", GetConsoleMacAddress().to_string(),
+                doc.GetAllocator());
   doc.AddMember("port", GetPlayerPort(), doc.GetAllocator());
 
   rapidjson::StringBuffer buffer;
@@ -1241,8 +1242,8 @@ void XLiveAPI::DeleteSession(uint64_t sessionId) {
 }
 
 void XLiveAPI::DeleteAllSessionsByMac() {
-  const std::string endpoint =
-      BuildEndpoint(fmt::format("DeleteSessions/{}", cvars::mac_address));
+  const std::string endpoint = BuildEndpoint(
+      fmt::format("DeleteSessions/{}", GetConsoleMacAddress().to_string()));
 
   std::unique_ptr<HTTPResponseObjectJSON> response = Delete(endpoint);
 
@@ -1299,7 +1300,7 @@ void XLiveAPI::XSessionCreate(uint64_t sessionId, XGI_SESSION_CREATE* data) {
   session.PrivateSlotsCount(data->num_slots_private);
   session.UserIndex(data->user_index);
   session.HostAddress(OnlineIP_str());
-  session.MacAddress(cvars::mac_address);
+  session.MacAddress(GetConsoleMacAddress().to_string());
   session.Port(GetPlayerPort());
 
   std::string session_output;
