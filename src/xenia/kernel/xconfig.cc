@@ -17,6 +17,8 @@
 #include "xenia/base/string_util.h"
 #include "xenia/xbox.h"
 
+#include "xenia/kernel/util/net_utils.h"
+
 #include <ranges>
 
 namespace xe {
@@ -88,7 +90,19 @@ void XConfig::WriteXConfig(const XConfigData* data) {
 }
 
 void XConfig::SetDefaults() {
+  MacAddress persistent_mac_address =
+      MacAddress(xconfig_data_.secured.mac_address.data());
+
+  // Persistent mac address is important, we don't want to keep changing it.
+  if (persistent_mac_address.to_uint64() == 0) {
+    persistent_mac_address = GenerateMacAddress();
+  }
+
   xconfig_data_ = {};
+
+  const auto mac_address_data = persistent_mac_address.to_array();
+  std::copy(mac_address_data.begin(), mac_address_data.end(),
+            xconfig_data_.secured.mac_address.begin());
 
   xconfig_data_.secured.av_region = X_AV_REGION::NTSCM;
   xconfig_data_.user.language = static_cast<uint32_t>(XLanguage::kEnglish);

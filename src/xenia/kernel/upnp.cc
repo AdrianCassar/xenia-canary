@@ -308,6 +308,10 @@ std::string UPnP::GetLocalIP_wget() {
   miniwget_getaddr(cvars::upnp_root.c_str(), &responce_size, lan_addr,
                    sizeof(lan_addr), 0, &status);
 
+  if (status != HTTP_OK) {
+    XELOGI("UPnP Local IP Error: HTTP Status Code - {}", status);
+  }
+
   return lan_addr;
 }
 
