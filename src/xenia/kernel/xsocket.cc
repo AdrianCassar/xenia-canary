@@ -16,6 +16,8 @@
 #include "xenia/kernel/xam/xam_module.h"
 #include "xenia/kernel/xboxkrnl/xboxkrnl_threading.h"
 
+DECLARE_bool(bind_interface);
+
 using namespace std::chrono_literals;
 
 namespace xe {
@@ -279,6 +281,19 @@ X_STATUS XSocket::Bind(const XSOCKADDR_IN* name, int name_len) {
   }
 
   sockaddr addr = sa_in.to_host();
+
+  // Check if title tried to bind an interface
+  assert_zero(name->address_ip.s_addr);
+
+  // Force socket to bind to the IP of the selected interface
+  if (cvars::bind_interface) {
+    sockaddr_in* addr_in = reinterpret_cast<sockaddr_in*>(&addr);
+
+    const auto network_adapter =
+        kernel_state()->emulator()->GetNetworkAdapterManager();
+
+    addr_in->sin_addr = network_adapter->GetSelectedAdapterLocalIP().sin_addr;
+  }
 
   int ret = bind(native_handle_, &addr, name_len);
   if (ret < 0) {
@@ -648,6 +663,18 @@ int XSocket::SendTo(uint8_t* buf, uint32_t buf_len, uint32_t flags,
   }
 
   sockaddr addr = to->to_host();
+
+  // Ensure the bound interface can route to the loopback interface/itself
+  if (cvars::bind_interface) {
+    sockaddr_in* addr_in = reinterpret_cast<sockaddr_in*>(&addr);
+
+    if (addr_in->sin_addr.s_addr == xe::byte_swap(LOOPBACK)) {
+      const auto network_adapter =
+          kernel_state()->emulator()->GetNetworkAdapterManager();
+
+      addr_in->sin_addr = network_adapter->GetSelectedAdapterLocalIP().sin_addr;
+    }
+  }
 
   int ret = sendto(native_handle_, reinterpret_cast<char*>(buf), buf_len, flags,
                    to ? &addr : nullptr, to_len);

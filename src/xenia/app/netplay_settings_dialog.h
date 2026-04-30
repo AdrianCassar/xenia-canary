@@ -74,9 +74,10 @@ class NetplaySettingsDialog final : public ui::ImGuiDialog {
   int selected_network_mode_index_ = 0;
   const char* network_modes_[3] = {"Offline", "Systemlink", "Xbox Live"};
 
-  bool xhttp_ = false;
-  bool logging_ = false;
   bool auto_check_for_updates_ = false;
+  bool bind_interface_ = false;
+  bool logging_ = false;
+  bool xhttp_ = false;
   bool discord_ = false;
 
   EmulatorWindow* emulator_window_ = nullptr;

@@ -12,13 +12,8 @@
 #include "xenia/base/cvar.h"
 #include "xenia/base/logging.h"
 #include "xenia/kernel/util/net_utils.h"
-
-DECLARE_string(network_guid);
-
-DECLARE_bool(logging);
-
-// TODO(Adrian): This should be moved to XConfig once supported.
-DEFINE_string(mac_address, "", "Console MAC address. (Do not touch!)", "Live");
+#include "xenia/kernel/util/shim_utils.h"
+#include "xenia/kernel/xconfig.h"
 
 namespace xe {
 namespace kernel {
@@ -69,47 +64,6 @@ std::string MacAddress::to_printable_form() const {
                   mac_address_[1], mac_address_[2], mac_address_[3],
                   mac_address_[4], mac_address_[5]);
   return mac;
-}
-
-sockaddr_in WinsockGetLocalIP() {
-  sockaddr_in localAddr{};
-
-#ifdef XE_PLATFORM_WIN32
-  SOCKET sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-
-  if (sock == INVALID_SOCKET) {
-    return localAddr;
-  }
-
-  // Connect the socket to a remote address
-  sockaddr_in remoteAddr{};
-  remoteAddr.sin_family = AF_INET;
-  remoteAddr.sin_port = htons(80);
-
-  // Google DNS
-  inet_pton(AF_INET, "8.8.8.8", &remoteAddr.sin_addr);
-
-  sockaddr* remoteAddr_ptr = reinterpret_cast<sockaddr*>(&remoteAddr);
-
-  if (connect(sock, remoteAddr_ptr, sizeof(remoteAddr)) == SOCKET_ERROR) {
-    closesocket(sock);
-    return localAddr;
-  }
-
-  sockaddr* localAddr_ptr = reinterpret_cast<sockaddr*>(&localAddr);
-  int addrSize = sizeof(localAddr);
-
-  if (getsockname(sock, localAddr_ptr, &addrSize) == SOCKET_ERROR) {
-    closesocket(sock);
-    return localAddr;
-  }
-
-  closesocket(sock);
-
-  return localAddr;
-#else
-  return localAddr;
-#endif  // XE_PLATFORM_WIN32
 }
 
 std::string ip_to_string(in_addr addr) {
@@ -193,14 +147,14 @@ uint64_t GetLocalMachineId(const MacAddress mac_address) {
   return GetMachineId(mac_address.to_uint64());
 }
 
-void CreateConsoleMacAddress() {
-  if (cvars::mac_address.empty()) {
-    const MacAddress mac_address = GenerateMacAddress();
-    OVERRIDE_string(mac_address, mac_address.to_string());
-  }
-}
+MacAddress GetConsoleMacAddress() {
+  uint8_t mac_address[MacAddress::MacAddressSize] = {};
 
-MacAddress GetConsoleMacAddress() { return MacAddress(cvars::mac_address); }
+  kernel_state()->xconfig()->ReadSetting(
+      XCONFIG_SECURED_CATEGORY, XCONFIG_SECURED_MAC_ADDRESS, &mac_address);
+
+  return MacAddress(mac_address);
+}
 
 MacAddress GenerateMacAddress() {
   uint8_t mac_address[MacAddress::MacAddressSize] = {};

@@ -86,6 +86,8 @@ class XLiveAPI {
 
   void SetXHttp(bool state) const;
 
+  void SetBindInterface(bool state) const;
+
   static std::string GetApiAddress();
 
   static std::string BuildEndpoint(std::string endpoint);
