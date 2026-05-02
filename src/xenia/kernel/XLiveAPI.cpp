@@ -1352,30 +1352,46 @@ bool XLiveAPI::SessionPropertiesSet(uint64_t session_id, uint64_t xuid) {
   //
   // 4E4D07DC will sometimes fail to find friends sessions, filtering
   // properties by XMAT fixes session discovery inconsistency.
+  //
+  // 545107D4 doesn't contain many system matchmaking properties in SPA.
   for (const auto& property_attribute : propertie_ids) {
     const auto property =
         kernel_state()->emulator()->game_info_database()->GetProperty(
             property_attribute.value);
 
-    if (property.has_value()) {
-      if (property->is_matchmaking ||
-          default_system_matchmaking_properties.contains(property->id)) {
-        const xam::Property* property =
-            kernel_state()->xam_state()->user_tracker()->GetProperty(
-                user_profile->xuid(), property_attribute.value);
+    // 545107D4
+    if (!property.has_value()) {
+      XELOGI("{}: Property {:08X} not found in SPA!", __func__,
+             property_attribute.value);
+    }
 
+    if ((property.has_value() && property->is_matchmaking) ||
+        default_system_matchmaking_properties.contains(
+            property_attribute.value)) {
+      const xam::Property* property =
+          kernel_state()->xam_state()->user_tracker()->GetProperty(
+              user_profile->xuid(), property_attribute.value);
+
+      if (property) {
         properties.push_back(*property);
       } else {
-        const std::string description =
-            string_util::remove_eol(string_util::trim(property->description));
+        XELOGI("{}: Property {:08X} is unset!", __func__,
+               property_attribute.value);
+      }
+    } else {
+      std::string description;
 
-        if (description.empty()) {
-          XELOGI("{}: Skipping non-matchmaking property: {:08X}", __func__,
-                 property_attribute.value);
-        } else {
-          XELOGI("{}: Skipping non-matchmaking property: {} - {:08X}", __func__,
-                 description, property_attribute.value);
-        }
+      if (property.has_value()) {
+        description =
+            string_util::remove_eol(string_util::trim(property->description));
+      }
+
+      if (description.empty()) {
+        XELOGI("{}: Skipping non-matchmaking property: {:08X}", __func__,
+               property_attribute.value);
+      } else {
+        XELOGI("{}: Skipping non-matchmaking property: {} - {:08X}", __func__,
+               description, property_attribute.value);
       }
     }
   }
@@ -1392,24 +1408,32 @@ bool XLiveAPI::SessionPropertiesSet(uint64_t session_id, uint64_t xuid) {
         kernel_state()->emulator()->game_info_database()->GetContext(
             context_attribute.value);
 
-    if (context_property.has_value()) {
-      if (context_property->is_matchmaking) {
-        const xam::Property* property =
-            kernel_state()->xam_state()->user_tracker()->GetProperty(
-                user_profile->xuid(), context_attribute.value);
+    if (!context_property.has_value()) {
+      XELOGI("{}: Context {:08X} not found in SPA!", __func__,
+             context_attribute.value);
+    }
 
+    if (context_property.has_value() && context_property->is_matchmaking) {
+      const xam::Property* property =
+          kernel_state()->xam_state()->user_tracker()->GetProperty(
+              user_profile->xuid(), context_attribute.value);
+
+      if (property) {
         properties.push_back(*property);
       } else {
-        const std::string description = string_util::remove_eol(
-            string_util::trim(context_property->description));
+        XELOGI("{}: Context {:08X} is unset!", __func__,
+               context_attribute.value);
+      }
+    } else {
+      const std::string description = string_util::remove_eol(
+          string_util::trim(context_property->description));
 
-        if (description.empty()) {
-          XELOGI("{}: Skipping non-matchmaking context: {:08X}", __func__,
-                 context_attribute.value);
-        } else {
-          XELOGI("{}: Skipping non-matchmaking context: {} {:08X}", __func__,
-                 description, context_attribute.value);
-        }
+      if (description.empty()) {
+        XELOGI("{}: Skipping non-matchmaking context: {:08X}", __func__,
+               context_attribute.value);
+      } else {
+        XELOGI("{}: Skipping non-matchmaking context: {} {:08X}", __func__,
+               description, context_attribute.value);
       }
     }
   }
