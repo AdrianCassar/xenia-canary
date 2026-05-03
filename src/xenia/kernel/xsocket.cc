@@ -257,12 +257,14 @@ X_STATUS XSocket::Connect(const XSOCKADDR_IN* name, int name_len) {
   sockaddr addr = sa_in.to_host();
 
   int ret = connect(native_handle_, &addr, name_len);
+
+  // Implicit Bind
+  bound_port_ = sa_in.address_port;
+  bound_ = true;
+
   if (ret < 0) {
     return X_STATUS_UNSUCCESSFUL;
   }
-
-  bound_port_ = sa_in.address_port;
-  bound_ = true;
 
   return X_STATUS_SUCCESS;
 }
@@ -286,18 +288,25 @@ X_STATUS XSocket::Bind(const XSOCKADDR_IN* name, int name_len) {
   bound_port_ = sa_in.address_port;
 
   if (!bound_port_) {
-    sockaddr_in sock_name = {};
-    int sock_name_len = sizeof(sockaddr);
-
-    if (!getsockname(native_handle_, reinterpret_cast<sockaddr*>(&sock_name),
-                     &sock_name_len)) {
-      bound_port_ = xe::byte_swap(sock_name.sin_port);
-    }
+    bound_port_ = GetImplicitlyBoundPort();
   }
 
   bound_ = true;
 
   return X_STATUS_SUCCESS;
+}
+
+uint16_t XSocket::GetImplicitlyBoundPort() const {
+  sockaddr_in sock_name = {};
+  int sock_name_len = sizeof(sockaddr);
+
+  if (!getsockname(native_handle_, reinterpret_cast<sockaddr*>(&sock_name),
+                   &sock_name_len)) {
+    return xe::byte_swap(sock_name.sin_port);
+  }
+
+  assert_always();
+  return 0;
 }
 
 X_STATUS XSocket::Listen(int backlog) {
@@ -340,11 +349,9 @@ object_ref<XSocket> XSocket::Accept(XSOCKADDR_IN* name, int* name_len) {
   sockaddr_in sock_name = {};
   int sock_name_len = sizeof(sockaddr);
 
-  if (!getsockname(socket_handle, reinterpret_cast<sockaddr*>(&sock_name),
-                   &sock_name_len)) {
-    socket->bound_port_ = xe::byte_swap(sock_name.sin_port);
-    socket->bound_ = true;
-  }
+  // Implicit Bind
+  socket->bound_port_ = bound_port_ = GetImplicitlyBoundPort();
+  socket->bound_ = true;
 
   return socket;
 }
@@ -642,8 +649,16 @@ int XSocket::SendTo(uint8_t* buf, uint32_t buf_len, uint32_t flags,
 
   sockaddr addr = to->to_host();
 
-  return sendto(native_handle_, reinterpret_cast<char*>(buf), buf_len, flags,
-                to ? &addr : nullptr, to_len);
+  int ret = sendto(native_handle_, reinterpret_cast<char*>(buf), buf_len, flags,
+                   to ? &addr : nullptr, to_len);
+
+  // Implicit Bind
+  if (!bound_port_) {
+    bound_port_ = GetImplicitlyBoundPort();
+    bound_ = true;
+  }
+
+  return ret;
 }
 
 int XSocket::WSAEventSelect(uint64_t socket_handle, uint64_t event_handle,
