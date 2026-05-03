@@ -227,6 +227,8 @@ class XSocket : public XObject {
   std::mutex receive_socket_mutex_;
   XWSAOVERLAPPED* active_overlapped_ = nullptr;
 
+  uint16_t GetImplicitlyBoundPort() const;
+
   int PollWSARecvFrom(bool wait, struct WSARecvFromData data);
 
   void SetLastWSAError(X_WSAError) const;
