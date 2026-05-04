@@ -282,9 +282,6 @@ X_STATUS XSocket::Bind(const XSOCKADDR_IN* name, int name_len) {
 
   sockaddr addr = sa_in.to_host();
 
-  // Check if title tried to bind an interface
-  assert_zero(name->address_ip.s_addr);
-
   // Force socket to bind to the IP of the selected interface
   if (cvars::bind_interface) {
     sockaddr_in* addr_in = reinterpret_cast<sockaddr_in*>(&addr);
@@ -292,7 +289,18 @@ X_STATUS XSocket::Bind(const XSOCKADDR_IN* name, int name_len) {
     const auto network_adapter =
         kernel_state()->emulator()->GetNetworkAdapterManager();
 
-    addr_in->sin_addr = network_adapter->GetSelectedAdapterLocalIP().sin_addr;
+    const in_addr interface_addr =
+        network_adapter->GetSelectedAdapterLocalIP().sin_addr;
+
+    // Title wants to bind to and interface but is it our bound interface?
+    if (name->address_ip.s_addr) {
+      assert_true(name->address_ip.s_addr == interface_addr.s_addr);
+    }
+
+    addr_in->sin_addr = interface_addr;
+  } else {
+    // Check if title tried to bind an interface
+    assert_zero(name->address_ip.s_addr);
   }
 
   int ret = bind(native_handle_, &addr, name_len);
