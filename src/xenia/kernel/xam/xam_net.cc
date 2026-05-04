@@ -53,6 +53,13 @@ DECLARE_int32(network_mode);
 
 DECLARE_bool(bind_interface);
 
+// WSARecvFrom, recvfrom, recv
+// Socket Handle -> Client IP -> Client Port
+std::unordered_map<uint32_t, std::unordered_map<uint32_t, uint16_t>>
+    recv_tracker_ = {};
+
+std::mutex recv_tracker_mutex_;
+
 enum XNET_QOS {
   LISTEN_ENABLE = 0x01,
   LISTEN_DISABLE = 0x02,
@@ -187,6 +194,79 @@ static void InitalizeSockaddr(XSOCKADDR_IN* sockaddr_ptr) {
   if (sockaddr_ptr) {
     std::memset(sockaddr_ptr, 0, sizeof(XSOCKADDR_IN));
     sockaddr_ptr->address_family = XSocket::AddressFamily::X_AF_INET;
+  }
+}
+
+// If host received data on a socket from a different port than title expects
+// then use the port which the data was received from to ensure response reaches
+// it's intended destination.
+// Useful for VPNs.
+static void AutoCorrectSendDestinationPort(const uint32_t socket_handle,
+                                           XSOCKADDR_IN* to_ptr) {
+  if (to_ptr->address_ip.s_addr == xe::byte_swap(LOOPBACK)) {
+    return;
+  }
+
+  std::unique_lock lock(recv_tracker_mutex_);
+
+  if (recv_tracker_.contains(socket_handle)) {
+    if (recv_tracker_.at(socket_handle).contains(to_ptr->address_ip.s_addr)) {
+      const uint16_t remote_port =
+          recv_tracker_.at(socket_handle).at(to_ptr->address_ip.s_addr);
+
+      if (remote_port != to_ptr->address_port) {
+        if (!cvars::log_mask_ips) {
+          XELOGI("Send: Fixing port destination from {}:{} to {}:{}",
+                 ip_to_string(to_ptr->address_ip), to_ptr->address_port.get(),
+                 ip_to_string(to_ptr->address_ip), remote_port);
+        }
+
+        to_ptr->address_port = remote_port;
+      }
+    }
+  }
+}
+
+static void AutoCorrectReceiveDestinationPort(const uint32_t socket_handle,
+                                              XSOCKADDR_IN* from_ptr) {
+  if (from_ptr->address_ip.s_addr == xe::byte_swap(LOOPBACK)) {
+    return;
+  }
+
+  if (cvars::bind_interface) {
+    const auto network_adapter =
+        kernel_state()->emulator()->GetNetworkAdapterManager();
+
+    if (from_ptr->address_ip.s_addr ==
+        network_adapter->GetSelectedAdapterLocalIP().sin_addr.s_addr) {
+      return;
+    }
+  }
+
+  auto socket =
+      kernel_state()->object_table()->LookupObject<XSocket>(socket_handle);
+  if (!socket) {
+    return;
+  }
+
+  std::unique_lock lock(recv_tracker_mutex_);
+
+  if (recv_tracker_.contains(socket_handle)) {
+    if (recv_tracker_.at(socket_handle).contains(from_ptr->address_ip.s_addr)) {
+      // Exclude TCP?
+      // socket->protocol() != XSocket::X_IPPROTO_TCP
+      if (from_ptr->address_port != socket->bound_port()) {
+        const uint16_t remote_port = from_ptr->address_port;
+
+        from_ptr->address_port = socket->bound_port();
+
+        if (!cvars::log_mask_ips) {
+          XELOGI("Receive: Fixing port destination from {}:{} to {}:{}",
+                 ip_to_string(from_ptr->address_ip), remote_port,
+                 ip_to_string(from_ptr->address_ip), socket->bound_port());
+        }
+      }
+    }
   }
 }
 
@@ -498,10 +578,18 @@ dword_result_t NetDll_WSARecvFrom_entry(
   if (ret < 0) {
     XThread::SetLastError(socket->GetLastWSAError());
   } else if (ret >= 0 && !cvars::log_mask_ips && from_ptr) {
+    {
+      std::unique_lock lock(recv_tracker_mutex_);
+      recv_tracker_[socket_handle][from_ptr->address_ip.s_addr] =
+          from_ptr->address_port;
+    }
+
     XELOGI("NetDll_WSARecvFrom: Received {} bytes from: {}:{}({})",
            static_cast<uint32_t>(*num_bytes_recv_ptr),
            ip_to_string(from_ptr->address_ip), from_ptr->address_port.get(),
            socket->GetProtocolUPnPString());
+
+    AutoCorrectReceiveDestinationPort(socket_handle, from_ptr);
   }
 
   return ret;
@@ -566,6 +654,10 @@ dword_result_t NetDll_WSASendTo_entry(
     combined_buffer_offset += buffers[i].len;
   }
 
+  const uint16_t port_backup = to_ptr->address_port;
+
+  AutoCorrectSendDestinationPort(socket_handle, to_ptr);
+
   const int result = socket->SendTo(
       combined_buffer_mem.data(), combined_buffer_size, flags, to_ptr, to_len);
 
@@ -577,6 +669,8 @@ dword_result_t NetDll_WSASendTo_entry(
            ip_to_string(to_ptr->address_ip), to_ptr->address_port.get(),
            socket->GetProtocolUPnPString());
   }
+
+  to_ptr->address_port = port_backup;
 
   if (num_bytes_sent && !overlapped) {
     *num_bytes_sent = result;
@@ -1996,6 +2090,11 @@ dword_result_t NetDll_closesocket_entry(dword_t caller, dword_t socket_handle) {
     }
   }
 
+  {
+    std::unique_lock lock(recv_tracker_mutex_);
+    recv_tracker_.erase(socket_handle);
+  }
+
   socket->Close();
   socket->ReleaseHandle();
   return 0;
@@ -2411,9 +2510,17 @@ dword_result_t NetDll_recvfrom_entry(dword_t caller, dword_t socket_handle,
   if (ret == -1) {
     XThread::SetLastError(socket->GetLastWSAError());
   } else if (ret >= 0 && !cvars::log_mask_ips && from_ptr) {
+    {
+      std::unique_lock lock(recv_tracker_mutex_);
+      recv_tracker_[socket_handle][from_ptr->address_ip.s_addr] =
+          from_ptr->address_port;
+    }
+
     XELOGI("NetDll_recvfrom: Received {} bytes from: {}:{}({})", ret,
            ip_to_string(from_ptr->address_ip), from_ptr->address_port.get(),
            socket->GetProtocolUPnPString());
+
+    AutoCorrectReceiveDestinationPort(socket_handle, from_ptr);
   }
 
   return ret;
@@ -2454,6 +2561,10 @@ dword_result_t NetDll_sendto_entry(dword_t caller, dword_t socket_handle,
     return -1;
   }
 
+  const uint16_t port_backup = to_ptr->address_port;
+
+  AutoCorrectSendDestinationPort(socket_handle, to_ptr);
+
   int ret = socket->SendTo(buf_ptr, buf_len, flags, to_ptr, to_len);
   if (ret < 0) {
     XThread::SetLastError(socket->GetLastWSAError());
@@ -2462,6 +2573,8 @@ dword_result_t NetDll_sendto_entry(dword_t caller, dword_t socket_handle,
            ip_to_string(to_ptr->address_ip), to_ptr->address_port.get(),
            socket->GetProtocolUPnPString());
   }
+
+  to_ptr->address_port = port_backup;
 
   return ret;
 }
