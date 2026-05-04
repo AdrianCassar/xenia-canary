@@ -849,7 +849,7 @@ dword_result_t NetDll_XNetXnAddrToInAddr_entry(dword_t caller,
                                                pointer_t<in_addr> in_addr) {
   in_addr.Zero();
 
-  // 494707E4
+  // 494707E4, 4E4D07D1
   if (GetConsoleMacAddress() == MacAddress(xn_addr->abEnet)) {
     XELOGI("Resolving XNetXnAddrToInAddr to LOOPBACK!");
 
@@ -896,17 +896,35 @@ dword_result_t NetDll_XNetInAddrToXnAddr_entry(dword_t caller, dword_t in_addr,
     XELOGI("Resolving XnAddr via BROADCAST!");
   }
 
-  if (in_addr == LOOPBACK || in_addr == BROADCAST) {
+  if (in_addr == LOOPBACK) {
     XELOGI("Resolving XnAddr via LOOPBACK!");
-    XLiveAPI::IpGetConsoleXnAddr(xn_addr);
-
-    return X_STATUS_SUCCESS;
   }
 
-  xn_addr->ina.s_addr = ntohl(in_addr);
-  xn_addr->inaOnline.s_addr = ntohl(in_addr);
-  xn_addr->wPortOnline = kernel_state()->GetXboxLiveAPI()->GetPlayerPort();
-  xn_addr->abOnline.platform_type = PLATFORM_TYPE::Xbox360;
+  bool bound_interface = false;
+
+  // 4E4D07D1
+  if (cvars::bind_interface) {
+    const auto network_adapter =
+        kernel_state()->emulator()->GetNetworkAdapterManager();
+
+    const uint32_t interface_ip = xe::byte_swap(
+        network_adapter->GetSelectedAdapterLocalIP().sin_addr.s_addr);
+
+    if (in_addr == interface_ip) {
+      bound_interface = true;
+      XELOGI("Resolving XnAddr via Interface!");
+    }
+  }
+
+  if (in_addr == LOOPBACK || bound_interface || in_addr == BROADCAST) {
+    XLiveAPI::IpGetConsoleXnAddr(xn_addr);
+    return X_ERROR_SUCCESS;
+  } else {
+    xn_addr->ina.s_addr = ntohl(in_addr);
+    xn_addr->inaOnline.s_addr = ntohl(in_addr);
+    xn_addr->wPortOnline = kernel_state()->GetXboxLiveAPI()->GetPlayerPort();
+    xn_addr->abOnline.platform_type = PLATFORM_TYPE::Xbox360;
+  }
 
   const uint64_t cached_session_id =
       kernel_state()->GetXboxLiveAPI()->GetSystemlinkID();
