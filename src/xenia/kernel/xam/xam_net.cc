@@ -1562,7 +1562,8 @@ dword_result_t NetDll_XHttpStartup_entry(dword_t caller, dword_t reserved,
                                          dword_t reserved_ptr) {
   // Console returns 1 even without network access
 
-  if (kernel_state()->emulator()->title_id() == kDashboardID) {
+  if (kernel_state()->emulator()->title_id() == kDashboardID ||
+      kernel_state()->emulator()->title_id() == kAvatarEditorID) {
     return 1;
   }
 
