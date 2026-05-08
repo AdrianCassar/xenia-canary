@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "xenia/kernel/util/xlast.h"
+#include "xenia/kernel/xam/xdbf/gpd_info.h"
 #include "xenia/kernel/xam/xdbf/spa_info.h"
 
 namespace xe {
@@ -115,6 +116,17 @@ class GameInfoDatabase {
     SharedView shared_view;
   };
 
+  struct AvatarAward {
+    uint32_t award_id;
+    xe::avatars::AssetId asset_id;
+    std::string title;
+    std::string description;
+    std::string unachieved_description;
+    uint32_t image_id;
+    xam::AchievementFlags flags;
+    xam::AssetSubcategory sub_category;
+  };
+
   struct ProductInformation {
     uint32_t max_offline_players_count;
     uint32_t max_systemlink_players_count;
@@ -156,6 +168,8 @@ class GameInfoDatabase {
   Presence GetPresence() const;
   std::optional<GameInfoDatabase::PresenceMode> GetPresenceMode(
       const uint32_t context_value) const;
+  std::optional<GameInfoDatabase::AvatarAward> GetAvatarAward(
+      const uint32_t award_id) const;
   std::vector<PresenceMode> GetPresenceModes(
       const std::vector<xam::PropertyBag> property_bags) const;
 
@@ -173,6 +187,7 @@ class GameInfoDatabase {
   std::vector<Property> GetProperties() const;
   std::vector<Achievement> GetAchievements() const;
   std::vector<PresenceMode> GetPresenceModes() const;
+  std::vector<GameInfoDatabase::AvatarAward> GetAvatarAwards() const;
   std::vector<StatsView> GetStatsViews() const;
 
   const bool HasXLast() const { return xlast_gamedata_.get(); };

@@ -1614,6 +1614,23 @@ X_STATUS Emulator::CompleteLaunch(const std::filesystem::path& path,
       XELOGI("\n-------------------- ACHIEVEMENTS --------------------\n{}",
              table.str());
 
+      table = tabulate::Table();
+      table.format().multi_byte_characters(true);
+      table.add_row({"Asset ID", "Title", "Description", "Subcategory"});
+
+      const std::vector<kernel::util::GameInfoDatabase::AvatarAward>
+          avatar_awards = game_info_database_->GetAvatarAwards();
+      for (const kernel::util::GameInfoDatabase::AvatarAward& entry :
+           avatar_awards) {
+        const std::string subcategory =
+            xe::kernel::xam::AssetSubcategoryToString(entry.sub_category);
+
+        table.add_row({fmt::format("{}", entry.asset_id.to_string()),
+                       entry.title, entry.description, subcategory});
+      }
+      XELOGI("\n-------------------- AVATAR AWARDS --------------------\n{}",
+             table.str());
+
       const std::vector<kernel::util::GameInfoDatabase::Property>
           properties_list = game_info_database_->GetProperties();
 

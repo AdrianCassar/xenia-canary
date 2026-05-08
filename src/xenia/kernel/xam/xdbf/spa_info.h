@@ -19,6 +19,7 @@
 #include <string>
 #include <vector>
 
+#include "xenia/avatars/asset_pack.h"
 #include "xenia/base/memory.h"
 #include "xenia/xbox.h"
 
@@ -77,6 +78,96 @@ enum class ViewFieldEntryFlags : uint32_t {
 
 enum class ViewFieldType : uint8_t { kContextField, kPropertyField };
 
+// https://github.com/hetelek/Velocity/blob/cf0b84cc8bbfad09c655476c6a3c762836ce1246/XboxInternals/AvatarAsset/AvatarAssetDefinintions.h#L5
+enum AssetSubcategory {
+  CarryableCarryable = 0x44c,
+  CarryableFirst = 0x44c,
+  CarryableLast = 0x44c,
+  CostumeCasualSuit = 0x68,
+  CostumeCostume = 0x69,
+  CostumeFirst = 100,
+  CostumeFormalSuit = 0x67,
+  CostumeLast = 0x6a,
+  CostumeLongDress = 0x65,
+  CostumeShortDress = 100,
+  EarringsDanglers = 0x387,
+  EarringsFirst = 900,
+  EarringsLargehoops = 0x38b,
+  EarringsLast = 0x38b,
+  EarringsSingleDangler = 0x386,
+  EarringsSingleLargeHoop = 0x38a,
+  EarringsSingleSmallHoop = 0x388,
+  EarringsSingleStud = 900,
+  EarringsSmallHoops = 0x389,
+  EarringsStuds = 0x385,
+  GlassesCostume = 0x2be,
+  GlassesFirst = 700,
+  GlassesGlasses = 700,
+  GlassesLast = 0x2be,
+  GlassesSunglasses = 0x2bd,
+  GlovesFingerless = 600,
+  GlovesFirst = 600,
+  GlovesFullFingered = 0x259,
+  GlovesLast = 0x259,
+  HatBaseballCap = 0x1f6,
+  HatBeanie = 500,
+  HatBearskin = 0x1fc,
+  HatBrimmed = 0x1f8,
+  HatCostume = 0x1fb,
+  HatFez = 0x1f9,
+  HatFirst = 500,
+  HatFlatCap = 0x1f5,
+  HatHeadwrap = 0x1fa,
+  HatHelmet = 0x1fd,
+  HatLast = 0x1fd,
+  HatPeakCap = 0x1f7,
+  RingFirst = 0x3e8,
+  RingLast = 0x3ea,
+  RingLeft = 0x3e9,
+  RingRight = 0x3e8,
+  ShirtCoat = 210,
+  ShirtFirst = 200,
+  ShirtHoodie = 0xd0,
+  ShirtJacket = 0xd1,
+  ShirtLast = 210,
+  ShirtLongSleeveShirt = 0xce,
+  ShirtLongSleeveTee = 0xcc,
+  ShirtPolo = 0xcb,
+  ShirtShortSleeveShirt = 0xcd,
+  ShirtSportsTee = 200,
+  ShirtSweater = 0xcf,
+  ShirtTee = 0xc9,
+  ShirtVest = 0xca,
+  ShoesCostume = 0x197,
+  ShoesFirst = 400,
+  ShoesFormal = 0x193,
+  ShoesHeels = 0x191,
+  ShoesHighBoots = 0x196,
+  ShoesLast = 0x197,
+  ShoesPumps = 0x192,
+  ShoesSandals = 400,
+  ShoesShortBoots = 0x195,
+  ShoesTrainers = 0x194,
+  TrousersCargo = 0x131,
+  TrousersFirst = 300,
+  TrousersHotpants = 300,
+  TrousersJeans = 0x132,
+  TrousersKilt = 0x134,
+  TrousersLast = 0x135,
+  TrousersLeggings = 0x12f,
+  TrousersLongShorts = 0x12e,
+  TrousersLongSkirt = 0x135,
+  TrousersShorts = 0x12d,
+  TrousersShortSkirt = 0x133,
+  TrousersTrousers = 0x130,
+  WristwearBands = 0x322,
+  WristwearBracelet = 800,
+  WristwearFirst = 800,
+  WristwearLast = 0x323,
+  WristwearSweatbands = 0x323,
+  WristwearWatch = 0x321
+};
+
 // System Attribute Ids
 constexpr uint32_t RankAttributeId = 0xFFFF;
 constexpr uint32_t RatingAttributeId = 0xFFFE;
@@ -122,6 +213,146 @@ constexpr inline std::string AttributeIdToName(const uint16_t id) {
       return "Gamertag";
     case AttachmentSizeAttributeId:
       return "Attachment Size";
+    default:
+      return "";
+  }
+}
+
+constexpr inline std::string AssetSubcategoryToString(
+    AssetSubcategory category) {
+  switch (category) {
+    case CarryableCarryable:
+      return "Carryable, Carryable";
+    case CostumeCasualSuit:
+      return "Costume, Casual Suit";
+    case CostumeCostume:
+      return "Costume, Costume";
+    case CostumeFormalSuit:
+      return "Costume, Formal Suit";
+    case CostumeLast:
+      return "Costume, Last";
+    case CostumeLongDress:
+      return "Costume, Long Dress";
+    case CostumeShortDress:
+      return "Costume, Short Dress";
+    case EarringsDanglers:
+      return "Earrings, Danglers";
+    case EarringsLargehoops:
+      return "Earrings, Largehoops";
+    case EarringsSingleDangler:
+      return "Earrings, Single Dangler";
+    case EarringsSingleLargeHoop:
+      return "Earrings, Single Large Hoop";
+    case EarringsSingleSmallHoop:
+      return "Earrings, Single Small Hoop";
+    case EarringsSingleStud:
+      return "Earrings, Single Stud";
+    case EarringsSmallHoops:
+      return "Earrings, Small Hoops";
+    case EarringsStuds:
+      return "Earrings, Studs";
+    case GlassesCostume:
+      return "Glasses, Costume";
+    case GlassesGlasses:
+      return "Glasses, Glasses";
+    case GlassesSunglasses:
+      return "Glasses, Sunglasses";
+    case GlovesFingerless:
+      return "Gloves, Fingerless";
+    case GlovesFullFingered:
+      return "Gloves, Full Fingered";
+    case HatBaseballCap:
+      return "Hat, Baseball Cap";
+    case HatBeanie:
+      return "Hat, Beanie";
+    case HatBearskin:
+      return "Hat, Bearskin";
+    case HatBrimmed:
+      return "Hat, Brimmed";
+    case HatCostume:
+      return "Hat, Costume";
+    case HatFez:
+      return "Hat, Fez";
+    case HatFlatCap:
+      return "Hat, Flat Cap";
+    case HatHeadwrap:
+      return "Hat, Headwrap";
+    case HatHelmet:
+      return "Hat, Helmet";
+    case HatPeakCap:
+      return "Hat, Peak Cap";
+    case RingLast:
+      return "Ring, Last";
+    case RingLeft:
+      return "Ring, Left";
+    case RingRight:
+      return "Ring, Right";
+    case ShirtCoat:
+      return "Shirt, Coat";
+    case ShirtHoodie:
+      return "Shirt, Hoodie";
+    case ShirtJacket:
+      return "Shirt, Jacket";
+    case ShirtLongSleeveShirt:
+      return "Shirt, Long Sleeve Shirt";
+    case ShirtLongSleeveTee:
+      return "Shirt, Long Sleeve Tee";
+    case ShirtPolo:
+      return "Shirt, Polo";
+    case ShirtShortSleeveShirt:
+      return "Shirt, Short Sleeve Shirt";
+    case ShirtSportsTee:
+      return "Shirt, Sports Tee";
+    case ShirtSweater:
+      return "Shirt, Sweater";
+    case ShirtTee:
+      return "Shirt, Tee";
+    case ShirtVest:
+      return "Shirt, Vest";
+    case ShoesCostume:
+      return "Shoes, Costume";
+    case ShoesFormal:
+      return "Shoes, Formal";
+    case ShoesHeels:
+      return "Shoes, Heels";
+    case ShoesHighBoots:
+      return "Shoes, High Boots";
+    case ShoesPumps:
+      return "Shoes, Pumps";
+    case ShoesSandals:
+      return "Shoes, Sandals";
+    case ShoesShortBoots:
+      return "Shoes, Short Boots";
+    case ShoesTrainers:
+      return "Shoes, Trainers";
+    case TrousersCargo:
+      return "Trousers, Cargo";
+    case TrousersHotpants:
+      return "Trousers, Hotpants";
+    case TrousersJeans:
+      return "Trousers, Jeans";
+    case TrousersKilt:
+      return "Trousers, Kilt";
+    case TrousersLeggings:
+      return "Trousers, Leggings";
+    case TrousersLongShorts:
+      return "Trousers, Long Shorts";
+    case TrousersLongSkirt:
+      return "Trousers, Long Skirt";
+    case TrousersShorts:
+      return "Trousers, Shorts";
+    case TrousersShortSkirt:
+      return "Trousers, Short Skirt";
+    case TrousersTrousers:
+      return "Trousers, Trousers";
+    case WristwearBands:
+      return "Wristwear, Bands";
+    case WristwearBracelet:
+      return "Wristwear, Bracelet";
+    case WristwearSweatbands:
+      return "Wristwear, Sweatbands";
+    case WristwearWatch:
+      return "Wristwear, Watch";
     default:
       return "";
   }
@@ -241,14 +472,35 @@ struct AchievementTableEntry {
   xe::be<uint16_t> unachieved_id;
   xe::be<uint32_t> image_id;
   xe::be<uint16_t> gamerscore;
-  xe::be<uint16_t> unkE;
+  xe::be<uint16_t> unused;
   xe::be<uint32_t> flags;
-  xe::be<uint32_t> unk14;
-  xe::be<uint32_t> unk18;
-  xe::be<uint32_t> unk1C;
-  xe::be<uint32_t> unk20;
+  xe::be<uint32_t> unused1;
+  xe::be<uint32_t> unused2;
+  xe::be<uint32_t> unused3;
+  xe::be<uint32_t> unused4;
 };
 static_assert_size(AchievementTableEntry, 0x24);
+
+struct AvatarItemsTableHeaderEntry {
+  xe::be<uint16_t> count;
+};
+static_assert_size(AvatarItemsTableHeaderEntry, 2);
+
+struct AvatarAwardEntry {
+  xe::avatars::AssetId asset_id;
+  xe::be<uint16_t> display_string_id;
+  xe::be<uint16_t> description_string_id;
+  xe::be<uint16_t> unachieved_string_id;
+  xe::be<uint16_t> reserved;
+  xe::be<uint32_t> image_id;
+  xe::be<uint32_t> flags;
+  xe::be<uint32_t> sub_category;
+};
+static_assert_size(AvatarAwardEntry, 0x24);
+
+struct AvatarAwardsTableEntry {
+  std::vector<AvatarAwardEntry> avatar_awards;
+};
 #pragma pack(pop)
 
 class SpaInfo : public XdbfFile {
@@ -304,6 +556,10 @@ class SpaInfo : public XdbfFile {
 
   const PresenceTableEntry* GetPresence() const { return &presence_; }
 
+  const AvatarAwardsTableEntry* GetAvatarAwards() const {
+    return &avatar_awards_;
+  }
+
   const PropertyBag* GetMatchCollection() const { return &matchmaking_; }
 
   const XdbfContextTableEntry* GetContext(uint32_t id);
@@ -311,6 +567,7 @@ class SpaInfo : public XdbfFile {
   const std::optional<ViewTable> GetStatsView(uint32_t id);
   const std::optional<PropertyBag> GetPresenceMode(
       uint32_t context_value) const;
+  const std::optional<AvatarAwardEntry> GetAvatarAward(uint32_t award_id) const;
 
   uint32_t total_gamerscore() const {
     return std::accumulate(achievements_.cbegin(), achievements_.cend(), 0,
@@ -337,6 +594,7 @@ class SpaInfo : public XdbfFile {
   std::vector<const XdbfPropertyTableEntry*> properties_;
   std::vector<ViewTable> stats_views_;
   PresenceTableEntry presence_;
+  AvatarAwardsTableEntry avatar_awards_;
   PropertyBag matchmaking_;
 
   using XdbfLanguageStrings = std::map<uint16_t, std::string>;
@@ -353,6 +611,7 @@ class SpaInfo : public XdbfFile {
 
   void LoadStatsViews();
   void LoadPresenceModes();
+  void LoadAvatarItems();
   void LoadMatchmaking();
 
   template <typename T>

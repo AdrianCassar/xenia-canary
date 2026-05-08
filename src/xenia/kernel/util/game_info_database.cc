@@ -272,6 +272,36 @@ std::optional<GameInfoDatabase::PresenceMode> GameInfoDatabase::GetPresenceMode(
   return presence_mode;
 }
 
+std::optional<GameInfoDatabase::AvatarAward> GameInfoDatabase::GetAvatarAward(
+    const uint32_t award_id) const {
+  if (!is_valid_) {
+    return std::nullopt;
+  }
+
+  const auto xgaa_avatar_award = spa_gamedata_->GetAvatarAward(award_id);
+
+  if (!xgaa_avatar_award.has_value()) {
+    return std::nullopt;
+  }
+
+  AvatarAward avatar_award = {};
+
+  avatar_award.award_id = award_id;
+  avatar_award.asset_id = xgaa_avatar_award->asset_id;
+  avatar_award.title = GetLocalizedString(xgaa_avatar_award->display_string_id);
+  avatar_award.description =
+      GetLocalizedString(xgaa_avatar_award->description_string_id);
+  avatar_award.unachieved_description =
+      GetLocalizedString(xgaa_avatar_award->description_string_id);
+  avatar_award.image_id = xgaa_avatar_award->image_id;
+  avatar_award.flags =
+      static_cast<xam::AchievementFlags>(xgaa_avatar_award->flags.get());
+  avatar_award.sub_category =
+      static_cast<xam::AssetSubcategory>(xgaa_avatar_award->sub_category.get());
+
+  return avatar_award;
+}
+
 std::vector<uint32_t> GameInfoDatabase::GetMatchmakingAttributes(
     const uint32_t id) const {
   // TODO(Gliniak): Implement when we will fully understand how to read it from
@@ -461,6 +491,30 @@ std::vector<GameInfoDatabase::PresenceMode> GameInfoDatabase::GetPresenceModes()
   }
 
   return presence_modes;
+}
+
+std::vector<GameInfoDatabase::AvatarAward> GameInfoDatabase::GetAvatarAwards()
+    const {
+  if (!is_valid_) {
+    return {};
+  }
+
+  std::vector<AvatarAward> avatar_awards;
+
+  const auto& xgaa_avatar_awards = spa_gamedata_->GetAvatarAwards();
+
+  for (uint32_t award_id = 0;
+       const auto& avatar_item : xgaa_avatar_awards->avatar_awards) {
+    const auto avatar_award = GetAvatarAward(award_id);
+
+    if (avatar_award.has_value()) {
+      avatar_awards.push_back(avatar_award.value());
+    }
+
+    award_id++;
+  }
+
+  return avatar_awards;
 }
 
 }  // namespace util
