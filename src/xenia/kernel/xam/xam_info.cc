@@ -94,6 +94,52 @@ dword_result_t XamGetOnlineSchema_entry() {
 }
 DECLARE_XAM_EXPORT1(XamGetOnlineSchema, kNone, kImplemented);
 
+dword_result_t XamGetLiveHiveValueA_entry(
+    lpstring_t feature_name, lpstring_t value_ptr, dword_t value_buffer_size,
+    dword_t unk, pointer_t<XAM_OVERLAPPED> overlapped_ptr) {
+  if (!feature_name || !value_ptr || !value_buffer_size) {
+    return X_E_INVALIDARG;
+  }
+
+  auto run = [=](uint32_t& extended_error, uint32_t& length) {
+    extended_error = X_ERROR_SUCCESS;
+    length = 0;
+
+    std::memset(value_ptr, 0, value_buffer_size);
+
+    if (feature_name.value() == "AvatarPhotoBoothEnabled") {
+      strcpy(value_ptr, "1");
+    } else if (feature_name.value() == "AvatarMarketplaceEnabled") {
+      strcpy(value_ptr, "0");
+    } else if (feature_name.value() == "AvatarAssetRefreshFrequency") {
+      strcpy(value_ptr, "100");
+    } else if (feature_name.value() == "CompanionBlacklist") {
+      // 58411457
+      // List?
+    } else if (feature_name.value() == "UseDashGamertagChangeApp") {
+      strcpy(value_ptr, "1");
+    } else if (feature_name.value() == "SysExtRevocationList") {
+      strcpy(value_ptr, "00D8B517FD2E27C62C866B041492CCD391085C3B");
+    } else {
+      assert_always();
+      XELOGI("Unknown Feature: {}", feature_name.value());
+    }
+
+    return X_ERROR_SUCCESS;
+  };
+
+  if (!overlapped_ptr) {
+    uint32_t extended_error, length;
+    X_RESULT result = run(extended_error, length);
+
+    return result == X_ERROR_SUCCESS ? result : extended_error;
+  }
+
+  kernel_state()->CompleteOverlappedDeferredEx(run, overlapped_ptr);
+  return X_ERROR_IO_PENDING;
+}
+DECLARE_XAM_EXPORT1(XamGetLiveHiveValueA, kMisc, kStub);
+
 dword_result_t XamGetLiveHiveValueW_entry(
     lpu16string_t feature_name, lpu16string_t value_ptr,
     dword_t value_buffer_size, dword_t unk,
