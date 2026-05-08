@@ -1787,6 +1787,11 @@ dword_result_t XamUserLogonEx_entry(pointer_t<X_PROFILEENUMRESULT> profile_ptr,
 }
 DECLARE_XAM_EXPORT1(XamUserLogonEx, kUserProfiles, kSketchy);
 
+X_HRESULT_result_t XamUserValidateAvatarManifest_entry() {
+  return X_ERROR_SUCCESS;
+}
+DECLARE_XAM_EXPORT1(XamUserValidateAvatarManifest, kUserProfiles, kStub);
+
 }  // namespace xam
 }  // namespace kernel
 }  // namespace xe
