@@ -210,6 +210,20 @@ X_HRESULT XLiveBaseApp::ExecuteDispatchMessage(uint32_t message,
              buffer_length);
       return SubscriptionEnumerate(buffer_ptr);
     }
+    case 0x00050108: {
+      assert_true(!buffer_length ||
+                  buffer_length == sizeof(XLIVEBASE_ASYNC_MESSAGE));
+      XELOGD("XUserValidateAvatarManifest({:08X}, {:08X})", buffer_ptr,
+             buffer_length);
+      return GenericMarshalled(buffer_ptr);
+    }
+    case 0x0005012B: {
+      assert_true(!buffer_length ||
+                  buffer_length == sizeof(XLIVEBASE_ASYNC_MESSAGE));
+      XELOGD("XUserValidateAvatarManifest({:08X}, {:08X})", buffer_ptr,
+             buffer_length);
+      return GenericMarshalled(buffer_ptr);
+    }
     case 0x00058003: {
       assert_true(!buffer_ptr || !buffer_length);
       // Called on startup of dashboard
@@ -1076,6 +1090,8 @@ X_HRESULT XLiveBaseApp::GenericMarshalled(uint32_t buffer_ptr) {
       "/xuacs/XeGetUserInfo.ashx";
   const std::string_view estimate_rank_for_rating_url =
       "/xstats/xstatestimaterankforratings.ashx";
+  const std::string_view validate_avatar_manifest =
+      "/xstats/validateavatarmanifest.ashx";
 
   if (string_verify_url == task_url) {
     return XStringVerify(buffer_ptr);
@@ -1087,6 +1103,10 @@ X_HRESULT XLiveBaseApp::GenericMarshalled(uint32_t buffer_ptr) {
 
   if (estimate_rank_for_rating_url == task_url) {
     return XUserEstimateRankForRating(buffer_ptr);
+  }
+
+  if (validate_avatar_manifest == task_url) {
+    return XUserValidateAvatarManifest(buffer_ptr);
   }
 
   XELOGI("{}:: URL: {}", __func__, task_url);
@@ -2860,6 +2880,29 @@ X_HRESULT XLiveBaseApp::SubscriptionEnumerate(uint32_t buffer_ptr) {
       returned_membership_count;
   subscription_enumerate_results_ptr->subscription_info_ptr =
       subscriptions_info_address;
+
+  return X_E_SUCCESS;
+}
+
+X_HRESULT XLiveBaseApp::XUserValidateAvatarManifest(uint32_t buffer_ptr) {
+  if (!buffer_ptr) {
+    return X_E_INVALIDARG;
+  }
+
+  GenericUnmarshaller unmarshaller(buffer_ptr);
+
+  X_HRESULT deserialize_result = unmarshaller.Deserialize();
+
+  if (deserialize_result) {
+    return deserialize_result;
+  }
+
+  X_VALIDATE_AVATAR_MANIFEST_RESULT* valiate_avatar_manifest =
+      unmarshaller.Results<X_VALIDATE_AVATAR_MANIFEST_RESULT>();
+
+  unmarshaller.ZeroResults();
+
+  valiate_avatar_manifest->ValidationResult = true;
 
   return X_E_SUCCESS;
 }
