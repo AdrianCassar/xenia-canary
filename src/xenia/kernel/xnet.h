@@ -993,6 +993,10 @@ struct STRING_VERIFY_RESPONSE {
 };
 static_assert_size(STRING_VERIFY_RESPONSE, 0x6);
 
+struct X_VALIDATE_AVATAR_MANIFEST_RESULT {
+  uint8_t ValidationResult;
+};
+
 struct FIND_USER_INFO {
   xe::be<uint64_t> xuid;
   char gamertag[16];

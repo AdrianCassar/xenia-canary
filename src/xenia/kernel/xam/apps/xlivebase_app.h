@@ -41,6 +41,7 @@ class XLiveBaseApp : public App {
   X_HRESULT XInviteGetAcceptedInfo(uint32_t buffer_ptr, uint32_t buffer_length);
   X_HRESULT GenericMarshalled(uint32_t buffer_ptr);
   X_HRESULT XUserMuteListQuery(uint32_t buffer_ptr, uint32_t buffer_length);
+  X_HRESULT XUserValidateAvatarManifest(uint32_t buffer_ptr);
   X_HRESULT XUserMuteListAdd(uint32_t buffer_ptr);
   X_HRESULT XUserMuteListRemove(uint32_t buffer_ptr);
   X_HRESULT XAccountGetUserInfo(uint32_t buffer_ptr);
