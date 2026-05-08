@@ -1005,12 +1005,10 @@ dword_result_t XamReadTile_entry(dword_t tile_type, dword_t title_id,
 }
 DECLARE_XAM_EXPORT1(XamReadTile, kUserProfiles, kSketchy);
 
-dword_result_t XamReadTileEx_entry(dword_t tile_type, dword_t game_id,
-                                   qword_t item_id, dword_t offset,
-                                   dword_t unk1, dword_t unk2,
-                                   lpdword_t output_ptr,
-                                   lpdword_t buffer_size_ptr,
-                                   pointer_t<XAM_OVERLAPPED> overlapped_ptr) {
+dword_result_t XamReadTileEx_entry(
+    dword_t tile_type, dword_t game_id, qword_t item_id, dword_t offset,
+    dword_t unkn, pointer_t<X_USER_DATA> unkn_data_ptr, lpdword_t output_ptr,
+    lpdword_t buffer_size_ptr, pointer_t<XAM_OVERLAPPED> overlapped_ptr) {
   return XamReadTile_entry(tile_type, game_id, item_id, offset, output_ptr,
                            buffer_size_ptr, overlapped_ptr);
 }
@@ -1366,6 +1364,38 @@ dword_result_t XamWriteGamerTile_entry(
   return X_ERROR_IO_PENDING;
 }
 DECLARE_XAM_EXPORT1(XamWriteGamerTile, kUserProfiles, kSketchy);
+
+dword_result_t XamWriteGamerTileEx_entry(
+    dword_t user_index, dword_t unkn, dword_t title_id, dword_t image_id,
+    dword_t image_id_small, dword_t flags, lpvoid_t image_big_ptr,
+    dword_t image_big_size, lpvoid_t image_small_ptr, dword_t image_small_size,
+    pointer_t<XAM_OVERLAPPED> overlapped_ptr) {
+  auto run = [=](uint32_t& extended_error, uint32_t& length) {
+    extended_error = X_ERROR_SUCCESS;
+    length = 0;
+
+    if (image_big_size > 0x4000) {
+      return X_ERROR_FUNCTION_FAILED;
+    }
+
+    if (image_small_size > 0x1000) {
+      return X_ERROR_FUNCTION_FAILED;
+    }
+
+    return X_ERROR_FUNCTION_FAILED;
+  };
+
+  if (!overlapped_ptr) {
+    uint32_t extended_error, length;
+    X_RESULT result = run(extended_error, length);
+
+    return result == X_ERROR_SUCCESS ? result : extended_error;
+  }
+
+  kernel_state()->CompleteOverlappedDeferredEx(run, overlapped_ptr);
+  return X_ERROR_IO_PENDING;
+}
+DECLARE_XAM_EXPORT1(XamWriteGamerTileEx, kUserProfiles, kStub);
 
 dword_result_t XamSessionCreateHandle_entry(lpdword_t handle_ptr) {
   auto e = object_ref<XSession>(new XSession(kernel_state()));

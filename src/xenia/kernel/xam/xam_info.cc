@@ -457,6 +457,9 @@ dword_result_t XamGetCurrentTitleId_entry() {
 }
 DECLARE_XAM_EXPORT1(XamGetCurrentTitleId, kNone, kImplemented);
 
+dword_result_t XamLoaderGetPriorTitleId_entry() { return 0; }
+DECLARE_XAM_EXPORT1(XamLoaderGetPriorTitleId, kNone, kImplemented);
+
 dword_result_t XamIsCurrentTitleDash_entry(const ppc_context_t& ctx) {
   return ctx->kernel_state->title_id() == kDashboardID;
 }

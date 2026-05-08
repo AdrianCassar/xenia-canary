@@ -747,9 +747,12 @@ std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::RegisterPlayer(
 
   std::map<uint32_t, std::vector<xam::UserSetting>> settings;
 
-  const auto dashboard_settings =
+  auto dashboard_settings =
       kernel_state()->xam_state()->user_tracker()->GetSettingIds(user_profile,
                                                                  kDashboardID);
+
+  dashboard_settings.push_back(
+      xam::UserSettingId::XPROFILE_GAMERCARD_AVATAR_INFO_1);
 
   const auto title_settings =
       kernel_state()->xam_state()->user_tracker()->GetSettingIds(
