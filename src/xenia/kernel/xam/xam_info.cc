@@ -94,6 +94,66 @@ dword_result_t XamGetOnlineSchema_entry() {
 }
 DECLARE_XAM_EXPORT1(XamGetOnlineSchema, kNone, kImplemented);
 
+dword_result_t XamGetLiveHiveValueW_entry(
+    lpu16string_t feature_name, lpu16string_t value_ptr,
+    dword_t value_buffer_size, dword_t unk,
+    pointer_t<XAM_OVERLAPPED> overlapped_ptr) {
+  if (!feature_name || !value_ptr || !value_buffer_size) {
+    return X_E_INVALIDARG;
+  }
+
+  auto run = [=](uint32_t& extended_error, uint32_t& length) {
+    extended_error = X_ERROR_SUCCESS;
+    length = 0;
+
+    std::memset(value_ptr, 0, value_buffer_size);
+
+    const std::u16string native_feature_name =
+        xe::string_util::read_u16string_and_swap(feature_name);
+
+    std::u16string data;
+
+    if (native_feature_name == u"GameImageAssetUriRoot") {
+      data = u"http://tiles.xbox.com/consoleAssets";
+    } else if (native_feature_name == u"EpixReportingEnabled") {
+      data = u"1";
+    } else if (native_feature_name == u"EpixFailSafeEnabled") {
+      data = u"0";
+    } else if (native_feature_name == u"EpixShallowEnabled") {
+      data = u"0";
+    } else if (native_feature_name == u"EpixPollFrequencyInMinutes") {
+      data = u"240";
+    } else if (native_feature_name == u"EpixManifestUriPath") {
+      data = u"/epix/$locale/";
+    } else if (native_feature_name == u"EpixPreviewUriRoot") {
+      data = u"http://epix-preview.xbox.com";
+    } else if (native_feature_name == u"EpixUriRoot") {
+      data = u"http://epix.xbox.com";
+    } else if (native_feature_name == u"EpixAvatarConfigPath") {
+      data = u"/consoleassets/vm_ems/avatarbitmask.txt";
+    } else {
+      assert_always();
+      XELOGI("Unknown Feature: {}", xe::to_utf8(native_feature_name));
+    }
+
+    xe::string_util::copy_and_swap_truncating(
+        value_ptr, data, xe::string_util::size_in_bytes(data));
+
+    return X_ERROR_SUCCESS;
+  };
+
+  if (!overlapped_ptr) {
+    uint32_t extended_error, length;
+    X_RESULT result = run(extended_error, length);
+
+    return result == X_ERROR_SUCCESS ? result : extended_error;
+  }
+
+  kernel_state()->CompleteOverlappedDeferredEx(run, overlapped_ptr);
+  return X_ERROR_IO_PENDING;
+}
+DECLARE_XAM_EXPORT1(XamGetLiveHiveValueW, kMisc, kStub);
+
 dword_result_t keXamBuildResourceLocator(uint64_t module,
                                          const std::u16string& container,
                                          const std::u16string& resource,
