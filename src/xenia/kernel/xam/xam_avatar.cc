@@ -131,6 +131,19 @@ const X_AVATAR_COMPONENT_ASSET_INFO avatar_component_asset_infos[] = {
     {0x00000800, 0x00019000},  // avatars::ComponentCategory::kProp
 };
 
+dword_result_t XamAvatarGetMetadataByXuid_entry() { return X_ERROR_SUCCESS; }
+DECLARE_XAM_EXPORT1(XamAvatarGetMetadataByXuid, kAvatars, kStub);
+
+dword_result_t XamAvatarGetMetadataSignedOutProfileCount_entry() {
+  return X_ERROR_SUCCESS;
+}
+DECLARE_XAM_EXPORT1(XamAvatarGetMetadataSignedOutProfileCount, kAvatars, kStub);
+
+dword_result_t XamAvatarGetMetadataSignedOutProfile_entry() {
+  return X_ERROR_SUCCESS;
+}
+DECLARE_XAM_EXPORT1(XamAvatarGetMetadataSignedOutProfile, kAvatars, kStub);
+
 dword_result_t XamAvatarGetAssetsResultSize_entry(dword_t category_mask,
                                                   lpdword_t out_cpu_size,
                                                   lpdword_t out_gpu_size) {
@@ -394,30 +407,67 @@ dword_result_t XamAvatarSetMetadata_entry(
 }
 DECLARE_XAM_EXPORT1(XamAvatarSetMetadata, kAvatars, kStub);
 
-dword_result_t XamAvatarGetAssetIcon_entry(
-    pointer_t<AssetId> asset_id, lpvoid_t a3, lpdword_t a4, dword_t a5,
-    pointer_t<XAM_OVERLAPPED> overlapped) {
-  auto run = [](uint32_t& length, uint32_t& extended_error) -> X_RESULT {
-    length = 0;
-    extended_error = X_E_FAIL;
-    return X_E_FAIL;
-  };
-  if (!overlapped) {
-    uint32_t length, extended_error;
-    return run(length, extended_error);
-  } else {
-    kernel_state()->CompleteOverlappedDeferredEx(run, overlapped);
-    return X_ERROR_IO_PENDING;
-  }
+dword_result_t XamAvatarGetAssetIcon_entry(pointer_t<AssetId> asset_id,
+                                           dword_t asset_load_flags,
+                                           lpdword_t buffer_size_ptr,
+                                           lpvoid_t image_buffer_ptr) {
+  return X_E_FAIL;
 }
 DECLARE_XAM_EXPORT1(XamAvatarGetAssetIcon, kAvatars, kStub);
 
-dword_result_t XamPngDecode_entry(lpdword_t png_data, dword_t size,
-                                  lpdword_t buffer, dword_t flags, dword_t r7,
-                                  dword_t r8, dword_t r9) {
-  return X_ERROR_SUCCESS;
+dword_result_t XamPngDecode_entry(
+    lpvoid_t png_data_ptr, dword_t size, lpdword_t output_texture_bits_ptr,
+    dword_t output_texture_bits,
+    lpvoid_t output_texture_ptr,         // D3DTexture*
+    lpdword_t output_texture_brush_ptr,  // XUIBRUSH**
+    pointer_t<XAM_OVERLAPPED> overlapped_ptr) {
+  auto run = [](uint32_t& length, uint32_t& extended_error) -> X_RESULT {
+    length = 0;
+    extended_error = X_E_SUCCESS;
+    return X_E_SUCCESS;
+  };
+
+  if (!overlapped_ptr) {
+    uint32_t length, extended_error;
+    return run(length, extended_error);
+  }
+
+  kernel_state()->CompleteOverlappedDeferredEx(run, overlapped_ptr);
+  return X_ERROR_IO_PENDING;
 }
 DECLARE_XAM_EXPORT1(XamPngDecode, kAvatars, kStub);
+
+dword_result_t XamPngEncodeEx_entry(lpvoid_t input_buffer_ptr, dword_t width,
+                                    dword_t height, dword_t pitch,
+                                    lpvoid_t out_buffer_ptr,
+                                    dword_t out_buffer_len, dword_t flags,
+                                    pointer_t<XAM_OVERLAPPED> overlapped_ptr) {
+  auto run = [](uint32_t& length, uint32_t& extended_error) -> X_RESULT {
+    length = 0;
+    extended_error = X_E_SUCCESS;
+    return X_E_SUCCESS;
+  };
+
+  if (!overlapped_ptr) {
+    uint32_t length, extended_error;
+    return run(length, extended_error);
+  }
+
+  kernel_state()->CompleteOverlappedDeferredEx(run, overlapped_ptr);
+  return X_ERROR_IO_PENDING;
+}
+DECLARE_XAM_EXPORT1(XamPngEncodeEx, kAvatars, kStub);
+
+dword_result_t XamPngEncode_entry(lpvoid_t input_buffer_ptr, dword_t width,
+                                  dword_t height, dword_t pitch,
+                                  lpvoid_t out_buffer_ptr,
+                                  dword_t out_buffer_len,
+                                  pointer_t<XAM_OVERLAPPED> overlapped_ptr) {
+  return XamPngEncodeEx_entry(input_buffer_ptr, width, height, pitch,
+                              out_buffer_ptr, out_buffer_len, 0,
+                              overlapped_ptr);
+}
+DECLARE_XAM_EXPORT1(XamPngEncode, kAvatars, kStub);
 
 }  // namespace xam
 }  // namespace kernel
