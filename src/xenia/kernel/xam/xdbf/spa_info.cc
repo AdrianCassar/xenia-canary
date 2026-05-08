@@ -27,6 +27,7 @@ void SpaInfo::Load() {
   LoadPresenceModes();
   LoadMatchmaking();
   LoadStatsViews();
+  LoadAvatarItems();
 }
 
 bool operator<(const SpaInfo& first, const SpaInfo& second) {
@@ -330,6 +331,30 @@ void SpaInfo::LoadPresenceModes() {
   }
 }
 
+void SpaInfo::LoadAvatarItems() {
+  auto avatar_awards_table =
+      GetEntry(static_cast<uint16_t>(SpaSection::kMetadata), kXdbfIdXgaa);
+  if (!avatar_awards_table) {
+    return;
+  }
+
+  auto xgaa_head = reinterpret_cast<const XdbfSectionHeader*>(
+      avatar_awards_table->data.data());
+  assert_true(xgaa_head->magic == kXdbfSignatureXgaa);
+  assert_true(xgaa_head->version == 1);
+
+  auto xgaa_head_start_ptr = reinterpret_cast<const uint8_t*>(xgaa_head + 1);
+
+  const AvatarItemsTableHeaderEntry* avatar_items_header_ptr =
+      reinterpret_cast<const AvatarItemsTableHeaderEntry*>(xgaa_head_start_ptr);
+
+  auto avatar_awards_ptr =
+      reinterpret_cast<const AvatarAwardEntry*>(avatar_items_header_ptr + 1);
+
+  avatar_awards_.avatar_awards = std::vector<AvatarAwardEntry>(
+      avatar_awards_ptr, avatar_awards_ptr + avatar_items_header_ptr->count);
+}
+
 void SpaInfo::LoadMatchmaking() {
   auto matchmaking_schema =
       GetEntry(static_cast<uint16_t>(SpaSection::kMetadata), kXdbfIdXmat);
@@ -499,6 +524,17 @@ const std::optional<PropertyBag> SpaInfo::GetPresenceMode(
 
   if (context_value < presence_.presence_modes.size()) {
     entry = presence_.presence_modes.at(context_value);
+  }
+
+  return entry;
+}
+
+const std::optional<AvatarAwardEntry> SpaInfo::GetAvatarAward(
+    uint32_t award_id) const {
+  std::optional<AvatarAwardEntry> entry = std::nullopt;
+
+  if (award_id < avatar_awards_.avatar_awards.size()) {
+    entry = avatar_awards_.avatar_awards.at(award_id);
   }
 
   return entry;
