@@ -21,7 +21,7 @@ X_HRESULT GenericUnmarshaller::Deserialize() {
     return X_E_INVALIDARG;
   }
 
-  if (!GetAsyncTask()->GetXLiveAsyncTask()->marshalled_request_ptr) {
+  if (!GetAsyncTask().GetXLiveAsyncTask()->marshalled_request_ptr) {
     return X_E_INVALIDARG;
   }
 

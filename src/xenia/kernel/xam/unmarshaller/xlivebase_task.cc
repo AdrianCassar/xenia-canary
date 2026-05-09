@@ -313,11 +313,13 @@ void XLivebaseAsyncTask::PrettyPrintOrdinalToIndex() const {
   XELOGI(pretty_schema_table);
 }
 
-XLIVE_ASYNC_TASK* XLivebaseAsyncTask::GetXLiveAsyncTask() {
+XLIVE_ASYNC_TASK* XLivebaseAsyncTask::GetXLiveAsyncTask() const {
   return xlive_async_task_ptr_;
 }
 
-SCHEMA_DATA* XLivebaseAsyncTask::GetSchemaData() { return schema_data_ptr_; }
+SCHEMA_DATA* XLivebaseAsyncTask::GetSchemaData() const {
+  return schema_data_ptr_;
+}
 
 }  // namespace xam
 }  // namespace kernel

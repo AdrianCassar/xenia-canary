@@ -25,15 +25,15 @@ X_HRESULT XUserFindUsersUnmarshaller::Deserialize() {
     return X_E_INVALIDARG;
   }
 
-  if (!GetAsyncTask()->GetXLiveAsyncTask()->marshalled_request_ptr) {
+  if (!GetAsyncTask().GetXLiveAsyncTask()->marshalled_request_ptr) {
     return X_E_INVALIDARG;
   }
 
-  if (!GetAsyncTask()->GetXLiveAsyncTask()->results_ptr) {
+  if (!GetAsyncTask().GetXLiveAsyncTask()->results_ptr) {
     return X_E_INVALIDARG;
   }
 
-  if (!GetAsyncTask()->GetXLiveAsyncTask()->results_size) {
+  if (!GetAsyncTask().GetXLiveAsyncTask()->results_size) {
     return X_E_INVALIDARG;
   }
 
@@ -42,8 +42,7 @@ X_HRESULT XUserFindUsersUnmarshaller::Deserialize() {
   num_users_ = Read<uint32_t>();
 
   const uint32_t results_capacity =
-      GetAsyncTask()->GetXLiveAsyncTask()->results_size /
-      sizeof(FIND_USER_INFO);
+      GetAsyncTask().GetXLiveAsyncTask()->results_size / sizeof(FIND_USER_INFO);
 
   if (num_users_ > results_capacity) {
     return X_E_INSUFFICIENT_BUFFER;
@@ -54,7 +53,7 @@ X_HRESULT XUserFindUsersUnmarshaller::Deserialize() {
   }
 
   if (GetPosition() !=
-      GetAsyncTask()->GetXLiveAsyncTask()->marshalled_request_size) {
+      GetAsyncTask().GetXLiveAsyncTask()->marshalled_request_size) {
     assert_always(std::format("{} deserialization incomplete", __func__));
   }
 

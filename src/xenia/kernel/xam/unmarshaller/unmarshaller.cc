@@ -14,9 +14,7 @@ namespace kernel {
 namespace xam {
 
 Unmarshaller::Unmarshaller(uint32_t marshaller_address)
-    : xlivebase_async_message_ptr_(nullptr),
-      async_task_(nullptr),
-      position_(0) {
+    : xlivebase_async_message_ptr_(nullptr), async_task_(0), position_(0) {
   if (!marshaller_address) {
     return;
   }
@@ -25,20 +23,20 @@ Unmarshaller::Unmarshaller(uint32_t marshaller_address)
       kernel_state()->memory()->TranslateVirtual<XLIVEBASE_ASYNC_MESSAGE*>(
           marshaller_address);
 
-  async_task_ = new XLivebaseAsyncTask(
-      xlivebase_async_message_ptr_->xlive_async_task_ptr);
+  async_task_ =
+      XLivebaseAsyncTask(xlivebase_async_message_ptr_->xlive_async_task_ptr);
 }
 
 std::span<uint8_t> Unmarshaller::Advance(size_t count) {
   const size_t offset = position_ + count;
 
-  if (offset > async_task_->data_ptr_.size()) {
+  if (offset > async_task_.data_ptr_.size()) {
     assert_always(std::format("{}: Out of Bounds Span!", __func__));
 
     return std::span<uint8_t>();
   }
 
-  std::span<uint8_t> data = async_task_->data_ptr_.subspan(position_, count);
+  std::span<uint8_t> data = async_task_.data_ptr_.subspan(position_, count);
 
   position_ = offset;
 
@@ -48,7 +46,7 @@ std::span<uint8_t> Unmarshaller::Advance(size_t count) {
 std::u16string Unmarshaller::ReadSwapUTF16String(uint32_t length) {
   // Excludes null terminator
   std::u16string server_path = xe::load_and_swap<std::u16string>(
-      reinterpret_cast<char16_t*>(async_task_->data_ptr_.data() + position_));
+      reinterpret_cast<char16_t*>(async_task_.data_ptr_.data() + position_));
 
   std::span<uint8_t> string_data =
       Advance(xe::string_util::size_in_bytes(server_path, true));
@@ -78,7 +76,7 @@ XLIVEBASE_ASYNC_MESSAGE* Unmarshaller::GetXLiveBaseAsyncMessage() {
   return xlivebase_async_message_ptr_;
 }
 
-XLivebaseAsyncTask* Unmarshaller::GetAsyncTask() { return async_task_; }
+XLivebaseAsyncTask Unmarshaller::GetAsyncTask() const { return async_task_; }
 
 size_t Unmarshaller::GetPosition() const { return position_; }
 
