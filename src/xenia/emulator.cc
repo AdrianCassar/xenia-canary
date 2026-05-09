@@ -1188,8 +1188,10 @@ void Emulator::DumpXLast() {
     if (game_info_database_->GetXLast()) {
       const std::string title_ver =
           title_version().empty() ? "" : " - " + title_version();
-      game_info_database_->GetXLast()->Dump(
-          fmt::format("{:08X}{}", title_id(), title_ver));
+      const std::string filename =
+          fmt::format("{:08X}{}.xml", title_id(), title_ver);
+
+      game_info_database_->GetXLast()->Dump(storage_root() / filename);
     } else {
       XELOGI("XLast data not found");
     }

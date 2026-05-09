@@ -656,31 +656,33 @@ std::vector<uint32_t> XLast::GetAllValuesFromNode(
   return result;
 }
 
-void XLast::Dump(std::string file_name) const {
+void XLast::Dump(std::filesystem::path file_path) const {
   if (!HasXLast()) {
     return;
   }
 
-  if (file_name.empty()) {
-    file_name = xe::to_utf8(GetTitleName());
-  }
-
-  const std::string file = fmt::format("{}.xml", file_name);
-
-  if (std::filesystem::exists(file)) {
+  if (std::filesystem::exists(file_path)) {
     return;
   }
 
-  FILE* outfile = xe::filesystem::OpenFile(file.c_str(), "ab");
+  std::ofstream xlast_src_stream(file_path, std::ios::binary);
 
-  if (outfile) {
-    fwrite(xlast_decompressed_xml_.data(), 1, xlast_decompressed_xml_.size(),
-           outfile);
+  if (xlast_src_stream.is_open()) {
+    std::u16string xlast_src;
 
-    XELOGI("XLast file saved {}", file);
+    // uint8_t -> char16_t
+    xlast_src.resize(xlast_decompressed_xml_.size() / 2);
+
+    std::copy(xlast_decompressed_xml_.begin(), xlast_decompressed_xml_.end(),
+              reinterpret_cast<uint8_t*>(xlast_src.data()));
+
+    const std::string xlast_src_clean = xe::to_utf8(xlast_src);
+
+    xlast_src_stream.write(xlast_src_clean.c_str(), xlast_src_clean.size());
+    xlast_src_stream.close();
+
+    XELOGI("XLast source saved: {}", file_path.filename());
   }
-
-  fclose(outfile);
 }
 
 std::string XLast::GetLocaleStringFromLanguage(XLanguage language) const {
