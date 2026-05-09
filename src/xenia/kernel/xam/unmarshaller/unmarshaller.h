@@ -50,19 +50,19 @@ class Unmarshaller {
 
   template <typename T>
   T* DeserializeReinterpret() {
-    return async_task_->DeserializeReinterpret<T>();
+    return async_task_.DeserializeReinterpret<T>();
   };
 
   template <typename T>
   T* Results() const {
-    return async_task_->Results<T>();
+    return async_task_.Results<T>();
   };
 
-  bool ZeroResults() const { return async_task_->ZeroResults(); };
+  bool ZeroResults() const { return async_task_.ZeroResults(); };
 
   XLIVEBASE_ASYNC_MESSAGE* GetXLiveBaseAsyncMessage();
 
-  XLivebaseAsyncTask* GetAsyncTask();
+  XLivebaseAsyncTask GetAsyncTask() const;
 
   size_t GetPosition() const;
 
@@ -72,7 +72,7 @@ class Unmarshaller {
   Unmarshaller(uint32_t marshaller_buffer);
 
   XLIVEBASE_ASYNC_MESSAGE* xlivebase_async_message_ptr_;
-  XLivebaseAsyncTask* async_task_;
+  XLivebaseAsyncTask async_task_;
 
  private:
   size_t position_;
