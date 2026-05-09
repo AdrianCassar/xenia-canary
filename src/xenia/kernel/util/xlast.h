@@ -164,7 +164,7 @@ class XLast {
       const pugi::xpath_node node, const std::string child_name,
       const std::string attribute_name);
 
-  void Dump(std::string file_name) const;
+  void Dump(std::filesystem::path file_path) const;
 
   const bool HasXLast() const { return !xlast_decompressed_xml_.empty(); };
 
