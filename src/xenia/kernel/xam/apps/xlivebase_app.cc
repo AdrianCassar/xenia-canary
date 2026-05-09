@@ -1081,7 +1081,7 @@ X_HRESULT XLiveBaseApp::GenericMarshalled(uint32_t buffer_ptr) {
 
   GenericUnmarshaller unmarshaller = GenericUnmarshaller(buffer_ptr);
 
-  const std::string_view task_url = unmarshaller.GetAsyncTask()->GetTaskUrl();
+  const std::string_view task_url = unmarshaller.GetAsyncTask().GetTaskUrl();
 
   // Determine function via it's URL, some functions don't have a URL if the url
   // index is 0.
@@ -1308,7 +1308,7 @@ X_HRESULT XLiveBaseApp::XStorageEnumerate(uint32_t buffer_ptr) {
 
   const uint32_t available_to_return_items =
       static_cast<uint32_t>(std::floor<uint32_t>(static_cast<uint32_t>(
-          (unmarshaller.GetAsyncTask()->GetXLiveAsyncTask()->results_size -
+          (unmarshaller.GetAsyncTask().GetXLiveAsyncTask()->results_size -
            sizeof(X_STORAGE_ENUMERATE_RESULTS)) /
           (sizeof(X_STORAGE_FILE_INFO) +
            (X_ONLINE_MAX_PATHNAME_LENGTH * sizeof(char16_t))))));
@@ -1617,7 +1617,7 @@ X_HRESULT XLiveBaseApp::XUserEstimateRankForRating(uint32_t buffer_ptr) {
   unmarshaller.ZeroResults();
 
   const uint32_t max_num_ranks_results =
-      (unmarshaller.GetAsyncTask()->GetXLiveAsyncTask()->results_size -
+      (unmarshaller.GetAsyncTask().GetXLiveAsyncTask()->results_size -
        sizeof(X_USER_ESTIMATE_RANK_RESULTS)) /
       sizeof(uint32_t);
 
@@ -2600,7 +2600,7 @@ X_HRESULT XLiveBaseApp::GenresEnumerate(uint32_t buffer_ptr) {
   const uint32_t total_genre_info_size =
       sizeof(GENRE_INFO) * genre_enumerate_request_ptr->max_count;
 
-  assert_true(unmarshaller.GetAsyncTask()->GetXLiveAsyncTask()->results_size >
+  assert_true(unmarshaller.GetAsyncTask().GetXLiveAsyncTask()->results_size >
               total_genre_info_size);
 
   // Results Layout
@@ -2714,7 +2714,7 @@ X_HRESULT XLiveBaseApp::EnumerateTitlesByFilter(uint32_t buffer_ptr) {
   const uint32_t enumerate_titles_info_size =
       sizeof(ENUMERATE_TITLES_INFO) * enumerate_titles_request_ptr->max_count;
 
-  assert_true(unmarshaller.GetAsyncTask()->GetXLiveAsyncTask()->results_size >
+  assert_true(unmarshaller.GetAsyncTask().GetXLiveAsyncTask()->results_size >
               enumerate_titles_info_size);
 
   uint32_t title_info_address = kernel_state_->memory()->HostToGuestVirtual(
@@ -2821,7 +2821,7 @@ X_HRESULT XLiveBaseApp::SubscriptionEnumerate(uint32_t buffer_ptr) {
   const uint32_t subscription_info_size =
       sizeof(SUBSCRIPTION_INFO) * subscription_enumerate_ptr->max_results;
 
-  assert_true(unmarshaller.GetAsyncTask()->GetXLiveAsyncTask()->results_size >
+  assert_true(unmarshaller.GetAsyncTask().GetXLiveAsyncTask()->results_size >
               subscription_info_size);
 
   SUBSCRIPTION_ENUMERATE_RESPONSE* subscription_enumerate_results_ptr =

@@ -49,9 +49,9 @@ class XLivebaseAsyncTask {
 
   void PrettyPrintOrdinalToIndex() const;
 
-  XLIVE_ASYNC_TASK* GetXLiveAsyncTask();
+  XLIVE_ASYNC_TASK* GetXLiveAsyncTask() const;
 
-  SCHEMA_DATA* GetSchemaData();
+  SCHEMA_DATA* GetSchemaData() const;
 
   template <typename T>
   T* DeserializeReinterpret() {
