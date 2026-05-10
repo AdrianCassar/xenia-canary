@@ -177,6 +177,10 @@ dword_result_t XamGetLiveHiveValueW_entry(
       data = u"http://epix.xbox.com";
     } else if (native_feature_name == u"EpixAvatarConfigPath") {
       data = u"/consoleassets/vm_ems/avatarbitmask.txt";
+    } else if (native_feature_name == u"XSignerMinimumVersion") {
+      data = u"0";
+    } else if (native_feature_name == u"MarketplaceLibraryEnabled") {
+      data = u"1";
     } else {
       assert_always();
       XELOGI("Unknown Feature: {}", xe::to_utf8(native_feature_name));
