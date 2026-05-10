@@ -182,8 +182,8 @@ dword_result_t XamGetLiveHiveValueW_entry(
       XELOGI("Unknown Feature: {}", xe::to_utf8(native_feature_name));
     }
 
-    xe::string_util::copy_and_swap_truncating(
-        value_ptr, data, xe::string_util::size_in_bytes(data));
+    xe::string_util::copy_and_swap_truncating(value_ptr, data,
+                                              value_buffer_size);
 
     return X_ERROR_SUCCESS;
   };
@@ -348,12 +348,8 @@ dword_result_t XamReadString_entry(dword_t title_id, qword_t id,
     char16_t* str_buffer =
         kernel_memory()->TranslateVirtual<char16_t*>(string_out_ptr);
 
-    const size_t localized_string_size =
-        string_util::size_in_bytes(localized_string, true);
-
-    xe::string_util::copy_and_swap_truncating(
-        str_buffer, localized_string.c_str(),
-        std::min(localized_string_size, str_buffer_size));
+    xe::string_util::copy_and_swap_truncating(str_buffer, localized_string,
+                                              str_buffer_size);
 
     extended_error = X_HRESULT_FROM_WIN32(result);
     length = 0;
