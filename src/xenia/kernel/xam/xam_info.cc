@@ -183,8 +183,8 @@ dword_result_t XamGetLiveHiveValueW_entry(
       XELOGI("Unknown Feature: {}", xe::to_utf8(native_feature_name));
     }
 
-    xe::string_util::copy_and_swap_truncating(
-        value_ptr, data, xe::string_util::size_in_bytes(data));
+    xe::string_util::copy_and_swap_truncating(value_ptr, data,
+                                              value_buffer_size);
 
     return X_ERROR_SUCCESS;
   };
