@@ -51,13 +51,13 @@ enum SessionFlags {
 
 inline bool IsOfflineSession(const SessionFlags flags) { return !flags; }
 
-inline bool IsSystemlinkSession(const SessionFlags flags) {
-  return !IsOfflineSession(flags) &&
-         (flags & ~SessionFlags::SYSTEMLINK_FEATURES) == 0;
-}
-
 inline bool IsXboxLiveSession(const SessionFlags flags) {
   return !IsOfflineSession(flags) && flags & SessionFlags::LIVE_FEATURES;
+}
+
+inline bool IsSystemlinkSession(const SessionFlags flags) {
+  return !IsOfflineSession(flags) && !IsXboxLiveSession(flags) &&
+         flags & SessionFlags::SYSTEMLINK_FEATURES;
 }
 
 enum STATE_FLAGS : uint32_t {
