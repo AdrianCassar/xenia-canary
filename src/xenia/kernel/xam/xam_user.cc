@@ -1097,16 +1097,25 @@ dword_result_t XamReadTileToTextureEx_entry(
     } else if (user_index == XUserIndexNone) {
       // Remote user
 
-      xe::be<uint32_t> title_id = 0;
+      xe::be<uint32_t> title_id_ = 0;
       xe::be<uint32_t> big_tile_id = 0;
       xe::be<uint32_t> small_tile_id = 0;
 
-      XamParseGamerTileKey_entry(key_ptr, &title_id.value, &big_tile_id.value,
-                                 &small_tile_id.value);
+      if (key_ptr) {
+        // XamReadTileToTextureEx
+        XamParseGamerTileKey_entry(key_ptr, &title_id_.value,
+                                   &big_tile_id.value, &small_tile_id.value);
+      } else {
+        // XamReadTileToTexture
+        // 534507D4 - Doesn't redirect to Ex version even with supported XAM.
+        title_id_ = title_id.value();
+        big_tile_id = static_cast<uint32_t>(tile_id);
+      }
 
       const uint32_t gamerpic_id = fsmall ? small_tile_id : big_tile_id;
 
-      if (!IsGamerPictureAvatar(title_id) && !IsGamerPictureCustom(title_id)) {
+      if (!IsGamerPictureAvatar(title_id_) &&
+          !IsGamerPictureCustom(title_id_)) {
         const auto gamerpic_data =
             kernel_state()->GetXboxLiveAPI()->GetCachedGamerpic(gamerpic_id);
 
@@ -1115,9 +1124,12 @@ dword_result_t XamReadTileToTextureEx_entry(
         } else {
           gamerpic_icon =
               kernel_state()->GetXboxLiveAPI()->DownloadGamerpicTile(
-                  title_id, gamerpic_id);
-          kernel_state()->GetXboxLiveAPI()->AddCachedGamerpic(gamerpic_id,
-                                                              gamerpic_icon);
+                  title_id_, gamerpic_id);
+
+          if (!gamerpic_icon.empty()) {
+            kernel_state()->GetXboxLiveAPI()->AddCachedGamerpic(gamerpic_id,
+                                                                gamerpic_icon);
+          }
         }
       } else {
         // We do not support avatar or custom gamerpics.
