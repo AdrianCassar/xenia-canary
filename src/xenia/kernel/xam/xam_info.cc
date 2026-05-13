@@ -107,23 +107,27 @@ dword_result_t XamGetLiveHiveValueA_entry(
 
     std::memset(value_ptr, 0, value_buffer_size);
 
+    std::string data;
+
     if (feature_name.value() == "AvatarPhotoBoothEnabled") {
-      strcpy(value_ptr, "1");
+      data = "1";
     } else if (feature_name.value() == "AvatarMarketplaceEnabled") {
-      strcpy(value_ptr, "0");
+      data = "0";
     } else if (feature_name.value() == "AvatarAssetRefreshFrequency") {
-      strcpy(value_ptr, "100");
+      data = "100";
     } else if (feature_name.value() == "CompanionBlacklist") {
       // 58411457
       // List?
     } else if (feature_name.value() == "UseDashGamertagChangeApp") {
-      strcpy(value_ptr, "1");
+      data = "1";
     } else if (feature_name.value() == "SysExtRevocationList") {
-      strcpy(value_ptr, "00D8B517FD2E27C62C866B041492CCD391085C3B");
+      data = "00D8B517FD2E27C62C866B041492CCD391085C3B";
     } else {
       assert_always();
       XELOGI("Unknown Feature: {}", feature_name.value());
     }
+
+    xe::string_util::copy_truncating(value_ptr, data, value_buffer_size);
 
     return X_ERROR_SUCCESS;
   };
