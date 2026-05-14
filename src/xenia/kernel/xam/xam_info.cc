@@ -208,6 +208,32 @@ dword_result_t XamGetLiveHiveValueW_entry(
 }
 DECLARE_XAM_EXPORT1(XamGetLiveHiveValueW, kMisc, kStub);
 
+dword_result_t XamGetErrorStringFromWebService_entry(
+    lpu16string_t status_code_desc_ptr, dword_t buffer_size,
+    dword_t status_code, pointer_t<XAM_OVERLAPPED> overlapped_ptr) {
+  if (!status_code_desc_ptr || !buffer_size || !status_code) {
+    return X_E_INVALIDARG;
+  }
+
+  auto run = [=](uint32_t& length, uint32_t& extended_error) -> X_RESULT {
+    length = 0;
+    extended_error = X_E_SUCCESS;
+
+    std::memset(status_code_desc_ptr, 0, buffer_size);
+
+    return X_E_SUCCESS;
+  };
+
+  if (!overlapped_ptr) {
+    uint32_t length, extended_error;
+    return run(length, extended_error);
+  }
+
+  kernel_state()->CompleteOverlappedDeferredEx(run, overlapped_ptr);
+  return X_ERROR_IO_PENDING;
+}
+DECLARE_XAM_EXPORT1(XamGetErrorStringFromWebService, kMisc, kStub);
+
 dword_result_t keXamBuildResourceLocator(uint64_t module,
                                          const std::u16string& container,
                                          const std::u16string& resource,
