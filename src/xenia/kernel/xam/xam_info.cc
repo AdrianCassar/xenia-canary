@@ -94,6 +94,55 @@ dword_result_t XamGetOnlineSchema_entry() {
 }
 DECLARE_XAM_EXPORT1(XamGetOnlineSchema, kNone, kImplemented);
 
+dword_result_t XamQueryLiveHiveA_entry(
+    lpstring_t feature_name, lpstring_t value_ptr, dword_t value_buffer_size,
+    pointer_t<XAM_OVERLAPPED> overlapped_ptr) {
+  if (!feature_name || !value_ptr || !value_buffer_size) {
+    return X_E_INVALIDARG;
+  }
+
+  auto run = [=](uint32_t& extended_error, uint32_t& length) {
+    extended_error = X_ERROR_SUCCESS;
+    length = 0;
+
+    std::memset(value_ptr, 0, value_buffer_size);
+
+    std::string value = "";
+
+    if (feature_name.value() == "SearchKillSwitch") {
+      value = "";
+    } else if (feature_name.value() == "SearchOnlineRecUnavailableLocales") {
+      // value = "fr-ch,de-ch";
+    } else if (feature_name.value() == "SearchUnavailableLocales") {
+      value = "";
+    } else if (feature_name.value() == "SearchSpeechURL") {
+      value = "https://ssl.bing.com/speechreco/xbox/query";
+    } else if (feature_name.value() == "DisplayCurrencyBalanceOnDash") {
+      value = "1";
+    } else if (feature_name.value() == "TFAEnabled") {
+      value = "1";
+    } else {
+      assert_always();
+      XELOGI("Unknown Feature: {}", feature_name.value());
+    }
+
+    xe::string_util::copy_truncating(value_ptr, value, value_buffer_size);
+
+    return X_ERROR_SUCCESS;
+  };
+
+  if (!overlapped_ptr) {
+    uint32_t extended_error, length;
+    X_RESULT result = run(extended_error, length);
+
+    return result == X_ERROR_SUCCESS ? result : extended_error;
+  }
+
+  kernel_state()->CompleteOverlappedDeferredEx(run, overlapped_ptr);
+  return X_ERROR_IO_PENDING;
+}
+DECLARE_XAM_EXPORT1(XamQueryLiveHiveA, kMisc, kStub);
+
 dword_result_t XamGetLiveHiveValueA_entry(
     lpstring_t feature_name, lpstring_t value_ptr, dword_t value_buffer_size,
     dword_t unk, pointer_t<XAM_OVERLAPPED> overlapped_ptr) {
