@@ -95,8 +95,8 @@ class ProfileManager {
 
   bool DeleteProfile(const uint64_t xuid);
 
-  bool ModifyAccount(const uint64_t xuid, X_XAMACCOUNTINFO* account,
-                     std::function<bool(X_XAMACCOUNTINFO* account)> action);
+  bool ModifyAccount(const uint64_t xuid, X_XAMACCOUNTINFO& account,
+                     std::function<bool(X_XAMACCOUNTINFO& account)> action);
 
   bool ConvertToXboxLiveEnabledProfile(const uint64_t xuid);
 
@@ -162,6 +162,8 @@ class ProfileManager {
   bool CreateAccount(const uint64_t xuid, const std::string gamertag,
                      uint32_t reserved_flags);
   bool CreateAccount(const uint64_t xuid, const X_XAMACCOUNTINFO* account);
+  void SetDefaultXboxLiveEnabledAccountSettings(
+      X_XAMACCOUNTINFO& account) const;
 
   std::filesystem::path GetProfilePath(const uint64_t xuid) const;
   std::filesystem::path GetProfilePath(const std::string xuid) const;

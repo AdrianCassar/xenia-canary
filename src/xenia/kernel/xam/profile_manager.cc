@@ -589,6 +589,7 @@ bool ProfileManager::CreateAccount(const uint64_t xuid,
   account.reserved_flags = reserved_flags;
 
   if (live_enabled) {
+    SetDefaultXboxLiveEnabledAccountSettings(account);
     account.xuid_online = GenerateXuidOnline();
   }
 
@@ -608,6 +609,24 @@ bool ProfileManager::CreateAccount(const uint64_t xuid,
     accounts_.insert({xuid, *account});
   }
   return result;
+}
+
+void ProfileManager::SetDefaultXboxLiveEnabledAccountSettings(
+    X_XAMACCOUNTINFO& account) const {
+  const XOnlineCountry country_id = static_cast<XOnlineCountry>(
+      kernel_state_->xconfig()->ReadSetting<uint8_t>(XCONFIG_USER_CATEGORY,
+                                                     XCONFIG_USER_COUNTRY));
+
+  const XLanguage desired_language =
+      static_cast<XLanguage>(kernel_state_->xconfig()->ReadSetting<uint32_t>(
+          XCONFIG_USER_CATEGORY,
+          XCONFIG_USER_CATEGORY_ENTRIES::XCONFIG_USER_LANGUAGE));
+
+  account.SetCountry(country_id);
+  account.SetLanguage(desired_language);
+
+  account.SetSubscriptionTier(
+      X_XAMACCOUNTINFO::AccountSubscriptionTier::kSubscriptionTierGold);
 }
 
 bool ProfileManager::UpdateAccount(const uint64_t xuid,
@@ -690,8 +709,8 @@ bool ProfileManager::DeleteProfile(const uint64_t xuid) {
 }
 
 bool ProfileManager::ModifyAccount(
-    const uint64_t xuid, X_XAMACCOUNTINFO* account,
-    std::function<bool(X_XAMACCOUNTINFO* account)> action) {
+    const uint64_t xuid, X_XAMACCOUNTINFO& account,
+    std::function<bool(X_XAMACCOUNTINFO& account)> action) {
   const uint8_t user_index = GetUserIndexAssignedToProfile(xuid);
 
   if (user_index < XUserMaxUserCount) {
@@ -708,7 +727,7 @@ bool ProfileManager::ModifyAccount(
     return false;
   }
 
-  if (!UpdateAccount(xuid, account)) {
+  if (!UpdateAccount(xuid, &account)) {
     return false;
   }
 
@@ -724,15 +743,15 @@ bool ProfileManager::ModifyAccount(
 }
 
 bool ProfileManager::ConvertToXboxLiveEnabledProfile(const uint64_t xuid) {
-  X_XAMACCOUNTINFO* account = &accounts_[xuid];
+  X_XAMACCOUNTINFO& account = accounts_[xuid];
 
-  auto run = [this](X_XAMACCOUNTINFO* account_info) {
-    account_info->reserved_flags |=
-        X_XAMACCOUNTINFO::AccountReservedFlags::kLiveEnabled;
+  auto run = [this](X_XAMACCOUNTINFO& account_info) {
+    account_info.ToggleLiveFlag(true);
 
-    // Generate once
-    if (!account_info->xuid_online) {
-      account_info->xuid_online = GenerateXuidOnline();
+    // Set default settings and online XUID once
+    if (!account_info.xuid_online) {
+      SetDefaultXboxLiveEnabledAccountSettings(account_info);
+      account_info.xuid_online = GenerateXuidOnline();
     }
 
     return true;
@@ -742,11 +761,12 @@ bool ProfileManager::ConvertToXboxLiveEnabledProfile(const uint64_t xuid) {
 }
 
 bool ProfileManager::ConvertToOfflineProfile(const uint64_t xuid) {
-  X_XAMACCOUNTINFO* account = &accounts_[xuid];
+  X_XAMACCOUNTINFO& account = accounts_[xuid];
 
-  auto run = [](X_XAMACCOUNTINFO* account_info) {
-    account_info->reserved_flags &=
-        ~X_XAMACCOUNTINFO::AccountReservedFlags::kLiveEnabled;
+  auto run = [](X_XAMACCOUNTINFO& account_info) {
+    account_info.ToggleLiveFlag(false);
+    account_info.SetSubscriptionTier(
+        X_XAMACCOUNTINFO::AccountSubscriptionTier::kSubscriptionTierNone);
 
     return true;
   };
