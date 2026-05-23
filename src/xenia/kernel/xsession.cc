@@ -830,20 +830,27 @@ X_RESULT XSession::WriteStats(XGI_STATS_WRITE* data) {
         emulator()->game_info_database()->GetStatsView(view_id);
 
     // TrueSkill leaderboards are not defined in SPA?
+    // 41560834 includes invalid leaderboards?
     if (!IsTrueSkillViewID(view_id) && !spa_stats_view.has_value()) {
-      XELOGI("{} invalid leaderboard view id {:08X}", __func__);
+      XELOGI("{} invalid leaderboard view id {:08X}", __func__, view_id);
       return X_ONLINE_E_STAT_INVALID_TITLE_OR_LEADERBOARD;
     }
 
-    const bool is_view_arbitrated =
-        spa_stats_view.has_value() && spa_stats_view.value().view.arbitrated;
+    if (spa_stats_view.has_value()) {
+      const auto& stats_view = spa_stats_view.value();
 
-    // If session attempts to write arbitrated leaderboards from a
-    // non-arbitrated session, then XSessionWriteStats will fail.
-    if (IsTrueSkillViewID(view_id) && !is_arbitrated_session) {
-      XELOGI("{} requires session arbitration", __func__);
-      return X_ONLINE_E_SESSION_REQUIRES_ARBITRATION;
-    } else if (!is_arbitrated_session && is_view_arbitrated) {
+      // If session attempts to write arbitrated leaderboards from a
+      // non-arbitrated session, then XSessionWriteStats will fail.
+      if (stats_view.view.arbitrated && !is_arbitrated_session) {
+        XELOGI("{} requires session arbitration", __func__);
+        return X_ONLINE_E_SESSION_REQUIRES_ARBITRATION;
+      }
+    }
+
+    // Only assume a leaderboard is arbitrated if it's skilled and not found
+    // in SPA.
+    if (IsTrueSkillViewID(view_id) && !is_arbitrated_session &&
+        !spa_stats_view.has_value()) {
       XELOGI("{} requires session arbitration", __func__);
       return X_ONLINE_E_SESSION_REQUIRES_ARBITRATION;
     }
