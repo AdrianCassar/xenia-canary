@@ -2,7 +2,7 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2015 Ben Vanik. All rights reserved.                             *
+ * Copyright 2026 Xenia Canary. All rights reserved.                          *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
@@ -21,6 +21,9 @@ namespace apps {
 class XLiveBaseApp : public App {
  public:
   explicit XLiveBaseApp(KernelState* kernel_state);
+
+  uint32_t GetDispatchMessageID(uint32_t message, uint32_t buffer_ptr,
+                                uint32_t buffer_length) const;
 
   X_HRESULT ExecuteDispatchMessage(uint32_t message, uint32_t buffer_ptr,
                                    uint32_t buffer_length,
@@ -65,18 +68,20 @@ class XLiveBaseApp : public App {
   X_STORAGE_FACILITY GetStorageFacilityTypeFromServerPath(
       std::string server_path);
 
-  X_HRESULT GetBannerList(uint32_t buffer_ptr);
+  X_HRESULT XGetBannerList(uint32_t buffer_ptr);
   X_HRESULT XAccountGetPointsBalance(uint32_t buffer_ptr);
-  X_HRESULT GetBannerListHot(uint32_t buffer_ptr);
-  X_HRESULT ContentEnumerate(uint32_t buffer_ptr);
-  X_HRESULT GenresEnumerate(uint32_t buffer_ptr);
-  X_HRESULT EnumerateTitlesByFilter(uint32_t buffer_ptr);
-  X_HRESULT SubscriptionEnumerate(uint32_t buffer_ptr);
+  X_HRESULT XGetBannerListHot(uint32_t buffer_ptr);
+  X_HRESULT XOfferingContentEnumerate(uint32_t buffer_ptr);
+  X_HRESULT XGenresEnumerate(uint32_t buffer_ptr);
+  X_HRESULT XEnumerateTitlesByFilter(uint32_t buffer_ptr);
+  X_HRESULT XOfferingSubscriptionEnumerate(uint32_t buffer_ptr);
 
   X_HRESULT XUpdateAccessTimes(uint32_t buffer_ptr);
 
   X_HRESULT XMessageEnumerate(uint32_t buffer_ptr, uint32_t buffer_length);
   X_HRESULT XPresenceGetState(uint32_t buffer_ptr, uint32_t buffer_length);
+
+  const uint32_t kAsyncSchemaIndexMask = 0x50000;
 
   static constexpr std::string_view xstorage_symboliclink = "XSTORAGE:";
 };
