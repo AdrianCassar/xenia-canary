@@ -410,6 +410,12 @@ enum class X_URL_COMPONENTS {
   Query
 };
 
+struct XONLINE_SCHEMA_DATA {
+  xe::be<uint32_t> schema_ptr;
+  xe::be<uint32_t> schema_size;
+};
+static_assert_size(XONLINE_SCHEMA_DATA, 0x8);
+
 struct XNKID {
   uint8_t ab[8];
   uint64_t as_uint64() { return *reinterpret_cast<uint64_t*>(&ab); }

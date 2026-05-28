@@ -71,6 +71,8 @@ class XamState {
 
   UIInputFilter& ui_input_filter() { return ui_input_filter_; }
 
+  uint32_t GetOnlineSchemaAddress() const { return online_schema_data_address; }
+
   uint32_t GetLanguageFallbackAddress(uint32_t index) const {
     return language_fallback_address_[index];
   }
@@ -85,6 +87,7 @@ class XamState {
   uint32_t content_register_callback = 0;
 
  private:
+  void LoadOnlineSchema();
   void LoadLanguageLocaleFallback();
   void LoadLanguageTypefacePatch();
   void LoadIptvServiceName();
@@ -103,6 +106,7 @@ class XamState {
   UIInputFilter ui_input_filter_;
 
   // Custom XAM stuff
+  uint32_t online_schema_data_address;
   std::array<uint32_t, 0x12> language_fallback_address_{};
   std::array<uint32_t, 0x7> language_type_face_patch_{};
   uint32_t iptv_name_address_{};
