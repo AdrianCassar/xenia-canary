@@ -10,6 +10,7 @@
 #include "xenia/kernel/xam/xam_state.h"
 #include "xenia/base/logging.h"
 #include "xenia/emulator.h"
+#include "xenia/kernel/xam/online_schema.h"
 
 namespace xe {
 namespace kernel {
@@ -31,10 +32,36 @@ XamState::XamState(Emulator* emulator, KernelState* kernel_state)
       std::make_unique<ProfileManager>(kernel_state, user_tracker_.get());
   achievement_manager_ = std::make_unique<AchievementManager>();
 
+  LoadOnlineSchema();
   LoadLanguageLocaleFallback();
   LoadIptvServiceName();
 
   AppManager::RegisterApps(kernel_state, app_manager_.get());
+}
+
+void XamState::LoadOnlineSchema() {
+  constexpr uint32_t schema_data_address = 0x80E00000;
+
+  if (kernel_state_->memory()
+          ->LookupHeap(0x80000000)
+          ->AllocFixed(
+              schema_data_address,
+              sizeof(XONLINE_SCHEMA_DATA) + sizeof(OnlineSchemaData_v6_5),
+              0x1000, kMemoryAllocationCommit,
+              kMemoryProtectRead | kMemoryProtectWrite)) {
+    online_schema_data_address = schema_data_address;
+
+    XONLINE_SCHEMA_DATA* schema_ptr =
+        kernel_state_->memory()->TranslateVirtual<XONLINE_SCHEMA_DATA*>(
+            schema_data_address);
+
+    std::memcpy(schema_ptr + 1, OnlineSchemaData_v6_5,
+                sizeof(OnlineSchemaData_v6_5));
+
+    schema_ptr->schema_ptr = kernel_state_->memory()->HostToGuestVirtual(
+        std::to_address(schema_ptr + 1));
+    schema_ptr->schema_size = sizeof(OnlineSchemaData_v6_5);
+  }
 }
 
 void XamState::LoadLanguageLocaleFallback() {
