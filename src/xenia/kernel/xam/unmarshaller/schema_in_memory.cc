@@ -9,38 +9,38 @@
 
 #include "xenia/kernel/xam/unmarshaller/schema_in_memory.h"
 #include "xenia/base/logging.h"
-#include "xenia/kernel/util/shim_utils.h"
+#include "xenia/kernel/kernel_state.h"
 
 namespace xe {
 namespace kernel {
 namespace xam {
 
-SchemaInMemory::SchemaInMemory() : SCHEMA_DATA{} {};
+SchemaInMemory::SchemaInMemory(KernelState* kernel_state)
+    : SCHEMA_DATA{},
+      kernel_state_(kernel_state),
+      memory_(kernel_state->memory()) {};
 
 void SchemaInMemory::Bind(uint32_t schema_address) {
   XONLINE_SCHEMA_DATA* schema_data_ptr =
-      kernel_memory()->TranslateVirtual<XONLINE_SCHEMA_DATA*>(schema_address);
+      memory_->TranslateVirtual<XONLINE_SCHEMA_DATA*>(schema_address);
 
   const SCHEMA_HEADER* SchemaHeader =
-      kernel_memory()->TranslateVirtual<SCHEMA_HEADER*>(
-          schema_data_ptr->schema_ptr);
+      memory_->TranslateVirtual<SCHEMA_HEADER*>(schema_data_ptr->schema_ptr);
 
   Header = *SchemaHeader;
 
   const uint8_t* cursor = reinterpret_cast<const uint8_t*>(SchemaHeader + 1);
 
-  OrdinalToIndexPtr =
-      kernel_memory()->HostToGuestVirtual(std::to_address(cursor));
+  OrdinalToIndexPtr = memory_->HostToGuestVirtual(std::to_address(cursor));
 
   cursor += SchemaHeader->SchemaTableEntries * sizeof(ORDINAL_TO_INDEX);
 
-  TableEntriesPtr =
-      kernel_memory()->HostToGuestVirtual(std::to_address(cursor));
+  TableEntriesPtr = memory_->HostToGuestVirtual(std::to_address(cursor));
 
   cursor +=
       SchemaHeader->SchemaTableEntries * SchemaHeader->SchemaTableEntrySize;
 
-  SchemaDataPtr = kernel_memory()->HostToGuestVirtual(std::to_address(cursor));
+  SchemaDataPtr = memory_->HostToGuestVirtual(std::to_address(cursor));
 
   SchemaDataSize =
       SchemaHeader->ConstantsTableOffset -
@@ -53,24 +53,22 @@ void SchemaInMemory::Bind(uint32_t schema_address) {
 
   cursor += SchemaDataSize;
 
-  ConstantListPtr =
-      kernel_memory()->HostToGuestVirtual(std::to_address(cursor));
+  ConstantListPtr = memory_->HostToGuestVirtual(std::to_address(cursor));
 
   cursor += Header.ConstantsTableSize * Header.ConstantSize;
 
-  UrlOffsetsPtr = kernel_memory()->HostToGuestVirtual(std::to_address(cursor));
+  UrlOffsetsPtr = memory_->HostToGuestVirtual(std::to_address(cursor));
 
   cursor += Header.UrlTableSize * sizeof(uint16_t);
 
-  UrlDataPtr = kernel_memory()->HostToGuestVirtual(std::to_address(cursor));
+  UrlDataPtr = memory_->HostToGuestVirtual(std::to_address(cursor));
 
   ResolveBind();
 }
 
 void SchemaInMemory::BindToSchema(uint32_t schema_address) {
   const SCHEMA_DATA* title_schema =
-      kernel_state()->memory()->TranslateVirtual<const SCHEMA_DATA*>(
-          schema_address);
+      memory_->TranslateVirtual<const SCHEMA_DATA*>(schema_address);
 
   Header = title_schema->Header;
   OrdinalToIndexPtr = title_schema->OrdinalToIndexPtr;
@@ -87,20 +85,20 @@ void SchemaInMemory::BindToSchema(uint32_t schema_address) {
 
 void SchemaInMemory::ResolveBind() {
   ordinal_to_index_ptr_ =
-      kernel_memory()->TranslateVirtual<ORDINAL_TO_INDEX*>(OrdinalToIndexPtr);
+      memory_->TranslateVirtual<ORDINAL_TO_INDEX*>(OrdinalToIndexPtr);
 
   schema_table_entry_ptr_ =
-      kernel_memory()->TranslateVirtual<SCHEMA_TABLE_ENTRY*>(TableEntriesPtr);
+      memory_->TranslateVirtual<SCHEMA_TABLE_ENTRY*>(TableEntriesPtr);
 
-  schema_data_ptr_ = kernel_memory()->TranslateVirtual<uint8_t*>(SchemaDataPtr);
+  schema_data_ptr_ = memory_->TranslateVirtual<uint8_t*>(SchemaDataPtr);
 
   constant_list_ptr_ =
-      kernel_memory()->TranslateVirtual<xe::be<uint32_t>*>(ConstantListPtr);
+      memory_->TranslateVirtual<xe::be<uint32_t>*>(ConstantListPtr);
 
   url_offsets_ptr_ =
-      kernel_memory()->TranslateVirtual<xe::be<uint16_t>*>(UrlOffsetsPtr);
+      memory_->TranslateVirtual<xe::be<uint16_t>*>(UrlOffsetsPtr);
 
-  url_data_ptr_ = kernel_memory()->TranslateVirtual<char*>(UrlDataPtr);
+  url_data_ptr_ = memory_->TranslateVirtual<char*>(UrlDataPtr);
 }
 
 bool SchemaInMemory::GetSchemaEntry(uint16_t schema_index,
@@ -138,8 +136,7 @@ bool SchemaInMemory::GetSchemaDataFromEntry(
 
 bool SchemaInMemory::EndianBufferBind(BASE_ENDIAN_BUFFER* base,
                                       std::span<uint8_t>& buffer) {
-  base->BufferPtr =
-      kernel_memory()->HostToGuestVirtual(std::to_address(buffer.data()));
+  base->BufferPtr = memory_->HostToGuestVirtual(std::to_address(buffer.data()));
   base->BufferSize = static_cast<uint32_t>(buffer.size());
   base->AvailableSize = static_cast<uint32_t>(buffer.size());
   base->ConsumedSize = 0;

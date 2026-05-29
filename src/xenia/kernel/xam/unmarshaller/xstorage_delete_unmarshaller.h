@@ -2,7 +2,7 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2025 Xenia Canary. All rights reserved.                          *
+ * Copyright 2026 Xenia Canary. All rights reserved.                          *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
@@ -18,7 +18,8 @@ namespace xam {
 
 class XStorageDeleteUnmarshaller : public Unmarshaller {
  public:
-  XStorageDeleteUnmarshaller(uint32_t marshaller_buffer);
+  XStorageDeleteUnmarshaller(KernelState* kernel_state,
+                             uint32_t marshaller_address);
 
   ~XStorageDeleteUnmarshaller() {};
 
@@ -31,8 +32,8 @@ class XStorageDeleteUnmarshaller : public Unmarshaller {
   const std::u16string ServerPath() const { return server_path_; };
 
  private:
-  uint32_t user_index_;
-  uint32_t server_path_len_;
+  uint32_t user_index_ = 0;
+  uint32_t server_path_len_ = 0;
   std::u16string server_path_;
 };
 

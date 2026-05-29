@@ -2,7 +2,7 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2025 Xenia Canary. All rights reserved.                          *
+ * Copyright 2026 Xenia Canary. All rights reserved.                          *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
@@ -18,7 +18,8 @@ namespace xam {
 
 class XStorageEnumerateUnmarshaller : public Unmarshaller {
  public:
-  XStorageEnumerateUnmarshaller(uint32_t marshaller_buffer);
+  XStorageEnumerateUnmarshaller(KernelState* kernel_state,
+                                uint32_t marshaller_address);
 
   ~XStorageEnumerateUnmarshaller() {};
 
@@ -35,11 +36,11 @@ class XStorageEnumerateUnmarshaller : public Unmarshaller {
   const uint32_t MaxResultsToReturn() const { return max_results_to_return_; };
 
  private:
-  uint32_t user_index_;
-  uint32_t server_path_len_;
+  uint32_t user_index_ = 0;
+  uint32_t server_path_len_ = 0;
   std::u16string server_path_;
-  uint32_t starting_index_;
-  uint32_t max_results_to_return_;
+  uint32_t starting_index_ = 0;
+  uint32_t max_results_to_return_ = 0;
 };
 
 }  // namespace xam

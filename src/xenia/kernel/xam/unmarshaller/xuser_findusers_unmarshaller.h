@@ -2,7 +2,7 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2025 Xenia Canary. All rights reserved.                          *
+ * Copyright 2026 Xenia Canary. All rights reserved.                          *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
@@ -18,7 +18,8 @@ namespace xam {
 
 class XUserFindUsersUnmarshaller : public Unmarshaller {
  public:
-  XUserFindUsersUnmarshaller(uint32_t marshaller_buffer);
+  XUserFindUsersUnmarshaller(KernelState* kernel_state,
+                             uint32_t marshaller_address);
 
   ~XUserFindUsersUnmarshaller() {};
 
@@ -33,9 +34,9 @@ class XUserFindUsersUnmarshaller : public Unmarshaller {
   const std::vector<FIND_USER_INFO>& Users() const { return users_; };
 
  private:
-  BASE_MSG_HEADER msg_header_;
-  uint64_t xuid_issuer_;
-  uint32_t num_users_;
+  BASE_MSG_HEADER msg_header_ = {};
+  uint64_t xuid_issuer_ = 0;
+  uint32_t num_users_ = 0;
   std::vector<FIND_USER_INFO> users_;
 };
 

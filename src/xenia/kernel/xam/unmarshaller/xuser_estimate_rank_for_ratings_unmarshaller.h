@@ -2,7 +2,7 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2025 Xenia Canary. All rights reserved.                          *
+ * Copyright 2026 Xenia Canary. All rights reserved.                          *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
@@ -18,7 +18,8 @@ namespace xam {
 
 class XUserEstimateRankForRatingUnmarshaller : public Unmarshaller {
  public:
-  XUserEstimateRankForRatingUnmarshaller(uint32_t marshaller_buffer);
+  XUserEstimateRankForRatingUnmarshaller(KernelState* kernel_state,
+                                         uint32_t marshaller_address);
 
   ~XUserEstimateRankForRatingUnmarshaller() {};
 
@@ -33,8 +34,8 @@ class XUserEstimateRankForRatingUnmarshaller : public Unmarshaller {
   };
 
  private:
-  uint32_t title_id_;
-  uint32_t ratings_count_;
+  uint32_t title_id_ = 0;
+  uint32_t ratings_count_ = 0;
   std::vector<X_USER_RANK_REQUEST> estimate_ranks_;
 };
 

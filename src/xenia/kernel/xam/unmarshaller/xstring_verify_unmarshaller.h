@@ -2,7 +2,7 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2025 Xenia Canary. All rights reserved.                          *
+ * Copyright 2026 Xenia Canary. All rights reserved.                          *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
@@ -18,7 +18,8 @@ namespace xam {
 
 class XStringVerifyUnmarshaller : public Unmarshaller {
  public:
-  XStringVerifyUnmarshaller(uint32_t marshaller_buffer);
+  XStringVerifyUnmarshaller(KernelState* kernel_state,
+                            uint32_t marshaller_address);
 
   ~XStringVerifyUnmarshaller() {};
 
@@ -39,10 +40,10 @@ class XStringVerifyUnmarshaller : public Unmarshaller {
   };
 
  private:
-  uint32_t title_id_;
-  uint32_t flags_;
-  uint16_t locale_size_;
-  uint16_t num_strings_;
+  uint32_t title_id_ = 0;
+  uint32_t flags_ = 0;
+  uint16_t locale_size_ = 0;
+  uint16_t num_strings_ = 0;
   std::string locale_;
   std::vector<std::string> strings_to_verify_;
 };
