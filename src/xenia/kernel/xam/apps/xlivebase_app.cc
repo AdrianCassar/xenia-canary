@@ -14,7 +14,6 @@
 #include "xenia/base/logging.h"
 #include "xenia/emulator.h"
 #include "xenia/kernel/XLiveAPI.h"
-#include "xenia/kernel/util/shim_utils.h"
 #include "xenia/kernel/xam/unmarshaller/generic_unmarshaller.h"
 #include "xenia/kernel/xam/unmarshaller/schema_in_memory.h"
 #include "xenia/kernel/xam/unmarshaller/xaccount_getuserinfo_unmarshaller.h"
@@ -69,10 +68,10 @@ uint32_t XLiveBaseApp::GetDispatchMessageID(uint32_t message,
     return message;
   }
 
-  SchemaInMemory schema;
+  SchemaInMemory schema(kernel_state_);
   schema.Bind(kernel_state_->xam_state()->GetOnlineSchemaAddress());
 
-  const GenericUnmarshaller unmarshaller(buffer_ptr);
+  const GenericUnmarshaller unmarshaller(kernel_state_, buffer_ptr);
   XLivebaseAsyncTask task = unmarshaller.GetAsyncTask();
   SchemaInMemory title_schema = task.GetTitleSchema();
 
@@ -337,22 +336,18 @@ X_HRESULT XLiveBaseApp::XPresenceInitialize(uint32_t buffer_ptr,
     return X_E_INVALIDARG;
   }
 
-  XLivebaseAsyncTask async_task = XLivebaseAsyncTask(buffer_ptr);
-
-  Memory* memory = kernel_state_->memory();
+  XLivebaseAsyncTask async_task(kernel_state_, buffer_ptr);
 
   const X_ARGUMENT_LIST* args_list =
-      memory->TranslateVirtual<X_ARGUMENT_LIST*>(buffer_length);
+      memory_->TranslateVirtual<X_ARGUMENT_LIST*>(buffer_length);
 
-  if (args_list->argument_count != 1) {
-    assert_always(fmt::format("{} - Invalid argument count!", __func__));
-  }
+  assert_false(args_list->argument_count != 1);
 
   const X_PRESENCE_INITIALIZE* initialize =
-      memory->TranslateVirtual<X_PRESENCE_INITIALIZE*>(buffer_length);
+      memory_->TranslateVirtual<X_PRESENCE_INITIALIZE*>(buffer_length);
 
   const uint32_t max_peer_subscriptions = xe::load_and_swap<uint32_t>(
-      memory->TranslateVirtual(static_cast<uint32_t>(
+      memory_->TranslateVirtual(static_cast<uint32_t>(
           initialize->max_peer_subscriptions.argument_value_ptr)));
 
   if (max_peer_subscriptions > X_ONLINE_PEER_SUBSCRIPTIONS) {
@@ -372,32 +367,24 @@ X_HRESULT XLiveBaseApp::XPresenceSubscribe(uint32_t buffer_ptr,
     return X_E_INVALIDARG;
   }
 
-  XLivebaseAsyncTask async_task = XLivebaseAsyncTask(buffer_ptr);
-
-  Memory* memory = kernel_state_->memory();
+  XLivebaseAsyncTask async_task(kernel_state_, buffer_ptr);
 
   const X_ARGUMENT_LIST* args_list =
-      memory->TranslateVirtual<X_ARGUMENT_LIST*>(buffer_length);
+      memory_->TranslateVirtual<X_ARGUMENT_LIST*>(buffer_length);
 
-  if (args_list->argument_count != 3) {
-    assert_always(fmt::format("{} - Invalid argument count!", __func__));
-  }
+  assert_false(args_list->argument_count != 3);
 
   const X_PRESENCE_SUBSCRIBE* subscribe_args =
-      memory->TranslateVirtual<X_PRESENCE_SUBSCRIBE*>(buffer_length);
+      memory_->TranslateVirtual<X_PRESENCE_SUBSCRIBE*>(buffer_length);
 
   const uint32_t user_index = xe::load_and_swap<uint32_t>(
-      memory->TranslateVirtual(static_cast<uint32_t>(
+      memory_->TranslateVirtual(static_cast<uint32_t>(
           subscribe_args->user_index.argument_value_ptr)));
   const uint32_t num_peers =
-      xe::load_and_swap<uint32_t>(memory->TranslateVirtual(
+      xe::load_and_swap<uint32_t>(memory_->TranslateVirtual(
           static_cast<uint32_t>(subscribe_args->peers.argument_value_ptr)));
 
-  if (!kernel_state()->xam_state()->IsUserSignedIn(user_index)) {
-    return X_E_INVALIDARG;
-  }
-
-  if (num_peers <= 0) {
+  if (!kernel_state_->xam_state()->IsUserSignedIn(user_index)) {
     return X_E_INVALIDARG;
   }
 
@@ -409,13 +396,13 @@ X_HRESULT XLiveBaseApp::XPresenceSubscribe(uint32_t buffer_ptr,
   }
 
   const xe::be<uint64_t>* peer_xuids =
-      memory->TranslateVirtual<xe::be<uint64_t>*>(xuid_address);
+      memory_->TranslateVirtual<xe::be<uint64_t>*>(xuid_address);
 
-  if (!kernel_state()->xam_state()->IsUserSignedIn(user_index)) {
+  if (!kernel_state_->xam_state()->IsUserSignedIn(user_index)) {
     return X_E_NO_SUCH_USER;
   }
 
-  const auto profile = kernel_state()->xam_state()->GetUserProfile(user_index);
+  const auto profile = kernel_state_->xam_state()->GetUserProfile(user_index);
 
   for (uint32_t i = 0; i < num_peers; i++) {
     const xe::be<uint64_t> xuid = peer_xuids[i];
@@ -448,28 +435,24 @@ X_HRESULT XLiveBaseApp::XPresenceUnsubscribe(uint32_t buffer_ptr,
     return X_E_INVALIDARG;
   }
 
-  XLivebaseAsyncTask async_task = XLivebaseAsyncTask(buffer_ptr);
-
-  Memory* memory = kernel_state_->memory();
+  XLivebaseAsyncTask async_task(kernel_state_, buffer_ptr);
 
   const X_ARGUMENT_LIST* args_list =
-      memory->TranslateVirtual<X_ARGUMENT_LIST*>(buffer_length);
+      memory_->TranslateVirtual<X_ARGUMENT_LIST*>(buffer_length);
 
-  if (args_list->argument_count != 3) {
-    assert_always(fmt::format("{} - Invalid argument count!", __func__));
-  }
+  assert_false(args_list->argument_count != 3);
 
   const X_PRESENCE_UNSUBSCRIBE* unsubscribe_args =
-      memory->TranslateVirtual<X_PRESENCE_UNSUBSCRIBE*>(buffer_length);
+      memory_->TranslateVirtual<X_PRESENCE_UNSUBSCRIBE*>(buffer_length);
 
   const uint32_t user_index = xe::load_and_swap<uint32_t>(
-      memory->TranslateVirtual(static_cast<uint32_t>(
+      memory_->TranslateVirtual(static_cast<uint32_t>(
           unsubscribe_args->user_index.argument_value_ptr)));
   const uint32_t num_peers =
-      xe::load_and_swap<uint32_t>(memory->TranslateVirtual(
+      xe::load_and_swap<uint32_t>(memory_->TranslateVirtual(
           static_cast<uint32_t>(unsubscribe_args->peers.argument_value_ptr)));
 
-  if (!kernel_state()->xam_state()->IsUserSignedIn(user_index)) {
+  if (!kernel_state_->xam_state()->IsUserSignedIn(user_index)) {
     return X_E_INVALIDARG;
   }
 
@@ -485,13 +468,13 @@ X_HRESULT XLiveBaseApp::XPresenceUnsubscribe(uint32_t buffer_ptr,
   }
 
   const xe::be<uint64_t>* peer_xuids =
-      memory->TranslateVirtual<xe::be<uint64_t>*>(xuid_address);
+      memory_->TranslateVirtual<xe::be<uint64_t>*>(xuid_address);
 
-  if (!kernel_state()->xam_state()->IsUserSignedIn(user_index)) {
+  if (!kernel_state_->xam_state()->IsUserSignedIn(user_index)) {
     return X_E_NO_SUCH_USER;
   }
 
-  const auto profile = kernel_state()->xam_state()->GetUserProfile(user_index);
+  const auto profile = kernel_state_->xam_state()->GetUserProfile(user_index);
 
   for (uint32_t i = 0; i < num_peers; i++) {
     const xe::be<uint64_t> xuid = peer_xuids[i];
@@ -521,31 +504,27 @@ X_HRESULT XLiveBaseApp::XPresenceCreateEnumerator(uint32_t buffer_ptr,
     return X_E_INVALIDARG;
   }
 
-  XLivebaseAsyncTask async_task = XLivebaseAsyncTask(buffer_ptr);
-
-  Memory* memory = kernel_state_->memory();
+  XLivebaseAsyncTask async_task(kernel_state_, buffer_ptr);
 
   const X_ARGUMENT_LIST* args_list =
-      memory->TranslateVirtual<X_ARGUMENT_LIST*>(buffer_length);
+      memory_->TranslateVirtual<X_ARGUMENT_LIST*>(buffer_length);
 
-  if (args_list->argument_count != 7) {
-    assert_always(fmt::format("{} - Invalid argument count!", __func__));
-  }
+  assert_false(args_list->argument_count != 7);
 
   const X_PRESENCE_CREATE* create_args = reinterpret_cast<X_PRESENCE_CREATE*>(
-      memory->TranslateVirtual(buffer_length));
+      memory_->TranslateVirtual(buffer_length));
 
   const uint32_t user_index =
-      xe::load_and_swap<uint32_t>(memory->TranslateVirtual(
+      xe::load_and_swap<uint32_t>(memory_->TranslateVirtual(
           static_cast<uint32_t>(create_args->user_index.argument_value_ptr)));
   const uint32_t num_peers =
-      xe::load_and_swap<uint32_t>(memory->TranslateVirtual(
+      xe::load_and_swap<uint32_t>(memory_->TranslateVirtual(
           static_cast<uint32_t>(create_args->num_peers.argument_value_ptr)));
   const uint32_t max_peers =
-      xe::load_and_swap<uint32_t>(memory->TranslateVirtual(
+      xe::load_and_swap<uint32_t>(memory_->TranslateVirtual(
           static_cast<uint32_t>(create_args->max_peers.argument_value_ptr)));
   const uint32_t starting_index = xe::load_and_swap<uint32_t>(
-      memory->TranslateVirtual(static_cast<uint32_t>(
+      memory_->TranslateVirtual(static_cast<uint32_t>(
           create_args->starting_index.argument_value_ptr)));
   const uint32_t xuid_address =
       static_cast<uint32_t>(create_args->peer_xuids_ptr.argument_value_ptr);
@@ -555,10 +534,10 @@ X_HRESULT XLiveBaseApp::XPresenceCreateEnumerator(uint32_t buffer_ptr,
       create_args->enumerator_handle_ptr.argument_value_ptr);
 
   const xe::be<uint64_t>* peer_xuids_ptr =
-      memory->TranslateVirtual<xe::be<uint64_t>*>(xuid_address);
+      memory_->TranslateVirtual<xe::be<uint64_t>*>(xuid_address);
   uint32_t* buffer_size_ptr =
-      memory->TranslateVirtual<uint32_t*>(buffer_address);
-  uint32_t* handle_ptr = memory->TranslateVirtual<uint32_t*>(handle_address);
+      memory_->TranslateVirtual<uint32_t*>(buffer_address);
+  uint32_t* handle_ptr = memory_->TranslateVirtual<uint32_t*>(handle_address);
 
   if (!handle_address) {
     return X_E_INVALIDARG;
@@ -572,7 +551,7 @@ X_HRESULT XLiveBaseApp::XPresenceCreateEnumerator(uint32_t buffer_ptr,
 
   *buffer_size_ptr = 0;
 
-  if (!kernel_state()->xam_state()->IsUserSignedIn(user_index)) {
+  if (!kernel_state_->xam_state()->IsUserSignedIn(user_index)) {
     return X_E_INVALIDARG;
   }
 
@@ -592,11 +571,11 @@ X_HRESULT XLiveBaseApp::XPresenceCreateEnumerator(uint32_t buffer_ptr,
     return X_E_INVALIDARG;
   }
 
-  if (!kernel_state()->xam_state()->IsUserSignedIn(user_index)) {
+  if (!kernel_state_->xam_state()->IsUserSignedIn(user_index)) {
     return X_E_NO_SUCH_USER;
   }
 
-  const auto profile = kernel_state()->xam_state()->GetUserProfile(user_index);
+  const auto profile = kernel_state_->xam_state()->GetUserProfile(user_index);
 
   auto e = make_object<XStaticEnumerator<X_ONLINE_PRESENCE>>(kernel_state_,
                                                              num_peers);
@@ -645,7 +624,7 @@ X_HRESULT XLiveBaseApp::XOnlineQuerySearch(uint32_t buffer_ptr) {
     return X_E_INVALIDARG;
   }
 
-  XQuerySearchUnmarshaller unmarshaller = XQuerySearchUnmarshaller(buffer_ptr);
+  XQuerySearchUnmarshaller unmarshaller(kernel_state_, buffer_ptr);
 
   X_HRESULT deserialize_result = unmarshaller.Deserialize();
 
@@ -660,7 +639,7 @@ X_HRESULT XLiveBaseApp::XOnlineQuerySearch(uint32_t buffer_ptr) {
   QUERY_SEARCH_RESULT* results_ptr =
       unmarshaller.Results<QUERY_SEARCH_RESULT>();
 
-  const auto services = kernel_state()->GetXboxLiveAPI()->GetServices();
+  const auto services = kernel_state_->GetXboxLiveAPI()->GetServices();
 
   results_ptr->total_results =
       static_cast<uint32_t>(services->QuerySearchResults().size());
@@ -672,8 +651,8 @@ X_HRESULT XLiveBaseApp::XOnlineQuerySearch(uint32_t buffer_ptr) {
   X_ONLINE_QUERY_ATTRIBUTE* attributes_ptr =
       reinterpret_cast<X_ONLINE_QUERY_ATTRIBUTE*>(results_ptr + 1);
 
-  uint32_t attributes_address = kernel_state_->memory()->HostToGuestVirtual(
-      std::to_address(attributes_ptr));
+  uint32_t attributes_address =
+      memory_->HostToGuestVirtual(std::to_address(attributes_ptr));
 
   results_ptr->attributes_ptr = attributes_address;
 
@@ -692,12 +671,10 @@ X_HRESULT XLiveBaseApp::XOnlineQuerySearch(uint32_t buffer_ptr) {
 
           // TODO(Adrian): Instead of allocating use title allocated buffer
           // results_ptr.
-          uint32_t TSADDR_adderess =
-              kernel_state()->memory()->SystemHeapAlloc(sizeof(TSADDR));
+          uint32_t TSADDR_adderess = memory_->SystemHeapAlloc(sizeof(TSADDR));
 
           TSADDR* TSADDR_ptr =
-              kernel_state()->memory()->TranslateVirtual<TSADDR*>(
-                  TSADDR_adderess);
+              memory_->TranslateVirtual<TSADDR*>(TSADDR_adderess);
 
           *TSADDR_ptr = gateway;
 
@@ -709,11 +686,9 @@ X_HRESULT XLiveBaseApp::XOnlineQuerySearch(uint32_t buffer_ptr) {
         case X_ONLINE_LSP_ATTRIBUTE_XNKID: {
           assert_false(attribute.length != sizeof(XNKID));
 
-          uint32_t XNKID_adderess =
-              kernel_state()->memory()->SystemHeapAlloc(sizeof(XNKID));
+          uint32_t XNKID_adderess = memory_->SystemHeapAlloc(sizeof(XNKID));
 
-          XNKID* XNKID_ptr = kernel_state()->memory()->TranslateVirtual<XNKID*>(
-              XNKID_adderess);
+          XNKID* XNKID_ptr = memory_->TranslateVirtual<XNKID*>(XNKID_adderess);
 
           xe::be<uint64_t> session_id = GenerateSessionId(XNKID_SERVER);
 
@@ -727,11 +702,9 @@ X_HRESULT XLiveBaseApp::XOnlineQuerySearch(uint32_t buffer_ptr) {
         case X_ONLINE_LSP_ATTRIBUTE_KEY: {
           assert_false(attribute.length != sizeof(XNKEY));
 
-          uint32_t XNKEY_adderess =
-              kernel_state()->memory()->SystemHeapAlloc(sizeof(XNKEY));
+          uint32_t XNKEY_adderess = memory_->SystemHeapAlloc(sizeof(XNKEY));
 
-          XNKEY* XNKEY_ptr = kernel_state()->memory()->TranslateVirtual<XNKEY*>(
-              XNKEY_adderess);
+          XNKEY* XNKEY_ptr = memory_->TranslateVirtual<XNKEY*>(XNKEY_adderess);
 
           GenerateIdentityExchangeKey(XNKEY_ptr);
 
@@ -764,12 +737,10 @@ X_HRESULT XLiveBaseApp::XOnlineQuerySearch(uint32_t buffer_ptr) {
               xe::string_util::size_in_bytes(filter, true));
 
           // LSP Filter?
-          uint32_t string_adderess =
-              kernel_state()->memory()->SystemHeapAlloc(size);
+          uint32_t string_adderess = memory_->SystemHeapAlloc(size);
 
           char16_t* string_ptr =
-              kernel_state()->memory()->TranslateVirtual<char16_t*>(
-                  string_adderess);
+              memory_->TranslateVirtual<char16_t*>(string_adderess);
 
           xe::string_util::copy_and_swap_truncating(string_ptr, filter.c_str(),
                                                     filter.size() + 1);
@@ -806,7 +777,7 @@ X_HRESULT XLiveBaseApp::XOnlineQuerySearch(uint32_t buffer_ptr) {
 // Check whether XLSP services are available
 X_HRESULT XLiveBaseApp::XOnlineGetServiceInfo(uint32_t serviceid,
                                               uint32_t serviceinfo) {
-  if (!kernel_state()->GetXboxLiveAPI()->IsConnectedToServer()) {
+  if (!kernel_state_->GetXboxLiveAPI()->IsConnectedToServer()) {
     return X_ONLINE_E_LOGON_NOT_LOGGED_ON;
   }
 
@@ -819,7 +790,7 @@ X_HRESULT XLiveBaseApp::XOnlineGetServiceInfo(uint32_t serviceid,
 
   std::memset(service_info_ptr, 0, sizeof(X_ONLINE_SERVICE_INFO));
 
-  const auto services = kernel_state()->GetXboxLiveAPI()->GetServices();
+  const auto services = kernel_state_->GetXboxLiveAPI()->GetServices();
 
   for (const auto& service_info : services->ServicesResults()) {
     if (service_info.id == serviceid) {
@@ -837,28 +808,24 @@ X_HRESULT XLiveBaseApp::XFriendsCreateEnumerator(uint32_t buffer_ptr,
     return X_E_INVALIDARG;
   }
 
-  XLivebaseAsyncTask async_task = XLivebaseAsyncTask(buffer_ptr);
-
-  Memory* memory = kernel_state_->memory();
+  XLivebaseAsyncTask async_task(kernel_state_, buffer_ptr);
 
   const X_ARGUMENT_LIST* args_list =
-      memory->TranslateVirtual<X_ARGUMENT_LIST*>(buffer_length);
+      memory_->TranslateVirtual<X_ARGUMENT_LIST*>(buffer_length);
 
-  if (args_list->argument_count != 5) {
-    assert_always(fmt::format("{} - Invalid argument count!", __func__));
-  }
+  assert_false(args_list->argument_count != 5);
 
   X_CREATE_FRIENDS_ENUMERATOR* friends_enumerator =
-      memory->TranslateVirtual<X_CREATE_FRIENDS_ENUMERATOR*>(buffer_length);
+      memory_->TranslateVirtual<X_CREATE_FRIENDS_ENUMERATOR*>(buffer_length);
 
   const uint32_t user_index = xe::load_and_swap<uint32_t>(
-      memory->TranslateVirtual(static_cast<uint32_t>(
+      memory_->TranslateVirtual(static_cast<uint32_t>(
           friends_enumerator->user_index.argument_value_ptr)));
   const uint32_t friends_starting_index = xe::load_and_swap<uint32_t>(
-      memory->TranslateVirtual(static_cast<uint32_t>(
+      memory_->TranslateVirtual(static_cast<uint32_t>(
           friends_enumerator->friends_starting_index.argument_value_ptr)));
   const uint32_t friends_amount = xe::load_and_swap<uint32_t>(
-      memory->TranslateVirtual(static_cast<uint32_t>(
+      memory_->TranslateVirtual(static_cast<uint32_t>(
           friends_enumerator->friends_amount.argument_value_ptr)));
   const uint32_t buffer_address =
       static_cast<uint32_t>(friends_enumerator->buffer_ptr.argument_value_ptr);
@@ -866,8 +833,8 @@ X_HRESULT XLiveBaseApp::XFriendsCreateEnumerator(uint32_t buffer_ptr,
       static_cast<uint32_t>(friends_enumerator->handle_ptr.argument_value_ptr);
 
   uint32_t* buffer_size_ptr =
-      memory->TranslateVirtual<uint32_t*>(buffer_address);
-  uint32_t* handle_ptr = memory->TranslateVirtual<uint32_t*>(handle_address);
+      memory_->TranslateVirtual<uint32_t*>(buffer_address);
+  uint32_t* handle_ptr = memory_->TranslateVirtual<uint32_t*>(handle_address);
 
   if (!handle_address) {
     return X_E_INVALIDARG;
@@ -895,14 +862,14 @@ X_HRESULT XLiveBaseApp::XFriendsCreateEnumerator(uint32_t buffer_ptr,
     return X_E_INVALIDARG;
   }
 
-  if (!kernel_state()->xam_state()->IsUserSignedIn(user_index)) {
+  if (!kernel_state_->xam_state()->IsUserSignedIn(user_index)) {
     return X_E_NO_SUCH_USER;
   }
 
-  auto const profile = kernel_state()->xam_state()->GetUserProfile(user_index);
+  auto const profile = kernel_state_->xam_state()->GetUserProfile(user_index);
 
   auto e = object_ref<FriendsEnumerator>(
-      new FriendsEnumerator(kernel_state(), friends_amount));
+      new FriendsEnumerator(kernel_state_, friends_amount));
 
   auto result = e->Initialize(-1, app_id(), 0x58021, 0x58022, 0);
 
@@ -936,7 +903,7 @@ X_HRESULT XLiveBaseApp::XInviteSend(uint32_t buffer_ptr) {
 
   // Current session must have PRESENCE flag.
 
-  XInviteSendUnmarshaller unmarshaller = XInviteSendUnmarshaller(buffer_ptr);
+  XInviteSendUnmarshaller unmarshaller(kernel_state_, buffer_ptr);
 
   X_HRESULT deserialize_result = unmarshaller.Deserialize();
 
@@ -945,7 +912,7 @@ X_HRESULT XLiveBaseApp::XInviteSend(uint32_t buffer_ptr) {
   }
 
   new xe::ui::HostNotificationWindow(
-      kernel_state()->emulator()->imgui_drawer(), "Invites aren't supported!",
+      kernel_state_->emulator()->imgui_drawer(), "Invites aren't supported!",
       xe::to_utf8(unmarshaller.DisplayString()), 0);
 
   return X_E_SUCCESS;
@@ -957,19 +924,15 @@ X_HRESULT XLiveBaseApp::XInviteGetAcceptedInfo(uint32_t buffer_ptr,
     return X_E_INVALIDARG;
   }
 
-  XLivebaseAsyncTask async_task = XLivebaseAsyncTask(buffer_ptr);
-
-  Memory* memory = kernel_state_->memory();
+  XLivebaseAsyncTask async_task(kernel_state_, buffer_ptr);
 
   const X_ARGUMENT_LIST* args_list =
-      memory->TranslateVirtual<X_ARGUMENT_LIST*>(buffer_length);
+      memory_->TranslateVirtual<X_ARGUMENT_LIST*>(buffer_length);
 
-  if (args_list->argument_count != 2) {
-    assert_always(fmt::format("{} - Invalid argument count!", __func__));
-  }
+  assert_false(args_list->argument_count != 2);
 
   const X_INVITE_GET_ACCEPTED_INFO* accepted_info =
-      memory->TranslateVirtual<X_INVITE_GET_ACCEPTED_INFO*>(buffer_length);
+      memory_->TranslateVirtual<X_INVITE_GET_ACCEPTED_INFO*>(buffer_length);
 
   const uint32_t user_index =
       xe::load_and_swap<uint32_t>(memory_->TranslateVirtual(
@@ -979,19 +942,19 @@ X_HRESULT XLiveBaseApp::XInviteGetAcceptedInfo(uint32_t buffer_ptr,
       memory_->TranslateVirtual(static_cast<uint32_t>(
           accepted_info->invite_info.argument_value_ptr)));
 
-  if (!kernel_state()->xam_state()->IsUserSignedIn(user_index)) {
+  if (!kernel_state_->xam_state()->IsUserSignedIn(user_index)) {
     return X_E_FAIL;
   }
 
   const auto user_profile =
-      kernel_state()->xam_state()->GetUserProfile(user_index);
+      kernel_state_->xam_state()->GetUserProfile(user_index);
 
   *invite_info = user_profile->GetSelfInvite();
 
   // Reset self invite
   user_profile->SetSelfInvite({});
 
-  const auto presence = kernel_state()->GetXboxLiveAPI()->GetFriendsPresence(
+  const auto presence = kernel_state_->GetXboxLiveAPI()->GetFriendsPresence(
       {invite_info->xuid_inviter});
 
   uint64_t session_id = 0;
@@ -1002,18 +965,17 @@ X_HRESULT XLiveBaseApp::XInviteGetAcceptedInfo(uint32_t buffer_ptr,
 
   if (!session_id) {
     new xe::ui::HostNotificationWindow(
-        kernel_state()->emulator()->imgui_drawer(), "Joining Session",
+        kernel_state_->emulator()->imgui_drawer(), "Joining Session",
         "Unable to join session", 0);
 
     return X_ONLINE_E_SESSION_NOT_FOUND;
   }
 
-  const auto session =
-      kernel_state()->GetXboxLiveAPI()->XSessionGet(session_id);
+  const auto session = kernel_state_->GetXboxLiveAPI()->XSessionGet(session_id);
 
   if (!session.SessionID_UInt()) {
     new xe::ui::HostNotificationWindow(
-        kernel_state()->emulator()->imgui_drawer(), "Joining Session",
+        kernel_state_->emulator()->imgui_drawer(), "Joining Session",
         "Unable to join session", 0);
 
     return X_ONLINE_E_SESSION_NOT_FOUND;
@@ -1022,14 +984,14 @@ X_HRESULT XLiveBaseApp::XInviteGetAcceptedInfo(uint32_t buffer_ptr,
   std::set<uint64_t> local_members = {};
 
   for (uint32_t i = 0; i < XUserMaxUserCount; i++) {
-    const auto profile = kernel_state()->xam_state()->GetUserProfile(i);
+    const auto profile = kernel_state_->xam_state()->GetUserProfile(i);
 
     if (profile && profile->IsLiveEnabled()) {
       local_members.insert(profile->GetOnlineXUID());
     }
   }
 
-  kernel_state()->GetXboxLiveAPI()->SessionPreJoin(session_id, local_members);
+  kernel_state_->GetXboxLiveAPI()->SessionPreJoin(session_id, local_members);
 
   Uint64toXNKID(session.SessionID_UInt(), &invite_info->host_info.sessionID);
   GenerateIdentityExchangeKey(&invite_info->host_info.keyExchangeKey);
@@ -1045,7 +1007,7 @@ X_HRESULT XLiveBaseApp::GenericMarshalled(uint32_t buffer_ptr) {
     return X_E_INVALIDARG;
   }
 
-  GenericUnmarshaller unmarshaller(buffer_ptr);
+  GenericUnmarshaller unmarshaller(kernel_state_, buffer_ptr);
 
   const std::string task_url = unmarshaller.GetAsyncTask().GetTaskUrl();
 
@@ -1081,13 +1043,13 @@ X_HRESULT XLiveBaseApp::XUserMuteListQuery(uint32_t buffer_ptr,
     return X_E_INVALIDARG;
   }
 
-  if (!kernel_state()->xam_state()->IsUserSignedIn(
+  if (!kernel_state_->xam_state()->IsUserSignedIn(
           remote_player_ptr->user_index)) {
     return X_ONLINE_E_LOGON_NOT_LOGGED_ON;
   }
 
-  auto user_profile = kernel_state()->xam_state()->GetUserProfile(
-      remote_player_ptr->user_index);
+  auto user_profile =
+      kernel_state_->xam_state()->GetUserProfile(remote_player_ptr->user_index);
 
   xe::be<uint32_t>* mute_list_ptr =
       memory_->TranslateVirtual<xe::be<uint32_t>*>(buffer_length);
@@ -1109,19 +1071,19 @@ X_HRESULT XLiveBaseApp::XUserMuteListAdd(uint32_t buffer_ptr) {
     return X_E_INVALIDARG;
   }
 
-  if (!kernel_state()->xam_state()->IsUserSignedIn(
+  if (!kernel_state_->xam_state()->IsUserSignedIn(
           remote_player_ptr->user_index)) {
     return X_ONLINE_E_LOGON_NOT_LOGGED_ON;
   }
 
-  auto user_profile = kernel_state()->xam_state()->GetUserProfile(
-      remote_player_ptr->user_index);
+  auto user_profile =
+      kernel_state_->xam_state()->GetUserProfile(remote_player_ptr->user_index);
 
   bool muted = user_profile->MutePlayer(remote_player_ptr->remote_xuid);
 
   if (muted) {
-    kernel_state()->BroadcastNotification(kXNotificationSystemMuteListChanged,
-                                          0);
+    kernel_state_->BroadcastNotification(kXNotificationSystemMuteListChanged,
+                                         0);
   }
 
   return X_E_SUCCESS;
@@ -1139,19 +1101,19 @@ X_HRESULT XLiveBaseApp::XUserMuteListRemove(uint32_t buffer_ptr) {
     return X_E_INVALIDARG;
   }
 
-  if (!kernel_state()->xam_state()->IsUserSignedIn(
+  if (!kernel_state_->xam_state()->IsUserSignedIn(
           remote_player_ptr->user_index)) {
     return X_ONLINE_E_LOGON_NOT_LOGGED_ON;
   }
 
-  auto user_profile = kernel_state()->xam_state()->GetUserProfile(
-      remote_player_ptr->user_index);
+  auto user_profile =
+      kernel_state_->xam_state()->GetUserProfile(remote_player_ptr->user_index);
 
   bool unmuted = user_profile->UnmutePlayer(remote_player_ptr->remote_xuid);
 
   if (unmuted) {
-    kernel_state()->BroadcastNotification(kXNotificationSystemMuteListChanged,
-                                          0);
+    kernel_state_->BroadcastNotification(kXNotificationSystemMuteListChanged,
+                                         0);
   }
 
   return X_E_SUCCESS;
@@ -1167,8 +1129,7 @@ X_HRESULT XLiveBaseApp::XAccountGetUserInfo(uint32_t buffer_ptr) {
     return X_E_INVALIDARG;
   }
 
-  XAccountGetUserInfoUnmarshaller unmarshaller =
-      XAccountGetUserInfoUnmarshaller(buffer_ptr);
+  XAccountGetUserInfoUnmarshaller unmarshaller(kernel_state_, buffer_ptr);
 
   X_HRESULT deserialize_result = unmarshaller.Deserialize();
 
@@ -1204,19 +1165,17 @@ X_HRESULT XLiveBaseApp::XAccountGetUserInfo(uint32_t buffer_ptr) {
   user_info_response_ptr->first_name_length =
       static_cast<uint32_t>(first_name.size());
   user_info_response_ptr->first_name =
-      kernel_state()->memory()->HostToGuestVirtual(
-          std::to_address(first_name_ptr));
+      memory_->HostToGuestVirtual(std::to_address(first_name_ptr));
 
   user_info_response_ptr->last_name_length =
       static_cast<uint32_t>(last_name.size());
   user_info_response_ptr->last_name =
-      kernel_state()->memory()->HostToGuestVirtual(
-          std::to_address(last_name_ptr));
+      memory_->HostToGuestVirtual(std::to_address(last_name_ptr));
 
   // 4D530AA5 wants an email
   user_info_response_ptr->email_length = static_cast<uint32_t>(email.size());
   user_info_response_ptr->email =
-      kernel_state()->memory()->HostToGuestVirtual(std::to_address(email_ptr));
+      memory_->HostToGuestVirtual(std::to_address(email_ptr));
 
   return X_E_SUCCESS;
 }
@@ -1226,8 +1185,7 @@ X_HRESULT XLiveBaseApp::XStorageEnumerate(uint32_t buffer_ptr) {
     return X_E_INVALIDARG;
   }
 
-  XStorageEnumerateUnmarshaller unmarshaller =
-      XStorageEnumerateUnmarshaller(buffer_ptr);
+  XStorageEnumerateUnmarshaller unmarshaller(kernel_state_, buffer_ptr);
 
   X_HRESULT deserialize_result = unmarshaller.Deserialize();
 
@@ -1242,7 +1200,7 @@ X_HRESULT XLiveBaseApp::XStorageEnumerate(uint32_t buffer_ptr) {
       unmarshaller.Results<X_STORAGE_ENUMERATE_RESULTS>();
 
   auto user_profle =
-      kernel_state()->xam_state()->GetUserProfile(unmarshaller.UserIndex());
+      kernel_state_->xam_state()->GetUserProfile(unmarshaller.UserIndex());
 
   const std::string enumeration_path = xe::to_utf8(unmarshaller.ServerPath());
 
@@ -1256,8 +1214,8 @@ X_HRESULT XLiveBaseApp::XStorageEnumerate(uint32_t buffer_ptr) {
   X_STORAGE_FILE_INFO* items_array_ptr =
       reinterpret_cast<X_STORAGE_FILE_INFO*>(results_ptr + 1);
 
-  uint32_t items_address = kernel_state_->memory()->HostToGuestVirtual(
-      std::to_address(items_array_ptr));
+  uint32_t items_address =
+      memory_->HostToGuestVirtual(std::to_address(items_array_ptr));
 
   results_ptr->items_ptr = items_address;
 
@@ -1297,8 +1255,8 @@ X_HRESULT XLiveBaseApp::XStorageEnumerate(uint32_t buffer_ptr) {
         unmarshaller.MaxResultsToReturn(), available_to_return_items);
 
     const auto enumeration_result =
-        kernel_state()->GetXboxLiveAPI()->XStorageEnumerate(enumeration_path,
-                                                            max_items);
+        kernel_state_->GetXboxLiveAPI()->XStorageEnumerate(enumeration_path,
+                                                           max_items);
 
     const auto& enumerated_files = enumeration_result.first;
     enumerated_backend = enumeration_result.second;
@@ -1309,15 +1267,14 @@ X_HRESULT XLiveBaseApp::XStorageEnumerate(uint32_t buffer_ptr) {
 
       // Path must use /
       std::u16string backend_item_path = xe::to_utf16(
-          std::format("{}{}", kernel_state()->GetXboxLiveAPI()->GetApiAddress(),
+          std::format("{}{}", kernel_state_->GetXboxLiveAPI()->GetApiAddress(),
                       entry.FilePath()));
 
       char16_t* item_path_ptr =
           std::to_address(items_path_name_array_ptr +
                           (item_index * (X_ONLINE_MAX_PATHNAME_LENGTH)));
 
-      uint32_t item_path_address =
-          kernel_state_->memory()->HostToGuestVirtual(item_path_ptr);
+      uint32_t item_path_address = memory_->HostToGuestVirtual(item_path_ptr);
 
       xe::string_util::copy_and_swap_truncating(
           item_path_ptr, backend_item_path, X_ONLINE_MAX_PATHNAME_LENGTH);
@@ -1383,8 +1340,7 @@ X_HRESULT XLiveBaseApp::XStorageEnumerate(uint32_t buffer_ptr) {
       std::erase(item_filename_literal, '*');
     }
 
-    vfs::Entry* folder =
-        kernel_state()->file_system()->ResolvePath(item_parent);
+    vfs::Entry* folder = kernel_state_->file_system()->ResolvePath(item_parent);
 
     uint32_t total_num_items = 0;
 
@@ -1444,8 +1400,7 @@ X_HRESULT XLiveBaseApp::XStorageEnumerate(uint32_t buffer_ptr) {
           std::to_address(items_path_name_array_ptr +
                           (item_index * (X_ONLINE_MAX_PATHNAME_LENGTH)));
 
-      uint32_t item_path_address =
-          kernel_state_->memory()->HostToGuestVirtual(item_path_ptr);
+      uint32_t item_path_address = memory_->HostToGuestVirtual(item_path_ptr);
 
       xe::string_util::copy_and_swap_truncating(item_path_ptr,
                                                 backend_storage_item_path,
@@ -1457,10 +1412,10 @@ X_HRESULT XLiveBaseApp::XStorageEnumerate(uint32_t buffer_ptr) {
 
       const uint32_t size_bytes = static_cast<uint32_t>(entry->size());
 
-      uint8_t country_id = kernel_state()->xconfig()->ReadSetting<uint8_t>(
+      uint8_t country_id = kernel_state_->xconfig()->ReadSetting<uint8_t>(
           XCONFIG_USER_CATEGORY, XCONFIG_USER_COUNTRY);
 
-      items_array_ptr[item_index].title_id = kernel_state()->title_id();
+      items_array_ptr[item_index].title_id = kernel_state_->title_id();
       items_array_ptr[item_index].title_version = 0;
       items_array_ptr[item_index].owner_puid =
           user_profle ? user_profle->xuid() : 0;
@@ -1504,8 +1459,7 @@ X_HRESULT XLiveBaseApp::XStringVerify(uint32_t buffer_ptr) {
     return X_E_INVALIDARG;
   }
 
-  XStringVerifyUnmarshaller unmarshaller =
-      XStringVerifyUnmarshaller(buffer_ptr);
+  XStringVerifyUnmarshaller unmarshaller(kernel_state_, buffer_ptr);
 
   X_HRESULT deserialize_result = unmarshaller.Deserialize();
 
@@ -1523,12 +1477,10 @@ X_HRESULT XLiveBaseApp::XStringVerify(uint32_t buffer_ptr) {
   }
 
   uint32_t response_result_address =
-      kernel_state_->memory()->HostToGuestVirtual(
-          std::to_address(responses_ptr + 1));
+      memory_->HostToGuestVirtual(std::to_address(responses_ptr + 1));
 
   X_HRESULT* response_results_ptr =
-      kernel_state_->memory()->TranslateVirtual<X_HRESULT*>(
-          response_result_address);
+      memory_->TranslateVirtual<X_HRESULT*>(response_result_address);
 
   for (uint32_t i = 0; i < unmarshaller.NumStrings(); i++) {
     response_results_ptr[i] = X_E_SUCCESS;
@@ -1545,8 +1497,8 @@ X_HRESULT XLiveBaseApp::XUserEstimateRankForRating(uint32_t buffer_ptr) {
     return X_E_INVALIDARG;
   }
 
-  XUserEstimateRankForRatingUnmarshaller unmarshaller =
-      XUserEstimateRankForRatingUnmarshaller(buffer_ptr);
+  XUserEstimateRankForRatingUnmarshaller unmarshaller(kernel_state_,
+                                                      buffer_ptr);
 
   X_HRESULT deserialize_result = unmarshaller.Deserialize();
 
@@ -1566,7 +1518,7 @@ X_HRESULT XLiveBaseApp::XUserEstimateRankForRating(uint32_t buffer_ptr) {
 
   for (const auto& rank_estimate : unmarshaller.StatsEstimateRanks()) {
     const auto stats_view =
-        kernel_state()->emulator()->game_info_database()->GetStatsView(
+        kernel_state_->emulator()->game_info_database()->GetStatsView(
             rank_estimate.view_id);
 
     // Read the leaderboard to determine if clip should be uploaded?
@@ -1578,7 +1530,7 @@ X_HRESULT XLiveBaseApp::XUserEstimateRankForRating(uint32_t buffer_ptr) {
 
   // 58410889 expects ptr even if num_ranks is 0.
   estimate_rank_results_ptr->ranks_ptr =
-      kernel_state()->memory()->HostToGuestVirtual(std::to_address(ranks));
+      memory_->HostToGuestVirtual(std::to_address(ranks));
 
   // XPROPERTY_ATTACHMENT_SIZE?
 
@@ -1590,8 +1542,7 @@ X_HRESULT XLiveBaseApp::XStorageDelete(uint32_t buffer_ptr) {
     return X_E_INVALIDARG;
   }
 
-  XStorageDeleteUnmarshaller unmarshaller =
-      XStorageDeleteUnmarshaller(buffer_ptr);
+  XStorageDeleteUnmarshaller unmarshaller(kernel_state_, buffer_ptr);
 
   X_HRESULT deserialize_result = unmarshaller.Deserialize();
 
@@ -1618,7 +1569,7 @@ X_HRESULT XLiveBaseApp::XStorageDelete(uint32_t buffer_ptr) {
        facility_type != X_STORAGE_FACILITY::FACILITY_PER_USER_TITLE);
 
   if (route_backend) {
-    bool deleted = kernel_state()->GetXboxLiveAPI()->XStorageDelete(item_path);
+    bool deleted = kernel_state_->GetXboxLiveAPI()->XStorageDelete(item_path);
     result = deleted ? X_E_SUCCESS : X_E_FAIL;
   }
 
@@ -1626,7 +1577,7 @@ X_HRESULT XLiveBaseApp::XStorageDelete(uint32_t buffer_ptr) {
     item_path = ConvertServerPathToXStorageSymlink(item_path);
 
     vfs::Entry* storage_item =
-        kernel_state()->file_system()->ResolvePath(item_path);
+        kernel_state_->file_system()->ResolvePath(item_path);
 
     if (storage_item) {
       result = storage_item->Delete() ? X_E_SUCCESS : X_E_FAIL;
@@ -1653,8 +1604,7 @@ X_HRESULT XLiveBaseApp::XStorageDownloadToMemory(uint32_t buffer_ptr,
     return X_E_INVALIDARG;
   }
 
-  XStorageDownloadToMemoryUnmarshaller unmarshaller =
-      XStorageDownloadToMemoryUnmarshaller(buffer_ptr);
+  XStorageDownloadToMemoryUnmarshaller unmarshaller(kernel_state_, buffer_ptr);
 
   X_HRESULT deserialize_result = unmarshaller.Deserialize();
 
@@ -1670,7 +1620,7 @@ X_HRESULT XLiveBaseApp::XStorageDownloadToMemory(uint32_t buffer_ptr,
   std::span<uint8_t> download_buffer = unmarshaller.GetDownloadBuffer();
 
   const auto user_profile =
-      kernel_state()->xam_state()->GetUserProfile(unmarshaller.UserIndex());
+      kernel_state_->xam_state()->GetUserProfile(unmarshaller.UserIndex());
 
   uint64_t xuid_owner = 0;
 
@@ -1692,7 +1642,7 @@ X_HRESULT XLiveBaseApp::XStorageDownloadToMemory(uint32_t buffer_ptr,
 
   if (route_backend) {
     const std::vector<uint8_t> buffer =
-        kernel_state()->GetXboxLiveAPI()->XStorageDownload(item_to_download);
+        kernel_state_->GetXboxLiveAPI()->XStorageDownload(item_to_download);
 
     if (!buffer.empty()) {
       if (buffer.size() > download_buffer.size_bytes()) {
@@ -1797,8 +1747,7 @@ X_HRESULT XLiveBaseApp::XStorageUploadFromMemory(uint32_t buffer_ptr) {
     return X_E_INVALIDARG;
   }
 
-  XStorageUploadToMemoryUnmarshaller unmarshaller =
-      XStorageUploadToMemoryUnmarshaller(buffer_ptr);
+  XStorageUploadToMemoryUnmarshaller unmarshaller(kernel_state_, buffer_ptr);
 
   X_HRESULT deserialize_result = unmarshaller.Deserialize();
 
@@ -1823,8 +1772,8 @@ X_HRESULT XLiveBaseApp::XStorageUploadFromMemory(uint32_t buffer_ptr) {
 
   if (route_backend) {
     X_STORAGE_UPLOAD_RESULT uploaded_result =
-        kernel_state()->GetXboxLiveAPI()->XStorageUpload(upload_file_path,
-                                                         upload_buffer);
+        kernel_state_->GetXboxLiveAPI()->XStorageUpload(upload_file_path,
+                                                        upload_buffer);
 
     switch (uploaded_result) {
       case X_STORAGE_UPLOAD_RESULT::UPLOADED:
@@ -1851,13 +1800,13 @@ X_HRESULT XLiveBaseApp::XStorageUploadFromMemory(uint32_t buffer_ptr) {
 
     // Check if entry exists
     vfs::Entry* entry =
-        kernel_state()->file_system()->ResolvePath(upload_file_path_parent);
+        kernel_state_->file_system()->ResolvePath(upload_file_path_parent);
 
     if (entry) {
       vfs::File* upload_file = nullptr;
       vfs::FileAction action;
 
-      result = kernel_state()->file_system()->OpenFile(
+      result = kernel_state_->file_system()->OpenFile(
           nullptr, upload_file_path, vfs::FileDisposition::kOverwriteIf,
           vfs::FileAccess::kGenericWrite, false, true, &upload_file, &action);
 
@@ -1900,8 +1849,7 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
   }
 
   X_STORAGE_BUILD_SERVER_PATH* args =
-      kernel_state_->memory()->TranslateVirtual<X_STORAGE_BUILD_SERVER_PATH*>(
-          buffer_ptr);
+      memory_->TranslateVirtual<X_STORAGE_BUILD_SERVER_PATH*>(buffer_ptr);
 
   if (!args->file_name_ptr) {
     return X_E_INVALIDARG;
@@ -1927,14 +1875,13 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
       args->storage_location == X_STORAGE_FACILITY::FACILITY_GAME_CLIP;
 
   if (!xuid && xuid_reqiured) {
-    xuid = kernel_state()
-               ->xam_state()
+    xuid = kernel_state_->xam_state()
                ->GetUserProfile(args->user_index.get())
                ->GetOnlineXUID();
   }
 
   uint8_t* filename_ptr =
-      kernel_state_->memory()->TranslateVirtual<uint8_t*>(args->file_name_ptr);
+      memory_->TranslateVirtual<uint8_t*>(args->file_name_ptr);
 
   const std::u16string filename =
       xe::load_and_swap<std::u16string>(filename_ptr);
@@ -1944,7 +1891,7 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
   std::string symlink_path;
 
   std::string backend_domain_prefix = fmt::format(
-      "{}xstorage", kernel_state()->GetXboxLiveAPI()->GetApiAddress());
+      "{}xstorage", kernel_state_->GetXboxLiveAPI()->GetApiAddress());
 
   std::string storage_type;
 
@@ -1967,12 +1914,12 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
       const uint32_t view_id = game_clip_info_ptr.leaderboard_id;
 
       const auto stats_view =
-          kernel_state()->emulator()->game_info_database()->GetStatsView(
+          kernel_state_->emulator()->game_info_database()->GetStatsView(
               view_id);
 
       const std::string path =
           fmt::format("clips/title/{:08X}/{:016X}/{:08X}/{}",
-                      kernel_state()->title_id(), xuid, view_id, filename_str);
+                      kernel_state_->title_id(), xuid, view_id, filename_str);
 
       backend_server_path_str =
           fmt::format("{}/{}", backend_domain_prefix, path);
@@ -1984,7 +1931,7 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
     } break;
     case X_STORAGE_FACILITY::FACILITY_PER_TITLE: {
       const std::string path = fmt::format(
-          "title/{:08X}/{}", kernel_state()->title_id(), filename_str);
+          "title/{:08X}/{}", kernel_state_->title_id(), filename_str);
 
       backend_server_path_str =
           fmt::format("{}/{}", backend_domain_prefix, path);
@@ -1997,7 +1944,7 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
     case X_STORAGE_FACILITY::FACILITY_PER_USER_TITLE: {
       const std::string path =
           fmt::format("user/{:016X}/title/{:08X}/{}", xuid,
-                      kernel_state()->title_id(), filename_str);
+                      kernel_state_->title_id(), filename_str);
 
       backend_server_path_str =
           fmt::format("{}/{}", backend_domain_prefix, path);
@@ -2028,16 +1975,14 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
 
   if (args->server_path_ptr) {
     char16_t* server_path_ptr =
-        kernel_state_->memory()->TranslateVirtual<char16_t*>(
-            args->server_path_ptr);
+        memory_->TranslateVirtual<char16_t*>(args->server_path_ptr);
 
     xe::string_util::copy_and_swap_truncating(
         server_path_ptr, server_path_buf.data(), X_ONLINE_MAX_PATHNAME_LENGTH);
   }
 
   uint32_t* server_path_length_ptr =
-      kernel_state_->memory()->TranslateVirtual<uint32_t*>(
-          args->server_path_length_ptr);
+      memory_->TranslateVirtual<uint32_t*>(args->server_path_length_ptr);
 
   *server_path_length_ptr =
       xe::byte_swap(static_cast<uint32_t>(server_path_buf.size()));
@@ -2054,7 +1999,7 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
         std::filesystem::path(backend_server_path_str).parent_path().string();
 
     X_STORAGE_BUILD_SERVER_PATH_RESULT build_result =
-        kernel_state()->GetXboxLiveAPI()->XStorageBuildServerPath(
+        kernel_state_->GetXboxLiveAPI()->XStorageBuildServerPath(
             create_valid_path);
 
     if (build_result == X_STORAGE_BUILD_SERVER_PATH_RESULT::Created ||
@@ -2069,8 +2014,7 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
     symlink_path = std::filesystem::path(symlink_path).parent_path().string();
 
     // Check if entry exists
-    vfs::Entry* entry =
-        kernel_state()->file_system()->ResolvePath(symlink_path);
+    vfs::Entry* entry = kernel_state_->file_system()->ResolvePath(symlink_path);
 
     if (!entry) {
       // Prepare path for splitting
@@ -2086,7 +2030,7 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
 
       // XSTORAGE entry
       vfs::Entry* xstorage_entry =
-          kernel_state()->file_system()->ResolvePath(xstorage_symboliclink);
+          kernel_state_->file_system()->ResolvePath(xstorage_symboliclink);
 
       if (xstorage_entry) {
         // Create root entry
@@ -2094,11 +2038,11 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
             starting_dir, xe::vfs::FileAttributeFlags::kFileAttributeDirectory);
 
         // Create child entries
-        vfs::Entry* entries = kernel_state()->file_system()->CreatePath(
+        vfs::Entry* entries = kernel_state_->file_system()->CreatePath(
             symlink_path, xe::vfs::FileAttributeFlags::kFileAttributeDirectory);
 
         // Update entry
-        entry = kernel_state()->file_system()->ResolvePath(symlink_path);
+        entry = kernel_state_->file_system()->ResolvePath(symlink_path);
 
         if (entry) {
           result = X_E_SUCCESS;
@@ -2126,31 +2070,28 @@ X_HRESULT XLiveBaseApp::XOnlineGetTaskProgress(uint32_t buffer_ptr) {
   }
 
   X_GET_TASK_PROGRESS* task_progress =
-      kernel_state()->memory()->TranslateVirtual<X_GET_TASK_PROGRESS*>(
-          buffer_ptr);
+      memory_->TranslateVirtual<X_GET_TASK_PROGRESS*>(buffer_ptr);
 
   XAM_OVERLAPPED* overlapped_ptr =
-      kernel_state()->memory()->TranslateVirtual<XAM_OVERLAPPED*>(
-          task_progress->overlapped_ptr);
+      memory_->TranslateVirtual<XAM_OVERLAPPED*>(task_progress->overlapped_ptr);
 
   uint32_t* percent_complete_ptr = nullptr;
   uint64_t* numerator_ptr = nullptr;
   uint64_t* denominator_ptr = nullptr;
 
   if (task_progress->percent_complete_ptr) {
-    percent_complete_ptr =
-        kernel_state()->memory()->TranslateVirtual<uint32_t*>(
-            task_progress->percent_complete_ptr);
+    percent_complete_ptr = memory_->TranslateVirtual<uint32_t*>(
+        task_progress->percent_complete_ptr);
   }
 
   if (task_progress->numerator_ptr) {
-    numerator_ptr = kernel_state()->memory()->TranslateVirtual<uint64_t*>(
-        task_progress->numerator_ptr);
+    numerator_ptr =
+        memory_->TranslateVirtual<uint64_t*>(task_progress->numerator_ptr);
   }
 
   if (task_progress->denominator_ptr) {
-    denominator_ptr = kernel_state()->memory()->TranslateVirtual<uint64_t*>(
-        task_progress->denominator_ptr);
+    denominator_ptr =
+        memory_->TranslateVirtual<uint64_t*>(task_progress->denominator_ptr);
   }
 
   if (percent_complete_ptr) {
@@ -2174,8 +2115,7 @@ X_HRESULT XLiveBaseApp::GetNextSequenceMessage(uint32_t buffer_ptr) {
   }
 
   XLIVEBASE_GET_SEQUENCE* data_ptr =
-      kernel_state_->memory()->TranslateVirtual<XLIVEBASE_GET_SEQUENCE*>(
-          buffer_ptr);
+      memory_->TranslateVirtual<XLIVEBASE_GET_SEQUENCE*>(buffer_ptr);
 
   data_ptr->seq_num = 0;
 
@@ -2192,8 +2132,7 @@ X_HRESULT XLiveBaseApp::XUserFindUsers(uint32_t buffer_ptr) {
     return X_E_INVALIDARG;
   }
 
-  XUserFindUsersUnmarshaller unmarshaller =
-      XUserFindUsersUnmarshaller(buffer_ptr);
+  XUserFindUsersUnmarshaller unmarshaller(kernel_state_, buffer_ptr);
 
   X_HRESULT deserialize_result = unmarshaller.Deserialize();
 
@@ -2214,7 +2153,7 @@ X_HRESULT XLiveBaseApp::XUserFindUsers(uint32_t buffer_ptr) {
     const uint64_t xuid = xe::byte_swap(user.xuid);
 
     const auto user_profile =
-        kernel_state()->xam_state()->GetUserProfileLive(xuid);
+        kernel_state_->xam_state()->GetUserProfileLive(xuid);
 
     // Only lookup non-local users
     if (user_profile) {
@@ -2232,8 +2171,7 @@ X_HRESULT XLiveBaseApp::XUserFindUsers(uint32_t buffer_ptr) {
   }
 
   if (!find_users.empty()) {
-    auto resolved = kernel_state()
-                        ->GetXboxLiveAPI()
+    auto resolved = kernel_state_->GetXboxLiveAPI()
                         ->GetFindUsers(find_users)
                         ->GetResolvedUsers();
 
@@ -2244,12 +2182,11 @@ X_HRESULT XLiveBaseApp::XUserFindUsers(uint32_t buffer_ptr) {
   uint32_t results_size = sizeof(FIND_USERS_RESPONSE) +
                           (unmarshaller.NumUsers() * sizeof(FIND_USER_INFO));
 
-  uint32_t users_address = kernel_state()->memory()->HostToGuestVirtual(
-      std::to_address(results_ptr + 1));
+  uint32_t users_address =
+      memory_->HostToGuestVirtual(std::to_address(results_ptr + 1));
 
   FIND_USER_INFO* user_results_ptr =
-      kernel_state()->memory()->TranslateVirtual<FIND_USER_INFO*>(
-          users_address);
+      memory_->TranslateVirtual<FIND_USER_INFO*>(users_address);
 
   for (uint32_t i = 0; const auto& user : resolved_users) {
     memcpy(&user_results_ptr[i], &user, sizeof(FIND_USER_INFO));
@@ -2266,19 +2203,17 @@ X_HRESULT XLiveBaseApp::XContentGetMarketplaceCounts(uint32_t buffer_ptr) {
   // 5454082B
 
   X_CONTENT_GET_MARKETPLACE_COUNTS* marketplace_counts_ptr =
-      kernel_state()
-          ->memory()
+      kernel_state_->memory()
           ->TranslateVirtual<X_CONTENT_GET_MARKETPLACE_COUNTS*>(buffer_ptr);
 
   X_OFFERING_CONTENTAVAILABLE_RESULT* results_ptr =
-      kernel_state()
-          ->memory()
+      kernel_state_->memory()
           ->TranslateVirtual<X_OFFERING_CONTENTAVAILABLE_RESULT*>(
               marketplace_counts_ptr->results_ptr);
 
   memset(results_ptr, 0, sizeof(X_OFFERING_CONTENTAVAILABLE_RESULT));
 
-  const auto user_profile = kernel_state()->xam_state()->GetUserProfile(
+  const auto user_profile = kernel_state_->xam_state()->GetUserProfile(
       marketplace_counts_ptr->user_index);
 
   XELOGI("{}: Content Categories: {:08X}", __func__,
@@ -2292,7 +2227,7 @@ std::string XLiveBaseApp::ConvertServerPathToXStorageSymlink(
   std::string symlink_path = server_path;
 
   std::string backend_domain_prefix = fmt::format(
-      "{}xstorage/", kernel_state()->GetXboxLiveAPI()->GetApiAddress());
+      "{}xstorage/", kernel_state_->GetXboxLiveAPI()->GetApiAddress());
 
   std::string location = symlink_path.substr(backend_domain_prefix.size());
 
@@ -2310,7 +2245,7 @@ std::string XLiveBaseApp::ConvertXStorageSymlinkToServerPath(
   server_path = utf8::fix_path_separators(server_path, '/');
 
   std::string backend_domain_prefix = fmt::format(
-      "{}xstorage", kernel_state()->GetXboxLiveAPI()->GetApiAddress());
+      "{}xstorage", kernel_state_->GetXboxLiveAPI()->GetApiAddress());
 
   server_path = std::format("{}/{}", backend_domain_prefix, server_path);
 
@@ -2364,7 +2299,7 @@ X_HRESULT XLiveBaseApp::XAccountGetPointsBalance(uint32_t buffer_ptr) {
     return X_E_INVALIDARG;
   }
 
-  GenericUnmarshaller unmarshaller = GenericUnmarshaller(buffer_ptr);
+  GenericUnmarshaller unmarshaller(kernel_state_, buffer_ptr);
 
   XACCOUNT_GET_POINTS_BALANCE_REQUEST* points_balance_request_ptr =
       unmarshaller
@@ -2392,7 +2327,7 @@ X_HRESULT XLiveBaseApp::XGetBannerList(uint32_t buffer_ptr) {
   // Called on startup of blades dashboard v1888 to v2858
   // Address: 92433DA8
 
-  GenericUnmarshaller unmarshaller = GenericUnmarshaller(buffer_ptr);
+  GenericUnmarshaller unmarshaller(kernel_state_, buffer_ptr);
 
   GET_BANNER_LIST_REQUEST* banner_list_request_ptr =
       unmarshaller.DeserializeReinterpret<GET_BANNER_LIST_REQUEST>();
@@ -2423,7 +2358,7 @@ X_HRESULT XLiveBaseApp::XGetBannerListHot(uint32_t buffer_ptr) {
     return X_E_INVALIDARG;
   }
 
-  GenericUnmarshaller unmarshaller = GenericUnmarshaller(buffer_ptr);
+  GenericUnmarshaller unmarshaller(kernel_state_, buffer_ptr);
 
   GET_BANNER_LIST_REQUEST* banner_list_request =
       unmarshaller.DeserializeReinterpret<GET_BANNER_LIST_REQUEST>();
@@ -2452,7 +2387,7 @@ X_HRESULT XLiveBaseApp::XOfferingContentEnumerate(uint32_t buffer_ptr) {
   // More Videos and Downloads
   // Address: 92433FA8
 
-  GenericUnmarshaller unmarshaller = GenericUnmarshaller(buffer_ptr);
+  GenericUnmarshaller unmarshaller(kernel_state_, buffer_ptr);
 
   CONTENT_ENUMERATE_REQUEST* content_enumerate_request_ptr =
       unmarshaller.DeserializeReinterpret<CONTENT_ENUMERATE_REQUEST>();
@@ -2473,8 +2408,8 @@ X_HRESULT XLiveBaseApp::XOfferingContentEnumerate(uint32_t buffer_ptr) {
   CONTENT_INFO* content_info_ptr =
       reinterpret_cast<CONTENT_INFO*>(content_enumerate_results_ptr + 1);
 
-  uint32_t content_info_address = kernel_state_->memory()->HostToGuestVirtual(
-      std::to_address(content_info_ptr));
+  uint32_t content_info_address =
+      memory_->HostToGuestVirtual(std::to_address(content_info_ptr));
 
   const std::vector<std::u16string> contents = {
       u"Content 1", u"Content 2", u"Content 3", u"Content 4", u"Content 5"};
@@ -2502,8 +2437,8 @@ X_HRESULT XLiveBaseApp::XOfferingContentEnumerate(uint32_t buffer_ptr) {
     xe::string_util::copy_and_swap_truncating(content_names_ptr,
                                               content_name.c_str(), size);
 
-    content_info_ptr->offer_name = kernel_state_->memory()->HostToGuestVirtual(
-        std::to_address(content_names_ptr));
+    content_info_ptr->offer_name =
+        memory_->HostToGuestVirtual(std::to_address(content_names_ptr));
     content_info_ptr->offer_name_length = size;
 
     content_info_ptr += 1;
@@ -2525,7 +2460,7 @@ X_HRESULT XLiveBaseApp::XGenresEnumerate(uint32_t buffer_ptr) {
   // sub menu.
   // Address: 92434218
 
-  GenericUnmarshaller unmarshaller = GenericUnmarshaller(buffer_ptr);
+  GenericUnmarshaller unmarshaller(kernel_state_, buffer_ptr);
 
   GENRES_ENUMERATE_REQUEST* genre_enumerate_request_ptr =
       unmarshaller.DeserializeReinterpret<GENRES_ENUMERATE_REQUEST>();
@@ -2553,8 +2488,8 @@ X_HRESULT XLiveBaseApp::XGenresEnumerate(uint32_t buffer_ptr) {
   GENRE_INFO* genre_info_ptr =
       reinterpret_cast<GENRE_INFO*>(genre_enumerate_results_ptr + 1);
 
-  uint32_t genre_info_address = kernel_state_->memory()->HostToGuestVirtual(
-      std::to_address(genre_info_ptr));
+  uint32_t genre_info_address =
+      memory_->HostToGuestVirtual(std::to_address(genre_info_ptr));
 
   const std::vector<std::u16string> genres = {
       u"Action",  u"Adventure", u"Simulation", u"Strategy",
@@ -2585,8 +2520,7 @@ X_HRESULT XLiveBaseApp::XGenresEnumerate(uint32_t buffer_ptr) {
                                               genre_name.c_str(), size);
 
     genre_info_ptr->localized_genre_name =
-        kernel_state_->memory()->HostToGuestVirtual(
-            std::to_address(genre_names_ptr));
+        memory_->HostToGuestVirtual(std::to_address(genre_names_ptr));
     genre_info_ptr->localized_genre_length = size;
 
     genre_info_ptr += 1;
@@ -2608,7 +2542,7 @@ X_HRESULT XLiveBaseApp::XEnumerateTitlesByFilter(uint32_t buffer_ptr) {
   // Fixes accessing marketplace Game Downloads.
   // Address: 92434468
 
-  GenericUnmarshaller unmarshaller = GenericUnmarshaller(buffer_ptr);
+  GenericUnmarshaller unmarshaller(kernel_state_, buffer_ptr);
 
   ENUMERATE_TITLES_BY_FILTER* enumerate_titles_request_ptr =
       unmarshaller.DeserializeReinterpret<ENUMERATE_TITLES_BY_FILTER>();
@@ -2657,8 +2591,8 @@ X_HRESULT XLiveBaseApp::XEnumerateTitlesByFilter(uint32_t buffer_ptr) {
   assert_true(unmarshaller.GetAsyncTask().GetXLiveAsyncTask()->results_size >
               enumerate_titles_info_size);
 
-  uint32_t title_info_address = kernel_state_->memory()->HostToGuestVirtual(
-      std::to_address(title_info_ptr));
+  uint32_t title_info_address =
+      memory_->HostToGuestVirtual(std::to_address(title_info_ptr));
 
   uint32_t total_titles_count = 0;
   uint32_t returned_titles_count = 0;
@@ -2666,7 +2600,7 @@ X_HRESULT XLiveBaseApp::XEnumerateTitlesByFilter(uint32_t buffer_ptr) {
   if (enumerate_titles_request_ptr->request_flags &
       static_cast<uint16_t>(ENUMERATE_TITLES_BY_FILTER_FLAGS::Played)) {
     const std::vector<TitleInfo> played_titles =
-        kernel_state()->xam_state()->user_tracker()->GetPlayedTitles(
+        kernel_state_->xam_state()->user_tracker()->GetPlayedTitles(
             enumerate_titles_request_ptr->xuid);
 
     total_titles_count = static_cast<uint32_t>(played_titles.size());
@@ -2694,8 +2628,8 @@ X_HRESULT XLiveBaseApp::XEnumerateTitlesByFilter(uint32_t buffer_ptr) {
 
       title_info_ptr->title_id = played_title.id;
       title_info_ptr->played = true;
-      title_info_ptr->title_name = kernel_state_->memory()->HostToGuestVirtual(
-          std::to_address(titles_names_ptr));
+      title_info_ptr->title_name =
+          memory_->HostToGuestVirtual(std::to_address(titles_names_ptr));
       title_info_ptr->title_name_length = size;
 
       title_info_ptr += 1;
@@ -2716,7 +2650,7 @@ X_HRESULT XLiveBaseApp::XOfferingSubscriptionEnumerate(uint32_t buffer_ptr) {
   // Fixes accessing marketplace Memberships.
   // Address: 924346C0
 
-  GenericUnmarshaller unmarshaller = GenericUnmarshaller(buffer_ptr);
+  GenericUnmarshaller unmarshaller(kernel_state_, buffer_ptr);
 
   SUBSCRIPTION_ENUMERATE_REQUEST* subscription_enumerate_ptr =
       unmarshaller.DeserializeReinterpret<SUBSCRIPTION_ENUMERATE_REQUEST>();
@@ -2772,8 +2706,7 @@ X_HRESULT XLiveBaseApp::XOfferingSubscriptionEnumerate(uint32_t buffer_ptr) {
                                            1);
 
   uint32_t subscriptions_info_address =
-      kernel_state_->memory()->HostToGuestVirtual(
-          std::to_address(subscriptions_info_ptr));
+      memory_->HostToGuestVirtual(std::to_address(subscriptions_info_ptr));
 
   const std::vector<std::u16string> memberships = {
       u"Premium Xenia Canary",
@@ -2805,8 +2738,7 @@ X_HRESULT XLiveBaseApp::XOfferingSubscriptionEnumerate(uint32_t buffer_ptr) {
 
     subscriptions_info_ptr->offer_id = i;
     subscriptions_info_ptr->offer_name =
-        kernel_state_->memory()->HostToGuestVirtual(
-            std::to_address(offer_names_ptr));
+        memory_->HostToGuestVirtual(std::to_address(offer_names_ptr));
     subscriptions_info_ptr->offer_name_length = size;
 
     subscriptions_info_ptr += 1;
@@ -2829,7 +2761,7 @@ X_HRESULT XLiveBaseApp::XUserValidateAvatarManifest(uint32_t buffer_ptr) {
     return X_E_INVALIDARG;
   }
 
-  GenericUnmarshaller unmarshaller(buffer_ptr);
+  GenericUnmarshaller unmarshaller(kernel_state_, buffer_ptr);
 
   X_HRESULT deserialize_result = unmarshaller.Deserialize();
 
@@ -2865,26 +2797,22 @@ X_HRESULT XLiveBaseApp::XMessageEnumerate(uint32_t buffer_ptr,
     return X_E_INVALIDARG;
   }
 
-  XLivebaseAsyncTask async_task = XLivebaseAsyncTask(buffer_ptr);
-
-  Memory* memory = kernel_state_->memory();
+  XLivebaseAsyncTask async_task(kernel_state_, buffer_ptr);
 
   const X_ARGUMENT_LIST* args_list =
-      memory->TranslateVirtual<X_ARGUMENT_LIST*>(buffer_length);
+      memory_->TranslateVirtual<X_ARGUMENT_LIST*>(buffer_length);
 
-  if (args_list->argument_count != 3) {
-    assert_always(fmt::format("{} - Invalid argument count!", __func__));
-  }
+  assert_false(args_list->argument_count != 3);
 
   XLIVEBASE_MESSAGES_ENUMERATOR* entry =
-      memory->TranslateVirtual<XLIVEBASE_MESSAGES_ENUMERATOR*>(buffer_length);
+      memory_->TranslateVirtual<XLIVEBASE_MESSAGES_ENUMERATOR*>(buffer_length);
 
-  uint64_t xuid = xe::load_and_swap<uint64_t>(memory->TranslateVirtual(
+  uint64_t xuid = xe::load_and_swap<uint64_t>(memory_->TranslateVirtual(
       static_cast<uint32_t>(entry->xuid.argument_value_ptr)));
-  auto messages_count = memory->TranslateVirtual<xe::be<uint32_t>*>(
+  auto messages_count = memory_->TranslateVirtual<xe::be<uint32_t>*>(
       static_cast<uint32_t>(entry->messages_count_ptr.argument_value_ptr));
   X_MESSAGE_SUMMARY* message_summaries =
-      memory->TranslateVirtual<X_MESSAGE_SUMMARY*>(static_cast<uint32_t>(
+      memory_->TranslateVirtual<X_MESSAGE_SUMMARY*>(static_cast<uint32_t>(
           entry->message_summaries_ptr.argument_value_ptr));
 
   *messages_count = 0;
@@ -2905,25 +2833,21 @@ X_HRESULT XLiveBaseApp::XPresenceGetState(uint32_t buffer_ptr,
     return X_E_INVALIDARG;
   }
 
-  XLivebaseAsyncTask async_task = XLivebaseAsyncTask(buffer_ptr);
-
-  Memory* memory = kernel_state_->memory();
+  XLivebaseAsyncTask async_task(kernel_state_, buffer_ptr);
 
   const X_ARGUMENT_LIST* args_list =
-      memory->TranslateVirtual<X_ARGUMENT_LIST*>(buffer_length);
+      memory_->TranslateVirtual<X_ARGUMENT_LIST*>(buffer_length);
 
-  if (args_list->argument_count != 3) {
-    assert_always(fmt::format("{} - Invalid argument count!", __func__));
-  }
+  assert_false(args_list->argument_count != 3);
 
   const XLIVEBASE_PRESENCE_GET_STATE* entry =
-      memory->TranslateVirtual<XLIVEBASE_PRESENCE_GET_STATE*>(buffer_length);
+      memory_->TranslateVirtual<XLIVEBASE_PRESENCE_GET_STATE*>(buffer_length);
 
-  uint64_t xuid = xe::load_and_swap<uint64_t>(memory->TranslateVirtual(
+  uint64_t xuid = xe::load_and_swap<uint64_t>(memory_->TranslateVirtual(
       static_cast<uint32_t>(entry->xuid.argument_value_ptr)));
-  auto state_flags_ptr = memory->TranslateVirtual<xe::be<uint32_t>*>(
+  auto state_flags_ptr = memory_->TranslateVirtual<xe::be<uint32_t>*>(
       static_cast<uint32_t>(entry->state_flags_ptr.argument_value_ptr));
-  auto session_id_ptr = memory->TranslateVirtual<XNKID*>(
+  auto session_id_ptr = memory_->TranslateVirtual<XNKID*>(
       static_cast<uint32_t>(entry->session_id_ptr.argument_value_ptr));
 
   *state_flags_ptr = 0;

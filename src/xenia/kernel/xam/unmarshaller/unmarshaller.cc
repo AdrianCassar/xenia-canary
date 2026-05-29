@@ -2,29 +2,34 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2025 Xenia Canary. All rights reserved.                          *
+ * Copyright 2026 Xenia Canary. All rights reserved.                          *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
 
 #include "xenia/kernel/xam/unmarshaller/unmarshaller.h"
+#include "xenia/kernel/kernel_state.h"
 
 namespace xe {
 namespace kernel {
 namespace xam {
 
-Unmarshaller::Unmarshaller(uint32_t marshaller_address)
-    : xlivebase_async_message_ptr_(nullptr), async_task_(0), position_(0) {
+Unmarshaller::Unmarshaller(KernelState* kernel_state,
+                           uint32_t marshaller_address)
+    : kernel_state_(kernel_state),
+      memory_(kernel_state->memory()),
+      async_task_(kernel_state_, GetAsyncTaskAddress(marshaller_address)) {
   if (!marshaller_address) {
     return;
   }
 
   xlivebase_async_message_ptr_ =
-      kernel_state()->memory()->TranslateVirtual<XLIVEBASE_ASYNC_MESSAGE*>(
-          marshaller_address);
+      memory_->TranslateVirtual<XLIVEBASE_ASYNC_MESSAGE*>(marshaller_address);
+}
 
-  async_task_ =
-      XLivebaseAsyncTask(xlivebase_async_message_ptr_->xlive_async_task_ptr);
+uint32_t Unmarshaller::GetAsyncTaskAddress(uint32_t marshaller_address) const {
+  return memory_->TranslateVirtual<XLIVEBASE_ASYNC_MESSAGE*>(marshaller_address)
+      ->xlive_async_task_ptr;
 }
 
 std::span<uint8_t> Unmarshaller::Advance(size_t count) {
@@ -70,7 +75,7 @@ std::string Unmarshaller::ReadString(uint32_t length) {
   return std::string(reinterpret_cast<char*>(string_data.data()), length);
 }
 
-X_HRESULT Unmarshaller::Deserialize() { return X_E_FAIL; }
+bool Unmarshaller::ZeroResults() const { return async_task_.ZeroResults(); }
 
 XLIVEBASE_ASYNC_MESSAGE* Unmarshaller::GetXLiveBaseAsyncMessage() {
   return xlivebase_async_message_ptr_;

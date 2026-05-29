@@ -2,7 +2,7 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2025 Xenia Canary. All rights reserved.                          *
+ * Copyright 2026 Xenia Canary. All rights reserved.                          *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
@@ -18,7 +18,8 @@ namespace xam {
 
 class XStorageDownloadToMemoryUnmarshaller : public Unmarshaller {
  public:
-  XStorageDownloadToMemoryUnmarshaller(uint32_t marshaller_buffer);
+  XStorageDownloadToMemoryUnmarshaller(KernelState* kernel_state,
+                                       uint32_t marshaller_address);
 
   ~XStorageDownloadToMemoryUnmarshaller() {};
 
@@ -38,18 +39,17 @@ class XStorageDownloadToMemoryUnmarshaller : public Unmarshaller {
 
   std::span<uint8_t> GetDownloadBuffer() const {
     uint8_t* download_buffer_ptr =
-        kernel_state()->memory()->TranslateVirtual<uint8_t*>(
-            download_buffer_address_);
+        memory_->TranslateVirtual<uint8_t*>(download_buffer_address_);
 
     return std::span<uint8_t>(download_buffer_ptr, buffer_size_);
   };
 
  private:
-  uint32_t user_index_;
-  uint32_t server_path_len_;
+  uint32_t user_index_ = 0;
+  uint32_t server_path_len_ = 0;
   std::u16string server_path_;
-  uint32_t buffer_size_;
-  uint32_t download_buffer_address_;
+  uint32_t buffer_size_ = 0;
+  uint32_t download_buffer_address_ = 0;
 };
 
 }  // namespace xam
