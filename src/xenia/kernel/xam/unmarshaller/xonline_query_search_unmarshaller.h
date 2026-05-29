@@ -2,7 +2,7 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2025 Xenia Canary. All rights reserved.                          *
+ * Copyright 2026 Xenia Canary. All rights reserved.                          *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
@@ -18,7 +18,8 @@ namespace xam {
 
 class XQuerySearchUnmarshaller : public Unmarshaller {
  public:
-  XQuerySearchUnmarshaller(uint32_t marshaller_buffer);
+  XQuerySearchUnmarshaller(KernelState* kernel_state,
+                           uint32_t marshaller_address);
 
   ~XQuerySearchUnmarshaller() {};
 
@@ -45,13 +46,13 @@ class XQuerySearchUnmarshaller : public Unmarshaller {
   void PrettyPrintAttributesSpec();
 
  private:
-  uint32_t title_id_;
-  uint32_t dataset_id_;
-  uint32_t proc_index_;
-  uint32_t page_;
-  uint32_t results_pre_page_;
-  uint32_t num_result_specs_;
-  uint32_t num_attributes_;
+  uint32_t title_id_ = 0;
+  uint32_t dataset_id_ = 0;
+  uint32_t proc_index_ = 0;
+  uint32_t page_ = 0;
+  uint32_t results_pre_page_ = 0;
+  uint32_t num_result_specs_ = 0;
+  uint32_t num_attributes_ = 0;
   std::vector<X_ONLINE_QUERY_ATTRIBUTE_SPEC> attributes_spec_;
 };
 

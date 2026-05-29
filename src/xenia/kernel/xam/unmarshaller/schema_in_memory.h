@@ -14,6 +14,12 @@
 
 namespace xe {
 namespace kernel {
+class KernelState;
+}  // namespace kernel
+}  // namespace xe
+
+namespace xe {
+namespace kernel {
 namespace xam {
 
 class SchemaInMemory : public SCHEMA_DATA {
@@ -45,7 +51,7 @@ class SchemaInMemory : public SCHEMA_DATA {
   };
 
  public:
-  SchemaInMemory();
+  SchemaInMemory(KernelState* kernel_state);
 
   void Bind(uint32_t schema_address);
 
@@ -83,6 +89,10 @@ class SchemaInMemory : public SCHEMA_DATA {
   void PrettyPrintUrlsWithSchemaIndex();
 
   void PrettyPrintOrdinalToIndex() const;
+
+ protected:
+  KernelState* kernel_state_;
+  Memory* memory_;
 };
 
 }  // namespace xam

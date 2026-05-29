@@ -8,25 +8,29 @@
  */
 
 #include "xenia/kernel/xam/unmarshaller/xlivebase_task.h"
+#include "xenia/base/logging.h"
+#include "xenia/kernel/kernel_state.h"
 
 namespace xe {
 namespace kernel {
 namespace xam {
 
-XLivebaseAsyncTask::XLivebaseAsyncTask(uint32_t async_task_address) {
+XLivebaseAsyncTask::XLivebaseAsyncTask(KernelState* kernel_state,
+                                       uint32_t async_task_address)
+    : kernel_state_(kernel_state),
+      memory_(kernel_state->memory()),
+      schema(kernel_state) {
   if (!async_task_address) {
     return;
   }
 
   xlive_async_task_ptr_ =
-      kernel_state()->memory()->TranslateVirtual<XLIVE_ASYNC_TASK*>(
-          async_task_address);
+      memory_->TranslateVirtual<XLIVE_ASYNC_TASK*>(async_task_address);
 
   schema.BindToSchema(xlive_async_task_ptr_->schema_data_ptr);
 
-  uint8_t* data_request_ptr =
-      kernel_state()->memory()->TranslateVirtual<uint8_t*>(
-          xlive_async_task_ptr_->marshalled_request_ptr);
+  uint8_t* data_request_ptr = memory_->TranslateVirtual<uint8_t*>(
+      xlive_async_task_ptr_->marshalled_request_ptr);
 
   data_ptr_ = std::span<uint8_t>(
       data_request_ptr, xlive_async_task_ptr_->marshalled_request_size);
