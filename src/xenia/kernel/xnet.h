@@ -416,6 +416,49 @@ struct XONLINE_SCHEMA_DATA {
 };
 static_assert_size(XONLINE_SCHEMA_DATA, 0x8);
 
+struct XPASSPORT_MEMBERS_NAME {
+  xe::be<uint64_t> xuid_1;
+  xe::be<uint64_t> xuid_2;
+};
+static_assert_size(XPASSPORT_MEMBERS_NAME, 0x10);
+
+struct PASSPORT_GET_MEMBER_NAME_RESPONSE {
+  xe::be<uint16_t> user_pmn_length;
+  xe::be<uint32_t> wsz_user_pmn_ptr;  // char16_t*
+  xe::be<uint16_t> cid_length;
+  xe::be<uint32_t> cid_ptr;  // char16_t*
+  xe::be<uint16_t> parent_pmn_length;
+  xe::be<uint32_t> parent_pmn_ptr;  // char16_t*
+};
+static_assert_size(PASSPORT_GET_MEMBER_NAME_RESPONSE, 0x18);
+
+struct XLIVEBASE_WEBSERVICETASK_CALL {
+  xe::be<uint32_t> user_index;
+  const xe::be<uint32_t> uri;      // char*
+  const xe::be<uint32_t> verb;     // char*
+  xe::be<uint32_t> workspace_ptr;  //  uint8_t*
+  xe::be<uint32_t> workspace_size;
+  xe::be<uint32_t> flags;
+  const xe::be<uint32_t> request_struct_ptr;  //  uint8_t*
+  xe::be<uint32_t> request_struct;
+  const xe::be<uint32_t> request_filter_ptr;  // char*
+  xe::be<uint32_t> http_status_code_ptr;      // uint32_t*
+  xe::be<uint32_t> response_struct_ptr;       //  uint8_t*
+  xe::be<uint32_t> response_struct_size;
+  const xe::be<uint32_t> response_filter_ptr;       // char*
+  const xe::be<uint32_t> sts_relying_party_id_ptr;  // char*
+};
+static_assert_size(XLIVEBASE_WEBSERVICETASK_CALL, 0x38);
+
+struct XLIVEBASE_WEBSERVICETASK_GETBUFFERSIZE {
+  const xe::be<uint32_t> uri_ptr;              // char*
+  const xe::be<uint32_t> request_filter_ptr;   // char*
+  const xe::be<uint32_t> response_filter_ptr;  // char*
+  xe::be<uint32_t> flags;
+  xe::be<uint32_t> task_buffer_size_ptr;  // uint32_t*
+};
+static_assert_size(XLIVEBASE_WEBSERVICETASK_GETBUFFERSIZE, 0x14);
+
 struct XNKID {
   uint8_t ab[8];
   uint64_t as_uint64() { return *reinterpret_cast<uint64_t*>(&ab); }
