@@ -181,6 +181,9 @@ X_HRESULT XLiveBaseApp::ExecuteDispatchMessage(uint32_t message,
     case 0x00050104: {
       return XOfferingSubscriptionEnumerate(buffer_ptr);
     }
+    case 0x00050119: {
+      return XPassportGetMemberName(buffer_ptr);
+    }
     case 0x0005012B: {
       return XUserValidateAvatarManifest(buffer_ptr);
     }
@@ -313,6 +316,23 @@ X_HRESULT XLiveBaseApp::ExecuteDispatchMessage(uint32_t message,
       // Required to be successful for 4D530910 to detect signed-in profile
       XELOGD("XPresenceInitialize({:08X}, {:08X})", buffer_ptr, buffer_length);
       return XPresenceInitialize(buffer_ptr, buffer_length);
+    }
+    case 0x00058056: {
+      XELOGD("XPresenceInitializeEx({:08X}, {:08X})", buffer_ptr,
+             buffer_length);
+      return XPresenceInitialize(buffer_ptr, buffer_length);
+    }
+    case 0x0005806A: {
+      assert_true(!buffer_length ||
+                  buffer_length == sizeof(XLIVEBASE_WEBSERVICETASK_CALL));
+      XELOGD("XOnlineCallWebService({:08X}, {:08X})", buffer_ptr,
+             buffer_length);
+      return XOnlineCallWebService(buffer_ptr);
+    }
+    case 0x00058072: {
+      XELOGD("XOnlineGetWebServiceTaskBufferSize({:08X}, {:08X})", buffer_ptr,
+             buffer_length);
+      return XOnlineGetWebServiceTaskBufferSize(buffer_ptr);
     }
   }
 
@@ -2852,6 +2872,78 @@ X_HRESULT XLiveBaseApp::XPresenceGetState(uint32_t buffer_ptr,
 
   *state_flags_ptr = 0;
   *session_id_ptr = {};
+
+  return X_E_SUCCESS;
+}
+
+X_HRESULT XLiveBaseApp::XOnlineCallWebService(uint32_t buffer_ptr) {
+  if (!buffer_ptr) {
+    return X_E_INVALIDARG;
+  }
+
+  XLIVEBASE_WEBSERVICETASK_CALL* data =
+      memory_->TranslateVirtual<XLIVEBASE_WEBSERVICETASK_CALL*>(buffer_ptr);
+
+  std::string uri = memory_->TranslateVirtual<char*>(data->uri);
+  std::string verb = memory_->TranslateVirtual<char*>(data->verb);
+  std::string request_filter =
+      memory_->TranslateVirtual<char*>(data->request_filter_ptr);
+  std::string response_filter =
+      memory_->TranslateVirtual<char*>(data->response_filter_ptr);
+  std::string sts_relying_party_id =
+      memory_->TranslateVirtual<char*>(data->sts_relying_party_id_ptr);
+
+  xe::be<uint32_t>* http_status_code =
+      memory_->TranslateVirtual<xe::be<uint32_t>*>(data->http_status_code_ptr);
+
+  *http_status_code = HTTP_STATUS_CODE::HTTP_OK;
+
+  return X_E_SUCCESS;
+}
+
+X_HRESULT XLiveBaseApp::XOnlineGetWebServiceTaskBufferSize(
+    uint32_t buffer_ptr) {
+  if (!buffer_ptr) {
+    return X_E_INVALIDARG;
+  }
+
+  XLIVEBASE_WEBSERVICETASK_GETBUFFERSIZE* get_buffer_size =
+      memory_->TranslateVirtual<XLIVEBASE_WEBSERVICETASK_GETBUFFERSIZE*>(
+          buffer_ptr);
+
+  std::string uri = memory_->TranslateVirtual<char*>(get_buffer_size->uri_ptr);
+  std::string request_filter =
+      memory_->TranslateVirtual<char*>(get_buffer_size->request_filter_ptr);
+  std::string response_filter =
+      memory_->TranslateVirtual<char*>(get_buffer_size->response_filter_ptr);
+
+  xe::be<uint32_t>* task_biffer_size =
+      memory_->TranslateVirtual<xe::be<uint32_t>*>(
+          get_buffer_size->task_buffer_size_ptr);
+
+  *task_biffer_size = 0;
+
+  return X_E_SUCCESS;
+}
+
+X_HRESULT XLiveBaseApp::XPassportGetMemberName(uint32_t buffer_ptr) {
+  if (!buffer_ptr) {
+    return X_E_INVALIDARG;
+  }
+
+  GenericUnmarshaller unmarshaller(kernel_state_, buffer_ptr);
+
+  XPASSPORT_MEMBERS_NAME* members =
+      unmarshaller.DeserializeReinterpret<XPASSPORT_MEMBERS_NAME>();
+
+  if (!members) {
+    return X_E_INVALIDARG;
+  }
+
+  unmarshaller.ZeroResults();
+
+  PASSPORT_GET_MEMBER_NAME_RESPONSE* results_ptr =
+      unmarshaller.Results<PASSPORT_GET_MEMBER_NAME_RESPONSE>();
 
   return X_E_SUCCESS;
 }

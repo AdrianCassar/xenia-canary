@@ -81,6 +81,11 @@ class XLiveBaseApp : public App {
   X_HRESULT XMessageEnumerate(uint32_t buffer_ptr, uint32_t buffer_length);
   X_HRESULT XPresenceGetState(uint32_t buffer_ptr, uint32_t buffer_length);
 
+  X_HRESULT XOnlineCallWebService(uint32_t buffer_ptr);
+  X_HRESULT XOnlineGetWebServiceTaskBufferSize(uint32_t buffer_ptr);
+
+  X_HRESULT XPassportGetMemberName(uint32_t buffer_ptr);
+
   const uint32_t kAsyncSchemaIndexMask = 0x50000;
 
   static constexpr std::string_view xstorage_symboliclink = "XSTORAGE:";
