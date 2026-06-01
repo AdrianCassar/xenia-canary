@@ -617,6 +617,12 @@ void GamercardUI::SaveAccountData() {
       *kernel_state()->xam_state()->profile_manager()->GetAccount(xuid_);
   auto account = account_original;
 
+  UserSetting gamercard_region(UserSettingId::XPROFILE_GAMERCARD_REGION,
+                               int32_t(gamercardValues_.country));
+
+  kernel_state()->xam_state()->user_tracker()->UpsertSetting(
+      xuid_, kDashboardID, &gamercard_region);
+
   account.SetCountry(gamercardValues_.country);
   account.SetLanguage(gamercardValues_.language);
   account.SetSubscriptionTier(gamercardValues_.account_subscription_tier);
