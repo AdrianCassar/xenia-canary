@@ -85,16 +85,19 @@ std::optional<Property> Property::DeserializeBase64(std::string base64) {
   const std::uint32_t size = static_cast<uint32_t>(base64.size());
   const std::uint32_t decode_size = AV_BASE64_DECODE_SIZE(size);
 
-  std::vector<uint8_t> property_data(decode_size);
+  std::vector<uint8_t> property_out(decode_size);
 
-  const int out =
-      av_base64_decode(property_data.data(), base64.c_str(), decode_size);
+  const int out_decode_size =
+      av_base64_decode(property_out.data(), base64.c_str(), decode_size);
 
-  if (out < 0) {
+  if (out_decode_size < 0) {
     return std::nullopt;
   }
 
-  const xam::Property property = xam::Property(property_data);
+  const std::span<uint8_t> property_data =
+      std::span<uint8_t>(property_out.data(), out_decode_size);
+
+  const xam::Property property(property_data);
 
   return property;
 }
