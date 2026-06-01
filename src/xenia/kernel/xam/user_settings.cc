@@ -160,15 +160,15 @@ std::optional<UserSetting> UserSetting::DeserializeBase64(std::string base64) {
 
   std::vector<uint8_t> setting_out(decode_size);
 
-  const int out =
+  const int out_decode_size =
       av_base64_decode(setting_out.data(), base64.c_str(), decode_size);
 
-  if (out < 0) {
+  if (out_decode_size < 0) {
     return std::nullopt;
   }
 
   const std::span<uint8_t> setting_data =
-      std::span<uint8_t>(setting_out.data(), decode_size);
+      std::span<uint8_t>(setting_out.data(), out_decode_size);
 
   xam::X_XDBF_GPD_SETTING_HEADER header = {};
   std::span<uint8_t> extended_data = {};
@@ -177,7 +177,7 @@ std::optional<UserSetting> UserSetting::DeserializeBase64(std::string base64) {
 
   extended_data = setting_data.subspan(sizeof(xam::X_XDBF_GPD_SETTING_HEADER));
 
-  const xam::UserSetting setting = xam::UserSetting(&header, extended_data);
+  const xam::UserSetting setting(&header, extended_data);
 
   return setting;
 }
