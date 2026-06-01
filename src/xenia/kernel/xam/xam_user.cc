@@ -234,17 +234,22 @@ uint32_t XamUserReadProfileSettingsEx(
     return X_ERROR_INVALID_PARAMETER;
   }
 
+  if (!kernel_state()->xam_state()->profile_manager()->IsAnyProfileSignedIn()) {
+    return X_ERROR_NOT_FOUND;
+  }
+
   // if buffer size is non-zero, buffer pointer must be valid
   auto buffer_size = static_cast<uint32_t>(*buffer_size_ptr);
   if (buffer_size && !buffer) {
     return X_ERROR_INVALID_PARAMETER;
   }
 
-  // Dashbaord expects settings in order use vector to ensure insertion order
+  // Dashboard expects settings in order use vector to ensure insertion order
   // is maintained.
   const std::vector<uint32_t> settings_ids = {setting_ids,
                                               setting_ids + setting_count};
 
+  // 454D07D2 reads settings from multiple XUIDs.
   const std::vector<uint64_t> profile_xuids = {xuids, xuids + xuid_count};
 
   uint32_t needed_header_size = 0;
@@ -291,10 +296,6 @@ uint32_t XamUserReadProfileSettingsEx(
       extended_error = X_E_NO_SUCH_USER;
       return X_ERROR_FUNCTION_FAILED;
     }
-
-    // Function seems to support multiple XUID lookups, but games always lookup
-    // xuids individually?
-    assert_false(profile_xuids.size() > 1);
 
     const auto requested_settings_view =
         settings_ids | std::views::transform([](uint32_t id) {
@@ -415,8 +416,8 @@ uint32_t XamUserReadProfileSettingsEx(
 
       out_header->setting_count =
           static_cast<uint32_t>(requested_settings_ids.size());
-      out_header->settings_ptr =
-          kernel_state()->memory()->HostToGuestVirtual(out_setting);
+      out_header->settings_ptr = kernel_state()->memory()->HostToGuestVirtual(
+          std::to_address(out_setting));
 
       uint32_t additional_data_buffer_ptr =
           out_header->settings_ptr +
@@ -482,7 +483,10 @@ uint32_t XamUserReadProfileSettingsEx(
         out_setting++;
       }
 
-      out_header++;
+      // Next profile settings header
+      out_header =
+          kernel_memory()->TranslateVirtual<X_USER_READ_PROFILE_SETTINGS*>(
+              additional_data_buffer_ptr);
     }
 
     return X_ERROR_SUCCESS;
