@@ -234,10 +234,6 @@ uint32_t XamUserReadProfileSettingsEx(
     return X_ERROR_INVALID_PARAMETER;
   }
 
-  if (!kernel_state()->xam_state()->profile_manager()->IsAnyProfileSignedIn()) {
-    return X_ERROR_NOT_FOUND;
-  }
-
   // if buffer size is non-zero, buffer pointer must be valid
   auto buffer_size = static_cast<uint32_t>(*buffer_size_ptr);
   if (buffer_size && !buffer) {
