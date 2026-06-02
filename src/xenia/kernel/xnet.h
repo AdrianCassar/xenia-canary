@@ -651,9 +651,9 @@ struct XHTTP_URL_COMPONENTS {
 static_assert_size(XHTTP_URL_COMPONENTS, 0x3C);
 
 struct XAM_RELYING_PARTY_TOKEN {
-  uint32_t reserved;
-  uint32_t length;
-  uint32_t token_data_ptr;  // uint8_t*
+  xe::be<uint32_t> reserved;
+  xe::be<uint32_t> length;
+  xe::be<uint32_t> token_data_ptr;  // uint8_t*
 };
 static_assert_size(XAM_RELYING_PARTY_TOKEN, 0xC);
 
