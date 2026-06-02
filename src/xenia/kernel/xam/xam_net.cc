@@ -299,14 +299,10 @@ dword_result_t NetDll_XnpLogonGetStatus_entry(
 }
 DECLARE_XAM_EXPORT1(NetDll_XnpLogonGetStatus, kNetworking, kStub);
 
+// Alias XAuthGetToken
 dword_result_t XamGetToken_entry(dword_t user_index, lpstring_t url_ptr,
-                                 dword_t url_size,
-                                 pointer_t<XAM_RELYING_PARTY_TOKEN> token_ptr,
+                                 dword_t url_size, lpdword_t token_out_ptr,
                                  pointer_t<XAM_OVERLAPPED> overlapped_ptr) {
-  if (token_ptr) {
-    token_ptr.Zero();
-  }
-
   if (user_index >= XUserMaxUserCount) {
     return X_ERROR_INVALID_PARAMETER;
   }
@@ -315,18 +311,39 @@ dword_result_t XamGetToken_entry(dword_t user_index, lpstring_t url_ptr,
     extended_error = X_ERROR_SUCCESS;
     length = 0;
 
-    // Failing causes the least crashes.
-    extended_error = X_E_FAIL;
+    const std::string url(url_ptr, url_size);
 
-    XThread::SetLastError(X_ERROR_FUNCTION_FAILED);
-    return X_ERROR_FUNCTION_FAILED;
+    XELOGI("XamGetToken: URL - {}", url);
+
+    const uint32_t token_address =
+        kernel_memory()->SystemHeapAlloc(sizeof(XAM_RELYING_PARTY_TOKEN));
+
+    auto token_ptr =
+        kernel_memory()->TranslateVirtual<XAM_RELYING_PARTY_TOKEN*>(
+            token_address);
+
+    *token_out_ptr = token_address;
+
+    const std::string mock_token = "MOCK_XBOX_STS_TOKEN";
+    const uint32_t mock_token_len = static_cast<uint32_t>(mock_token.size());
+
+    const uint32_t token_data_addrress =
+        kernel_memory()->SystemHeapAlloc(mock_token.size());
+
+    uint8_t* token_data =
+        kernel_memory()->TranslateVirtual<uint8_t*>(token_data_addrress);
+
+    std::memcpy(token_data, mock_token.data(), mock_token_len);
+
+    token_ptr->token_data_ptr = token_data_addrress;
+    token_ptr->length = mock_token_len;
+
+    return X_ERROR_SUCCESS;
   };
 
   if (!overlapped_ptr) {
     uint32_t extended_error, length;
-    X_RESULT result = run(extended_error, length);
-
-    return result;
+    return run(extended_error, length);
   }
 
   kernel_state()->CompleteOverlappedDeferredEx(run, overlapped_ptr);
@@ -336,6 +353,10 @@ DECLARE_XAM_EXPORT1(XamGetToken, kNetworking, kStub);
 
 void XamFreeToken_entry(pointer_t<XAM_RELYING_PARTY_TOKEN> token_ptr) {
   if (token_ptr) {
+    if (token_ptr->token_data_ptr) {
+      kernel_memory()->SystemHeapFree(token_ptr->token_data_ptr);
+    }
+
     kernel_memory()->SystemHeapFree(token_ptr.guest_address());
   }
 }
