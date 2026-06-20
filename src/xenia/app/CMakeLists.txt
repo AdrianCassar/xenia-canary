@@ -77,8 +77,19 @@ target_link_libraries(xenia-app PRIVATE
   mspack
   snappy
   xxhash
-  libcurl
 )
+
+if(WIN32)
+  target_link_libraries(xenia-app PRIVATE
+    libcurl
+  )
+endif()
+
+if(LINUX)
+  target_link_libraries(xenia-app PRIVATE
+    curl
+  )
+endif()
 
 # Vulkan/SPIR-V backends (not macOS)
 if(NOT APPLE)

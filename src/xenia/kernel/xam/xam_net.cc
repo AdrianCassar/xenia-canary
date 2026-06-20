@@ -37,6 +37,7 @@
 #include <WS2tcpip.h>
 #else
 #include <arpa/inet.h>
+#include <netdb.h>
 #include <netinet/in.h>
 #include <netinet/ip.h>
 #include <sys/select.h>
@@ -178,8 +179,8 @@ struct XNQOSLISTENSTATS {
 static_assert_size(XNQOSLISTENSTATS, 0x1C);
 
 struct X_TIMEVAL {
-  xe::be<long> tv_sec;
-  xe::be<long> tv_usec;
+  xe::be<uint32_t> tv_sec;
+  xe::be<uint32_t> tv_usec;
 };
 static_assert_size(X_TIMEVAL, 0x8);
 
@@ -317,7 +318,7 @@ dword_result_t XamGetToken_entry(dword_t user_index, lpstring_t url_ptr,
     extended_error = X_ERROR_SUCCESS;
     length = 0;
 
-    const std::string url(url_ptr, url_size);
+    const std::string url(url_ptr.value(), url_size);
 
     XELOGI("XamGetToken: URL - {}", url);
 
@@ -1096,8 +1097,8 @@ dword_result_t NetDll_XNetDnsLookup_entry(dword_t caller, lpstring_t host,
       return;
     }
 
-    ADDRINFOA hints = {.ai_family = XSocket::X_AF_INET};
-    PADDRINFOA addr_info = {};
+    addrinfo hints = {.ai_family = XSocket::X_AF_INET};
+    addrinfo* addr_info = nullptr;
 
     const int status = getaddrinfo(host, nullptr, &hints, &addr_info);
 
@@ -2372,7 +2373,8 @@ int_result_t NetDll_select_entry(dword_t caller, dword_t nfds,
   timeval* timeout_in = nullptr;
   timeval timeout = {};
   if (timeout_ptr) {
-    timeout = {timeout_ptr->tv_sec, timeout_ptr->tv_usec};
+    timeout = {static_cast<long>(timeout_ptr->tv_sec),
+               static_cast<long>(timeout_ptr->tv_usec)};
     Clock::ScaleGuestDurationTimeval(
         reinterpret_cast<int32_t*>(&timeout.tv_sec),
         reinterpret_cast<int32_t*>(&timeout.tv_usec));
@@ -2571,7 +2573,7 @@ dword_result_t NetDll_getpeername_entry(dword_t caller, dword_t socket_handle,
     return -1;
   }
 
-  int native_len = *addrlen_ptr;
+  socklen_t native_len = *addrlen_ptr;
   X_STATUS status = socket->GetPeerName(addr_ptr, &native_len);
   if (XFAILED(status)) {
     XThread::SetLastError(socket->XWSAGetLastError());
@@ -2600,7 +2602,7 @@ dword_result_t NetDll_getsockname_entry(dword_t caller, dword_t socket_handle,
     return -1;
   }
 
-  int native_len = *addrlen_ptr;
+  socklen_t native_len = *addrlen_ptr;
   X_STATUS status = socket->GetSockName(addr_ptr, &native_len);
   if (XFAILED(status)) {
     XThread::SetLastError(socket->XWSAGetLastError());
