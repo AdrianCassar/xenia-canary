@@ -11,6 +11,8 @@ extern "C" {
 #include "third_party/FFmpeg/libavutil/base64.h"
 }
 
+#include <optional>
+
 #include "xenia/base/string_util.h"
 #include "xenia/kernel/json/properties_object_json.h"
 #include "xenia/kernel/util/net_utils.h"

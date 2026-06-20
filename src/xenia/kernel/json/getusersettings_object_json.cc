@@ -58,8 +58,8 @@ bool GetUserSettingsObjectJSON::Deserialize(const rapidjson::Value& obj) {
 
             const auto& settings = title_idsObj_itr->value.GetArray();
 
-            for (const auto& setting : settings) {
-              const std::string setting_base64 = setting.GetString();
+            for (const auto& serialized_setting : settings) {
+              const std::string setting_base64 = serialized_setting.GetString();
 
               const auto setting =
                   xam::UserSetting::DeserializeBase64(setting_base64);
