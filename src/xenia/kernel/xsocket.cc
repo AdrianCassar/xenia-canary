@@ -494,13 +494,23 @@ int XSocket::PollWSASendTo(bool wait, WSASendToData send_async_data,
     return X_SOCKET_ERROR;
   }
 
+#if XE_PLATFORM_WIN32
   std::vector<WSABUF> buffers(send_async_data.num_buffers);
 
   for (uint32_t i = 0; i < send_async_data.num_buffers; i++) {
     buffers[i].len = send_async_data.buffers[i].len;
-    buffers[i].buf = kernel_state()->memory()->TranslateVirtual<CHAR*>(
+    buffers[i].buf = kernel_state()->memory()->TranslateVirtual<char*>(
         send_async_data.buffers[i].buf_ptr);
   }
+#else
+  std::vector<iovec> buffers(send_async_data.num_buffers);
+
+  for (uint32_t i = 0; i < send_async_data.num_buffers; i++) {
+    buffers[i].iov_len = send_async_data.buffers[i].len;
+    buffers[i].iov_base = kernel_state()->memory()->TranslateVirtual<char*>(
+        send_async_data.buffers[i].buf_ptr);
+  }
+#endif
 
   sockaddr saddr = {};
   sockaddr* saddr_ptr = nullptr;
@@ -532,11 +542,34 @@ int XSocket::PollWSASendTo(bool wait, WSASendToData send_async_data,
     saddr_len = send_async_data.to_len;
   }
 
-  DWORD bytes_sent = 0;
+  uint32_t bytes_sent = 0;
 
-  const int result =
+  int result = 0;
+
+#if XE_PLATFORM_WIN32
+  result =
       ::WSASendTo(native_handle_, buffers.data(), send_async_data.num_buffers,
-                  &bytes_sent, 0, &saddr, saddr_len, nullptr, nullptr);
+                  reinterpret_cast<DWORD*>(&bytes_sent), 0, &saddr, saddr_len,
+                  nullptr, nullptr);
+#else
+  msghdr message = {};
+
+  message.msg_name = &saddr;
+  message.msg_namelen = saddr_len;
+
+  // Set scatter-gather buffers (Equivalent to WSABUF array)
+  message.msg_iov = const_cast<iovec*>(buffers.data());
+  message.msg_iovlen = buffers.size();
+
+  ssize_t sent_bytes = sendmsg(native_handle_, &message, 0);
+
+  if (sent_bytes >= 0) {
+    bytes_sent = sent_bytes;
+    result = X_ERROR_SUCCESS;
+  } else {
+    result = X_SOCKET_ERROR;
+  }
+#endif
 
   // Implicit Bind
   if (!bound_port_) {
@@ -768,11 +801,19 @@ int XSocket::PollWSARecvFrom(bool wait, WSARecvFromData receive_async_data) {
     return X_SOCKET_ERROR;
   }
 
+#if XE_PLATFORM_WIN32
   WSABUF recv_buffer = {};
 
-  recv_buffer.buf = kernel_state()->memory()->TranslateVirtual<CHAR*>(
+  recv_buffer.buf = kernel_state()->memory()->TranslateVirtual<char*>(
       receive_async_data.buffers->buf_ptr);
   recv_buffer.len = receive_async_data.buffers->len;
+#else
+  iovec recv_buffer = {};
+
+  recv_buffer.iov_base = kernel_state()->memory()->TranslateVirtual<char*>(
+      receive_async_data.buffers->buf_ptr);
+  recv_buffer.iov_len = receive_async_data.buffers->len;
+#endif
 
   sockaddr saddr = {};
 
@@ -780,8 +821,8 @@ int XSocket::PollWSARecvFrom(bool wait, WSARecvFromData receive_async_data) {
     saddr = receive_async_data.from->to_host();
   }
 
-  DWORD bytes_received = 0;
-  DWORD flags = 0;
+  uint32_t bytes_received = 0;
+  uint32_t flags = 0;
   int from_len =
       receive_async_data.from_len ? receive_async_data.from_len->get() : 0;
 
@@ -790,10 +831,38 @@ int XSocket::PollWSARecvFrom(bool wait, WSARecvFromData receive_async_data) {
     flags = receive_async_data.flags->get();
   }
 
-  const int result = ::WSARecvFrom(
+  int result = 0;
+
+#if XE_PLATFORM_WIN32
+  result = ::WSARecvFrom(
       native_handle_, &recv_buffer, receive_async_data.num_buffers,
-      &bytes_received, &flags, receive_async_data.from ? &saddr : nullptr,
+      reinterpret_cast<DWORD*>(&bytes_received),
+      reinterpret_cast<DWORD*>(&flags),
+      receive_async_data.from ? &saddr : nullptr,
       receive_async_data.from_len ? &from_len : nullptr, nullptr, nullptr);
+#else
+  sockaddr_in sender_addr = {};
+  msghdr message = {};
+
+  message.msg_name = receive_async_data.from ? &saddr : nullptr;
+  message.msg_namelen = receive_async_data.from_len ? from_len : 0;
+
+  // Setup scatter-gather destination buffers (Equivalent to WSABUF array)
+  message.msg_iov = &recv_buffer;
+  message.msg_iovlen = receive_async_data.num_buffers;
+
+  ssize_t received_bytes = recvmsg(native_handle_, &message, flags);
+
+  // Posix flags are not the same as Windows flags.
+  // flags = message.msg_flags;
+
+  if (received_bytes >= 0) {
+    bytes_received = received_bytes;
+    result = X_ERROR_SUCCESS;
+  } else {
+    result = X_SOCKET_ERROR;
+  }
+#endif
 
   const bool pending =
       XWSAGetLastError() ==
@@ -1252,6 +1321,7 @@ int XSocket::SendTo(uint8_t* buf, uint32_t buf_len, uint32_t flags,
 
 int XSocket::WSAEventSelect(uint32_t event_handle, uint64_t native_event_handle,
                             uint32_t flags) {
+#if XE_PLATFORM_WIN32
   const HANDLE hEvent =
       reinterpret_cast<HANDLE>(static_cast<uintptr_t>(native_event_handle));
   const int ret = ::WSAEventSelect(native_handle_, hEvent, flags);
@@ -1262,6 +1332,8 @@ int XSocket::WSAEventSelect(uint32_t event_handle, uint64_t native_event_handle,
   }
 
   return ret;
+#endif
+  return X_ERROR_SUCCESS;
 }
 
 bool XSocket::IsEventSelectPending(uint32_t event_handle) {
@@ -1292,7 +1364,7 @@ bool XSocket::QueuePacket(uint32_t src_ip, uint16_t src_port,
   return true;
 }
 
-X_STATUS XSocket::GetPeerName(XSOCKADDR_IN* name, int* name_len) {
+X_STATUS XSocket::GetPeerName(XSOCKADDR_IN* name, socklen_t* name_len) {
   sockaddr addr = name->to_host();
 
   int ret = getpeername(native_handle_, &addr, name_len);
@@ -1304,7 +1376,7 @@ X_STATUS XSocket::GetPeerName(XSOCKADDR_IN* name, int* name_len) {
   return X_STATUS_SUCCESS;
 }
 
-X_STATUS XSocket::GetSockName(XSOCKADDR_IN* name, int* name_len) {
+X_STATUS XSocket::GetSockName(XSOCKADDR_IN* name, socklen_t* name_len) {
   sockaddr addr = name->to_host();
 
   int ret = getsockname(native_handle_, &addr, name_len);

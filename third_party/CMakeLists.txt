@@ -831,6 +831,7 @@ ffmpeg_common(libavformat)
 # libcurl
 # ==============================================================================
 
+if(WIN32)
 file(GLOB_RECURSE CURL_SOURCES 
     "${CMAKE_CURRENT_SOURCE_DIR}/libcurl/lib/**.c" 
     "${CMAKE_CURRENT_SOURCE_DIR}/libcurl/lib/**.h"
@@ -841,6 +842,14 @@ target_include_directories(libcurl PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/libcurl/l
 target_compile_definitions(libcurl PRIVATE
   BUILDING_LIBCURL HTTP_ONLY USE_SCHANNEL USE_WINDOWS_SSPI
 )
+endif()
+
+# Linking against system library
+# Instead we should build libcurl with wolfssl
+if(LINUX)
+# find_package(CURL 8.20.0 EXACT REQUIRED)
+find_package(CURL REQUIRED)
+endif()
 
 # ==============================================================================
 # miniupnp

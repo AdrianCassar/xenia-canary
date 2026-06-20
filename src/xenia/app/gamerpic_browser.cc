@@ -426,7 +426,7 @@ void TitleGamerpicBrowser::OnDraw(ImGuiIO& io) {
 
         DrawInputTextBoxWithHint("##SearchTitleGamerpics", "415608CB",
                                  title_id_, sizeof(title_id_),
-                                 [=](std::span<const char> data) {
+                                 [this](std::span<const char> data) {
                                    return IsSupportedTitleID(data);
                                  });
 
