@@ -413,7 +413,7 @@ void UPnP::StartPeriodicPortsRefresher() {
 
   // We don't know if router supports variable lease times until we open the
   // first port.
-  auto run = [=]() {
+  auto run = [this]() {
     if (leases_supported_) {
       RefreshPorts();
     }
