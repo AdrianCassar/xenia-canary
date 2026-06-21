@@ -2,16 +2,16 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2025 Xenia Canary. All rights reserved.                          *
+ * Copyright 2026 Xenia Canary. All rights reserved.                          *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
 
-#include "xenia/kernel/util/network_adapter_manager.h"
+#include "xenia/kernel/util/network_adapter_manager_win.h"
 #include "xenia/base/cvar.h"
 #include "xenia/base/logging.h"
 
-DEFINE_string(network_guid, "", "Network Interface GUID", "Live");
+DEFINE_string(network_interface, "", "Network Interface Identifier", "Live");
 
 namespace xe {
 namespace kernel {
@@ -40,7 +40,7 @@ void NetworkAdapterManager::SelectBestInterface() {
   Initialize();
 }
 
-void NetworkAdapterManager::SetSelectedAdapterGUID(std::string guid) {
+void NetworkAdapterManager::SetSelectedAdapterIdentifier(std::string guid) {
   ResetSelectedAdapter();
 
   const auto adapter = GetAdapterFromGUID(guid);
@@ -49,14 +49,14 @@ void NetworkAdapterManager::SetSelectedAdapterGUID(std::string guid) {
     UpdateNetworkInterface(adapter.value());
   }
 
-  XELOGI(GetSelectedAdapterDesciption());
+  XELOGI(GetSelectedAdapterDescription());
 }
 
-std::string NetworkAdapterManager::GetSelectedAdapaterGUID() const {
-  return cvars::network_guid;
+std::string NetworkAdapterManager::GetSelectedAdapterIdentifier() const {
+  return cvars::network_interface;
 }
 
-std::string NetworkAdapterManager::GetSelectedAdapterDesciption() const {
+std::string NetworkAdapterManager::GetSelectedAdapterDescription() const {
   return fmt::format("Network Interface: {} {} {}", GetSelectedAdapterName(),
                      GetSelectedAdapterLocalIPString(),
                      is_WAN_routing_ ? "(WAN Routing)" : "(Non-WAN Routing)");
@@ -130,7 +130,7 @@ MacAddress NetworkAdapterManager::GetAdapterMacAddressFromGUID(
 
 std::optional<IP_ADAPTER_ADDRESSES> NetworkAdapterManager::GetSelectedAdapter()
     const {
-  return GetAdapterFromGUID(cvars::network_guid);
+  return GetAdapterFromGUID(cvars::network_interface);
 }
 
 std::string NetworkAdapterManager::GetSelectedAdapterName() const {
@@ -142,6 +142,17 @@ std::string NetworkAdapterManager::GetSelectedAdapterLocalIPString() const {
   return ip_to_string(local_ip_);
 }
 
+std::unordered_map<std::string, std::string>
+NetworkAdapterManager::GetAdaptersIdentifiers() const {
+  std::unordered_map<std::string, std::string> identifiers = {};
+
+  for (const auto& adapter : GetAdapters()) {
+    identifiers[adapter.AdapterName] = GetAdapterFriendlyName(adapter);
+  }
+
+  return identifiers;
+};
+
 bool NetworkAdapterManager::IsInterfaceSelected() const {
   return local_ip_.sin_addr.s_addr;
 }
@@ -149,7 +160,7 @@ bool NetworkAdapterManager::IsInterfaceSelected() const {
 void NetworkAdapterManager::ResetSelectedAdapter() {
   local_ip_ = {};
   is_WAN_routing_ = false;
-  OVERRIDE_string(network_guid, "");
+  OVERRIDE_string(network_interface, "");
 }
 
 std::vector<IP_ADAPTER_ADDRESSES>
@@ -238,7 +249,7 @@ bool NetworkAdapterManager::UpdateNetworkInterface(
   if (updated) {
     local_ip_ = adapter_addr.value();
     is_WAN_routing_ = IsInterfaceWANRouting(adapter_addr.value());
-    OVERRIDE_string(network_guid, adapter.AdapterName);
+    OVERRIDE_string(network_interface, adapter.AdapterName);
   }
 
   return updated;
@@ -325,8 +336,8 @@ bool NetworkAdapterManager::SelectSavedNetworkAdapter() {
 
   if (adapter.has_value()) {
     return UpdateNetworkInterface(adapter.value());
-  } else {
-    XELOGI("Interface GUID: {} not found!", cvars::network_guid);
+  } else if (!cvars::network_interface.empty()) {
+    XELOGI("Interface GUID: {} not found!", cvars::network_interface);
   }
 
   return false;
@@ -348,7 +359,7 @@ void NetworkAdapterManager::AutoSelectNetworkAdapter(
   }
 
   if (selected) {
-    XELOGI(GetSelectedAdapterDesciption());
+    XELOGI(GetSelectedAdapterDescription());
   } else {
     XELOGI("Unspecified Network Interface!");
   }

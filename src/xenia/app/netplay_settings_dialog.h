@@ -13,7 +13,7 @@
 #include <map>
 #include <ranges>
 
-#include "xenia/kernel/util/network_adapter_manager.h"
+#include "xenia/kernel/util/network_adapter_manager_interface.h"
 #include "xenia/ui/imgui_dialog.h"
 #include "xenia/ui/imgui_drawer.h"
 
@@ -24,13 +24,13 @@ class EmulatorWindow;  // Forward declaration due to circular dependency
 
 class NetplaySettingsDialog final : public ui::ImGuiDialog {
  public:
-  NetplaySettingsDialog(ui::ImGuiDrawer* imgui_drawer,
-                        EmulatorWindow* emulator_window,
-                        kernel::NetworkAdapterManager* network_dapter_manager)
+  NetplaySettingsDialog(
+      ui::ImGuiDrawer* imgui_drawer, EmulatorWindow* emulator_window,
+      kernel::NetworkAdapterManagerInterface* network_dapter_manager)
       : ui::ImGuiDialog(imgui_drawer),
         emulator_window_(emulator_window),
         network_adapter_manager_(network_dapter_manager) {
-    UpdateInterfaceGUIDs();
+    UpdateInterfaceIdentifiers();
     UpdateSelectedInterfaceItemAndIndex();
 
     UpdateAPIAddress();
@@ -45,7 +45,7 @@ class NetplaySettingsDialog final : public ui::ImGuiDialog {
   void OnDraw(ImGuiIO& io) override;
 
  private:
-  void UpdateInterfaceGUIDs();
+  void UpdateInterfaceIdentifiers();
   void UpdateSelectedInterfaceItemAndIndex();
   void RefreshInterfaces();
 
@@ -63,7 +63,7 @@ class NetplaySettingsDialog final : public ui::ImGuiDialog {
   int selected_interface_index_ = 0;
   const char* selected_network_interface_item_ = nullptr;
   std::vector<std::string> network_interfaces_;
-  std::unordered_map<std::string, std::string> network_interface_guids_;
+  std::unordered_map<std::string, std::string> network_interface_identifiers_;
 
   bool add_api_address_dialog_open_ = false;
   bool add_address_context_open_ = false;
@@ -81,14 +81,14 @@ class NetplaySettingsDialog final : public ui::ImGuiDialog {
   bool discord_ = false;
 
   EmulatorWindow* emulator_window_ = nullptr;
-  kernel::NetworkAdapterManager* network_adapter_manager_ = nullptr;
+  kernel::NetworkAdapterManagerInterface* network_adapter_manager_ = nullptr;
 };
 
 class NetplayStatusDialog final : public ui::ImGuiDialog {
  public:
-  NetplayStatusDialog(ui::ImGuiDrawer* imgui_drawer,
-                      EmulatorWindow* emulator_window,
-                      kernel::NetworkAdapterManager* network_dapter_manager)
+  NetplayStatusDialog(
+      ui::ImGuiDrawer* imgui_drawer, EmulatorWindow* emulator_window,
+      kernel::NetworkAdapterManagerInterface* network_dapter_manager)
       : ui::ImGuiDialog(imgui_drawer),
         emulator_window_(emulator_window),
         network_adapter_manager_(network_dapter_manager) {}
@@ -99,7 +99,7 @@ class NetplayStatusDialog final : public ui::ImGuiDialog {
  private:
   bool dialog_opened_ = false;
   EmulatorWindow* emulator_window_ = nullptr;
-  kernel::NetworkAdapterManager* network_adapter_manager_ = nullptr;
+  kernel::NetworkAdapterManagerInterface* network_adapter_manager_ = nullptr;
 };
 
 }  // namespace app
