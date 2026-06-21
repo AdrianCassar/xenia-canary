@@ -168,11 +168,13 @@ void NetplaySettingsDialog::OnDraw(ImGuiIO& io) {
           selected_interface_index_ = index;
           selected_network_interface_item_ = interface_name.c_str();
 
-          const auto guid_keys = std::views::keys(network_interface_guids_);
-          std::vector<std::string> guids = {guid_keys.begin(), guid_keys.end()};
+          const auto identifier_keys =
+              std::views::keys(network_interface_identifiers_);
+          std::vector<std::string> identifiers = {identifier_keys.begin(),
+                                                  identifier_keys.end()};
 
-          network_adapter_manager_->SetSelectedAdapterGUID(
-              guids.at(selected_interface_index_));
+          network_adapter_manager_->SetSelectedAdapterIdentifier(
+              identifiers.at(selected_interface_index_));
         }
 
         if (is_selected) {
@@ -377,28 +379,26 @@ void NetplaySettingsDialog::OnDraw(ImGuiIO& io) {
   }
 }
 
-void NetplaySettingsDialog::UpdateInterfaceGUIDs() {
-  for (const auto& adapter : network_adapter_manager_->GetAdapters()) {
-    const std::string guid = adapter.AdapterName;
-    const std::string interface_name =
-        network_adapter_manager_->GetAdapterFriendlyName(adapter);
+void NetplaySettingsDialog::UpdateInterfaceIdentifiers() {
+  network_interface_identifiers_ =
+      network_adapter_manager_->GetAdaptersIdentifiers();
 
-    network_interface_guids_[guid] = interface_name;
-  }
-
-  const auto network_interfaces = std::views::values(network_interface_guids_);
+  const auto network_interfaces =
+      std::views::values(network_interface_identifiers_);
   network_interfaces_ = {network_interfaces.begin(), network_interfaces.end()};
 }
 
 void NetplaySettingsDialog::UpdateSelectedInterfaceItemAndIndex() {
-  const auto guid_keys = std::views::keys(network_interface_guids_);
+  const auto identifier_keys = std::views::keys(network_interface_identifiers_);
 
   const auto it = std::ranges::find(
-      guid_keys, network_adapter_manager_->GetSelectedAdapaterGUID());
+      identifier_keys,
+      network_adapter_manager_->GetSelectedAdapterIdentifier());
 
-  if (it != guid_keys.end()) {
-    selected_interface_index_ = std::distance(guid_keys.begin(), it);
-    selected_network_interface_item_ = network_interface_guids_.at(*it).c_str();
+  if (it != identifier_keys.end()) {
+    selected_interface_index_ = std::distance(identifier_keys.begin(), it);
+    selected_network_interface_item_ =
+        network_interface_identifiers_.at(*it).c_str();
   } else {
     selected_interface_index_ = 0;
     selected_network_interface_item_ = "Unspecified Network";
@@ -407,9 +407,9 @@ void NetplaySettingsDialog::UpdateSelectedInterfaceItemAndIndex() {
 
 void NetplaySettingsDialog::RefreshInterfaces() {
   network_interfaces_.clear();
-  network_interface_guids_.clear();
+  network_interface_identifiers_.clear();
 
-  UpdateInterfaceGUIDs();
+  UpdateInterfaceIdentifiers();
   UpdateSelectedInterfaceItemAndIndex();
 }
 

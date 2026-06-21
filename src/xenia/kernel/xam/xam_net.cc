@@ -20,7 +20,7 @@
 #include "xenia/kernel/XLiveAPI.h"
 #include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/util/net_utils.h"
-#include "xenia/kernel/util/network_adapter_manager.h"
+#include "xenia/kernel/util/network_adapter_manager_interface.h"
 #include "xenia/kernel/util/shim_utils.h"
 #include "xenia/kernel/xam/xam_module.h"
 #include "xenia/kernel/xam/xam_net.h"

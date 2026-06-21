@@ -24,7 +24,7 @@
 #include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/upnp.h"
 #include "xenia/kernel/util/game_info_database.h"
-#include "xenia/kernel/util/network_adapter_manager.h"
+#include "xenia/kernel/util/network_adapter_manager_interface.h"
 #include "xenia/kernel/util/xlast.h"
 #include "xenia/memory.h"
 #include "xenia/patcher/patcher.h"
@@ -180,7 +180,7 @@ class Emulator {
     return game_info_database_.get();
   }
 
-  kernel::NetworkAdapterManager* GetNetworkAdapterManager() {
+  kernel::NetworkAdapterManagerInterface* GetNetworkAdapterManager() {
     return network_adapter_manager_.get();
   }
 
@@ -390,7 +390,8 @@ class Emulator {
   kernel::object_ref<kernel::XHostThread> plugin_loader_thread_;
   std::optional<uint32_t> title_id_;  // Currently running title ID
   std::unique_ptr<kernel::util::GameInfoDatabase> game_info_database_;
-  std::unique_ptr<kernel::NetworkAdapterManager> network_adapter_manager_;
+  std::unique_ptr<kernel::NetworkAdapterManagerInterface>
+      network_adapter_manager_;
   std::unique_ptr<kernel::UPnP> upnp_;
   std::unique_ptr<kernel::XLiveAPI> xbox_live_api_;
 
