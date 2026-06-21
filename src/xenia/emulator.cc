@@ -63,6 +63,12 @@
 #include "xenia/vfs/devices/xcontent_container_device.h"
 #include "xenia/vfs/virtual_file_system.h"
 
+#if XE_PLATFORM_WIN32
+#include "xenia/kernel/util/network_adapter_manager_win.h"
+#elif XE_PLATFORM_LINUX
+#include "xenia/kernel/util/network_adapter_manager_linux.h"
+#endif
+
 #if XE_ARCH_AMD64
 #include "xenia/cpu/backend/x64/x64_backend.h"
 #elif XE_ARCH_ARM64
