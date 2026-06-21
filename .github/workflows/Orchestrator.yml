@@ -44,16 +44,15 @@ jobs:
     if: ${{ !failure() && !cancelled() }}
     uses: ./.github/workflows/Windows_x86.yml
 
-  # Uncomment when platform support is ready:
-  # build-linux:
-  #   name: Linux (x86-64)
-  #   needs: [lint, commit-message]
-  #   if: ${{ !failure() && !cancelled() }}
-  #   uses: ./.github/workflows/Linux_x86.yml
-  #   with:
-  #     runs-on: ${{ needs.lint.outputs.runs-on }}
-  #     llvm_version: ${{ needs.lint.outputs.llvm_version }}
-  #     ubuntu_base: ${{ needs.lint.outputs.ubuntu_base }}
+  build-linux:
+    name: Linux (x86-64)
+    needs: [lint, commit-message]
+    if: ${{ !failure() && !cancelled() }}
+    uses: ./.github/workflows/Linux_x86.yml
+    with:
+      runs-on: ${{ needs.lint.outputs.runs-on }}
+      llvm_version: ${{ needs.lint.outputs.llvm_version }}
+      ubuntu_base: ${{ needs.lint.outputs.ubuntu_base }}
 
   # Uncomment when platform support is ready:
   # build-windows-arm64:
