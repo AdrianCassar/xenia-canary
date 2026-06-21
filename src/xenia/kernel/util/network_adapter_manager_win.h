@@ -2,20 +2,20 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2025 Xenia Canary. All rights reserved.                          *
+ * Copyright 2026 Xenia Canary. All rights reserved.                          *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
 
-#ifndef XENIA_KERNEL_XAM_NETWORK_ADAPTER_MANAGER
-#define XENIA_KERNEL_XAM_NETWORK_ADAPTER_MANAGER
+#ifndef XENIA_KERNEL_XAM_NETWORK_ADAPTER_MANAGER_WIN
+#define XENIA_KERNEL_XAM_NETWORK_ADAPTER_MANAGER_WIN
 
 #include <cstdint>
 #include <optional>
 #include <string>
 #include <vector>
 
-#include "xenia/kernel/util/net_utils.h"
+#include "xenia/kernel/util/network_adapter_manager_interface.h"
 
 #ifdef XE_PLATFORM_WIN32
 #include <Iphlpapi.h>
@@ -24,23 +24,19 @@
 namespace xe {
 namespace kernel {
 
-// TODO:
-// Forward declaration or abstract type to hide OS details
-class PlatformData;
-
-class NetworkAdapterManager {
+class NetworkAdapterManager : public NetworkAdapterManagerInterface {
  public:
   NetworkAdapterManager();
 
-  void Initialize();
+  void Initialize() override;
 
-  void SelectBestInterface();
+  void SelectBestInterface() override;
 
-  void SetSelectedAdapterGUID(const std::string guid);
+  void SetSelectedAdapterIdentifier(const std::string guid) override;
 
-  std::string GetSelectedAdapaterGUID() const;
+  std::string GetSelectedAdapterIdentifier() const override;
 
-  std::string GetSelectedAdapterDesciption() const;
+  std::string GetSelectedAdapterDescription() const override;
 
   std::optional<IP_ADAPTER_ADDRESSES> GetAdapterFromGUID(
       const std::string guid) const;
@@ -58,20 +54,19 @@ class NetworkAdapterManager {
 
   std::string GetSelectedAdapterName() const;
 
-  sockaddr_in GetSelectedAdapterLocalIP() const { return local_ip_; }
+  std::string GetSelectedAdapterLocalIPString() const override;
 
-  std::string GetSelectedAdapterLocalIPString() const;
+  std::unordered_map<std::string, std::string> GetAdaptersIdentifiers()
+      const override;
 
   const std::vector<IP_ADAPTER_ADDRESSES>& GetAdapters() const {
     return adapter_addresses_;
   }
 
-  bool IsSelectedAdapterWANRouting() const { return is_WAN_routing_; }
-
-  bool IsInterfaceSelected() const;
+  bool IsInterfaceSelected() const override;
 
  private:
-  void ResetSelectedAdapter();
+  void ResetSelectedAdapter() override;
 
   std::vector<IP_ADAPTER_ADDRESSES> DiscoverNetworkAdapters();
 
@@ -79,12 +74,12 @@ class NetworkAdapterManager {
 
   int32_t GetBestInterfaceIfIndex();
 
-  bool IsInterfaceWANRouting(const sockaddr_in interface_addr);
+  bool IsInterfaceWANRouting(const sockaddr_in interface_addr) override;
 
   std::optional<sockaddr_in> GetInterfaceIPFromIfIndex(
       const int32_t IfIndex) const;
 
-  bool SelectSavedNetworkAdapter();
+  bool SelectSavedNetworkAdapter() override;
 
   void AutoSelectNetworkAdapter(const int32_t best_interface_IfIndex);
 
@@ -95,13 +90,9 @@ class NetworkAdapterManager {
   std::vector<IP_ADAPTER_ADDRESSES> adapter_addresses_;
 
   int32_t best_interface_IfIndex_ = -1;
-
-  sockaddr_in local_ip_ = {};
-
-  bool is_WAN_routing_ = false;
 };
 
 }  // namespace kernel
 }  // namespace xe
 
-#endif  // XENIA_KERNEL_XAM_NETWORK_ADAPTER_MANAGER
+#endif  // XENIA_KERNEL_XAM_NETWORK_ADAPTER_MANAGER_WIN
