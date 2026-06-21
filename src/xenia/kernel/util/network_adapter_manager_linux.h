@@ -10,13 +10,7 @@
 #ifndef XENIA_KERNEL_XAM_NETWORK_ADAPTER_MANAGER_LINUX
 #define XENIA_KERNEL_XAM_NETWORK_ADAPTER_MANAGER_LINUX
 
-#include <cstdint>
-#include <optional>
-#include <string>
-#include <unordered_map>
-#include <vector>
-
-#include "xenia/kernel/util/net_utils.h"
+#include "xenia/kernel/util/network_adapter_manager_interface.h"
 
 #include <ifaddrs.h>
 #include <libudev.h>
@@ -24,19 +18,20 @@
 namespace xe {
 namespace kernel {
 
-class NetworkAdapterManager {
+class NetworkAdapterManager : public NetworkAdapterManagerInterface {
  public:
   NetworkAdapterManager();
 
-  void Initialize();
+  void Initialize() override;
 
-  void SelectBestInterface();
+  void SelectBestInterface() override;
 
-  void SetSelectedAdapterIdentifier(const std::string adapter_identifier);
+  void SetSelectedAdapterIdentifier(
+      const std::string adapter_identifier) override;
 
-  std::string GetSelectedAdapterIdentifier() const;
+  std::string GetSelectedAdapterIdentifier() const override;
 
-  std::string GetSelectedAdapterDescription() const;
+  std::string GetSelectedAdapterDescription() const override;
 
   std::optional<std::string> SearchUdevDevices(udev_enumerate* enumerate) const;
 
@@ -45,24 +40,17 @@ class NetworkAdapterManager {
 
   std::optional<std::string> GetSelectedAdapter() const;
 
-  sockaddr_in GetSelectedAdapterLocalIP() const { return local_ip_; }
+  std::string GetSelectedAdapterLocalIPString() const override;
 
-  std::string GetSelectedAdapterLocalIPString() const;
+  std::unordered_map<std::string, std::string> GetAdaptersIdentifiers()
+      const override;
 
-  std::unordered_map<std::string, std::string> GetAdaptersIdentifiers() const;
-
-  const std::vector<std::string>& GetAdapters() const {
-    return adapter_identifiers_;
-  }
-
-  bool IsSelectedAdapterWANRouting() const { return is_WAN_routing_; }
-
-  bool IsInterfaceSelected() const;
+  bool IsInterfaceSelected() const override;
 
   std::optional<std::string> GetAdapterIdentifier(std::string name);
 
  private:
-  void ResetSelectedAdapter();
+  void ResetSelectedAdapter() override;
 
   std::vector<std::string> DiscoverNetworkAdapters();
 
@@ -70,22 +58,18 @@ class NetworkAdapterManager {
 
   std::optional<std::string> GetBestInterface();
 
-  bool IsInterfaceWANRouting(const sockaddr_in interface_addr);
+  bool IsInterfaceWANRouting(const sockaddr_in interface_addr) override;
 
   std::optional<sockaddr_in> GetInterfaceIPFromName(
       const std::string name) const;
 
-  bool SelectSavedNetworkAdapter();
+  bool SelectSavedNetworkAdapter() override;
 
   void AutoSelectNetworkAdapter(const std::string best_interface_name);
 
   std::vector<std::string> adapter_identifiers_;
 
   std::string best_interface_name_;
-
-  sockaddr_in local_ip_ = {};
-
-  bool is_WAN_routing_ = false;
 };
 
 }  // namespace kernel
