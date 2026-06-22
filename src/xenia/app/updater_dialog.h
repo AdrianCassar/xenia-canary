@@ -22,7 +22,7 @@ class EmulatorWindow;  // Forward declaration due to circular dependency
 constexpr std::string_view windows_artifact_name_ =
     "xenia_canary_netplay_windows.zip";
 constexpr std::string_view linux_artifact_name_ =
-    "xenia_canary_netplay_linux.tar.xz";
+    "xenia_canary_netplay_linux.zip";
 
 class UpdaterDialog final : public ui::ImGuiDialog {
  public:
