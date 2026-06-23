@@ -11,9 +11,11 @@
 
 #include "xenia/kernel/xam/apps/xlivebase_app.h"
 
+#include <xenia/kernel/util/xex2_info.h>
 #include "xenia/base/logging.h"
 #include "xenia/emulator.h"
 #include "xenia/kernel/XLiveAPI.h"
+#include "xenia/kernel/user_module.h"
 #include "xenia/kernel/xam/unmarshaller/generic_unmarshaller.h"
 #include "xenia/kernel/xam/unmarshaller/schema_in_memory.h"
 #include "xenia/kernel/xam/unmarshaller/xaccount_getuserinfo_unmarshaller.h"
@@ -1225,7 +1227,10 @@ X_HRESULT XLiveBaseApp::XStorageEnumerate(uint32_t buffer_ptr) {
   auto user_profle =
       kernel_state_->xam_state()->GetUserProfile(unmarshaller.UserIndex());
 
-  const std::string enumeration_path = xe::to_utf8(unmarshaller.ServerPath());
+  const std::string guest_enumeration_path =
+      xe::to_utf8(unmarshaller.ServerPath());
+  const std::string host_enumeration_path_base =
+      ConvertGuestServerPathToHostServerPath(guest_enumeration_path);
 
   const uint32_t available_to_return_items =
       static_cast<uint32_t>(std::floor<uint32_t>(static_cast<uint32_t>(
@@ -1252,7 +1257,7 @@ X_HRESULT XLiveBaseApp::XStorageEnumerate(uint32_t buffer_ptr) {
   }
 
   X_STORAGE_FACILITY facility_type =
-      GetStorageFacilityTypeFromServerPath(enumeration_path);
+      GetStorageFacilityTypeFromGuestServerPath(guest_enumeration_path);
 
   if (facility_type != X_STORAGE_FACILITY::FACILITY_PER_TITLE) {
     XELOGI("{}: Unsupported Storage Facility: {}", __func__,
@@ -1260,17 +1265,23 @@ X_HRESULT XLiveBaseApp::XStorageEnumerate(uint32_t buffer_ptr) {
     return X_E_FAIL;
   }
 
-  XContentType content_type =
-      facility_type == X_STORAGE_FACILITY::FACILITY_PER_TITLE
-          ? XContentType::kPublisher
-          : XContentType::kSavedGame;
+  const auto module = kernel_state_->GetExecutableModule();
+  xe::xex2_version title_version = {};
+
+  if (module) {
+    xex2_opt_execution_info* info = nullptr;
+    module->GetOptHeader(XEX_HEADER_EXECUTION_INFO, &info);
+
+    if (info) {
+      title_version = info->version();
+    }
+  }
 
   bool route_backend =
       cvars::xstorage_backend &&
       (cvars::xstorage_user_data_backend ||
        facility_type != X_STORAGE_FACILITY::FACILITY_PER_USER_TITLE);
 
-  std::string final_enumeration_path = enumeration_path;
   bool enumerated_backend = false;
 
   if (route_backend) {
@@ -1278,8 +1289,8 @@ X_HRESULT XLiveBaseApp::XStorageEnumerate(uint32_t buffer_ptr) {
         unmarshaller.MaxResultsToReturn(), available_to_return_items);
 
     const auto enumeration_result =
-        kernel_state_->GetXboxLiveAPI()->XStorageEnumerate(enumeration_path,
-                                                           max_items);
+        kernel_state_->GetXboxLiveAPI()->XStorageEnumerate(
+            host_enumeration_path_base, max_items);
 
     const auto& enumerated_files = enumeration_result.first;
     enumerated_backend = enumeration_result.second;
@@ -1289,9 +1300,8 @@ X_HRESULT XLiveBaseApp::XStorageEnumerate(uint32_t buffer_ptr) {
       std::string filename = utf8::find_name_from_path(entry.FilePath(), '/');
 
       // Path must use /
-      std::u16string backend_item_path = xe::to_utf16(
-          std::format("{}{}", kernel_state_->GetXboxLiveAPI()->GetApiAddress(),
-                      entry.FilePath()));
+      std::u16string guest_backend_item_path = xe::to_utf16(
+          ConvertHostServerPathToGuestServerPath(entry.FilePath()));
 
       char16_t* item_path_ptr =
           std::to_address(items_path_name_array_ptr +
@@ -1300,14 +1310,14 @@ X_HRESULT XLiveBaseApp::XStorageEnumerate(uint32_t buffer_ptr) {
       uint32_t item_path_address = memory_->HostToGuestVirtual(item_path_ptr);
 
       xe::string_util::copy_and_swap_truncating(
-          item_path_ptr, backend_item_path, X_ONLINE_MAX_PATHNAME_LENGTH);
+          item_path_ptr, guest_backend_item_path, X_ONLINE_MAX_PATHNAME_LENGTH);
 
       items_array_ptr[item_index].path_name =
-          static_cast<uint32_t>(backend_item_path.size());
+          static_cast<uint32_t>(guest_backend_item_path.size());
       items_array_ptr[item_index].path_name_ptr = item_path_address;
 
       items_array_ptr[item_index].title_id = entry.TitleID();
-      items_array_ptr[item_index].title_version = entry.TitleVersion();
+      items_array_ptr[item_index].title_version = title_version.value;
       items_array_ptr[item_index].owner_puid = entry.OwnerPUID();
       items_array_ptr[item_index].country_id = entry.CountryID();
       items_array_ptr[item_index].content_type = entry.ContentType();
@@ -1340,13 +1350,14 @@ X_HRESULT XLiveBaseApp::XStorageEnumerate(uint32_t buffer_ptr) {
   }
 
   if (!route_backend || !enumerated_backend) {
-    final_enumeration_path =
-        ConvertServerPathToXStorageSymlink(enumeration_path);
+    const std::string symlink_enumeration_path =
+        ConvertGuestServerPathToHostSymlinkPath(guest_enumeration_path);
 
-    std::string filename = utf8::find_name_from_path(enumeration_path, '/');
+    std::string filename =
+        utf8::find_name_from_path(guest_enumeration_path, '/');
 
     std::string item_parent =
-        std::filesystem::path(final_enumeration_path).parent_path().string();
+        std::filesystem::path(symlink_enumeration_path).parent_path().string();
 
     // Match Wildcards: /*file.cfg and filename literal file.cfg
     std::string wildcard_item_filename = filename;
@@ -1411,13 +1422,17 @@ X_HRESULT XLiveBaseApp::XStorageEnumerate(uint32_t buffer_ptr) {
 
     for (uint32_t item_index = unmarshaller.StartingIndex();
          const auto entry : entries) {
-      std::string symlink_item_path =
-          std::format("{}\\{}", item_parent, entry->name());
-
       // Path must use /
-      // Keep server return consistent with XStorageBuildServerPath
-      std::u16string backend_storage_item_path =
-          xe::to_utf16(ConvertXStorageSymlinkToServerPath(symlink_item_path));
+      std::u16string guest_item_path;
+
+      if (auto pos = guest_enumeration_path.rfind('/');
+          pos != std::string::npos) {
+        std::string guest_item_path_parent =
+            guest_enumeration_path.substr(0, pos);
+
+        guest_item_path = xe::to_utf16(
+            fmt::format("{}/{}", guest_item_path_parent, entry->name()));
+      }
 
       char16_t* item_path_ptr =
           std::to_address(items_path_name_array_ptr +
@@ -1425,12 +1440,11 @@ X_HRESULT XLiveBaseApp::XStorageEnumerate(uint32_t buffer_ptr) {
 
       uint32_t item_path_address = memory_->HostToGuestVirtual(item_path_ptr);
 
-      xe::string_util::copy_and_swap_truncating(item_path_ptr,
-                                                backend_storage_item_path,
-                                                X_ONLINE_MAX_PATHNAME_LENGTH);
+      xe::string_util::copy_and_swap_truncating(
+          item_path_ptr, guest_item_path.c_str(), X_ONLINE_MAX_PATHNAME_LENGTH);
 
       items_array_ptr[item_index].path_name =
-          static_cast<uint32_t>(backend_storage_item_path.size());
+          static_cast<uint32_t>(guest_item_path.size());
       items_array_ptr[item_index].path_name_ptr = item_path_address;
 
       const uint32_t size_bytes = static_cast<uint32_t>(entry->size());
@@ -1439,12 +1453,11 @@ X_HRESULT XLiveBaseApp::XStorageEnumerate(uint32_t buffer_ptr) {
           XCONFIG_USER_CATEGORY, XCONFIG_USER_COUNTRY);
 
       items_array_ptr[item_index].title_id = kernel_state_->title_id();
-      items_array_ptr[item_index].title_version = 0;
-      items_array_ptr[item_index].owner_puid =
-          user_profle ? user_profle->xuid() : 0;
+      items_array_ptr[item_index].title_version = title_version.value;
+      items_array_ptr[item_index].owner_puid = 0;
       items_array_ptr[item_index].country_id = country_id;
       items_array_ptr[item_index].content_type =
-          static_cast<uint32_t>(content_type);
+          static_cast<uint32_t>(XContentType::kStorageDownload);
       items_array_ptr[item_index].storage_size =
           size_bytes;  // XStorageDownloadToMemory -> buffer_size 464F07ED
       items_array_ptr[item_index].installed_size =
@@ -1472,7 +1485,7 @@ X_HRESULT XLiveBaseApp::XStorageEnumerate(uint32_t buffer_ptr) {
       "Items: {}, Server Path: {}",
       __func__, available_to_return_items,
       results_ptr->num_items_returned.get(), unmarshaller.StartingIndex(),
-      unmarshaller.MaxResultsToReturn(), final_enumeration_path);
+      unmarshaller.MaxResultsToReturn(), guest_enumeration_path);
 
   return result;
 }
@@ -1573,12 +1586,14 @@ X_HRESULT XLiveBaseApp::XStorageDelete(uint32_t buffer_ptr) {
     return deserialize_result;
   }
 
-  std::string item_path = xe::to_utf8(unmarshaller.ServerPath());
+  const std::string guest_item_path = xe::to_utf8(unmarshaller.ServerPath());
+  const std::string host_item_path_base =
+      ConvertGuestServerPathToHostServerPath(guest_item_path);
 
   X_STATUS result = X_E_FAIL;
 
   X_STORAGE_FACILITY facility_type =
-      GetStorageFacilityTypeFromServerPath(item_path);
+      GetStorageFacilityTypeFromGuestServerPath(guest_item_path);
 
   if (facility_type != X_STORAGE_FACILITY::FACILITY_PER_USER_TITLE) {
     XELOGI("{}: Unsupported Storage Facility: {}", __func__,
@@ -1592,15 +1607,22 @@ X_HRESULT XLiveBaseApp::XStorageDelete(uint32_t buffer_ptr) {
        facility_type != X_STORAGE_FACILITY::FACILITY_PER_USER_TITLE);
 
   if (route_backend) {
-    bool deleted = kernel_state_->GetXboxLiveAPI()->XStorageDelete(item_path);
+    const std::string host_item_path =
+        kernel_state_->GetXboxLiveAPI()->BuildEndpoint(
+            fmt::format("xstorage/{}", host_item_path_base));
+
+    bool deleted =
+        kernel_state_->GetXboxLiveAPI()->XStorageDelete(host_item_path);
+
     result = deleted ? X_E_SUCCESS : X_E_FAIL;
   }
 
   if (!route_backend || result) {
-    item_path = ConvertServerPathToXStorageSymlink(item_path);
+    const std::string symlink_item_path =
+        ConvertGuestServerPathToHostSymlinkPath(guest_item_path);
 
     vfs::Entry* storage_item =
-        kernel_state_->file_system()->ResolvePath(item_path);
+        kernel_state_->file_system()->ResolvePath(symlink_item_path);
 
     if (storage_item) {
       result = storage_item->Delete() ? X_E_SUCCESS : X_E_FAIL;
@@ -1609,7 +1631,7 @@ X_HRESULT XLiveBaseApp::XStorageDelete(uint32_t buffer_ptr) {
     }
   }
 
-  XELOGI("{}: {}", __func__, item_path);
+  XELOGI("{}: {}", __func__, guest_item_path);
 
   return result;
 }
@@ -1642,21 +1664,44 @@ X_HRESULT XLiveBaseApp::XStorageDownloadToMemory(uint32_t buffer_ptr,
 
   std::span<uint8_t> download_buffer = unmarshaller.GetDownloadBuffer();
 
-  const auto user_profile =
-      kernel_state_->xam_state()->GetUserProfile(unmarshaller.UserIndex());
-
-  uint64_t xuid_owner = 0;
-
-  if (user_profile) {
-    xuid_owner = user_profile->GetOnlineXUID();
-  }
-
-  std::string item_to_download = xe::to_utf8(unmarshaller.ServerPath());
+  const std::string guest_item_to_download =
+      xe::to_utf8(unmarshaller.ServerPath());
+  const std::string host_item_to_download_base =
+      ConvertGuestServerPathToHostServerPath(guest_item_to_download);
 
   X_STATUS result = X_E_SUCCESS;
 
   X_STORAGE_FACILITY facility_type =
-      GetStorageFacilityTypeFromServerPath(item_to_download);
+      GetStorageFacilityTypeFromGuestServerPath(guest_item_to_download);
+
+  // 4C4107D6 expects correct XUID otherwise fails to load downloaded content.
+  // Since we don't return this information in the response we can try and
+  // extract it locally as a workaround.
+  uint64_t xuid_owner = 0;
+
+  const std::optional<std::smatch> parsed_path =
+      ParseGuestServerPath(guest_item_to_download);
+
+  switch (facility_type) {
+    case FACILITY_GAME_CLIP: {
+      if (parsed_path.has_value()) {
+        xuid_owner = xe::string_util::from_string<uint64_t>(
+            parsed_path.value()[1].str(), true);
+      }
+    } break;
+    case FACILITY_PER_TITLE: {
+      // What XUID would be used here?
+    } break;
+    case FACILITY_PER_USER_TITLE: {
+      if (parsed_path.has_value()) {
+        xuid_owner = xe::string_util::from_string<uint64_t>(
+            parsed_path.value()[2].str(), true);
+      }
+    } break;
+    default: {
+      // What XUID would be used for other content?
+    } break;
+  }
 
   bool route_backend =
       cvars::xstorage_backend &&
@@ -1664,8 +1709,13 @@ X_HRESULT XLiveBaseApp::XStorageDownloadToMemory(uint32_t buffer_ptr,
        facility_type != X_STORAGE_FACILITY::FACILITY_PER_USER_TITLE);
 
   if (route_backend) {
+    const std::string host_item_to_download_path =
+        kernel_state_->GetXboxLiveAPI()->BuildEndpoint(
+            fmt::format("xstorage/{}", host_item_to_download_base));
+
     const std::vector<uint8_t> buffer =
-        kernel_state_->GetXboxLiveAPI()->XStorageDownload(item_to_download);
+        kernel_state_->GetXboxLiveAPI()->XStorageDownload(
+            host_item_to_download_path);
 
     if (!buffer.empty()) {
       if (buffer.size() > download_buffer.size_bytes()) {
@@ -1680,7 +1730,7 @@ X_HRESULT XLiveBaseApp::XStorageDownloadToMemory(uint32_t buffer_ptr,
         return result;
       }
 
-      memcpy(download_buffer.data(), buffer.data(), buffer.size());
+      std::memcpy(download_buffer.data(), buffer.data(), buffer.size());
 
       // Possible solution: Use custom HTTP header or encode binary in base64
       // with metadata
@@ -1699,14 +1749,17 @@ X_HRESULT XLiveBaseApp::XStorageDownloadToMemory(uint32_t buffer_ptr,
   }
 
   if (!route_backend || result) {
-    std::string filename = utf8::find_name_from_path(item_to_download, '/');
-    item_to_download = ConvertServerPathToXStorageSymlink(item_to_download);
+    const std::string symlink_item_to_download_path =
+        ConvertGuestServerPathToHostSymlinkPath(guest_item_to_download);
+
+    std::string filename =
+        utf8::find_name_from_path(guest_item_to_download, '/');
 
     xe::vfs::File* output_file;
     xe::vfs::FileAction action = {};
 
     X_STATUS open_result = kernel_state_->file_system()->OpenFile(
-        nullptr, item_to_download, xe::vfs::FileDisposition::kOpen,
+        nullptr, symlink_item_to_download_path, xe::vfs::FileDisposition::kOpen,
         xe::vfs::FileAccess::kFileReadData, false, true, &output_file, &action);
 
     if (!open_result) {
@@ -1730,7 +1783,7 @@ X_HRESULT XLiveBaseApp::XStorageDownloadToMemory(uint32_t buffer_ptr,
           return result;
         }
 
-        memcpy(download_buffer.data(), file_data.data(), bytes_read);
+        std::memcpy(download_buffer.data(), file_data.data(), bytes_read);
 
         download_results_ptr->xuid_owner = xuid_owner;
         download_results_ptr->bytes_total = static_cast<uint32_t>(bytes_read);
@@ -1760,7 +1813,7 @@ X_HRESULT XLiveBaseApp::XStorageDownloadToMemory(uint32_t buffer_ptr,
 
   XELOGI("{}: Downloaded Bytes: {}b, Buffer Size: {}b, Server Path: {}",
          __func__, download_results_ptr->bytes_total.get(),
-         unmarshaller.BufferSize(), item_to_download);
+         unmarshaller.BufferSize(), guest_item_to_download);
 
   return result;
 }
@@ -1778,15 +1831,28 @@ X_HRESULT XLiveBaseApp::XStorageUploadFromMemory(uint32_t buffer_ptr) {
     return deserialize_result;
   }
 
+  const auto user_profile =
+      kernel_state_->xam_state()->GetUserProfile(unmarshaller.UserIndex());
+
+  // TODO:
+  // We should include content owner XUID during upload so it's available for
+  // download.
+  const uint64_t xuid_owner = user_profile ? user_profile->GetOnlineXUID() : 0;
+
   std::span<uint8_t> upload_buffer = unmarshaller.GetUploadBuffer();
 
-  std::string upload_file_path = xe::to_utf8(unmarshaller.ServerPath());
-  std::string filename = utf8::find_name_from_path(upload_file_path, '/');
+  const std::string guest_upload_file_path =
+      xe::to_utf8(unmarshaller.ServerPath());
+  const std::string host_upload_file_path_base =
+      ConvertGuestServerPathToHostServerPath(guest_upload_file_path);
+
+  std::string filename =
+      utf8::find_name_from_path(host_upload_file_path_base, '/');
 
   X_STATUS result = X_E_FAIL;
 
   X_STORAGE_FACILITY facility_type =
-      GetStorageFacilityTypeFromServerPath(upload_file_path);
+      GetStorageFacilityTypeFromGuestServerPath(guest_upload_file_path);
 
   bool route_backend =
       cvars::xstorage_backend &&
@@ -1794,8 +1860,12 @@ X_HRESULT XLiveBaseApp::XStorageUploadFromMemory(uint32_t buffer_ptr) {
        facility_type != X_STORAGE_FACILITY::FACILITY_PER_USER_TITLE);
 
   if (route_backend) {
+    const std::string host_upload_file_path =
+        kernel_state_->GetXboxLiveAPI()->BuildEndpoint(
+            fmt::format("xstorage/{}", host_upload_file_path_base));
+
     X_STORAGE_UPLOAD_RESULT uploaded_result =
-        kernel_state_->GetXboxLiveAPI()->XStorageUpload(upload_file_path,
+        kernel_state_->GetXboxLiveAPI()->XStorageUpload(host_upload_file_path,
                                                         upload_buffer);
 
     switch (uploaded_result) {
@@ -1816,10 +1886,11 @@ X_HRESULT XLiveBaseApp::XStorageUploadFromMemory(uint32_t buffer_ptr) {
   }
 
   if (!route_backend || result == X_E_FAIL) {
-    upload_file_path = ConvertServerPathToXStorageSymlink(upload_file_path);
+    const std::string symlink_upload_file_path =
+        ConvertGuestServerPathToHostSymlinkPath(guest_upload_file_path);
 
     std::string upload_file_path_parent =
-        std::filesystem::path(upload_file_path).parent_path().string();
+        std::filesystem::path(symlink_upload_file_path).parent_path().string();
 
     // Check if entry exists
     vfs::Entry* entry =
@@ -1830,7 +1901,7 @@ X_HRESULT XLiveBaseApp::XStorageUploadFromMemory(uint32_t buffer_ptr) {
       vfs::FileAction action;
 
       result = kernel_state_->file_system()->OpenFile(
-          nullptr, upload_file_path, vfs::FileDisposition::kOverwriteIf,
+          nullptr, symlink_upload_file_path, vfs::FileDisposition::kOverwriteIf,
           vfs::FileAccess::kGenericWrite, false, true, &upload_file, &action);
 
       if (!result) {
@@ -1861,7 +1932,7 @@ X_HRESULT XLiveBaseApp::XStorageUploadFromMemory(uint32_t buffer_ptr) {
   }
 
   XELOGI("{}: Size: {}b, Path: {}", __func__, unmarshaller.BufferSize(),
-         upload_file_path);
+         guest_upload_file_path);
 
   return result;
 }
@@ -1874,14 +1945,6 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
   X_STORAGE_BUILD_SERVER_PATH* args =
       memory_->TranslateVirtual<X_STORAGE_BUILD_SERVER_PATH*>(buffer_ptr);
 
-  if (!args->file_name_ptr) {
-    return X_E_INVALIDARG;
-  }
-
-  if (!args->server_path_length_ptr) {
-    return X_E_INVALIDARG;
-  }
-
   if (args->user_index >= XUserMaxUserCount &&
       args->user_index != XUserIndexNone) {
     return X_E_INVALIDARG;
@@ -1891,89 +1954,116 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
 
   if (args->user_index == XUserIndexNone) {
     xuid = args->xuid;
-  }
 
-  bool xuid_reqiured =
-      args->storage_location == X_STORAGE_FACILITY::FACILITY_PER_USER_TITLE ||
-      args->storage_location == X_STORAGE_FACILITY::FACILITY_GAME_CLIP;
-
-  if (!xuid && xuid_reqiured) {
+    if (!xuid) {
+      return X_E_INVALIDARG;
+    }
+  } else {
     xuid = kernel_state_->xam_state()
                ->GetUserProfile(args->user_index.get())
                ->GetOnlineXUID();
   }
 
-  uint8_t* filename_ptr =
-      memory_->TranslateVirtual<uint8_t*>(args->file_name_ptr);
+  if (!args->server_path_length_ptr) {
+    return X_E_INVALIDARG;
+  }
 
-  const std::u16string filename =
-      xe::load_and_swap<std::u16string>(filename_ptr);
-  const std::string filename_str = xe::to_utf8(filename);
+  auto read_filename = [args, this]() -> std::string {
+    if (!args->file_name_ptr) {
+      return "";
+    }
 
-  std::string backend_server_path_str;
-  std::string symlink_path;
+    char16_t* filename_ptr =
+        memory_->TranslateVirtual<char16_t*>(args->file_name_ptr);
 
-  std::string backend_domain_prefix = fmt::format(
-      "{}xstorage", kernel_state_->GetXboxLiveAPI()->GetApiAddress());
+    std::u16string filename =
+        xe::string_util::read_u16string_and_swap(filename_ptr);
+    std::string filename_str = xe::to_utf8(filename);
+
+    return filename_str;
+  };
+
+  // Return path in guest format and use our own host path format for backend
+  // and symlink.
+  std::u16string guest_path;
+  std::string host_path_base;
 
   std::string storage_type;
 
+  X_STORAGE_FACILITY_INFO_GAME_CLIP* game_clip_info_ptr = nullptr;
+
   switch (args->storage_location) {
     case X_STORAGE_FACILITY::FACILITY_GAME_CLIP: {
-      X_STORAGE_FACILITY_INFO_GAME_CLIP game_clip_info_ptr = {};
-
-      assert_not_zero(args->storage_location_info_ptr);
-
-      if (args->storage_location_info_ptr) {
-        game_clip_info_ptr =
-            *kernel_state_->memory()
-                 ->TranslateVirtual<X_STORAGE_FACILITY_INFO_GAME_CLIP*>(
-                     args->storage_location_info_ptr);
-
-        XELOGI("{}: Leaderboard ID: {:08X}", __func__,
-               game_clip_info_ptr.leaderboard_id.get());
+      if (!args->storage_location_info_ptr ||
+          args->storage_location_info_size !=
+              sizeof(X_STORAGE_FACILITY_INFO_GAME_CLIP)) {
+        return X_E_INVALIDARG;
       }
 
-      const uint32_t view_id = game_clip_info_ptr.leaderboard_id;
+      game_clip_info_ptr =
+          kernel_state_->memory()
+              ->TranslateVirtual<X_STORAGE_FACILITY_INFO_GAME_CLIP*>(
+                  args->storage_location_info_ptr);
+
+      // Filename can be provided but we don't use it for clips because it can
+      // be empty.
+      const std::string filename = read_filename();
+
+      XELOGI("{}: Leaderboard ID: {:08X}", __func__,
+             game_clip_info_ptr->leaderboard_id.get());
+
+      uint32_t view_id = game_clip_info_ptr->leaderboard_id;
 
       const auto stats_view =
           kernel_state_->emulator()->game_info_database()->GetStatsView(
               view_id);
 
-      const std::string path =
-          fmt::format("clips/title/{:08X}/{:016X}/{:08X}/{}",
-                      kernel_state_->title_id(), xuid, view_id, filename_str);
+      guest_path =
+          to_utf16(fmt::format("//xestats/u:{:016x}/{:08x}/{:08x}", xuid,
+                               kernel_state_->title_id(), view_id));
 
-      backend_server_path_str =
-          fmt::format("{}/{}", backend_domain_prefix, path);
-
-      symlink_path = fmt::format("{}{}", xstorage_symboliclink, path);
-      symlink_path = utf8::fix_guest_path_separators(symlink_path);
+      host_path_base = fmt::format("clips/title/{:08X}/{:016X}/{:08X}",
+                                   kernel_state_->title_id(), xuid, view_id);
 
       storage_type = "Game Clip";
     } break;
     case X_STORAGE_FACILITY::FACILITY_PER_TITLE: {
-      const std::string path = fmt::format(
-          "title/{:08X}/{}", kernel_state_->title_id(), filename_str);
+      if (args->storage_location_info_ptr || args->storage_location_info_size) {
+        return X_E_INVALIDARG;
+      }
 
-      backend_server_path_str =
-          fmt::format("{}/{}", backend_domain_prefix, path);
+      const std::string filename = read_filename();
 
-      symlink_path = fmt::format("{}{}", xstorage_symboliclink, path);
-      symlink_path = utf8::fix_guest_path_separators(symlink_path);
+      if (filename.empty()) {
+        return X_E_INVALIDARG;
+      }
+
+      guest_path = to_utf16(fmt::format("//title.{:08x}/t:{:08x}/{}",
+                                        kernel_state_->title_id(),
+                                        kernel_state_->title_id(), filename));
+
+      host_path_base =
+          fmt::format("title/{:08X}/{}", kernel_state_->title_id(), filename);
 
       storage_type = "Per Title";
     } break;
     case X_STORAGE_FACILITY::FACILITY_PER_USER_TITLE: {
-      const std::string path =
-          fmt::format("user/{:016X}/title/{:08X}/{}", xuid,
-                      kernel_state_->title_id(), filename_str);
+      if (args->storage_location_info_ptr || args->storage_location_info_size) {
+        return X_E_INVALIDARG;
+      }
 
-      backend_server_path_str =
-          fmt::format("{}/{}", backend_domain_prefix, path);
+      const std::string filename = read_filename();
 
-      symlink_path = fmt::format("{}{}", xstorage_symboliclink, path);
-      symlink_path = utf8::fix_guest_path_separators(symlink_path);
+      if (filename.empty()) {
+        return X_E_INVALIDARG;
+      }
+
+      guest_path = to_utf16(fmt::format("//tuser.{:08x}/u:{:016x}/{:08x}/{}",
+                                        kernel_state_->title_id(), xuid,
+                                        kernel_state_->title_id(), filename));
+
+      host_path_base = fmt::format("user/{:016X}/title/{:08X}/{}", xuid,
+                                   kernel_state_->title_id(), filename);
 
       storage_type = "Per User Title";
     } break;
@@ -1981,34 +2071,35 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
       return X_ONLINE_E_STORAGE_INVALID_FACILITY;
   }
 
-  const std::u16string backend_server_path =
-      xe::to_utf16(backend_server_path_str);
-
-  size_t server_path_length = backend_server_path.size();
-
-  std::vector<char16_t> server_path_buf =
-      std::vector<char16_t>(server_path_length);
-
-  size_t size_bytes = server_path_length * sizeof(char16_t);
-
-  memcpy(server_path_buf.data(), backend_server_path.c_str(), size_bytes);
-
-  // Null-terminator
-  server_path_buf.push_back(u'\0');
+  uint32_t server_path_length = 0;
 
   if (args->server_path_ptr) {
+    const size_t size_bytes = xe::string_util::size_in_bytes(guest_path, true);
+
+    // Ensure server path buffer has enough space
+    if (args->server_path_length_ptr) {
+      server_path_length = xe::load_and_swap<uint32_t>(
+          memory_->TranslateVirtual(args->server_path_length_ptr));
+
+      if (server_path_length < size_bytes) {
+        return X_E_INVALIDARG;
+      }
+    }
+
     char16_t* server_path_ptr =
         memory_->TranslateVirtual<char16_t*>(args->server_path_ptr);
 
     xe::string_util::copy_and_swap_truncating(
-        server_path_ptr, server_path_buf.data(), X_ONLINE_MAX_PATHNAME_LENGTH);
+        server_path_ptr, guest_path.data(), server_path_length);
   }
 
-  uint32_t* server_path_length_ptr =
-      memory_->TranslateVirtual<uint32_t*>(args->server_path_length_ptr);
+  if (args->server_path_length_ptr) {
+    server_path_length = guest_path.size() + 1;
 
-  *server_path_length_ptr =
-      xe::byte_swap(static_cast<uint32_t>(server_path_buf.size()));
+    xe::store_and_swap<uint32_t>(
+        memory_->TranslateVirtual(args->server_path_length_ptr),
+        server_path_length);
+  }
 
   X_STATUS result = X_E_SUCCESS;
 
@@ -2018,12 +2109,16 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
        args->storage_location != X_STORAGE_FACILITY::FACILITY_PER_USER_TITLE);
 
   if (route_backend) {
-    const std::string create_valid_path =
-        std::filesystem::path(backend_server_path_str).parent_path().string();
+    const std::string host_server_path =
+        kernel_state_->GetXboxLiveAPI()->BuildEndpoint(
+            fmt::format("xstorage/{}", host_path_base));
+
+    const std::string valid_backend_path =
+        std::filesystem::path(host_server_path).parent_path().string();
 
     X_STORAGE_BUILD_SERVER_PATH_RESULT build_result =
         kernel_state_->GetXboxLiveAPI()->XStorageBuildServerPath(
-            create_valid_path);
+            valid_backend_path);
 
     if (build_result == X_STORAGE_BUILD_SERVER_PATH_RESULT::Created ||
         build_result == X_STORAGE_BUILD_SERVER_PATH_RESULT::Found) {
@@ -2034,14 +2129,20 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
   }
 
   if (!route_backend || result) {
-    symlink_path = std::filesystem::path(symlink_path).parent_path().string();
+    const std::string symlink_path =
+        fmt::format("{}{}", xstorage_symboliclink,
+                    utf8::fix_path_separators(host_path_base));
+
+    const std::string valid_symlink_path =
+        std::filesystem::path(symlink_path).parent_path().string();
 
     // Check if entry exists
-    vfs::Entry* entry = kernel_state_->file_system()->ResolvePath(symlink_path);
+    vfs::Entry* entry =
+        kernel_state_->file_system()->ResolvePath(valid_symlink_path);
 
     if (!entry) {
       // Prepare path for splitting
-      std::string starting_dir = symlink_path;
+      std::string starting_dir = valid_symlink_path;
       std::replace(starting_dir.begin(), starting_dir.end(), ':',
                    kGuestPathSeparator);
 
@@ -2062,27 +2163,42 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
 
         // Create child entries
         vfs::Entry* entries = kernel_state_->file_system()->CreatePath(
-            symlink_path, xe::vfs::FileAttributeFlags::kFileAttributeDirectory);
+            valid_symlink_path,
+            xe::vfs::FileAttributeFlags::kFileAttributeDirectory);
 
         // Update entry
-        entry = kernel_state_->file_system()->ResolvePath(symlink_path);
+        entry = kernel_state_->file_system()->ResolvePath(valid_symlink_path);
 
         if (entry) {
           result = X_E_SUCCESS;
-          XELOGI("{}: Created Path: {}", __func__, symlink_path);
+          XELOGI("{}: Created Path: {}", __func__, valid_symlink_path);
         } else {
           result = X_E_FAIL;
-          XELOGW("{}: Failed to create path: {}", __func__, symlink_path);
+          XELOGW("{}: Failed to create path: {}", __func__, valid_symlink_path);
         }
       }
     } else {
       result = X_E_SUCCESS;
-      XELOGI("{}: Found Path: {}", __func__, symlink_path);
+      XELOGI("{}: Found Path: {}", __func__, valid_symlink_path);
     }
   }
 
-  XELOGI("{}: Filename: {}, Storage Type: {}", __func__, filename_str,
-         storage_type);
+  std::string desc = "Unknown Facility";
+
+  switch (args->storage_location) {
+    case X_STORAGE_FACILITY::FACILITY_GAME_CLIP:
+      if (game_clip_info_ptr) {
+        desc = fmt::format("Clip ID: {:08X}",
+                           game_clip_info_ptr->leaderboard_id.get());
+      }
+      break;
+    case X_STORAGE_FACILITY::FACILITY_PER_TITLE:
+    case X_STORAGE_FACILITY::FACILITY_PER_USER_TITLE:
+      desc = fmt::format("Filename: {}", read_filename());
+      break;
+  }
+
+  XELOGI("{}: {}, Storage Type: {}", __func__, desc, storage_type);
 
   return result;
 }
@@ -2243,71 +2359,6 @@ X_HRESULT XLiveBaseApp::XContentGetMarketplaceCounts(uint32_t buffer_ptr) {
          marketplace_counts_ptr->content_categories.get());
 
   return X_E_SUCCESS;
-}
-
-std::string XLiveBaseApp::ConvertServerPathToXStorageSymlink(
-    std::string server_path) {
-  std::string symlink_path = server_path;
-
-  std::string backend_domain_prefix = fmt::format(
-      "{}xstorage/", kernel_state_->GetXboxLiveAPI()->GetApiAddress());
-
-  std::string location = symlink_path.substr(backend_domain_prefix.size());
-
-  symlink_path = std::format("{}{}", xstorage_symboliclink, location);
-  symlink_path = utf8::fix_guest_path_separators(symlink_path);
-
-  return symlink_path;
-}
-
-std::string XLiveBaseApp::ConvertXStorageSymlinkToServerPath(
-    std::string symlink_path_string) {
-  std::string server_path = symlink_path_string;
-
-  server_path = symlink_path_string.substr(xstorage_symboliclink.size());
-  server_path = utf8::fix_path_separators(server_path, '/');
-
-  std::string backend_domain_prefix = fmt::format(
-      "{}xstorage", kernel_state_->GetXboxLiveAPI()->GetApiAddress());
-
-  server_path = std::format("{}/{}", backend_domain_prefix, server_path);
-
-  return server_path;
-}
-
-X_STORAGE_FACILITY XLiveBaseApp::GetStorageFacilityTypeFromServerPath(
-    std::string server_path) {
-  std::string title_facility = R"(title(/|\\)[0-9a-fA-F]{8}(/|\\))";
-  std::string clips_facility = R"(clips(/|\\))";
-  std::string user_facility = R"(user(/|\\)[0-9a-fA-F]{16}(/|\\))";
-
-  std::regex title_facility_regex(title_facility);
-  std::regex clips_facility_regex(clips_facility);
-  std::regex user_facility_regex(
-      fmt::format("{}{}", user_facility, title_facility));
-
-  X_STORAGE_FACILITY facility_type = X_STORAGE_FACILITY::FACILITY_INVALID;
-
-  if (facility_type == X_STORAGE_FACILITY::FACILITY_INVALID) {
-    if (std::regex_search(server_path, user_facility_regex)) {
-      facility_type = X_STORAGE_FACILITY::FACILITY_PER_USER_TITLE;
-    }
-  }
-
-  if (facility_type == X_STORAGE_FACILITY::FACILITY_INVALID) {
-    if (std::regex_search(server_path, clips_facility_regex)) {
-      facility_type = X_STORAGE_FACILITY::FACILITY_GAME_CLIP;
-    }
-  }
-
-  // Check per title last
-  if (facility_type == X_STORAGE_FACILITY::FACILITY_INVALID) {
-    if (std::regex_search(server_path, title_facility_regex)) {
-      facility_type = X_STORAGE_FACILITY::FACILITY_PER_TITLE;
-    }
-  }
-
-  return facility_type;
 }
 
 X_HRESULT XLiveBaseApp::XAccountGetPointsBalance(uint32_t buffer_ptr) {
@@ -2950,6 +3001,227 @@ X_HRESULT XLiveBaseApp::XPassportGetMemberName(uint32_t buffer_ptr) {
 
   return X_E_SUCCESS;
 }
+
+#pragma region XStoragePathHelpers
+
+X_STORAGE_FACILITY XLiveBaseApp::GetStorageFacilityTypeFromGuestServerPath(
+    const std::string server_path) const {
+  if (server_path.starts_with("//xestats")) {
+    return X_STORAGE_FACILITY::FACILITY_GAME_CLIP;
+  }
+
+  if (server_path.starts_with("//title")) {
+    return X_STORAGE_FACILITY::FACILITY_PER_TITLE;
+  }
+
+  if (server_path.starts_with("//tuser")) {
+    return X_STORAGE_FACILITY::FACILITY_PER_USER_TITLE;
+  }
+
+  // TODO:
+  // Avatar Editor custom gamerpics
+  // avatar/u:0009000000000000/avatarpic-l.png
+
+  return X_STORAGE_FACILITY::FACILITY_INVALID;
+}
+
+std::optional<std::smatch> XLiveBaseApp::ParseGuestServerPath(
+    const std::string& server_path) const {
+  std::optional<std::smatch> match = std::nullopt;
+  std::regex pattern;
+
+  switch (GetStorageFacilityTypeFromGuestServerPath(server_path)) {
+    case X_STORAGE_FACILITY::FACILITY_GAME_CLIP: {
+      // //xestats/u:0009000000000000/ffffffff/00000000
+      pattern = std::regex(R"(^//xestats/u:(.{16})/(.{8})/(.*)$)");
+    } break;
+    case X_STORAGE_FACILITY::FACILITY_PER_TITLE: {
+      // //title.ffffffff/t:ffffffff/File.bin
+      pattern = std::regex(R"(^//title.(.{8})/t:(.{8})/(.*)$)");
+    } break;
+    case X_STORAGE_FACILITY::FACILITY_PER_USER_TITLE: {
+      // //tuser.ffffffff/u:0009000000000000/ffffffff/File.bin
+      pattern = std::regex(R"(^//tuser.(.{8})/u:(.{16})/(.{8})/(.*)$)");
+    } break;
+    case X_STORAGE_FACILITY::FACILITY_INVALID:
+    default:
+      break;
+  }
+
+  std::smatch matches;
+  if (std::regex_search(server_path, matches, pattern)) {
+    match = matches;
+  }
+
+  return match;
+}
+
+std::string XLiveBaseApp::ConvertGuestServerPathToHostServerPath(
+    const std::string server_path) const {
+  std::string host_server_path;
+
+  const std::optional<std::smatch> parsed_guest_path =
+      ParseGuestServerPath(server_path);
+
+  if (!parsed_guest_path.has_value()) {
+    return host_server_path;
+  }
+
+  const std::smatch matches = parsed_guest_path.value();
+
+  switch (GetStorageFacilityTypeFromGuestServerPath(server_path)) {
+    case X_STORAGE_FACILITY::FACILITY_GAME_CLIP: {
+      const uint64_t xuid =
+          xe::string_util::from_string<uint64_t>(matches[1].str(), true);
+      const uint32_t title_id =
+          xe::string_util::from_string<uint32_t>(matches[2].str(), true);
+      const uint32_t leadereboard_id =
+          xe::string_util::from_string<uint32_t>(matches[3].str(), true);
+
+      host_server_path = fmt::format("clips/title/{:08X}/{:016X}/{:08X}",
+                                     title_id, xuid, leadereboard_id);
+    } break;
+    case X_STORAGE_FACILITY::FACILITY_PER_TITLE: {
+      const uint32_t title_id_1 =
+          xe::string_util::from_string<uint32_t>(matches[1].str(), true);
+      const uint32_t title_id_2 =
+          xe::string_util::from_string<uint32_t>(matches[2].str(), true);
+      const std::string filename = matches[3].str();
+
+      host_server_path = fmt::format("title/{:08X}/{}", title_id_1, filename);
+    } break;
+    case X_STORAGE_FACILITY::FACILITY_PER_USER_TITLE: {
+      const uint32_t title_id_1 =
+          xe::string_util::from_string<uint32_t>(matches[1].str(), true);
+      const uint64_t xuid =
+          xe::string_util::from_string<uint64_t>(matches[2].str(), true);
+      const uint32_t title_id_2 =
+          xe::string_util::from_string<uint32_t>(matches[3].str(), true);
+      const std::string filename = matches[4].str();
+
+      host_server_path = fmt::format("user/{:016X}/title/{:08X}/{}", xuid,
+                                     title_id_1, filename);
+    } break;
+    case X_STORAGE_FACILITY::FACILITY_INVALID:
+    default:
+      break;
+  }
+
+  return host_server_path;
+}
+
+std::string XLiveBaseApp::ConvertGuestServerPathToHostSymlinkPath(
+    const std::string server_path) const {
+  const std::string host_server_path =
+      ConvertGuestServerPathToHostServerPath(server_path);
+
+  const std::string symlink_path =
+      std::format("{}{}", xstorage_symboliclink,
+                  utf8::fix_path_separators(host_server_path));
+
+  return symlink_path;
+}
+
+X_STORAGE_FACILITY XLiveBaseApp::GetStorageFacilityTypeFromHostServerPath(
+    const std::string server_path) const {
+  if (server_path.starts_with("xstorage/clip")) {
+    return X_STORAGE_FACILITY::FACILITY_GAME_CLIP;
+  }
+
+  if (server_path.starts_with("xstorage/title")) {
+    return X_STORAGE_FACILITY::FACILITY_PER_TITLE;
+  }
+
+  if (server_path.starts_with("xstorage/user")) {
+    return X_STORAGE_FACILITY::FACILITY_PER_USER_TITLE;
+  }
+
+  return X_STORAGE_FACILITY::FACILITY_INVALID;
+}
+
+std::optional<std::smatch> XLiveBaseApp::ParseHostServerPath(
+    const std::string& server_path) const {
+  std::optional<std::smatch> match = std::nullopt;
+  std::regex pattern;
+
+  switch (GetStorageFacilityTypeFromHostServerPath(server_path)) {
+    case X_STORAGE_FACILITY::FACILITY_GAME_CLIP: {
+      // xstorage/clips/title/FFFFFFFF/0009000000000000/00000000
+      pattern = std::regex(R"(^xstorage/clips/title/(.{8})/(.{16})/(.*)$)");
+    } break;
+    case X_STORAGE_FACILITY::FACILITY_PER_TITLE: {
+      // xstorage/title/FFFFFFFF/File.bin
+      pattern = std::regex(R"(^xstorage/title/(.{8})/(.*)$)");
+    } break;
+    case X_STORAGE_FACILITY::FACILITY_PER_USER_TITLE: {
+      // xstorage/user/0009000000000000/title/FFFFFFFF/File.bin
+      pattern = std::regex(R"(^xstorage/user/(.{16})/title/(.{8})/(.*)$)");
+    } break;
+    case X_STORAGE_FACILITY::FACILITY_INVALID:
+    default:
+      break;
+  }
+
+  std::smatch matches;
+  if (std::regex_search(server_path, matches, pattern)) {
+    match = matches;
+  }
+
+  return match;
+}
+
+std::string XLiveBaseApp::ConvertHostServerPathToGuestServerPath(
+    const std::string server_path) const {
+  std::string guest_server_path;
+
+  const std::optional<std::smatch> parsed_guest_path =
+      ParseHostServerPath(server_path);
+
+  if (!parsed_guest_path.has_value()) {
+    return guest_server_path;
+  }
+
+  const std::smatch matches = parsed_guest_path.value();
+
+  switch (GetStorageFacilityTypeFromHostServerPath(server_path)) {
+    case X_STORAGE_FACILITY::FACILITY_GAME_CLIP: {
+      const uint32_t title_id =
+          xe::string_util::from_string<uint32_t>(matches[1].str(), true);
+      const uint64_t xuid =
+          xe::string_util::from_string<uint64_t>(matches[2].str(), true);
+      const uint32_t view_id =
+          xe::string_util::from_string<uint32_t>(matches[3].str(), true);
+
+      guest_server_path = fmt::format("//xestats/u:{:016x}/{:08x}/{:08x}", xuid,
+                                      title_id, view_id);
+    } break;
+    case X_STORAGE_FACILITY::FACILITY_PER_TITLE: {
+      const uint32_t title_id =
+          xe::string_util::from_string<uint32_t>(matches[1].str(), true);
+      const std::string filename = matches[2].str();
+
+      guest_server_path = fmt::format("//title.{:08x}/t:{:08x}/{}", title_id,
+                                      title_id, filename);
+    } break;
+    case X_STORAGE_FACILITY::FACILITY_PER_USER_TITLE: {
+      const uint64_t xuid =
+          xe::string_util::from_string<uint64_t>(matches[1].str(), true);
+      const uint32_t title_id =
+          xe::string_util::from_string<uint32_t>(matches[2].str(), true);
+      const std::string filename = matches[3].str();
+
+      guest_server_path = fmt::format("//tuser.{:08x}/u:{:016x}/{:08x}/{}",
+                                      title_id, xuid, title_id, filename);
+    } break;
+    case X_STORAGE_FACILITY::FACILITY_INVALID:
+    default:
+      break;
+  }
+
+  return guest_server_path;
+}
+
+#pragma endregion
 
 }  // namespace apps
 }  // namespace xam

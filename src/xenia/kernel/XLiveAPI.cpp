@@ -1695,7 +1695,6 @@ std::unique_ptr<FriendsPresenceObjectJSON> XLiveAPI::GetFriendsPresence(
 
 X_STORAGE_BUILD_SERVER_PATH_RESULT XLiveAPI::XStorageBuildServerPath(
     std::string server_path) {
-  // Remove address it's added later
   std::string endpoint = server_path;
 
   X_STORAGE_BUILD_SERVER_PATH_RESULT result =
@@ -1731,7 +1730,6 @@ X_STORAGE_BUILD_SERVER_PATH_RESULT XLiveAPI::XStorageBuildServerPath(
 }
 
 bool XLiveAPI::XStorageDelete(std::string server_path) {
-  // Remove address it's added later
   std::string endpoint = server_path;
 
   std::unique_ptr<HTTPResponseObjectJSON> response = Delete(endpoint);
@@ -1747,7 +1745,6 @@ bool XLiveAPI::XStorageDelete(std::string server_path) {
 }
 
 std::vector<uint8_t> XLiveAPI::XStorageDownload(std::string server_path) {
-  // Remove address it's added later
   std::string endpoint = server_path;
 
   std::unique_ptr<HTTPResponseObjectJSON> response = Get(endpoint);
@@ -1775,7 +1772,6 @@ std::vector<uint8_t> XLiveAPI::XStorageDownload(std::string server_path) {
 
 X_STORAGE_UPLOAD_RESULT XLiveAPI::XStorageUpload(std::string server_path,
                                                  std::span<uint8_t> buffer) {
-  // Remove address it's added later
   std::string endpoint = server_path;
 
   X_STORAGE_UPLOAD_RESULT result = X_STORAGE_UPLOAD_RESULT::UPLOAD_ERROR;
@@ -1805,24 +1801,24 @@ X_STORAGE_UPLOAD_RESULT XLiveAPI::XStorageUpload(std::string server_path,
 
 std::pair<std::unique_ptr<XStorageFilesInfoObjectJSON>, bool>
 XLiveAPI::XStorageEnumerate(std::string server_path, uint32_t max_items) {
-  const size_t prefix_size =
-      GetApiAddress().size() + std::string("xstorage/").size();
-
-  std::string url_to_encode = server_path.substr(prefix_size);
-
   CURL* curl = curl_easy_init();
 
-  char* encoded_url = curl_easy_escape(curl, url_to_encode.c_str(),
-                                       static_cast<int>(url_to_encode.size()));
+  if (!curl) {
+    return {};
+  }
 
-  curl_easy_cleanup(curl);
+  char* encoded_url = curl_easy_escape(curl, server_path.c_str(),
+                                       static_cast<int>(server_path.size()));
+
+  if (!encoded_url) {
+    return {};
+  }
 
   std::string endpoint =
-      BuildEndpoint("xstorage/enumerate/" + std::string(encoded_url));
+      BuildEndpoint(fmt::format("xstorage/enumerate/{}", encoded_url));
 
-  if (encoded_url) {
-    curl_free(encoded_url);
-  }
+  curl_free(encoded_url);
+  curl_easy_cleanup(curl);
 
   std::pair<std::unique_ptr<XStorageFilesInfoObjectJSON>, bool>
       enumeration_result = {};
