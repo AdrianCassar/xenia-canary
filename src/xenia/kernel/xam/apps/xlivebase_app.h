@@ -61,13 +61,6 @@ class XLiveBaseApp : public App {
   X_HRESULT XUserFindUsers(uint32_t buffer_ptr);
   X_HRESULT XContentGetMarketplaceCounts(uint32_t buffer_ptr);
 
-  std::string ConvertServerPathToXStorageSymlink(
-      std::string server_path_string);
-  std::string ConvertXStorageSymlinkToServerPath(
-      std::string symlink_path_string);
-  X_STORAGE_FACILITY GetStorageFacilityTypeFromServerPath(
-      std::string server_path);
-
   X_HRESULT XGetBannerList(uint32_t buffer_ptr);
   X_HRESULT XAccountGetPointsBalance(uint32_t buffer_ptr);
   X_HRESULT XGetBannerListHot(uint32_t buffer_ptr);
@@ -85,6 +78,22 @@ class XLiveBaseApp : public App {
   X_HRESULT XOnlineGetWebServiceTaskBufferSize(uint32_t buffer_ptr);
 
   X_HRESULT XPassportGetMemberName(uint32_t buffer_ptr);
+
+  X_STORAGE_FACILITY GetStorageFacilityTypeFromGuestServerPath(
+      const std::string server_path) const;
+  std::optional<std::smatch> ParseGuestServerPath(
+      const std::string& server_path) const;
+  std::string ConvertGuestServerPathToHostServerPath(
+      const std::string server_path) const;
+  std::string ConvertGuestServerPathToHostSymlinkPath(
+      const std::string server_path) const;
+
+  X_STORAGE_FACILITY GetStorageFacilityTypeFromHostServerPath(
+      const std::string server_path) const;
+  std::optional<std::smatch> ParseHostServerPath(
+      const std::string& server_path) const;
+  std::string ConvertHostServerPathToGuestServerPath(
+      const std::string server_path) const;
 
   const uint32_t kAsyncSchemaIndexMask = 0x50000;
 
