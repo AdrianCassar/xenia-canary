@@ -10,6 +10,7 @@ from datetime import datetime
 from multiprocessing import Pool
 from functools import partial
 from argparse import ArgumentParser, ArgumentTypeError
+from typing import TypedDict
 from glob import glob
 from json import loads as jsonloads
 import os
@@ -19,6 +20,7 @@ from shutil import rmtree
 import subprocess
 import sys
 import stat
+from urllib.parse import urlparse
 import enum
 
 __author__ = "ben.vanik@gmail.com (Ben Vanik)"
@@ -83,6 +85,12 @@ class bcolors:
     ENDC = "\033[0m"
 #    BOLD = "\033[1m"
 #    UNDERLINE = "\033[4m"
+
+class RemoteInfo(TypedDict):
+    type: str
+    host: str
+    owner: str
+    name: str
 
 def print_error(text: str):
     print(f"{bcolors.FAIL}ERROR: {text}{bcolors.ENDC}")
@@ -452,7 +460,7 @@ def generate_version_h(build_dir="build"):
     pr_number = None
 
     if git_is_repository():
-        (branch_name, commit, commit_short) = git_get_head_info()
+        (branch_name, remote_info, commit, commit_short) = git_get_head_info()
 
         if is_pull_request():
             pr_number = get_pr_number()
@@ -468,6 +476,9 @@ def generate_version_h(build_dir="build"):
 #define XE_BUILD_BRANCH "{branch_name}"
 #define XE_BUILD_COMMIT "{commit}"
 #define XE_BUILD_COMMIT_SHORT "{commit_short}"
+#define XE_BUILD_REMOTE_OWNER "{remote_info['owner']}"
+#define XE_BUILD_REMOTE_NAME "{remote_info['name']}"
+#define XE_BUILD_REMOTE_HOST "{remote_info['host']}"
 #define XE_BUILD_DATE __DATE__
 """
 
@@ -550,6 +561,35 @@ def git_get_head_info():
         ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     (stdout, stderr) = p.communicate()
     branch_name = stdout.decode("ascii").strip() or "detached"
+    if branch_name != "detached":
+        p = subprocess.Popen([
+            "git",
+            "rev-parse",
+            "--abbrev-ref",
+            "--symbolic-full-name",
+            '@{push}'
+            ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        (stdout, stderr) = p.communicate()
+        remote_path = stdout.decode("ascii").strip() or "unknown"
+        remote_name = (remote_path).split("/")[0]
+        print(f"Remote name: {remote_name}")
+        if remote_name != "unknown":
+            p = subprocess.Popen([
+                "git",
+                "remote",
+                "get-url",
+                remote_name
+                ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            (stdout, stderr) = p.communicate()
+            remote_url = stdout.decode("ascii").strip() or "unknown"
+            remote_info: RemoteInfo = git_parse_remote(remote_url)
+    else:
+        remote_info: RemoteInfo = {
+            "type": "unknown",
+            "host": "unknown",
+            "name": "unknown",
+            "owner": "unknown"
+        }
     p = subprocess.Popen([
         "git",
         "rev-parse",
@@ -565,7 +605,65 @@ def git_get_head_info():
         ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     (stdout, stderr) = p.communicate()
     commit_short = stdout.decode("ascii").strip() or "unknown"
-    return branch_name, commit, commit_short
+    return branch_name, remote_info, commit, commit_short
+
+def git_parse_remote(remote_url: str) -> RemoteInfo:
+    """Parses a git remote url and returns a dict
+
+    A remote url should 
+    Args:
+        remote_url: remote url as output by `git remote get-url`
+
+    Returns:
+      RemoteInfo: dict of remote information. all values unknown in case of an unsupported remote type
+    """
+    remote_info: RemoteInfo = {
+        "type": "unknown",
+        "host": "unknown",
+        "owner": "unknown",
+        "name": "unknown",
+    }
+    unsupported_remote_config = False
+    supported_schemes = ["ssh", "http", "https", "git"]
+    if "@" in remote_url:
+        # remove leading ssh:// for parsing in case it's there
+        remote_url = remote_url.replace("ssh://", "")
+        # if @ in remote name we'll assume it's an ssh remote
+        # we'll need to reformat the standard git@github.com:OWNER/REPO.git to parse it
+        # handle situations where a port is specified in the url:
+        if remote_url.count(":" == 2):
+            # eg git@example.com:2222:OWNER/REPOSITORY.git -> git@example.com/OWNER/REPOSITORY.git
+            remote_url = remote_url.split(":")[0] + "/" + remote_url.split(":")[2]
+        elif remote_url.count(":" == 1):
+            # eg git@example.com:OWNER/REPOSITORY.git -> git@example.com/OWNER/REPOSITORY.git
+            remote_url = remote_url.replace(":", "/", 1)
+        else:
+            # that's not a real URL by any standard
+            unsupported_remote_config = True
+        remote_url = "ssh://" + remote_url
+
+    parsed_remote_url = urlparse(remote_url)
+
+    if (
+        # Do not support paths of greater than 2 parts:
+        parsed_remote_url.path.count("/") > 2 or
+        parsed_remote_url.scheme not in supported_schemes
+    ):
+        unsupported_remote_config = True
+
+    if unsupported_remote_config:
+        return remote_info
+    else:
+        remote_info["type"] = parsed_remote_url.scheme
+        remote_info["host"] = parsed_remote_url.hostname
+        remote_info["owner"] = parsed_remote_url.path.split("/")[1]
+        repo_name = parsed_remote_url.path.split("/")[2]
+        if repo_name.endswith(".git"):
+            remote_info["name"] = repo_name[:len(repo_name)-4]
+        else:
+            remote_info["name"] = repo_name
+    return remote_info
+
 
 
 def git_is_repository():

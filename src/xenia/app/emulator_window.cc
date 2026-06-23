@@ -208,7 +208,8 @@ EmulatorWindow::EmulatorWindow(Emulator* emulator,
                 XE_BUILD_BRANCH "@" XE_BUILD_COMMIT_SHORT " on " XE_BUILD_DATE
                 ")";
 
-  updater_ = std::make_shared<Updater>("AdrianCassar", "xenia-canary");
+  updater_ =
+      std::make_shared<Updater>(XE_BUILD_REMOTE_OWNER, XE_BUILD_REMOTE_NAME);
 
   LoadRecentlyLaunchedTitles();
 }
@@ -994,9 +995,9 @@ bool EmulatorWindow::Initialize() {
         std::bind(&EmulatorWindow::ShowBuildCommit, this)));
     help_menu->AddChild(MenuItem::Create(
         MenuItem::Type::kString, "Recent changes on GitHub...", []() {
-          LaunchWebBrowser(
-              "https://github.com/AdrianCassar/xenia-canary/"
-              "compare/" XE_BUILD_COMMIT "..." XE_BUILD_BRANCH);
+          LaunchWebBrowser("https://" XE_BUILD_REMOTE_HOST
+                           "/" XE_BUILD_REMOTE_OWNER "/" XE_BUILD_REMOTE_NAME
+                           "/compare/" XE_BUILD_COMMIT "..." XE_BUILD_BRANCH);
         }));
     help_menu->AddChild(MenuItem::Create(MenuItem::Type::kSeparator));
     help_menu->AddChild(MenuItem::Create(
@@ -1877,11 +1878,11 @@ void EmulatorWindow::ShowFAQ() {
 
 void EmulatorWindow::ShowBuildCommit() {
 #ifdef XE_BUILD_IS_PR
-  LaunchWebBrowser(
-      "https://github.com/AdrianCassar/xenia-canary/pull/" XE_BUILD_PR_NUMBER);
+  LaunchWebBrowser("https://" XE_BUILD_REMOTE_HOST "/" XE_BUILD_REMOTE_OWNER
+                   "/" XE_BUILD_REMOTE_NAME "/pull/" XE_BUILD_PR_NUMBER);
 #else
-  LaunchWebBrowser(
-      "https://github.com/AdrianCassar/xenia-canary/commit/" XE_BUILD_COMMIT);
+  LaunchWebBrowser("https://" XE_BUILD_REMOTE_HOST "/" XE_BUILD_REMOTE_OWNER
+                   "/" XE_BUILD_REMOTE_NAME "/commit/" XE_BUILD_COMMIT);
 #endif
 }
 
