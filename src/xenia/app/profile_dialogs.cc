@@ -155,6 +155,14 @@ void ProfileConfigDialog::LoadProfileIcon(const uint64_t xuid) {
                             : imgui_drawer()->LoadImGuiIcon(profile_icon);
 }
 
+void ProfileConfigDialog::LoadSignedInProfilesCount() {
+  signed_in_profiles_count_ = emulator_window_->emulator()
+                                  ->kernel_state()
+                                  ->xam_state()
+                                  ->profile_manager()
+                                  ->SignedInProfilesCount();
+}
+
 void ProfileConfigDialog::OnDraw(ImGuiIO& io) {
   if (!emulator_window_->emulator() ||
       !emulator_window_->emulator()->kernel_state() ||
@@ -211,6 +219,12 @@ void ProfileConfigDialog::OnDraw(ImGuiIO& io) {
   const ImVec2 next_window_position =
       ImVec2(ImGui::GetWindowPos().x + ImGui::GetWindowSize().x + 20.f,
              ImGui::GetWindowPos().y);
+
+  // Load profile icon for profiles created while dialog is rendering.
+  if (signed_in_profiles_count_ != profile_manager->SignedInProfilesCount()) {
+    LoadProfileIcon();
+    signed_in_profiles_count_ = profile_manager->SignedInProfilesCount();
+  }
 
   // Scroll instead of running off the window, keeping Create Profile visible.
   const ImGuiViewport* viewport = ImGui::GetMainViewport();
