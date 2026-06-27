@@ -1409,33 +1409,33 @@ bool XLiveAPI::SessionPropertiesSet(uint64_t session_id, uint64_t xuid) {
         kernel_state()->emulator()->game_info_database()->GetContext(
             context_attribute.value);
 
-    if (!context_property.has_value()) {
-      XELOGI("{}: Context {:08X} not found in SPA!", __func__,
-             context_attribute.value);
-    }
+    if (context_property.has_value()) {
+      if (context_property->is_matchmaking) {
+        const xam::Property* property =
+            kernel_state()->xam_state()->user_tracker()->GetProperty(
+                user_profile->xuid(), context_attribute.value);
 
-    if (context_property.has_value() && context_property->is_matchmaking) {
-      const xam::Property* property =
-          kernel_state()->xam_state()->user_tracker()->GetProperty(
-              user_profile->xuid(), context_attribute.value);
-
-      if (property) {
-        properties.push_back(*property);
+        if (property) {
+          properties.push_back(*property);
+        } else {
+          XELOGI("{}: Context {:08X} is unset!", __func__,
+                 context_attribute.value);
+        }
       } else {
-        XELOGI("{}: Context {:08X} is unset!", __func__,
-               context_attribute.value);
+        const std::string description = string_util::remove_eol(
+            string_util::trim(context_property->description));
+
+        if (description.empty()) {
+          XELOGI("{}: Skipping non-matchmaking context: {:08X}", __func__,
+                 context_attribute.value);
+        } else {
+          XELOGI("{}: Skipping non-matchmaking context: {} {:08X}", __func__,
+                 description, context_attribute.value);
+        }
       }
     } else {
-      const std::string description = string_util::remove_eol(
-          string_util::trim(context_property->description));
-
-      if (description.empty()) {
-        XELOGI("{}: Skipping non-matchmaking context: {:08X}", __func__,
-               context_attribute.value);
-      } else {
-        XELOGI("{}: Skipping non-matchmaking context: {} {:08X}", __func__,
-               description, context_attribute.value);
-      }
+      XELOGI("{}: Context {:08X} not found in SPA!", __func__,
+             context_attribute.value);
     }
   }
 
