@@ -44,6 +44,7 @@ class ProfileConfigDialog final : public ui::ImGuiDialog {
                       EmulatorWindow* emulator_window)
       : ui::ImGuiDialog(imgui_drawer), emulator_window_(emulator_window) {
     LoadProfileIcon();
+    LoadSignedInProfilesCount();
   }
 
  protected:
@@ -53,10 +54,13 @@ class ProfileConfigDialog final : public ui::ImGuiDialog {
   void LoadProfileIcon();
   void LoadProfileIcon(const uint64_t xuid);
 
+  void LoadSignedInProfilesCount();
+
   std::map<uint64_t, std::unique_ptr<ui::ImmediateTexture>> profile_icon_;
   std::map<uint64_t, kernel::xam::GamerPictureKey> profile_gamerpic_key_;
 
   uint64_t selected_xuid_ = 0;
+  uint8_t signed_in_profiles_count_ = 0;
   EmulatorWindow* emulator_window_;
 };
 
