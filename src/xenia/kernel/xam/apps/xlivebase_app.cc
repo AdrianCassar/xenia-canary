@@ -342,7 +342,7 @@ X_HRESULT XLiveBaseApp::ExecuteDispatchMessage(uint32_t message,
   auto xlivebase_log = fmt::format(
       "{} XLIVEBASE message app={:08X}, msg={:08X}, buffer_ptr={:08X}, "
       "buffer_length={:08X}",
-      cvars::stub_xlivebase ? "Stubbed" : "Unimplemented", app_id(), message,
+      cvars::stub_xlivebase ? "Stubbed" : "Unimplemented", app_id(), message_id,
       buffer_ptr, buffer_length);
 
   XELOGE("{}", xlivebase_log);
