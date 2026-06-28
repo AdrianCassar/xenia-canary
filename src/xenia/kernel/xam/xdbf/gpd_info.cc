@@ -7,9 +7,11 @@
  ******************************************************************************
  */
 
-#include "xenia/kernel/xam/xdbf/gpd_info.h"
+#include <ranges>
+
 #include "xenia/kernel/util/shim_utils.h"
 #include "xenia/kernel/xam/user_settings.h"
+#include "xenia/kernel/xam/xdbf/gpd_info.h"
 
 namespace xe {
 namespace kernel {
@@ -55,6 +57,22 @@ void GpdInfo::AddImage(uint32_t id, std::span<const uint8_t> image_data) {
   memcpy(new_entry.data.data(), image_data.data(), image_data.size());
 
   UpsertEntry(&new_entry);
+}
+
+std::vector<uint32_t> GpdInfo::GetSettingIds() const {
+  std::vector<uint32_t> ids;
+
+  auto settings = entries_ | std::views::filter([](const auto& entry) {
+                    return !IsSyncEntry(&entry);
+                  }) |
+                  std::views::filter([](const auto& entry) {
+                    return IsEntryOfSection(&entry, GpdSection::kSetting);
+                  });
+
+  for (const auto& setting : settings) {
+    ids.push_back(static_cast<uint32_t>(setting.info.id));
+  }
+  return ids;
 }
 
 X_XDBF_GPD_SETTING_HEADER* GpdInfo::GetSetting(uint32_t id) {
