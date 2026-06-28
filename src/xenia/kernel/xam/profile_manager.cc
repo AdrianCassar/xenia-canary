@@ -669,6 +669,8 @@ void ProfileManager::SetDefaultXboxLiveEnabledAccountSettings(
 
   account.SetSubscriptionTier(
       X_XAMACCOUNTINFO::AccountSubscriptionTier::kSubscriptionTierGold);
+
+  account.SetXboxLiveServiceProvider(X_XAMACCOUNTINFO::ProductionNet);
 }
 
 bool ProfileManager::UpdateAccount(const uint64_t xuid,
@@ -809,6 +811,7 @@ bool ProfileManager::ConvertToOfflineProfile(const uint64_t xuid) {
     account_info.ToggleLiveFlag(false);
     account_info.SetSubscriptionTier(
         X_XAMACCOUNTINFO::AccountSubscriptionTier::kSubscriptionTierNone);
+    account_info.SetXboxLiveServiceProvider(X_XAMACCOUNTINFO::LiveDisabled);
 
     return true;
   };
