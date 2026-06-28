@@ -151,6 +151,9 @@ static constexpr const char* AccountSubscription[] = {
     "None",  nullptr, nullptr, "Silver", nullptr,
     nullptr, "Gold",  nullptr, nullptr,  "Family"};
 
+static constexpr const char* AccountServiceProvider[] = {
+    "None", "ProductionNet", "PartnerNet"};
+
 static constexpr const char* XGamerzoneName[] = {"None", "Recreation", "Pro",
                                                  "Family", "Underground"};
 
@@ -250,6 +253,12 @@ void GamercardUI::LoadGamercardInfo() {
 
   gamercardOriginalValues_.account_subscription_tier =
       account_data->GetSubscriptionTier();
+
+  gamercardOriginalValues_.account_service_provider =
+      account_data->GetXboxLiveServiceProvider();
+  gamercardOriginalValues_.account_service_provider_index =
+      GetServiceProviderIndex(
+          gamercardOriginalValues_.account_service_provider);
 
   if (is_signed_in_) {
     // GPD settings to load
@@ -450,6 +459,19 @@ void GamercardUI::DrawOnlineSettings(ImGuiIO& io) {
                    std::size(gamercardValues_.online_domain),
                    ImGuiInputTextFlags_ReadOnly);
 
+  ImGui::Text("Service Provider:");
+  ImGui::SameLine(leftSideTextObjectAlignment);
+
+  ImGui::BeginDisabled(true);
+  if (ImGui::Combo("###ServiceProvider",
+                   &gamercardValues_.account_service_provider_index,
+                   AccountServiceProvider,
+                   static_cast<int>(std::size(AccountServiceProvider)))) {
+    gamercardValues_.account_service_provider = GetServiceProviderFromIndex(
+        gamercardValues_.account_service_provider_index);
+  }
+  ImGui::EndDisabled();
+
   ImGui::BeginDisabled(!gamercardValues_.is_live_enabled);
   DrawSettingComboBox(
       UserSettingId::XPROFILE_GAMERCARD_ZONE, "Gamer Zone", XGamerzoneName,
@@ -612,6 +634,40 @@ void GamercardUI::OnDraw(ImGuiIO& io) {
   ImGui::EndPopup();
 }
 
+X_XAMACCOUNTINFO::AccountXboxLiveServiceProvider
+GamercardUI::GetServiceProviderFromIndex(uint32_t index) {
+  switch (index) {
+    case 0: {
+      return X_XAMACCOUNTINFO::AccountXboxLiveServiceProvider::LiveDisabled;
+    } break;
+    case 1: {
+      return X_XAMACCOUNTINFO::AccountXboxLiveServiceProvider::ProductionNet;
+    } break;
+    case 2: {
+      return X_XAMACCOUNTINFO::AccountXboxLiveServiceProvider::PartnerNet;
+    } break;
+  }
+
+  return X_XAMACCOUNTINFO::AccountXboxLiveServiceProvider::LiveDisabled;
+}
+
+uint32_t GamercardUI::GetServiceProviderIndex(
+    X_XAMACCOUNTINFO::AccountXboxLiveServiceProvider service_provider) {
+  switch (service_provider) {
+    case X_XAMACCOUNTINFO::AccountXboxLiveServiceProvider::LiveDisabled: {
+      return 0;
+    } break;
+    case X_XAMACCOUNTINFO::AccountXboxLiveServiceProvider::ProductionNet: {
+      return 1;
+    } break;
+    case X_XAMACCOUNTINFO::AccountXboxLiveServiceProvider::PartnerNet: {
+      return 2;
+    } break;
+  }
+
+  return 0;
+}
+
 void GamercardUI::SaveAccountData() {
   const auto account_original =
       *kernel_state()->xam_state()->profile_manager()->GetAccount(xuid_);
@@ -627,6 +683,7 @@ void GamercardUI::SaveAccountData() {
   account.SetLanguage(gamercardValues_.language);
   account.SetSubscriptionTier(gamercardValues_.account_subscription_tier);
   account.ToggleLiveFlag(gamercardValues_.is_live_enabled);
+  account.SetXboxLiveServiceProvider(gamercardValues_.account_service_provider);
 
   const std::u16string gamertag =
       xe::to_utf16(std::string(gamercardValues_.gamertag));

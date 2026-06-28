@@ -26,6 +26,8 @@ struct GamercardSettings {
   char online_xuid[0x11];
   char online_domain[0x14];
   X_XAMACCOUNTINFO::AccountSubscriptionTier account_subscription_tier;
+  X_XAMACCOUNTINFO::AccountXboxLiveServiceProvider account_service_provider;
+  int account_service_provider_index;
 
   // GPD settings
   std::map<UserSettingId, UserDataTypes> gpd_settings;
@@ -70,6 +72,11 @@ class GamercardUI final : public XamDialog {
       std::function<bool(std::span<char>)> on_input_change = {});
 
   void SelectNewIcon();
+
+  X_XAMACCOUNTINFO::AccountXboxLiveServiceProvider GetServiceProviderFromIndex(
+      uint32_t index);
+  uint32_t GetServiceProviderIndex(
+      X_XAMACCOUNTINFO::AccountXboxLiveServiceProvider service_provider);
 
   const uint64_t xuid_ = 0;
   const bool is_signed_in_ = false;
