@@ -747,43 +747,33 @@ std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::RegisterPlayer(
 
   std::map<uint32_t, std::vector<xam::UserSetting>> settings;
 
-  const std::set<xam::UserSettingId> default_dashboard_settings = {
-      xam::UserSettingId::XPROFILE_GAMER_DIFFICULTY,
-      xam::UserSettingId::XPROFILE_GAMER_TYPE,
-      xam::UserSettingId::XPROFILE_GAMERCARD_PICTURE_KEY,
-      xam::UserSettingId::XPROFILE_GAMERCARD_MOTTO,
-      xam::UserSettingId::XPROFILE_GAMERCARD_ZONE,
-      xam::UserSettingId::XPROFILE_GAMERCARD_REGION,
-      xam::UserSettingId::XPROFILE_GAMERCARD_CRED,
-      xam::UserSettingId::XPROFILE_GAMERCARD_REP,
-      xam::UserSettingId::XPROFILE_GAMERCARD_TITLES_PLAYED,
-      xam::UserSettingId::XPROFILE_GAMERCARD_ACHIEVEMENTS_EARNED,
-      xam::UserSettingId::XPROFILE_GAMERCARD_TITLE_CRED_EARNED};
+  const auto dashboard_settings =
+      kernel_state()->xam_state()->user_tracker()->GetSettingIds(user_profile,
+                                                                 kDashboardID);
 
-  const std::set<xam::UserSettingId> default_title_settings = {
-      xam::UserSettingId::XPROFILE_TITLE_SPECIFIC1,
-      xam::UserSettingId::XPROFILE_TITLE_SPECIFIC2,
-      xam::UserSettingId::XPROFILE_TITLE_SPECIFIC3};
+  const auto title_settings =
+      kernel_state()->xam_state()->user_tracker()->GetSettingIds(
+          user_profile, kernel_state()->title_id());
 
-  for (const xam::UserSettingId setting_id : default_dashboard_settings) {
-    if (const auto setting =
-            kernel_state()->xam_state()->user_tracker()->GetSetting(
-                user_profile, kDashboardID,
-                static_cast<uint32_t>(setting_id))) {
-      if (setting.has_value()) {
-        settings[kDashboardID].push_back(setting.value());
-      }
+  for (const xam::UserSettingId setting_id : dashboard_settings) {
+    const auto setting =
+        kernel_state()->xam_state()->user_tracker()->GetSetting(
+            user_profile, kDashboardID, static_cast<uint32_t>(setting_id));
+
+    if (setting.has_value()) {
+      settings[kDashboardID].push_back(setting.value());
     }
   }
 
-  for (const xam::UserSettingId setting_id : default_title_settings) {
-    if (const auto setting =
-            kernel_state()->xam_state()->user_tracker()->GetSetting(
-                user_profile, kernel_state()->title_id(),
-                static_cast<uint32_t>(setting_id))) {
-      if (setting.has_value()) {
-        settings[kernel_state()->title_id()].push_back(setting.value());
-      }
+  for (const xam::UserSettingId setting_id : title_settings) {
+    const uint32_t title_id = kernel_state()->title_id();
+
+    const auto setting =
+        kernel_state()->xam_state()->user_tracker()->GetSetting(
+            user_profile, title_id, static_cast<uint32_t>(setting_id));
+
+    if (setting.has_value()) {
+      settings[title_id].push_back(setting.value());
     }
   }
 
