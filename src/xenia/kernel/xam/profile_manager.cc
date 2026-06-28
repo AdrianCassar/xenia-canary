@@ -747,6 +747,10 @@ bool ProfileManager::ModifyAccount(
 bool ProfileManager::ConvertToXboxLiveEnabledProfile(const uint64_t xuid) {
   X_XAMACCOUNTINFO& account = accounts_[xuid];
 
+  // We want to apply settings to profiles that were created without default
+  // settings initially.
+  user_tracker_->SetupDefaultProfileSettings(xuid);
+
   auto run = [this](X_XAMACCOUNTINFO& account_info) {
     account_info.ToggleLiveFlag(true);
 

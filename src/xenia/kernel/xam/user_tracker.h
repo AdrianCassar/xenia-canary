@@ -119,6 +119,9 @@ class UserTracker {
   std::optional<UserSetting> GetSetting(UserProfile* user, uint32_t title_id,
                                         uint32_t setting_id) const;
 
+  std::vector<UserSettingId> GetSettingIds(UserProfile* user,
+                                           uint32_t title_id) const;
+
   bool GetUserSetting(uint64_t xuid, uint32_t title_id, uint32_t setting_id,
                       X_USER_PROFILE_SETTING* setting_ptr,
                       uint32_t& extended_data_address) const;
@@ -151,6 +154,8 @@ class UserTracker {
 
   std::span<const uint8_t> GetIcon(uint64_t xuid, uint32_t title_id,
                                    XTileType tile_type, uint64_t tile_id) const;
+
+  void SetupDefaultProfileSettings(uint64_t xuid);
 
  private:
   bool IsUserTracked(uint64_t xuid) const;

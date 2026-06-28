@@ -162,6 +162,7 @@ class GpdInfo : public XdbfFile {
   std::span<const uint8_t> GetImage(uint64_t id) const;
   void AddImage(uint32_t id, std::span<const uint8_t> image_data);
 
+  std::vector<uint32_t> GetSettingIds() const;
   X_XDBF_GPD_SETTING_HEADER* GetSetting(uint32_t id);
   std::span<const uint8_t> GetSettingData(uint32_t id);
 

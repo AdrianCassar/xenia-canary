@@ -162,11 +162,12 @@ bool xeDrawCreateProfile(xe::ui::ImGuiDrawer* imgui_drawer, Emulator* emulator,
       const auto created_user_profile =
           profile_manager->GetProfile(created_profile_xuid);
 
-      UserSetting gamercard_region(UserSettingId::XPROFILE_GAMERCARD_REGION,
-                                   int32_t(created_user_profile->GetCountry()));
-
-      kernel_state()->xam_state()->user_tracker()->UpsertSetting(
-          created_user_profile->xuid(), kDashboardID, &gamercard_region);
+      if (args.live_enabled) {
+        kernel_state()
+            ->xam_state()
+            ->user_tracker()
+            ->SetupDefaultProfileSettings(created_profile_xuid);
+      }
 
       if (args.downloaded_gamerpics.valid() && args.gamerpic_key.has_value()) {
         const gamerpics_pair gamerpics = args.downloaded_gamerpics.get();

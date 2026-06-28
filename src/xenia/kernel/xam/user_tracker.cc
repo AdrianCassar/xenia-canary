@@ -8,6 +8,7 @@
  */
 
 #include <algorithm>
+#include <ranges>
 #include <vector>
 
 #include "xenia/emulator.h"
@@ -986,6 +987,24 @@ std::optional<UserSetting> UserTracker::GetSetting(UserProfile* user,
   return UserSetting::GetDefaultSetting(setting_id);
 }
 
+std::vector<UserSettingId> UserTracker::GetSettingIds(UserProfile* user,
+                                                      uint32_t title_id) const {
+  const auto gpd = user->GetGpd(title_id);
+  if (!gpd) {
+    return {};
+  }
+
+  const auto settings_ids_view =
+      gpd->GetSettingIds() | std::views::transform([](uint32_t id) {
+        return static_cast<xam::UserSettingId>(id);
+      });
+
+  const std::vector<xam::UserSettingId> settings_ids(settings_ids_view.begin(),
+                                                     settings_ids_view.end());
+
+  return settings_ids;
+}
+
 bool UserTracker::GetUserSetting(uint64_t xuid, uint32_t title_id,
                                  uint32_t setting_id,
                                  X_USER_PROFILE_SETTING* setting_ptr,
@@ -1726,6 +1745,174 @@ void UserTracker::StopPeriodicMaintenance(uint64_t xuid) const {
   if (user->GetPeriodicMaintenanceTask()) {
     XELOGD(fmt::format("Stopped Periodic Maintenance: {:016X}", xuid));
     user->SetPeriodicMaintenanceTask({});
+  }
+}
+
+void UserTracker::SetupDefaultProfileSettings(uint64_t xuid) {
+  auto user = kernel_state()->xam_state()->GetUserProfile(xuid);
+  if (!user) {
+    return;
+  }
+
+  // TODO:
+  // We should properly set the flags for:
+  // XPROFILE_PERMISSIONS
+  // XPROFILE_USER_PREFERENCES
+
+  const int32_t controller_vibration = 3;
+  const int32_t gamercard_region = user->GetCountry();
+  const int32_t voice_volume = 100;
+  const int32_t messenger_signup_state = 1;
+  const int32_t save_windows_live_password = 1;
+  const int32_t show_buddies = 1;
+  const int32_t email_format = 2;
+
+  // Int32
+  UserSetting Permissions(UserSettingId::XPROFILE_PERMISSIONS, int32_t(0));
+  UserSetting Y_Axis_Inversion(UserSettingId::XPROFILE_AIM_SENSITIVITY_YAXIS,
+                               int32_t(0));
+  UserSetting Controller_Vibration(
+      UserSettingId::XPROFILE_OPTION_CONTROLLER_VIBRATION,
+      int32_t(controller_vibration));
+  UserSetting Gamercard_Zone(UserSettingId::XPROFILE_GAMERCARD_ZONE,
+                             int32_t(0));
+  UserSetting Gamercard_Region(UserSettingId::XPROFILE_GAMERCARD_REGION,
+                               int32_t(gamercard_region));
+  UserSetting Gamercard_Cred(UserSettingId::XPROFILE_GAMERCARD_CRED,
+                             int32_t(0));
+  UserSetting Vision_Enabled(UserSettingId::XPROFILE_GAMERCARD_HAS_VISION,
+                             int32_t(0));
+  UserSetting Voice_Muted(UserSettingId::XPROFILE_OPTION_VOICE_MUTED,
+                          int32_t(0));
+  UserSetting Voice_Through_Speakers(
+      UserSettingId::XPROFILE_OPTION_VOICE_THRU_SPEAKERS, int32_t(0));
+  UserSetting Voice_Volume(UserSettingId::XPROFILE_OPTION_VOICE_VOLUME,
+                           int32_t(voice_volume));
+  UserSetting Difficulty(UserSettingId::XPROFILE_GAMER_DIFFICULTY, int32_t(0));
+  UserSetting Control_Sensitivity(
+      UserSettingId::XPROFILE_GAMER_CONTROL_SENSITIVITY, int32_t(0));
+  UserSetting Primary_Preferred_Color(
+      UserSettingId::XPROFILE_GAMER_PREFERRED_COLOR_FIRST, int32_t(0));
+  UserSetting Secondary_Preferred_Color(
+      UserSettingId::XPROFILE_GAMER_PREFERRED_COLOR_SECOND, int32_t(0));
+  UserSetting Auto_Aim(UserSettingId::XPROFILE_GAMER_ACTION_AUTO_AIM,
+                       int32_t(0));
+  UserSetting Auto_Center(UserSettingId::XPROFILE_GAMER_ACTION_AUTO_CENTER,
+                          int32_t(0));
+  UserSetting Movement_Control(
+      UserSettingId::XPROFILE_GAMER_ACTION_MOVEMENT_CONTROL, int32_t(0));
+  UserSetting Race_Camera_Location(
+      UserSettingId::XPROFILE_GAMER_RACE_CAMERA_LOCATION, int32_t(0));
+  UserSetting Brake_Control(UserSettingId::XPROFILE_GAMER_RACE_BRAKE_CONTROL,
+                            int32_t(0));
+  UserSetting Accelerator_Control(
+      UserSettingId::XPROFILE_GAMER_RACE_ACCELERATOR_CONTROL, int32_t(0));
+  UserSetting Messenger_Signup_State(
+      UserSettingId::XPROFILE_MESSENGER_SIGNUP_STATE,
+      int32_t(messenger_signup_state));
+  UserSetting Messenger_Auto_Sign_in(
+      UserSettingId::XPROFILE_MESSENGER_AUTO_SIGNIN, int32_t(0));
+  UserSetting Save_Windows_Live_Password(
+      UserSettingId::XPROFILE_SAVE_WINDOWS_LIVE_PASSWORD,
+      int32_t(save_windows_live_password));
+  UserSetting Show_Friends(UserSettingId::XPROFILE_FRIENDSAPP_SHOW_BUDDIES,
+                           int32_t(show_buddies));
+
+  UserSetting Tenure_Level(UserSettingId::XPROFILE_TENURE_LEVEL, int32_t(0));
+  UserSetting Tenure_Milestone(UserSettingId::XPROFILE_TENURE_MILESTONE,
+                               int32_t(0));
+  UserSetting Subscription_Length(
+      UserSettingId::XPROFILE_SUBSCRIPTION_TYPE_LENGTH_IN_MONTHS, int32_t(0));
+  UserSetting Subscription_Payment_Type(
+      UserSettingId::XPROFILE_SUBSCRIPTION_PAYMENT_TYPE, int32_t(0));
+  UserSetting User_Preferences(UserSettingId::XPROFILE_USER_PREFERENCES,
+                               int32_t(0));
+  UserSetting Xbox_One_Gamerscore(UserSettingId::XPROFILE_XBOXONE_GAMERSCORE,
+                                  int32_t(0));
+  UserSetting Email_Format(UserSettingId::WEB_EMAIL_FORMAT,
+                           int32_t(email_format));
+
+  // u16string
+  UserSetting Motto(UserSettingId::XPROFILE_GAMERCARD_MOTTO, std::u16string());
+  UserSetting User_Location(UserSettingId::XPROFILE_GAMERCARD_USER_LOCATION,
+                            std::u16string());
+  UserSetting User_Name(UserSettingId::XPROFILE_GAMERCARD_USER_NAME,
+                        std::u16string());
+  UserSetting User_URL(UserSettingId::XPROFILE_GAMERCARD_USER_URL,
+                       std::u16string());
+  UserSetting User_Bio(UserSettingId::XPROFILE_GAMERCARD_USER_BIO,
+                       std::u16string());
+
+  // Float
+  UserSetting Reputation(UserSettingId::XPROFILE_GAMERCARD_REP, float(0));
+
+  // Binary
+  UserSetting Video_Metadata(UserSettingId::XPROFILE_VIDEO_METADATA,
+                             std::vector<uint8_t>());
+  UserSetting Party_Address(UserSettingId::XPROFILE_GAMERCARD_PARTY_ADDR,
+                            std::vector<uint8_t>());
+  UserSetting Party_Info(UserSettingId::XPROFILE_GAMERCARD_PARTY_INFO,
+                         std::vector<uint8_t>());
+  UserSetting Unknown_Setting_61180050(UserSettingId::XPROFILE_UNK_61180050,
+                                       std::vector<uint8_t>());
+  // UserSetting Avatar_Info_1(UserSettingId::XPROFILE_GAMERCARD_AVATAR_INFO_1,
+  //                           std::vector<uint8_t>());
+
+  // Datetime
+  UserSetting Next_Tenure_Milestone_Date(
+      UserSettingId::XPROFILE_TENURE_NEXT_MILESTONE_DATE, int64_t(0));
+  UserSetting Last_Xbox_Live_Sign_in(UserSettingId::XPROFILE_LAST_LIVE_SIGNIN,
+                                     int64_t(0));
+
+  std::vector<UserSetting> settings;
+
+  settings.push_back(Permissions);
+  settings.push_back(Y_Axis_Inversion);
+  settings.push_back(Gamercard_Zone);
+  settings.push_back(Gamercard_Region);
+  settings.push_back(Gamercard_Cred);
+  settings.push_back(Vision_Enabled);
+  settings.push_back(Voice_Muted);
+  settings.push_back(Voice_Volume);
+  settings.push_back(Control_Sensitivity);
+  settings.push_back(Primary_Preferred_Color);
+  settings.push_back(Secondary_Preferred_Color);
+  settings.push_back(Auto_Aim);
+  settings.push_back(Auto_Center);
+  settings.push_back(Race_Camera_Location);
+  settings.push_back(Brake_Control);
+  settings.push_back(Accelerator_Control);
+  settings.push_back(Messenger_Signup_State);
+  settings.push_back(Messenger_Auto_Sign_in);
+  settings.push_back(Save_Windows_Live_Password);
+  settings.push_back(Show_Friends);
+  settings.push_back(Tenure_Level);
+  settings.push_back(Tenure_Milestone);
+  settings.push_back(Subscription_Length);
+  settings.push_back(Subscription_Payment_Type);
+  settings.push_back(User_Preferences);
+  settings.push_back(Xbox_One_Gamerscore);
+  settings.push_back(Email_Format);
+  settings.push_back(Motto);
+  settings.push_back(User_Location);
+  settings.push_back(User_Name);
+  settings.push_back(User_URL);
+  settings.push_back(User_Bio);
+  settings.push_back(Reputation);
+  settings.push_back(Video_Metadata);
+  settings.push_back(Party_Address);
+  settings.push_back(Party_Info);
+  settings.push_back(Unknown_Setting_61180050);
+  settings.push_back(Next_Tenure_Milestone_Date);
+  settings.push_back(Last_Xbox_Live_Sign_in);
+
+  for (const auto& setting : settings) {
+    std::optional<UserSetting> setting_exists =
+        GetGpdSetting(user, kDashboardID, setting.get_setting_id());
+
+    if (!setting_exists.has_value()) {
+      UpsertSetting(xuid, kDashboardID, &setting);
+    }
   }
 }
 
