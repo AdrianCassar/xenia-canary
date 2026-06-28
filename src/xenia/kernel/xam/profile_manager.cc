@@ -664,6 +664,8 @@ void ProfileManager::SetDefaultXboxLiveEnabledAccountSettings(
           XCONFIG_USER_CATEGORY,
           XCONFIG_USER_CATEGORY_ENTRIES::XCONFIG_USER_LANGUAGE));
 
+  account.ToggleLiveFlag(true);
+
   account.SetCountry(country_id);
   account.SetLanguage(desired_language);
 
@@ -794,11 +796,10 @@ bool ProfileManager::ConvertToXboxLiveEnabledProfile(const uint64_t xuid) {
   user_tracker_->SetupDefaultProfileSettings(xuid);
 
   auto run = [this](X_XAMACCOUNTINFO& account_info) {
-    account_info.ToggleLiveFlag(true);
+    SetDefaultXboxLiveEnabledAccountSettings(account_info);
 
     // Set default settings and online XUID once
     if (!account_info.xuid_online) {
-      SetDefaultXboxLiveEnabledAccountSettings(account_info);
       account_info.xuid_online = GenerateXuidOnline();
     }
 
