@@ -166,6 +166,9 @@ X_HRESULT XLiveBaseApp::ExecuteDispatchMessage(uint32_t message,
              buffer_length);
       return XEnumerateTitlesByFilter(buffer_ptr);
     }
+    case 0x000500B0: {
+      return XAccountGetUserInfo(buffer_ptr);
+    }
     case 0x000500C6: {
       return XAccountGetPointsBalance(buffer_ptr);
     }

@@ -37,6 +37,7 @@ class SchemaInMemory : public SCHEMA_DATA {
       {0x0602, "XAccountGetPointsBalance"},
       {0x0604, "XAccountGetUserInfo"},
       {0x0613, "XPassportGetMemberName"},
+      {0x0636, "XAccountGetUserInfo"},
       {0x0704, "XUserEstimateRankForRating"},
       {0x0716, "XUserValidateAvatarManifest"},
       {0x0801, "XStringVerify"},
