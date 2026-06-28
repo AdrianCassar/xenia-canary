@@ -17,6 +17,7 @@
 #include "xenia/ui/file_picker.h"
 #include "xenia/ui/imgui_host_notification.h"
 
+#include <xenia/vfs/devices/host_path_entry.h>
 #include "xenia/kernel/xam/ui/create_profile_ui.h"
 #include "xenia/kernel/xam/ui/gamercard_ui.h"
 #include "xenia/kernel/xam/ui/signin_ui.h"
@@ -350,6 +351,48 @@ void ProfileConfigDialog::OnDraw(ImGuiIO& io) {
           std::thread path_open(LaunchFileExplorer, path);
           path_open.detach();
         }
+
+        ImGui::BeginDisabled(!account.IsLiveEnabled());
+        if (ImGui::BeginMenu("XStorage Content")) {
+          const auto emulator = emulator_window_->emulator();
+          const auto filesystem = emulator->kernel_state()->file_system();
+
+          xe::vfs::HostPathEntry* entry = nullptr;
+          std::string symlink_path;
+
+          if (ImGui::MenuItem("Show Game Data")) {
+            if (emulator->is_title_open()) {
+              symlink_path =
+                  fmt::format("XSTORAGE:user\\{:016X}\\title\\{:08X}",
+                              account.xuid_online.get(), emulator->title_id());
+
+            } else {
+              symlink_path = fmt::format("XSTORAGE:user\\{:016X}",
+                                         account.xuid_online.get());
+            }
+          }
+
+          ImGui::BeginDisabled(!emulator->is_title_open());
+          if (ImGui::MenuItem("Show Game Clips")) {
+            symlink_path =
+                fmt::format("XSTORAGE:clips\\title\\{:08X}\\{:016X}",
+                            emulator->title_id(), account.xuid_online.get());
+          }
+          ImGui::EndDisabled();
+
+          if (!symlink_path.empty()) {
+            entry = reinterpret_cast<xe::vfs::HostPathEntry*>(
+                filesystem->ResolvePath(symlink_path));
+
+            if (entry) {
+              std::thread path_open(LaunchFileExplorer, entry->host_path());
+              path_open.detach();
+            }
+          }
+
+          ImGui::EndMenu();
+        }
+        ImGui::EndDisabled();
 
         if (!emulator_window_->emulator()->is_title_open()) {
           ImGui::Separator();
