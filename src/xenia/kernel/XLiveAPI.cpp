@@ -105,7 +105,7 @@ void XLiveAPI::IpGetConsoleXnAddr(XNADDR* XnAddr_ptr) {
 
   XnAddr_ptr->abOnline.platform_type = PLATFORM_TYPE::Xbox360;
 
-  memcpy(XnAddr_ptr->abEnet, GetConsoleMacAddress().raw(),
+  memcpy(XnAddr_ptr->abEnet, GetSessionMacAddress().raw(),
          MacAddress::MacAddressSize);
 }
 
@@ -723,7 +723,7 @@ std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::RegisterPlayer(
     return response;
   }
 
-  if (GetConsoleMacAddress().to_uint64() == 0) {
+  if (GetSessionMacAddress().to_uint64() == 0) {
     XELOGE("Cancelled registering profile!");
     return response;
   }
@@ -779,7 +779,7 @@ std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::RegisterPlayer(
 
   PlayerObjectJSON player = PlayerObjectJSON();
 
-  MacAddress mac_address = GetConsoleMacAddress();
+  MacAddress mac_address = GetSessionMacAddress();
 
   player.XUID(registered_xuid);
   player.Gamertag(user_profile->name());
@@ -1098,7 +1098,7 @@ std::unique_ptr<SessionObjectJSON> XLiveAPI::XSessionMigration(
 
   doc.AddMember("xuid", xuid_str, doc.GetAllocator());
   doc.AddMember("hostAddress", OnlineIP_str(), doc.GetAllocator());
-  doc.AddMember("macAddress", GetConsoleMacAddress().to_string(),
+  doc.AddMember("macAddress", GetSessionMacAddress().to_string(),
                 doc.GetAllocator());
   doc.AddMember("port", GetPlayerPort(), doc.GetAllocator());
 
@@ -1233,7 +1233,7 @@ void XLiveAPI::DeleteSession(uint64_t sessionId) {
 
 void XLiveAPI::DeleteAllSessionsByMac() {
   const std::string endpoint = BuildEndpoint(
-      fmt::format("DeleteSessions/{}", GetConsoleMacAddress().to_string()));
+      fmt::format("DeleteSessions/{}", GetSessionMacAddress().to_string()));
 
   std::unique_ptr<HTTPResponseObjectJSON> response = Delete(endpoint);
 
@@ -1290,7 +1290,7 @@ void XLiveAPI::XSessionCreate(uint64_t sessionId, XGI_SESSION_CREATE* data) {
   session.PrivateSlotsCount(data->num_slots_private);
   session.UserIndex(data->user_index);
   session.HostAddress(OnlineIP_str());
-  session.MacAddress(GetConsoleMacAddress().to_string());
+  session.MacAddress(GetSessionMacAddress().to_string());
   session.Port(GetPlayerPort());
 
   std::string session_output;

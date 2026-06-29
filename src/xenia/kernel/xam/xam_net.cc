@@ -273,7 +273,7 @@ dword_result_t NetDll_XNetCleanup_entry(dword_t caller) {
 DECLARE_XAM_EXPORT1(NetDll_XNetCleanup, kNetworking, kImplemented);
 
 dword_result_t XNetLogonGetMachineID_entry(lpqword_t machine_id_ptr) {
-  *machine_id_ptr = GetLocalMachineId(GetConsoleMacAddress());
+  *machine_id_ptr = GetLocalMachineId(GetSessionMacAddress());
 
   // if (XLiveAPI::GetInitState() != XLiveAPI::InitState::Success) {
   //   *machine_id_ptr = 0;
@@ -863,19 +863,32 @@ dword_result_t NetDll_XNetXnAddrToInAddr_entry(dword_t caller,
   in_addr.Zero();
 
   // 494707E4, 4E4D07D1
-  if (GetConsoleMacAddress() == MacAddress(xn_addr->abEnet)) {
-    XELOGI("Resolving XNetXnAddrToInAddr to LOOPBACK!");
+  if (GetSessionMacAddress() == MacAddress(xn_addr->abEnet)) {
+    const auto network_adapter =
+        kernel_state()->emulator()->GetNetworkAdapterManager();
+    const auto local_addr =
+        network_adapter->GetSelectedAdapterLocalIP().sin_addr;
+    const bool is_local_addr =
+        !xn_addr->ina.s_addr || xn_addr->ina.s_addr == xe::byte_swap(LOOPBACK) ||
+        xn_addr->ina.s_addr == local_addr.s_addr;
 
-    if (cvars::bind_interface) {
-      const auto network_adapter =
-          kernel_state()->emulator()->GetNetworkAdapterManager();
+    if (is_local_addr) {
+      XELOGI("Resolving XNetXnAddrToInAddr to LOOPBACK!");
 
-      in_addr->s_addr =
-          network_adapter->GetSelectedAdapterLocalIP().sin_addr.s_addr;
-    } else {
-      in_addr->s_addr = xe::byte_swap(LOOPBACK);
+      if (cvars::bind_interface) {
+        in_addr->s_addr = local_addr.s_addr;
+      } else {
+        in_addr->s_addr = xe::byte_swap(LOOPBACK);
+      }
+
+      return X_ERROR_SUCCESS;
     }
 
+    XELOGW(
+        "XNetXnAddrToInAddr: remote XNADDR uses this console's MAC, but has "
+        "a different IP; treating it as a remote peer.");
+    in_addr->s_addr =
+        xn_addr->ina.s_addr ? xn_addr->ina.s_addr : xn_addr->inaOnline.s_addr;
     return X_ERROR_SUCCESS;
   }
 

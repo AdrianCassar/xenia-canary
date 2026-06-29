@@ -77,6 +77,8 @@ uint64_t GetLocalMachineId(const MacAddress mac_address);
 
 MacAddress GetConsoleMacAddress();
 
+MacAddress GetSessionMacAddress();
+
 MacAddress GenerateMacAddress();
 
 }  // namespace kernel

@@ -156,6 +156,11 @@ MacAddress GetConsoleMacAddress() {
   return MacAddress(mac_address);
 }
 
+MacAddress GetSessionMacAddress() {
+  static const MacAddress session_mac_address = GenerateMacAddress();
+  return session_mac_address;
+}
+
 MacAddress GenerateMacAddress() {
   uint8_t mac_address[MacAddress::MacAddressSize] = {};
 
