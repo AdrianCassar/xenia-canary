@@ -211,6 +211,15 @@ EmulatorWindow::EmulatorWindow(Emulator* emulator,
   updater_ =
       std::make_shared<Updater>(XE_BUILD_REMOTE_OWNER, XE_BUILD_REMOTE_NAME);
 
+  remote_repo_url_ = fmt::format("https://{}/{}/{}", XE_BUILD_REMOTE_HOST,
+                                 XE_BUILD_REMOTE_OWNER, XE_BUILD_REMOTE_NAME);
+
+  if (std::string(XE_BUILD_REMOTE_HOST) != "github.com") {
+    XELOGW(
+        "Remote repository host is not Github, therefore updater will not "
+        "function as expected!");
+  }
+
   LoadRecentlyLaunchedTitles();
 }
 
@@ -308,8 +317,9 @@ void EmulatorWindow::OnEmulatorInitialized() {
     Gamepad_HotKeys_Listener->set_name("Gamepad HotKeys Listener");
   }
 
-  // Check for updates
-#if !defined(DEBUG) && !defined(XE_BUILD_IS_PR)
+  // Auto check for updates if build is not debug, not a PR and build from
+  // Github actions.
+#if !DEBUG && !defined(XE_BUILD_IS_PR) && XE_BUILD_GITHUB_ACTIONS
   bool should_check_update = cvars::auto_check_updates &&
                              !(cvar::updated_arg_present && cvar::updated);
 
@@ -994,10 +1004,9 @@ bool EmulatorWindow::Initialize() {
         MenuItem::Type::kString, "Build commit on GitHub...", "F2",
         std::bind(&EmulatorWindow::ShowBuildCommit, this)));
     help_menu->AddChild(MenuItem::Create(
-        MenuItem::Type::kString, "Recent changes on GitHub...", []() {
-          LaunchWebBrowser("https://" XE_BUILD_REMOTE_HOST
-                           "/" XE_BUILD_REMOTE_OWNER "/" XE_BUILD_REMOTE_NAME
-                           "/compare/" XE_BUILD_COMMIT "..." XE_BUILD_BRANCH);
+        MenuItem::Type::kString, "Recent changes on GitHub...", [this]() {
+          LaunchWebBrowser(fmt::format("{}/compare/{}/{}", remote_repo_url_,
+                                       XE_BUILD_COMMIT, XE_BUILD_BRANCH));
         }));
     help_menu->AddChild(MenuItem::Create(MenuItem::Type::kSeparator));
     help_menu->AddChild(MenuItem::Create(
@@ -1878,11 +1887,11 @@ void EmulatorWindow::ShowFAQ() {
 
 void EmulatorWindow::ShowBuildCommit() {
 #ifdef XE_BUILD_IS_PR
-  LaunchWebBrowser("https://" XE_BUILD_REMOTE_HOST "/" XE_BUILD_REMOTE_OWNER
-                   "/" XE_BUILD_REMOTE_NAME "/pull/" XE_BUILD_PR_NUMBER);
+  LaunchWebBrowser(
+      fmt::format("{}/pull/{}", remote_repo_url_, XE_BUILD_PR_NUMBER));
 #else
-  LaunchWebBrowser("https://" XE_BUILD_REMOTE_HOST "/" XE_BUILD_REMOTE_OWNER
-                   "/" XE_BUILD_REMOTE_NAME "/commit/" XE_BUILD_COMMIT);
+  LaunchWebBrowser(
+      fmt::format("{}/commit/{}", remote_repo_url_, XE_BUILD_COMMIT));
 #endif
 }
 
