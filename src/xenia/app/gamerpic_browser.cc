@@ -21,7 +21,7 @@
 #include "xenia/base/png_utils.h"
 #include "xenia/base/system.h"
 #include "xenia/kernel/XLiveAPI.h"
-#include "xenia/kernel/xam/friends_util.h"
+#include "xenia/kernel/util/friends_util.h"
 #include "xenia/kernel/xam/user_data.h"
 
 using namespace std::chrono_literals;

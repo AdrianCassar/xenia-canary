@@ -39,6 +39,14 @@ class UserTracker;
 namespace xe {
 namespace kernel {
 namespace xam {
+class FriendsManager;
+}  // namespace xam
+}  // namespace kernel
+}  // namespace xe
+
+namespace xe {
+namespace kernel {
+namespace xam {
 
 inline const std::string kDashboardStringID =
     fmt::format("{:08X}", kDashboardID);
@@ -115,6 +123,7 @@ class ProfileManager {
   void ReloadProfiles();
   void ReloadProfile(const uint64_t xuid);
 
+  UserProfile* GetProfileAny(const uint64_t xuid) const;
   UserProfile* GetProfile(const uint64_t xuid) const;
   UserProfile* GetProfileLive(const uint64_t xuid) const;
   UserProfile* GetProfile(const uint8_t user_index) const;
