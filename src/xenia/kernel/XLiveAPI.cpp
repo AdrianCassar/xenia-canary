@@ -22,8 +22,8 @@
 #include "xenia/emulator.h"
 #include "xenia/kernel/XLiveAPI.h"
 #include "xenia/kernel/user_module.h"
+#include "xenia/kernel/util/friends_util.h"
 #include "xenia/kernel/util/shim_utils.h"
-#include "xenia/kernel/xam/friends_util.h"
 
 DEFINE_string(api_address, "192.168.0.1:36000/",
               "Xenia Server Address e.g. IP:PORT", "Live");
@@ -320,7 +320,9 @@ void XLiveAPI::Init() {
     std::unique_ptr<HTTPResponseObjectJSON> register_responce =
         RegisterPlayer(profile->xuid());
 
-    profile->AddDummyFriends(dummy_friends_count_);
+    // Add dummy friends here so we can use the title_id.
+    kernel_state()->friends_manager()->AddDummyFriends(profile->xuid(),
+                                                       dummy_friends_count_);
   }
 
   initialized_ = InitState::Success;
@@ -2360,15 +2362,17 @@ XLiveAPI::GetFriendsGamerpicsAsync(uint64_t xuid,
     return {};
   }
 
-  return std::async(std::launch::async, [this, user_profile, imgui_drawer]() {
-    const auto gamerpics =
-        GetMultiGamerpicsFromXUIDs(user_profile->GetFriendsXUIDs());
+  return std::async(std::launch::async, [this, xuid, imgui_drawer]() {
+    const auto friends_xuids =
+        kernel_state()->friends_manager()->GetFriendsXUIDs(xuid);
+
+    const auto gamerpics = GetMultiGamerpicsFromXUIDs(friends_xuids);
 
     std::map<uint64_t, std::shared_ptr<xe::ui::ImmediateTexture>>
         immediate_gamerpics = {};
 
-    for (const auto& [xuid, gamerpic] : gamerpics) {
-      immediate_gamerpics[xuid] =
+    for (const auto& [friend_xuid, gamerpic] : gamerpics) {
+      immediate_gamerpics[friend_xuid] =
           std::move(imgui_drawer->LoadImGuiIcon({gamerpic}));
     }
 
@@ -2462,7 +2466,10 @@ XLiveAPI::GetOfflineFriendsPresence(uint64_t xuid) {
 
   std::map<uint64_t, FriendPresenceObjectJSON> peer_presences = {};
 
-  for (uint32_t count = 1; const auto& xuid : user_profile->GetFriendsXUIDs()) {
+  const auto friends_xuids =
+      kernel_state()->friends_manager()->GetFriendsXUIDs(user_profile->xuid());
+
+  for (uint32_t count = 1; const auto& xuid : friends_xuids) {
     FriendPresenceObjectJSON peer = {};
     peer.Gamertag(std::format("Friend {}", count));
     peer.XUID(xuid);
@@ -2483,8 +2490,10 @@ std::map<uint64_t, FriendPresenceObjectJSON> XLiveAPI::GetOnlineFriendsPresence(
   }
   std::map<uint64_t, FriendPresenceObjectJSON> peer_presences = {};
 
-  const auto friends_presence_responce =
-      GetFriendsPresence(user_profile->GetFriendsXUIDs());
+  const auto friends_xuids =
+      kernel_state()->friends_manager()->GetFriendsXUIDs(user_profile->xuid());
+
+  const auto friends_presence_responce = GetFriendsPresence(friends_xuids);
 
   const auto& friends_presence = friends_presence_responce->PlayersPresence();
 

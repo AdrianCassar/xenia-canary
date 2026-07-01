@@ -42,15 +42,20 @@ GamercardFromXUIDUI::GamercardFromXUIDUI(xe::ui::ImGuiDrawer* imgui_drawer,
       presence_.TitleID(fmt::format("{:08X}", kernel_state()->title_id()));
     } else if (!is_self) {
       // Cached friend presence
-      X_ONLINE_FRIEND friend_info_ = {};
-      are_friends = profile_->IsFriend(xuid_, &friend_info_);
+      const auto friend_info =
+          kernel_state()->friends_manager()->GetFriend(profile_->xuid(), xuid);
 
       presence_.Gamertag("Xenia User");
       presence_.RichPresence(xe::to_utf16("Unknown"));
-      presence_.XUID(friend_info_.xuid);
 
-      if (friend_info_.title_id) {
-        presence_.TitleID(fmt::format("{:08X}", friend_info_.title_id.get()));
+      if (friend_info.has_value()) {
+        are_friends = true;
+
+        presence_.XUID(friend_info->xuid);
+
+        if (friend_info->title_id) {
+          presence_.TitleID(fmt::format("{:08X}", friend_info->title_id.get()));
+        }
       }
     }
   } else {
