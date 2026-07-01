@@ -1433,7 +1433,10 @@ PresenceSyncState UserTracker::IsPresenceOutOfSync(
   for (const auto& player : presence_info) {
     const uint64_t xuid = player.XUID();
 
-    if (!user->IsFriend(xuid) && !user->IsSubscribed(xuid)) {
+    const auto friends_manager = kernel_state()->friends_manager();
+
+    if (!friends_manager->IsFriend(user->xuid(), xuid) &&
+        !user->IsSubscribed(xuid)) {
       XELOGI("Requested unknown peer presence: {} - {:016X}", player.Gamertag(),
              xuid);
       continue;
@@ -1443,17 +1446,15 @@ PresenceSyncState UserTracker::IsPresenceOutOfSync(
       break;
     }
 
-    if (user->IsFriend(xuid) && !sync_state.friends) {
-      X_ONLINE_FRIEND peer = {};
+    const auto online_friend = friends_manager->GetFriend(user->xuid(), xuid);
 
-      if (user->GetFriendFromXUID(xuid, &peer)) {
-        const X_ONLINE_FRIEND updated_peer_presence =
-            player.GetFriendPresence();
+    if (online_friend.has_value()) {
+      const X_ONLINE_FRIEND peer = online_friend.value();
+      const X_ONLINE_FRIEND updated_peer_presence = player.GetFriendPresence();
 
-        if (std::memcmp(&peer, &updated_peer_presence,
-                        sizeof(X_ONLINE_FRIEND)) != 0) {
-          sync_state.friends = true;
-        }
+      if (std::memcmp(&peer, &updated_peer_presence, sizeof(X_ONLINE_FRIEND)) !=
+          0) {
+        sync_state.friends = true;
       }
     } else if (user->IsSubscribed(xuid) && !sync_state.peers) {
       X_ONLINE_PRESENCE peer = {};
@@ -1479,7 +1480,9 @@ void UserTracker::RefershFriendsAndSubscribersPresence(uint64_t xuid) const {
     return;
   }
 
-  const auto friends_xuids = user->GetFriendsXUIDs();
+  const auto friends_manager = kernel_state()->friends_manager();
+
+  const auto friends_xuids = friends_manager->GetFriendsXUIDs(user->xuid());
   const auto subscribed_xuids = user->GetSubscribedXUIDs();
   std::set<uint64_t> friends_and_subscribed_xuids = {};
 
@@ -1503,9 +1506,8 @@ void UserTracker::RefershFriendsAndSubscribersPresence(uint64_t xuid) const {
   for (const auto& player : presences->PlayersPresence()) {
     const uint64_t xuid = player.XUID();
 
-    if (user->IsFriend(xuid)) {
-      X_ONLINE_FRIEND friend_presence = player.GetFriendPresence();
-      user->SetFriend(friend_presence);
+    if (friends_manager->IsFriend(user->xuid(), xuid)) {
+      friends_manager->UpdateFriend(user->xuid(), player.GetFriendPresence());
     } else if (user->IsSubscribed(xuid)) {
       X_ONLINE_PRESENCE presence = player.ToOnlineRichPresence();
       user->SetSubscriptionFromXUID(xuid, &presence);

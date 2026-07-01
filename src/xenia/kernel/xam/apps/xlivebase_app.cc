@@ -430,20 +430,21 @@ X_HRESULT XLiveBaseApp::XPresenceSubscribe(uint32_t buffer_ptr,
   const auto profile = kernel_state_->xam_state()->GetUserProfile(user_index);
 
   for (uint32_t i = 0; i < num_peers; i++) {
-    const xe::be<uint64_t> xuid = peer_xuids[i];
+    const xe::be<uint64_t> peer_xuid = peer_xuids[i];
 
-    if (!xuid) {
+    if (!peer_xuid) {
       continue;
     }
 
-    if (profile->IsFriend(xuid)) {
+    if (kernel_state_->friends_manager()->IsFriend(profile->xuid(),
+                                                   peer_xuid)) {
       continue;
     }
 
     if (ACTIVE_TITLE_SUBSCRIPTIONS <= MAX_TITLE_SUBSCRIPTIONS) {
       ACTIVE_TITLE_SUBSCRIPTIONS++;
 
-      profile->SubscribeFromXUID(xuid);
+      profile->SubscribeFromXUID(peer_xuid);
     } else {
       XELOGI("Max subscriptions reached");
     }
@@ -502,20 +503,21 @@ X_HRESULT XLiveBaseApp::XPresenceUnsubscribe(uint32_t buffer_ptr,
   const auto profile = kernel_state_->xam_state()->GetUserProfile(user_index);
 
   for (uint32_t i = 0; i < num_peers; i++) {
-    const xe::be<uint64_t> xuid = peer_xuids[i];
+    const xe::be<uint64_t> peer_xuid = peer_xuids[i];
 
-    if (!xuid) {
+    if (!peer_xuid) {
       continue;
     }
 
-    if (profile->IsFriend(xuid)) {
+    if (kernel_state_->friends_manager()->IsFriend(profile->xuid(),
+                                                   peer_xuid)) {
       continue;
     }
 
     if (ACTIVE_TITLE_SUBSCRIPTIONS > 0) {
       ACTIVE_TITLE_SUBSCRIPTIONS--;
 
-      profile->UnsubscribeFromXUID(xuid);
+      profile->UnsubscribeFromXUID(peer_xuid);
     }
   }
 
@@ -620,10 +622,17 @@ X_HRESULT XLiveBaseApp::XPresenceCreateEnumerator(uint32_t buffer_ptr,
       continue;
     }
 
-    if (profile->IsFriend(xuid)) {
-      auto item = e->AppendItem();
+    const auto friends_manager = kernel_state_->friends_manager();
 
-      profile->GetFriendPresenceFromXUID(xuid, item);
+    if (friends_manager->IsFriend(profile->xuid(), xuid)) {
+      const auto presence =
+          friends_manager->GetFriendPresence(profile->xuid(), xuid);
+
+      if (presence.has_value()) {
+        auto item = e->AppendItem();
+        *item = presence.value();
+      }
+
     } else if (profile->IsSubscribed(xuid)) {
       auto item = e->AppendItem();
 
@@ -903,12 +912,11 @@ X_HRESULT XLiveBaseApp::XFriendsCreateEnumerator(uint32_t buffer_ptr,
   }
 
   for (auto i = friends_starting_index; i < e->items_per_enumerate(); i++) {
-    X_ONLINE_FRIEND peer = {};
+    const auto peer = kernel_state_->friends_manager()->GetFriendFromIndex(
+        profile->xuid(), i);
 
-    const bool is_friend = profile->GetFriendFromIndex(i, &peer);
-
-    if (is_friend) {
-      e->AppendItem(peer);
+    if (peer.has_value()) {
+      e->AppendItem(peer.value());
     }
   }
 

@@ -18,7 +18,7 @@
 #include "xenia/kernel/XLiveAPI.h"
 #include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/util/crypto_utils.h"
-#include "xenia/kernel/xam/friends_util.h"
+#include "xenia/kernel/util/friends_util.h"
 #include "xenia/vfs/devices/host_path_device.h"
 
 DEFINE_string(logged_profile_slot_0_xuid, "",
@@ -148,6 +148,10 @@ void ProfileManager::ReloadProfiles() {
   for (const auto account_xuid : FindProfiles()) {
     LoadAccount(account_xuid);
   }
+}
+
+UserProfile* ProfileManager::GetProfileAny(const uint64_t xuid) const {
+  return GetProfile(xuid) ? GetProfile(xuid) : GetProfileLive(xuid);
 }
 
 UserProfile* ProfileManager::GetProfile(const uint64_t xuid) const {
@@ -336,10 +340,9 @@ void ProfileManager::Login(const uint64_t xuid, const uint8_t user_index,
       std::unique_ptr<HTTPResponseObjectJSON> reg_result =
           kernel_state_->GetXboxLiveAPI()->RegisterPlayer(xuid);
     }
-
-    logged_profiles_[assigned_user_slot]->AddDummyFriends(
-        kernel_state_->GetXboxLiveAPI()->GetDummyFriendsCount());
   }
+
+  logged_profiles_[assigned_user_slot]->LoadFriends();
 }
 
 void ProfileManager::Logout(const uint8_t user_index, bool notify) {

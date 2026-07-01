@@ -15,8 +15,8 @@
 #include "xenia/kernel/XLiveAPI.h"
 #include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/user_module.h"
+#include "xenia/kernel/util/friends_util.h"
 #include "xenia/kernel/util/shim_utils.h"
-#include "xenia/kernel/xam/friends_util.h"
 #include "xenia/kernel/xam/xam_content_device.h"
 #include "xenia/kernel/xam/xam_private.h"
 #include "xenia/ui/file_picker.h"
@@ -1045,7 +1045,8 @@ bool xeDrawFriendContent(xe::ui::ImGuiDrawer* imgui_drawer,
                     (ImGui::GetStyle().ItemSpacing.x * 0.5f);
   ImVec2 half_width_btn = ImVec2(btn_width, btn_height);
 
-  bool are_friends = profile->IsFriend(friend_xuid, nullptr);
+  bool are_friends =
+      kernel_state()->friends_manager()->IsFriend(profile->xuid(), friend_xuid);
   bool is_self = profile->GetOnlineXUID() == presence.XUID();
 
   const std::string join_label =
@@ -1091,7 +1092,8 @@ bool xeDrawFriendContent(xe::ui::ImGuiDrawer* imgui_drawer,
 
   if (are_friends && !is_self) {
     if (ImGui::Button(remove_label.c_str(), half_width_btn)) {
-      if (profile->RemoveFriend(friend_xuid)) {
+      if (kernel_state()->friends_manager()->RemoveFriend(profile->xuid(),
+                                                          friend_xuid)) {
         if (removed_xuid_) {
           *removed_xuid_ = friend_xuid;
         }
@@ -1120,7 +1122,8 @@ bool xeDrawFriendContent(xe::ui::ImGuiDrawer* imgui_drawer,
 
   if (!are_friends && !is_self) {
     if (ImGui::Button(add_label.c_str(), half_width_btn)) {
-      bool added = profile->AddFriendFromXUID(friend_xuid);
+      bool added = kernel_state()->friends_manager()->AddFriend(profile->xuid(),
+                                                                friend_xuid);
 
       if (added) {
         AddFriendToConfig(friend_xuid);
@@ -1228,7 +1231,8 @@ bool xeDrawAddFriend(xe::ui::ImGuiDrawer* imgui_drawer, UserProfile* profile,
         kernel_state()->xam_state()->GetUserIndexAssignedToProfileFromXUID(
             profile->GetLogonXUID());
 
-    bool max_friends = profile->GetFriendsCount() >= X_ONLINE_MAX_FRIENDS;
+    bool max_friends = kernel_state()->friends_manager()->GetFriendsCount(
+                           profile->xuid()) >= X_ONLINE_MAX_FRIENDS;
 
     if (max_friends) {
       ImGui::Text("Max Friends Reached!");
@@ -1247,7 +1251,8 @@ bool xeDrawAddFriend(xe::ui::ImGuiDrawer* imgui_drawer, UserProfile* profile,
         xuid = string_util::from_string<uint64_t>(xuid_string, true);
 
         args.valid_xuid = IsOnlineXUID(xuid);
-        args.are_friends = profile->IsFriend(xuid);
+        args.are_friends =
+            kernel_state()->friends_manager()->IsFriend(profile->xuid(), xuid);
       }
 
       if (!args.valid_xuid) {
@@ -1272,13 +1277,15 @@ bool xeDrawAddFriend(xe::ui::ImGuiDrawer* imgui_drawer, UserProfile* profile,
 
     const float window_width = ImGui::GetContentRegionAvail().x;
 
-    const std::string friends_count =
-        fmt::format("{}/100", profile->GetFriendsCount());
+    const uint32_t friends_count =
+        kernel_state()->friends_manager()->GetFriendsCount(profile->xuid());
+
+    const std::string friends_total = fmt::format("{}/100", friends_count);
 
     ImGui::SetCursorPosX((ImGui::GetCursorPosX() + window_width -
-                          ImGui::CalcTextSize(friends_count.c_str()).x));
+                          ImGui::CalcTextSize(friends_total.c_str()).x));
 
-    ImGui::Text(friends_count.c_str());
+    ImGui::Text(friends_total.c_str());
 
     if (!args.add_friend_first_draw && std::string(args.add_xuid_).empty()) {
       args.add_friend_first_draw = true;
@@ -1326,7 +1333,8 @@ bool xeDrawAddFriend(xe::ui::ImGuiDrawer* imgui_drawer, UserProfile* profile,
 
     ImGui::BeginDisabled(!args.valid_xuid || args.are_friends || max_friends);
     if (ImGui::Button("Add", btn_size)) {
-      bool added = profile->AddFriendFromXUID(xuid);
+      bool added =
+          kernel_state()->friends_manager()->AddFriend(profile->xuid(), xuid);
 
       if (added) {
         AddFriendToConfig(xuid);
@@ -1453,12 +1461,14 @@ bool xeDrawFriendsContent(
 
     ImGui::SetCursorPos(search_pos_input_end);
 
-    const std::string friends_count =
-        fmt::format("{}/100", profile->GetFriendsCount());
+    const uint32_t friends_count =
+        kernel_state()->friends_manager()->GetFriendsCount(profile->xuid());
+
+    const std::string friends_total = fmt::format("{}/100", friends_count);
 
     ImGui::SetCursorPosX((ImGui::GetCursorPosX() + window_width -
-                          ImGui::CalcTextSize(friends_count.c_str()).x));
-    ImGui::Text(friends_count.c_str());
+                          ImGui::CalcTextSize(friends_total.c_str()).x));
+    ImGui::Text(friends_total.c_str());
 
     ImGui::SetCursorPosY((ImGui::GetCursorPosY() - ImGui::GetTextLineHeight()) -
                          4);
@@ -1480,7 +1490,7 @@ bool xeDrawFriendsContent(
       ImGui::OpenPopup("Add Friend");
     }
 
-    ImGui::BeginDisabled(!profile->GetFriendsCount());
+    ImGui::BeginDisabled(!friends_count);
     if (ImGui::Button("Refresh", half_width_btn)) {
       args.refresh_presence = true;
     }
@@ -1488,7 +1498,7 @@ bool xeDrawFriendsContent(
 
     ImGui::SameLine();
 
-    ImGui::BeginDisabled(!profile->GetFriendsCount());
+    ImGui::BeginDisabled(!friends_count);
     if (ImGui::Button("Remove All", half_width_btn)) {
       ImGui::OpenPopup("Remove All Friends");
     }
@@ -1574,7 +1584,7 @@ bool xeDrawFriendsContent(
       ImGui::Separator();
 
       if (ImGui::Button("Yes", btn_size)) {
-        profile->RemoveAllFriends();
+        kernel_state()->friends_manager()->ClearFriends(profile->xuid());
 
         args.refresh_presence = true;
 

@@ -29,6 +29,7 @@
 #include "xenia/kernel/xam/achievement_manager.h"
 #include "xenia/kernel/xam/app_manager.h"
 #include "xenia/kernel/xam/content_manager.h"
+#include "xenia/kernel/xam/friends_manager.h"
 #include "xenia/kernel/xam/user_profile.h"
 #include "xenia/kernel/xam/xam_state.h"
 #include "xenia/kernel/xam/xdbf/spa_info.h"
@@ -194,6 +195,9 @@ class KernelState {
   xam::AppManager* app_manager() const { return xam_state()->app_manager(); }
   xam::ContentManager* content_manager() const {
     return xam_state()->content_manager();
+  }
+  xam::FriendsManager* friends_manager() const {
+    return xam_state()->friends_manager();
   }
 
   XmpVolumePatch* xmp_volume_patch() const { return xmp_volume_patch_.get(); }

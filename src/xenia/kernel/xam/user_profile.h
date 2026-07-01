@@ -108,6 +108,8 @@ class UserProfile {
  public:
   UserProfile(const uint64_t xuid, const X_XAMACCOUNTINFO* account_info);
 
+  void LoadFriends();
+
   uint64_t xuid() const { return xuid_; }
   uint64_t GetOnlineXUID() const {
     return IsLiveEnabled() ? static_cast<uint64_t>(account_info_.xuid_online)
@@ -175,29 +177,7 @@ class UserProfile {
 
   friend class UserTracker;
   friend class GpdAchievementBackend;
-
-  static X_ONLINE_FRIEND GenerateDummyFriend();
-
-  void AddDummyFriends(const uint32_t friends_count);
-
-  bool GetFriendPresenceFromXUID(const uint64_t xuid,
-                                 X_ONLINE_PRESENCE* presence);
-
-  bool SetFriend(const X_ONLINE_FRIEND& update_peer);
-  bool AddFriendFromXUID(const uint64_t xuid);
-  bool AddFriend(X_ONLINE_FRIEND* add_friend);
-  bool RemoveFriend(const X_ONLINE_FRIEND& peer);
-  bool RemoveFriend(const uint64_t xuid);
-  void RemoveAllFriends();
-
-  bool GetFriendFromIndex(const uint32_t index, X_ONLINE_FRIEND* peer);
-  bool GetFriendFromXUID(const uint64_t xuid, X_ONLINE_FRIEND* peer);
-  bool IsFriend(const uint64_t xuid, X_ONLINE_FRIEND* peer = nullptr);
-
-  const std::vector<X_ONLINE_FRIEND> GetFriends() const { return friends_; }
-  const std::set<uint64_t> GetFriendsXUIDs() const;
-
-  const uint32_t GetFriendsCount() const;
+  friend class FriendsManager;
 
   bool SetSubscriptionFromXUID(const uint64_t xuid, X_ONLINE_PRESENCE* peer);
   bool GetSubscriptionFromXUID(const uint64_t xuid, X_ONLINE_PRESENCE* peer);
@@ -266,8 +246,8 @@ class UserProfile {
  private:
   uint64_t xuid_;
   X_XAMACCOUNTINFO account_info_;
-  X_INVITE_INFO self_invite;
 
+  X_INVITE_INFO self_invite = {};
   std::vector<object_ref<XSession>> owned_sessions_;
   std::unique_ptr<xe::threading::PeriodicCallback> periodic_maintenance_task_;
 
