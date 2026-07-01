@@ -13,8 +13,8 @@
 #include "xenia/base/cvar.h"
 #include "xenia/base/logging.h"
 #include "xenia/kernel/XLiveAPI.h"
+#include "xenia/kernel/util/friends_util.h"
 #include "xenia/kernel/util/shim_utils.h"
-#include "xenia/kernel/xam/friends_util.h"
 #include "xenia/kernel/xnet.h"
 
 DEFINE_string(friends_xuids, "", "Comma delimited list of XUIDs. (Max 100)",
@@ -75,13 +75,13 @@ std::string BuildCSVFromVector(std::vector<std::string>& data, uint32_t count) {
   return xe::string_util::trim(csv.str());
 }
 
-std::vector<std::uint64_t> ParseFriendsXUIDs() {
+std::set<uint64_t> ParseFriendsXUIDs() {
   const auto& xuids = cvars::friends_xuids;
 
   const std::vector<std::string> friends_xuids =
       ParseDelimitedList(xuids, X_ONLINE_MAX_FRIENDS);
 
-  std::vector<std::uint64_t> xuids_parsed;
+  std::set<uint64_t> xuids_parsed;
 
   uint32_t index = 0;
   for (const auto& friend_xuid : friends_xuids) {
@@ -101,7 +101,7 @@ std::vector<std::uint64_t> ParseFriendsXUIDs() {
       continue;
     }
 
-    xuids_parsed.push_back(xuid);
+    xuids_parsed.insert(xuid);
 
     index++;
   }

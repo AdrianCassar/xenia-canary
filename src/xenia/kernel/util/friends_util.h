@@ -7,8 +7,8 @@
  ******************************************************************************
  */
 
-#ifndef XENIA_KERNEL_XAM_FRIENDS_UTIL
-#define XENIA_KERNEL_XAM_FRIENDS_UTIL
+#ifndef XENIA_KERNEL_UTIL_FRIENDS_UTIL
+#define XENIA_KERNEL_UTIL_FRIENDS_UTIL
 
 #include <cstdint>
 #include <vector>
@@ -22,7 +22,7 @@ std::vector<std::string> ParseDelimitedList(std::string_view csv,
 std::string BuildCSVFromVector(std::vector<std::string>& data,
                                uint32_t count = 0);
 
-std::vector<std::uint64_t> ParseFriendsXUIDs();
+std::set<uint64_t> ParseFriendsXUIDs();
 
 void AddFriendToConfig(uint64_t xuid);
 
@@ -31,4 +31,4 @@ void RemoveFriendFromConfig(uint64_t xuid);
 }  // namespace kernel
 }  // namespace xe
 
-#endif  // XENIA_KERNEL_XAM_FRIENDS_UTIL
+#endif  // XENIA_KERNEL_UTIL_FRIENDS_UTIL
