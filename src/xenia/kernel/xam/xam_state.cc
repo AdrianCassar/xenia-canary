@@ -10,6 +10,7 @@
 #include "xenia/kernel/xam/xam_state.h"
 #include "xenia/base/logging.h"
 #include "xenia/emulator.h"
+#include "xenia/kernel/util/friends_util.h"
 #include "xenia/kernel/xam/online_schema.h"
 
 namespace xe {
@@ -30,8 +31,11 @@ XamState::XamState(Emulator* emulator, KernelState* kernel_state)
   user_tracker_ = std::make_unique<UserTracker>();
   profile_manager_ =
       std::make_unique<ProfileManager>(kernel_state, user_tracker_.get());
+  friends_manager_ =
+      std::make_unique<FriendsManager>(kernel_state, profile_manager_.get());
   achievement_manager_ = std::make_unique<AchievementManager>();
 
+  LoadOnlineFriends();
   LoadOnlineSchema();
   LoadLanguageLocaleFallback();
   LoadIptvServiceName();
@@ -100,6 +104,16 @@ void XamState::LoadIptvServiceName() {
   }
 }
 
+void XamState::LoadOnlineFriends() {
+  for (uint32_t user_index = 0; user_index < XUserMaxUserCount; user_index++) {
+    const auto profile = GetUserProfile(user_index);
+
+    if (profile) {
+      friends_manager_->AddFriends(profile->xuid(), ParseFriendsXUIDs());
+    }
+  }
+}
+
 UserProfile* XamState::GetUserProfile(uint32_t user_index) const {
   if (user_index >= XUserMaxUserCount && user_index < XUserIndexLatest) {
     return nullptr;
@@ -122,13 +136,7 @@ UserProfile* XamState::GetUserProfileLive(uint64_t xuid) const {
 }
 
 UserProfile* XamState::GetUserProfileAny(uint64_t xuid) const {
-  auto profile = profile_manager_->GetProfile(xuid);
-
-  if (profile != nullptr) {
-    return profile;
-  }
-
-  return profile_manager_->GetProfileLive(xuid);
+  return profile_manager_->GetProfileAny(xuid);
 }
 
 uint8_t XamState::GetUserIndexAssignedToProfileFromXUID(uint64_t xuid) const {

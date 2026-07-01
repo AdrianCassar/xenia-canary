@@ -735,7 +735,8 @@ dword_result_t XamUserAreUsersFriends_entry(
           // xuid is 0 sometimes?
           uint64_t xuid = xuids_ptr[i];
 
-          if (user_profile->IsFriend(xuid)) {
+          if (kernel_state()->friends_manager()->IsFriend(user_profile->xuid(),
+                                                          xuid)) {
             friends_count++;
           }
         }

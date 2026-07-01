@@ -258,7 +258,7 @@ class XLiveAPI {
 
   void SetXUIDMismatch(bool state) { xuid_mismatch_ = state; };
 
-  bool GetDummyFriendsCount() const { return dummy_friends_count_; };
+  uint32_t GetDummyFriendsCount() const { return dummy_friends_count_; };
 
   void SetDummyFriendsCount(const uint32_t count) {
     dummy_friends_count_ = count;
