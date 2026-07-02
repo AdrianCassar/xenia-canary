@@ -255,6 +255,7 @@ uint32_t XamUserReadProfileSettingsEx(
     if (!UserSetting::is_setting_valid(setting_id)) {
       if (!setting_id) {
         XELOGE("{} requested unknown setting {:08X}", __func__, setting_id);
+        continue;
       }
     }
 
@@ -301,13 +302,17 @@ uint32_t XamUserReadProfileSettingsEx(
       return X_ERROR_FUNCTION_FAILED;
     }
 
-    const auto requested_settings_view =
-        settings_ids | std::views::transform([](uint32_t id) {
-          return static_cast<xam::UserSettingId>(id);
-        });
+    // 455607DB uses invalid setting IDs
+    auto valid_requested_settings_view =
+        settings_ids | std::views::filter([](uint32_t setting_id) {
+          return UserSetting::is_setting_valid(setting_id);
+        }) |
+        std::views::transform(
+            [](uint32_t id) { return static_cast<xam::UserSettingId>(id); });
 
-    const std::vector<xam::UserSettingId> requested_settings_ids(
-        requested_settings_view.begin(), requested_settings_view.end());
+    const std::vector<xam::UserSettingId> valid_requested_settings_ids(
+        valid_requested_settings_view.begin(),
+        valid_requested_settings_view.end());
 
     user_settings_map remote_user_settings = {};
     user_settings_map local_user_settings = {};
@@ -318,7 +323,7 @@ uint32_t XamUserReadProfileSettingsEx(
 
     // We split the settings into their respective title ids for lookup,
     // therefore we lose the setting ids order!
-    const auto GetLocalUserSettings = [requested_settings_ids,
+    const auto GetLocalUserSettings = [valid_requested_settings_ids,
                                        titleId](UserProfile* user_profile) {
       std::map<uint32_t, std::vector<xam::UserSetting>> title_settings = {};
 
@@ -326,7 +331,7 @@ uint32_t XamUserReadProfileSettingsEx(
         return title_settings;
       }
 
-      for (const xam::UserSettingId setting_id : requested_settings_ids) {
+      for (const xam::UserSettingId setting_id : valid_requested_settings_ids) {
         const uint32_t setting_id_val = static_cast<uint32_t>(setting_id);
         uint32_t setting_title_id = titleId;
 
@@ -356,7 +361,8 @@ uint32_t XamUserReadProfileSettingsEx(
       for (const uint64_t xuid : profile_xuids) {
         if (!kernel_state()->xam_state()->IsUserSignedIn(xuid) &&
             IsOnlineXUID(xuid)) {
-          for (const xam::UserSettingId settings_id : requested_settings_ids) {
+          for (const xam::UserSettingId settings_id :
+               valid_requested_settings_ids) {
             uint32_t setting_title_id = titleId;
 
             // If setting is not title specific then assume it belongs to the
@@ -419,7 +425,7 @@ uint32_t XamUserReadProfileSettingsEx(
       std::fill_n(out_setting, setting_count, X_USER_PROFILE_SETTING{});
 
       out_header->setting_count =
-          static_cast<uint32_t>(requested_settings_ids.size());
+          static_cast<uint32_t>(valid_requested_settings_ids.size());
       out_header->settings_ptr = kernel_state()->memory()->HostToGuestVirtual(
           std::to_address(out_setting));
 
@@ -428,7 +434,7 @@ uint32_t XamUserReadProfileSettingsEx(
           (setting_count * sizeof(X_USER_PROFILE_SETTING));
 
       // Maintain requested settings id order.
-      for (const xam::UserSettingId setting_id : requested_settings_ids) {
+      for (const xam::UserSettingId setting_id : valid_requested_settings_ids) {
         const uint32_t setting_id_val = static_cast<uint32_t>(setting_id);
         uint32_t setting_title_id = titleId;
 
