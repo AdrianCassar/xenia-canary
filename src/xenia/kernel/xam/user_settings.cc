@@ -57,6 +57,8 @@ std::optional<UserSetting> UserSetting::GetDefaultSetting(uint32_t setting_id) {
 
   switch (type) {
     case X_USER_DATA_TYPE::CONTEXT:
+      return std::make_optional<UserSetting>(
+          static_cast<UserSettingId>(setting_id), static_cast<uint32_t>(0));
     case X_USER_DATA_TYPE::INT32:
     case X_USER_DATA_TYPE::UNSET:
       return std::make_optional<UserSetting>(
