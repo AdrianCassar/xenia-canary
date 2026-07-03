@@ -236,7 +236,7 @@ dword_result_t XamCreateEnumeratorHandle_entry(
       XELOGI(enumerator_log);
 
       auto e = object_ref<XStaticUntypedEnumerator>(
-          new XStaticUntypedEnumerator(kernel_state(), item_count, extra_size));
+          new XStaticUntypedEnumerator(kernel_state(), item_count, 0));
 
       result = e->Initialize(user_index, app_id, open_message, close_message,
                              flags, extra_size, nullptr);
@@ -265,6 +265,9 @@ dword_result_t XamGetPrivateEnumStructureFromHandle_entry(
   // It's released in ObDereferenceObject.
   e->RetainHandle();
 
+  // TODO:
+  // Enumerator objects don't have X_DISPATCH_HEADER currently it's included in
+  // object, but should be removed.
   if (out_object_ptr.guest_address()) {
     *out_object_ptr = e->guest_object();
   }

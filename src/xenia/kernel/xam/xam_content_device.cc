@@ -166,7 +166,7 @@ dword_result_t XamContentCreateDeviceEnumerator_entry(dword_t content_type,
 
   auto e = make_object<XStaticEnumerator<X_CONTENT_DEVICE_DATA>>(kernel_state(),
                                                                  max_count);
-  auto result = e->Initialize(XUserIndexNone, 0xFE, 0x2000A, 0x20009, 0);
+  auto result = e->Initialize(XUserIndexNone, 0xFE, 0x2000A, 0x20009, 0, 0x98);
   if (XFAILED(result)) {
     return result;
   }
