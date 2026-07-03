@@ -924,7 +924,7 @@ dword_result_t XamUserCreateAchievementEnumerator_entry(
 
   auto e = object_ref<XAchievementEnumerator>(
       new XAchievementEnumerator(kernel_state(), count, offset, flags));
-  auto result = e->Initialize(user_index, 0xFB, 0xB000A, 0xB000B, 0);
+  auto result = e->Initialize(user_index, 0xFB, 0xB000A, 0xB000B, 0, 0x28);
   if (XFAILED(result)) {
     return result;
   }
@@ -1668,8 +1668,8 @@ dword_result_t XamUserCreateStatsEnumerator_entry(
   auto e = object_ref<XStaticUntypedEnumerator>(
       new XStaticUntypedEnumerator(kernel_state(), 1, buffer_size));
 
-  const X_STATUS result =
-      e->Initialize(XUserIndexNone, 0xFB, 0xB0023, 0xB0024, 0);
+  const X_STATUS result = e->Initialize(XUserIndexNone, 0xFB, 0xB0023, 0xB0024,
+                                        0, 0x8C * num_stats_specs + 0x20);
 
   if (XFAILED(result)) {
     return result;
