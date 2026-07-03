@@ -244,7 +244,7 @@ dword_result_t XamCreateEnumeratorHandle_entry(
       XELOGI(enumerator_log);
 
       auto e = object_ref<XStaticUntypedEnumerator>(
-          new XStaticUntypedEnumerator(kernel_state(), item_count, extra_size));
+          new XStaticUntypedEnumerator(kernel_state(), item_count, 0));
 
       result = e->Initialize(user_index, app_id, open_message, close_message,
                              flags, extra_size, nullptr);

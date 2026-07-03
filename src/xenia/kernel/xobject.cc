@@ -55,6 +55,8 @@ XObject::~XObject() {
     uint32_t ptr = guest_object_ptr_ - sizeof(X_OBJECT_HEADER);
     auto header = memory()->TranslateVirtual<X_OBJECT_HEADER*>(ptr);
 
+    kernel_state()->object_table()->UnmapGuestObjectHostHandle(ptr);
+
     // Free the object creation info
     if (header->object_type_ptr) {
       memory()->SystemHeapFree(header->object_type_ptr);
@@ -372,6 +374,7 @@ uint8_t* XObject::CreateNative(uint32_t size) {
 
   allocated_guest_object_ = true;
   memory()->Zero(mem, total_size);
+
   SetNativePointer(mem + sizeof(X_OBJECT_HEADER), true);
 
   auto header = memory()->TranslateVirtual<X_OBJECT_HEADER*>(mem);
@@ -393,17 +396,8 @@ void XObject::SetNativePointer(uint32_t native_ptr, bool uninitialized) {
   // If hit: We've already setup the native ptr with CreateNative!
   assert_zero(guest_object_ptr_);
 
-  auto header =
-      kernel_state_->memory()->TranslateVirtual<X_DISPATCH_HEADER*>(native_ptr);
-
-  // Memory uninitialized, so don't bother with the check.
-  if (!uninitialized) {
-    assert_true(!(header->wait_list.blink_ptr & 0x1));
-  }
-
-  // Stash pointer in struct.
-  // FIXME: This assumes the object has a dispatch header (some don't!)
-  StashHandle(header, handle());
+  kernel_state_->object_table()->MapGuestObjectToHostHandle(native_ptr,
+                                                            handle());
 
   guest_object_ptr_ = native_ptr;
 }
@@ -422,12 +416,14 @@ object_ref<XObject> XObject::GetNativeObject(KernelState* kernel_state,
   // each time.
   // We identify this by setting wait_list.flink_ptr to a magic value. When set,
   // wait_list.blink_ptr will hold a handle to our object.
+  auto guest_ptr = kernel_state->memory()->HostToGuestVirtual(native_ptr);
   if (!already_locked) {
     global_critical_region::mutex().lock();
   }
 
   XObject* result = nullptr;
 
+  // ????
   auto header = reinterpret_cast<X_DISPATCH_HEADER*>(native_ptr);
   X_OBJECT_TYPES type = as_type;
 
@@ -435,19 +431,40 @@ object_ref<XObject> XObject::GetNativeObject(KernelState* kernel_state,
     type = header->type;
   }
 
-  if (header->wait_list.flink_ptr == kXObjSignature) {
+  // auto true_object_header =
+  //     kernel_state->memory()->TranslateVirtual<X_OBJECT_HEADER*>(
+  //         guest_ptr - sizeof(X_OBJECT_HEADER));
+
+  X_HANDLE host_handle = X_INVALID_HANDLE_VALUE;
+
+  bool successfully_mapped_to_host =
+      kernel_state->object_table()->HostHandleForGuestObject(guest_ptr,
+                                                             host_handle);
+
+  bool create_new = true;
+
+  if (successfully_mapped_to_host) {
     // Already initialized.
     // TODO: assert if the type of the object != as_type
-    uint32_t handle = header->wait_list.blink_ptr;
+
+    create_new = false;
+
     result = kernel_state->object_table()
-                 ->LookupObject<XObject>(handle, true)
+                 ->LookupObject<XObject>(host_handle, true)
                  .release();
     if (result) {
-      // The only place the guest hands us a raw dispatch header, so the only
-      // place a direct write to it can be picked up.
-      result->SyncFromGuest();
+      if (HasDispatcherHeader(result->type()) &&
+          MapGuestTypeToHost(header->type) != result->type()) {
+        create_new = true;
+      } else {
+        // The only place the guest hands us a raw dispatch header, so the only
+        // place a direct write to it can be picked up.
+        result->SyncFromGuest();
+      }
     }
-  } else {
+  }
+
+  if (create_new) {
     // First use, create new.
     // https://www.nirsoft.net/kernel_struct/vista/KOBJECTS.html
     switch (type) {
@@ -485,11 +502,11 @@ object_ref<XObject> XObject::GetNativeObject(KernelState* kernel_state,
         assert_always();
         result = nullptr;
     }
-    // Stash pointer in struct.
-    // FIXME: This assumes the object contains a dispatch header (some don't!)
-    if (result) {
-      StashHandle(header, result->handle());
-    }
+  }
+
+  if (result) {
+    kernel_state->object_table()->MapGuestObjectToHostHandle(guest_ptr,
+                                                             result->handle());
   }
 
   if (!already_locked) {

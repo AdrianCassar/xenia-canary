@@ -256,12 +256,6 @@ class XObject {
     return reinterpret_cast<T*>(CreateNative(sizeof(T)));
   }
 
-  // Stash native pointer into X_DISPATCH_HEADER
-  static void StashHandle(X_DISPATCH_HEADER* header, uint32_t handle) {
-    header->wait_list.flink_ptr = kXObjSignature;
-    header->wait_list.blink_ptr = handle;
-  }
-
   static uint32_t TimeoutTicksToMs(int64_t timeout_ticks);
 
   KernelState* kernel_state_;

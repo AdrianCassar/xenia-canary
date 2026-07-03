@@ -47,6 +47,15 @@ class ObjectTable {
   // Restores a XObject reference with a handle. Mainly for internal use - do
   // not use.
   X_STATUS RestoreHandle(X_HANDLE handle, XObject* object);
+
+  void MapGuestObjectToHostHandle(uint32_t guest_object, X_HANDLE host_handle);
+
+  bool HostHandleForGuestObject(uint32_t guest_object, X_HANDLE& out) const;
+
+  void UnmapGuestObjectHostHandle(uint32_t guest_object);
+
+  void FlushGuestToHostMapping(uint32_t base_address, uint32_t length);
+
   template <typename T>
   object_ref<T> LookupObject(X_HANDLE handle, bool already_locked = false) {
     auto object = LookupObject(handle, already_locked);
@@ -110,6 +119,7 @@ class ObjectTable {
   uint32_t last_free_entry_ = 0;
   uint32_t last_free_host_entry_ = 0;
   std::unordered_map<string_key_case, X_HANDLE> name_table_;
+  std::map<uint32_t, X_HANDLE> guest_to_host_handle_;
 };
 
 // Generic lookup
