@@ -1519,11 +1519,14 @@ dword_result_t XamGetServiceEndpoint_entry(
         extended_error = X_ERROR_INSUFFICIENT_BUFFER;
         return X_ERROR_FUNCTION_FAILED;
       } else {
-        strcpy(service_endpoint_ptr, fallback_service_endpoint.c_str());
+        xe::string_util::copy_truncating(service_endpoint_ptr,
+                                         fallback_service_endpoint.c_str(),
+                                         service_endpoint_len);
         XELOGI("XamGetServiceEndpoint: {}", fallback_service_endpoint.c_str());
       }
     } else {
-      strcpy(service_endpoint_ptr, service_endpoint.c_str());
+      xe::string_util::copy_truncating(
+          service_endpoint_ptr, service_endpoint.c_str(), service_endpoint_len);
       XELOGI("XamGetServiceEndpoint: {}", service_endpoint.c_str());
     }
 
