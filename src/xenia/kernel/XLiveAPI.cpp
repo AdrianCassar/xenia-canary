@@ -1521,9 +1521,9 @@ std::vector<X_TITLE_SERVER> XLiveAPI::GetServers() {
 
     std::string description = server_data["description"].GetString();
 
-    if (description.size() < sizeof(server.server_description)) {
-      strcpy(server.server_description, description.c_str());
-    }
+    xe::string_util::copy_truncating(server.server_description,
+                                     description.c_str(),
+                                     sizeof(server.server_description));
 
     xlsp_servers_.push_back(server);
   }

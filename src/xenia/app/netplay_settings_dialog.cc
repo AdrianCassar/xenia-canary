@@ -352,21 +352,18 @@ void NetplaySettingsDialog::OnDraw(ImGuiIO& io) {
         add_address_context_open_ = true;
 
         if (ImGui::MenuItem("Paste")) {
-          const std::string clipboard = ImGui::GetClipboardText();
+          const char* clipboard = ImGui::GetClipboardText();
 
-          if (!clipboard.empty()) {
-            // Null terminated string
-            const std::string safe_clipboard = xe::string_util::trim(
-                clipboard.substr(0, sizeof(new_api_address_) - 1));
-
-            strcpy(new_api_address_, safe_clipboard.c_str());
+          if (clipboard) {
+            xe::string_util::copy_truncating(new_api_address_, clipboard,
+                                             sizeof(new_api_address_));
           }
         }
 
         ImGui::Separator();
 
         if (ImGui::MenuItem("Clear")) {
-          memset(new_api_address_, 0, sizeof(new_api_address_));
+          std::memset(new_api_address_, 0, sizeof(new_api_address_));
         }
 
         ImGui::EndPopup();

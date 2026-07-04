@@ -383,10 +383,10 @@ void TitleGamerpicBrowser::OnDraw(ImGuiIO& io) {
         if (ImGui::BeginPopupContextItem(lbl_search_title_contexts.c_str())) {
           if (ImGui::MenuItem("Paste")) {
             const char* clipboard = ImGui::GetClipboardText();
-            std::string title_id_str(clipboard);
 
-            if (title_id_str.size() == sizeof(title_id_) - 1) {
-              strcpy(title_id_, title_id_str.c_str());
+            if (clipboard) {
+              xe::string_util::copy_truncating(title_id_, clipboard,
+                                               sizeof(title_id_));
             }
           }
 
