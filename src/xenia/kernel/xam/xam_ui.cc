@@ -1305,10 +1305,11 @@ bool xeDrawAddFriend(xe::ui::ImGuiDrawer* imgui_drawer, UserProfile* profile,
       args.add_friend_context_open = true;
 
       if (ImGui::MenuItem("Paste")) {
-        const std::string clipboard = ImGui::GetClipboardText();
+        const char* clipboard = ImGui::GetClipboardText();
 
-        if (!clipboard.empty()) {
-          strncpy(args.add_xuid_, clipboard.c_str(), sizeof(args.add_xuid_));
+        if (clipboard) {
+          xe::string_util::copy_truncating(args.add_xuid_, clipboard,
+                                           sizeof(args.add_xuid_));
         }
       }
 
@@ -1422,13 +1423,11 @@ bool xeDrawFriendsContent(
       args.add_friend_args.search_filter_context_open = true;
 
       if (ImGui::MenuItem("Paste")) {
-        const std::string clipboard = ImGui::GetClipboardText();
+        const char* clipboard = ImGui::GetClipboardText();
 
-        if (!clipboard.empty()) {
-          memset(args.filter.InputBuf, 0, sizeof(args.filter.InputBuf));
-
-          strncpy(args.filter.InputBuf, clipboard.c_str(),
-                  sizeof(args.filter.InputBuf));
+        if (clipboard) {
+          xe::string_util::copy_truncating(args.filter.InputBuf, clipboard,
+                                           sizeof(args.filter.InputBuf));
 
           args.filter.Build();
         }
