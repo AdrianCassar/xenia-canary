@@ -423,10 +423,7 @@ void NetplaySettingsDialog::UpdateSelectedInterfaceItemAndIndex() {
     selected_network_interface_item_ = network_interface_guids_.at(*it).c_str();
   } else {
     selected_interface_index_ = 0;
-
-    if (guid_keys.empty()) {
-      selected_network_interface_item_ = "Unspecified Network";
-    }
+    selected_network_interface_item_ = "Unspecified Network";
   }
 }
 

@@ -26,7 +26,12 @@ void NetworkAdapterManager::Initialize() {
     // interface index.
     best_interface_IfIndex_ = GetBestInterfaceIfIndex();
 
-    AutoSelectNetworkAdapter(best_interface_IfIndex_);
+    // If we cannot find a best interface then default to first interface.
+    if (best_interface_IfIndex_ == -1) {
+      AutoSelectNetworkAdapter(adapter_addresses_.front().IfIndex);
+    } else {
+      AutoSelectNetworkAdapter(best_interface_IfIndex_);
+    }
   }
 }
 
