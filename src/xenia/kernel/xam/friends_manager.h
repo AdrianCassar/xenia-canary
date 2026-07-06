@@ -13,6 +13,7 @@
 #include <optional>
 #include <set>
 
+#include "xenia/kernel/json/friend_presence_object_json.h"
 #include "xenia/kernel/xnet.h"
 
 namespace xe {
@@ -71,6 +72,9 @@ class FriendsManager {
       const uint64_t xuid, const uint64_t friend_xuid) const;
 
   void AddDummyFriends(const uint64_t xuid, const uint32_t friends_count) const;
+
+  bool IsPresenceOutOfSync(uint64_t xuid,
+                           std::vector<FriendPresenceObjectJSON> friends) const;
 
  private:
   std::vector<X_ONLINE_FRIEND>::iterator FindFriend(

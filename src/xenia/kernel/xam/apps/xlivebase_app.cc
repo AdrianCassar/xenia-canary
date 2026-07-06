@@ -352,9 +352,6 @@ X_HRESULT XLiveBaseApp::ExecuteDispatchMessage(uint32_t message,
   return cvars::stub_xlivebase ? X_E_SUCCESS : X_E_FAIL;
 }
 
-uint32_t MAX_TITLE_SUBSCRIPTIONS = 0;
-uint32_t ACTIVE_TITLE_SUBSCRIPTIONS = 0;
-
 X_HRESULT XLiveBaseApp::XPresenceInitialize(uint32_t buffer_ptr,
                                             uint32_t buffer_length) {
   if (!buffer_ptr || !buffer_length) {
@@ -379,7 +376,7 @@ X_HRESULT XLiveBaseApp::XPresenceInitialize(uint32_t buffer_ptr,
     return X_ONLINE_E_NOTIFICATION_TOO_MANY_SUBS;
   }
 
-  MAX_TITLE_SUBSCRIPTIONS = max_peer_subscriptions;
+  kernel_state_->presence_manager()->Initialize(max_peer_subscriptions);
 
   return X_E_SUCCESS;
 }
@@ -427,26 +424,15 @@ X_HRESULT XLiveBaseApp::XPresenceSubscribe(uint32_t buffer_ptr,
     return X_E_NO_SUCH_USER;
   }
 
-  const auto profile = kernel_state_->xam_state()->GetUserProfile(user_index);
+  const auto user_xuid =
+      kernel_state_->xam_state()->GetUserProfile(user_index)->xuid();
 
   for (uint32_t i = 0; i < num_peers; i++) {
     const xe::be<uint64_t> peer_xuid = peer_xuids[i];
 
-    if (!peer_xuid) {
-      continue;
-    }
-
-    if (kernel_state_->friends_manager()->IsFriend(profile->xuid(),
-                                                   peer_xuid)) {
-      continue;
-    }
-
-    if (ACTIVE_TITLE_SUBSCRIPTIONS <= MAX_TITLE_SUBSCRIPTIONS) {
-      ACTIVE_TITLE_SUBSCRIPTIONS++;
-
-      profile->SubscribeFromXUID(peer_xuid);
-    } else {
-      XELOGI("Max subscriptions reached");
+    if (!kernel_state_->presence_manager()->Subscribe(user_xuid, peer_xuid)) {
+      XELOGI("{}: Failed to subscribe peer: {:016X}", __func__,
+             peer_xuid.get());
     }
   }
 
@@ -500,24 +486,15 @@ X_HRESULT XLiveBaseApp::XPresenceUnsubscribe(uint32_t buffer_ptr,
     return X_E_NO_SUCH_USER;
   }
 
-  const auto profile = kernel_state_->xam_state()->GetUserProfile(user_index);
+  const auto user_xuid =
+      kernel_state_->xam_state()->GetUserProfile(user_index)->xuid();
 
   for (uint32_t i = 0; i < num_peers; i++) {
     const xe::be<uint64_t> peer_xuid = peer_xuids[i];
 
-    if (!peer_xuid) {
-      continue;
-    }
-
-    if (kernel_state_->friends_manager()->IsFriend(profile->xuid(),
-                                                   peer_xuid)) {
-      continue;
-    }
-
-    if (ACTIVE_TITLE_SUBSCRIPTIONS > 0) {
-      ACTIVE_TITLE_SUBSCRIPTIONS--;
-
-      profile->UnsubscribeFromXUID(peer_xuid);
+    if (!kernel_state_->presence_manager()->Unsubscribe(user_xuid, peer_xuid)) {
+      XELOGI("{}: Failed to unsubscribe peer: {:016X}", __func__,
+             peer_xuid.get());
     }
   }
 
@@ -530,6 +507,8 @@ X_HRESULT XLiveBaseApp::XPresenceCreateEnumerator(uint32_t buffer_ptr,
   if (!buffer_ptr || !buffer_length) {
     return X_E_INVALIDARG;
   }
+
+  assert_true(kernel_state_->presence_manager()->IsInitialized());
 
   XLivebaseAsyncTask async_task(kernel_state_, buffer_ptr);
 
@@ -578,10 +557,6 @@ X_HRESULT XLiveBaseApp::XPresenceCreateEnumerator(uint32_t buffer_ptr,
 
   *buffer_size_ptr = 0;
 
-  if (!kernel_state_->xam_state()->IsUserSignedIn(user_index)) {
-    return X_E_INVALIDARG;
-  }
-
   if (num_peers <= 0) {
     return X_E_INVALIDARG;
   }
@@ -602,7 +577,8 @@ X_HRESULT XLiveBaseApp::XPresenceCreateEnumerator(uint32_t buffer_ptr,
     return X_E_NO_SUCH_USER;
   }
 
-  const auto profile = kernel_state_->xam_state()->GetUserProfile(user_index);
+  const auto user_xuid =
+      kernel_state_->xam_state()->GetUserProfile(user_index)->xuid();
 
   auto e = make_object<XStaticEnumerator<X_ONLINE_PRESENCE>>(kernel_state_,
                                                              num_peers);
@@ -616,27 +592,27 @@ X_HRESULT XLiveBaseApp::XPresenceCreateEnumerator(uint32_t buffer_ptr,
       std::vector<uint64_t>(peer_xuids_ptr, peer_xuids_ptr + num_peers);
 
   for (auto i = starting_index; i < e->items_per_enumerate(); i++) {
-    const xe::be<uint64_t> xuid = peer_xuids[i];
-
-    if (!xuid) {
-      continue;
-    }
+    const xe::be<uint64_t> peer_xuid = peer_xuids[i];
 
     const auto friends_manager = kernel_state_->friends_manager();
+    const auto presence_manager = kernel_state_->presence_manager();
 
-    if (friends_manager->IsFriend(profile->xuid(), xuid)) {
+    if (friends_manager->IsFriend(user_xuid, peer_xuid)) {
       const auto presence =
-          friends_manager->GetFriendPresence(profile->xuid(), xuid);
+          friends_manager->GetFriendPresence(user_xuid, peer_xuid);
 
       if (presence.has_value()) {
         auto item = e->AppendItem();
         *item = presence.value();
       }
+    } else if (presence_manager->IsSubscribed(user_xuid, peer_xuid)) {
+      const auto subscription =
+          presence_manager->GetSubscription(user_xuid, peer_xuid);
 
-    } else if (profile->IsSubscribed(xuid)) {
-      auto item = e->AppendItem();
-
-      profile->GetSubscriptionFromXUID(xuid, item);
+      if (subscription.has_value()) {
+        auto item = e->AppendItem();
+        *item = subscription.value();
+      }
     }
   }
 
@@ -842,6 +818,9 @@ X_HRESULT XLiveBaseApp::XFriendsCreateEnumerator(uint32_t buffer_ptr,
     return X_E_INVALIDARG;
   }
 
+  // 5841128F and 58410A57 don't call XPresenceInitialize before
+  // XFriendsCreateEnumerator, maybe it's not mandatory?
+
   XLivebaseAsyncTask async_task(kernel_state_, buffer_ptr);
 
   const X_ARGUMENT_LIST* args_list =
@@ -987,8 +966,8 @@ X_HRESULT XLiveBaseApp::XInviteGetAcceptedInfo(uint32_t buffer_ptr,
   // Reset self invite
   user_profile->SetSelfInvite({});
 
-  const auto presence = kernel_state_->GetXboxLiveAPI()->GetFriendsPresence(
-      {invite_info->xuid_inviter});
+  const auto presence = kernel_state_->presence_manager()->GetFriendsPresence(
+      user_profile->xuid(), {invite_info->xuid_inviter});
 
   uint64_t session_id = 0;
 

@@ -8,9 +8,7 @@
  */
 
 #include "xenia/kernel/xam/ui/gamercard_from_xuid_ui.h"
-#include "xenia/emulator.h"
 #include "xenia/kernel/XLiveAPI.h"
-#include "xenia/ui/imgui_host_notification.h"
 
 namespace xe {
 namespace kernel {
@@ -20,11 +18,7 @@ namespace ui {
 GamercardFromXUIDUI::GamercardFromXUIDUI(xe::ui::ImGuiDrawer* imgui_drawer,
                                          const uint64_t xuid,
                                          UserProfile* profile)
-    : XamDialog(imgui_drawer),
-      xuid_(xuid),
-      profile_(profile),
-      presence_({}),
-      title_("Gamercard") {
+    : XamDialog(imgui_drawer), xuid_(xuid), profile_(profile) {
   is_self = xuid_ == profile_->xuid() || xuid_ == profile_->GetOnlineXUID();
 
   if (!is_self) {
@@ -34,11 +28,8 @@ GamercardFromXUIDUI::GamercardFromXUIDUI(xe::ui::ImGuiDrawer* imgui_drawer,
   if (!kernel_state()->GetXboxLiveAPI()->IsConnectedToServer()) {
     if (is_self) {
       presence_.Gamertag(profile_->name());
-
       presence_.RichPresence(profile_->GetPresenceString());
-
       presence_.XUID(profile_->GetOnlineXUID());
-
       presence_.TitleID(fmt::format("{:08X}", kernel_state()->title_id()));
     } else if (!is_self) {
       // Cached friend presence
@@ -60,7 +51,8 @@ GamercardFromXUIDUI::GamercardFromXUIDUI(xe::ui::ImGuiDrawer* imgui_drawer,
     }
   } else {
     const auto presences =
-        kernel_state()->GetXboxLiveAPI()->GetFriendsPresence({xuid_});
+        kernel_state()->presence_manager()->GetFriendsPresence(profile_->xuid(),
+                                                               {xuid_});
 
     immediate_gamerpic_ = std::async(std::launch::async, [xuid,
                                                           imgui_drawer]() {
@@ -72,6 +64,8 @@ GamercardFromXUIDUI::GamercardFromXUIDUI(xe::ui::ImGuiDrawer* imgui_drawer,
 
       return shared_gamerpic;
     });
+
+    presence_.XUID(xuid_);
 
     if (!presences->PlayersPresence().empty()) {
       presence_ = presences->PlayersPresence().front();
@@ -98,8 +92,8 @@ GamercardFromXUIDUI::GamercardFromXUIDUI(xe::ui::ImGuiDrawer* imgui_drawer,
 }
 
 void GamercardFromXUIDUI::OnDraw(ImGuiIO& io) {
-  if (!card_opened) {
-    card_opened = true;
+  if (!dialog_open) {
+    dialog_open = true;
     ImGui::OpenPopup(title_.c_str());
   }
 
@@ -115,19 +109,21 @@ void GamercardFromXUIDUI::OnDraw(ImGuiIO& io) {
   }
 
   ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-  if (ImGui::BeginPopupModal(title_.c_str(), &card_opened,
+  if (ImGui::BeginPopupModal(title_.c_str(), &dialog_open,
                              ImGuiWindowFlags_AlwaysAutoResize)) {
     if (ImGui::IsKeyPressed(ImGuiKey::ImGuiKey_GamepadFaceRight, false)) {
       ImGui::CloseCurrentPopup();
     }
 
-    xeDrawFriendContent(imgui_drawer(), profile_, gamerpic_texture, presence_,
-                        nullptr, nullptr);
+    friend_presence_ = presence_.GetFriendPresence();
+
+    xeDrawFriendContent(imgui_drawer(), profile_, gamerpic_texture,
+                        friend_presence_, nullptr, nullptr);
 
     ImGui::EndPopup();
   }
 
-  if (!card_opened) {
+  if (!dialog_open) {
     Close();
   }
 }

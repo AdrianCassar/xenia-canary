@@ -530,8 +530,8 @@ const std::optional<uint32_t> XLast::GetPresenceStringId(
 }
 
 const std::u16string XLast::GetPresenceRawString(
-    const xam::Property* presence_property) {
-  const uint32_t presence_value = presence_property->get_data()->data.u32;
+    const xam::Property& presence_property) {
+  const uint32_t presence_value = presence_property.get_data()->data.u32;
 
   const std::optional<uint32_t> presence_string_id =
       GetPresenceStringId(presence_value);

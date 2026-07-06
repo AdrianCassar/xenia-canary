@@ -16,7 +16,6 @@
 
 #include "xenia/xbox.h"
 
-#include "xenia/kernel/json/friend_presence_object_json.h"
 #include "xenia/kernel/xam/user_profile.h"
 #include "xenia/kernel/xam/user_settings.h"
 
@@ -47,13 +46,6 @@ struct TitleInfo {
   }
 };
 
-struct PresenceSyncState {
-  bool friends;
-  bool peers;
-
-  bool IsOutOfSync() const { return friends || peers; }
-};
-
 class UserTracker {
  public:
   UserTracker() = default;
@@ -69,13 +61,6 @@ class UserTracker {
   // User related methods
   bool UnlockAchievement(uint64_t xuid, uint32_t achievement_id);
   void RefreshTitleSummary(uint64_t xuid, uint32_t title_id);
-
-  PresenceSyncState IsPresenceOutOfSync(
-      const uint64_t xuid,
-      const std::vector<FriendPresenceObjectJSON> presence_info) const;
-
-  // XFriendsCreateEnumerator & XPresenceCreateEnumerator
-  void RefershFriendsAndSubscribersPresence(const uint64_t xuid) const;
 
   // XSessions
   void AddOwnedSession(const uint64_t xuid,
