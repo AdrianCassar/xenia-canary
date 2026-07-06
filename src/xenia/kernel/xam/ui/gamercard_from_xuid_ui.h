@@ -12,7 +12,6 @@
 
 #include <future>
 
-#include "xenia/kernel/json/friend_presence_object_json.h"
 #include "xenia/kernel/xam/xam_ui.h"
 
 namespace xe {
@@ -28,15 +27,16 @@ class GamercardFromXUIDUI : public XamDialog {
  private:
   void OnDraw(ImGuiIO& io) override;
 
-  bool card_opened = false;
+  bool dialog_open = false;
   bool is_self = false;
   bool are_friends = false;
-  std::string title_;
+  std::string title_ = "Gamercard";
   const uint64_t xuid_;
   std::shared_future<std::shared_ptr<xe::ui::ImmediateTexture>>
       immediate_gamerpic_;
   UserProfile* profile_;
   FriendPresenceObjectJSON presence_;
+  X_ONLINE_FRIEND friend_presence_ = {};
 };
 
 }  // namespace ui

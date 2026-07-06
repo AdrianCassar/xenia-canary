@@ -154,7 +154,7 @@ class XLast {
   const std::optional<uint32_t> GetPresenceStringId(const uint32_t context_id);
   const std::optional<uint32_t> GetPropertyStringId(const uint32_t property_id);
   const std::u16string GetPresenceRawString(
-      const xam::Property* presence_property);
+      const xam::Property& presence_property);
   XLastGameModeQuery* GetGameModeQuery() const;
   XLastContextsQuery* GetContextsQuery() const;
   XLastPropertiesQuery* GetPropertiesQuery() const;

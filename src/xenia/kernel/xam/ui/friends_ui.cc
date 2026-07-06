@@ -17,55 +17,68 @@ namespace ui {
 
 FriendsUI::FriendsUI(xe::ui::ImGuiDrawer* imgui_drawer, UserProfile* profile)
     : XamDialog(imgui_drawer), profile_(profile) {
-  friends_presence_ = kernel_state()->GetXboxLiveAPI()->GetFriendsPresenceAsync(
-      profile->xuid());
-  immediate_gamerpics_ =
+  friends_ui_args_.friends_presence =
+      kernel_state()->xam_state()->presence_manager()->GetFriendsPresenceSorted(
+          profile_->xuid());
+
+  friends_ui_args_.immediate_gamerpics =
       kernel_state()->GetXboxLiveAPI()->GetFriendsGamerpicsAsync(
           profile->xuid(), imgui_drawer);
 }
 
-// TODO(Adrian): Move into a separate function so draw can be reused with dialog
-// manager to reduce duplication.
 void FriendsUI::OnDraw(ImGuiIO& io) {
-  if (!args.friends_open) {
-    args.first_draw = true;
-    args.friends_open = true;
-
-    ImGui::OpenPopup("Friends");
+  if (!friends_ui_args_.content_args.friends_open) {
+    friends_ui_args_.content_args.first_draw = true;
+    friends_ui_args_.content_args.friends_open = true;
 
     if (kernel_state()->GetXboxLiveAPI()->IsConnectedToServer()) {
-      args.filter_offline = true;
+      friends_ui_args_.content_args.filter_offline = true;
     }
+
+    ImGui::OpenPopup("Friends");
   }
 
-  if (friends_presence_.valid()) {
-    if (friends_presence_.wait_for(0s) == std::future_status::ready) {
-      friends_presence_result_ = friends_presence_.get();
-    }
-  }
-
-  if (args.refresh_presence) {
-    friends_presence_ =
-        kernel_state()->GetXboxLiveAPI()->GetFriendsPresenceAsync(
-            profile_->xuid());
-    immediate_gamerpics_ =
-        kernel_state()->GetXboxLiveAPI()->GetFriendsGamerpicsAsync(
-            profile_->xuid(), imgui_drawer());
-    args.refresh_presence = false;
-  }
-
-  if (immediate_gamerpics_.valid()) {
-    if (immediate_gamerpics_.wait_for(0s) == std::future_status::ready) {
-      immediate_gamerpics_result_.merge(immediate_gamerpics_.get());
-    }
-  }
-
-  xeDrawFriendsContent(imgui_drawer(), profile_, args,
-                       &friends_presence_result_, immediate_gamerpics_result_);
-
-  if (!args.friends_open) {
+  if (!xeDrawFriendsUI(imgui_drawer(), profile_, friends_ui_args_)) {
+    friends_ui_args_.content_args.first_draw = false;
     Close();
   }
+}
+
+bool xeDrawFriendsUI(xe::ui::ImGuiDrawer* imgui_drawer, UserProfile* profile,
+                     FriendsUIArgs& friends_ui_args) {
+  if (!profile) {
+    return false;
+  }
+
+  // Automatically sync/update friends presence information.
+  friends_ui_args.friends_presence =
+      kernel_state()->xam_state()->presence_manager()->GetFriendsPresenceSorted(
+          profile->xuid());
+
+  if (friends_ui_args.content_args.refresh_presence) {
+    friends_ui_args.content_args.refresh_presence = false;
+
+    friends_ui_args.friends_presence_sync =
+        kernel_state()->presence_manager()->SyncPresenceAsync(profile->xuid());
+
+    friends_ui_args.immediate_gamerpics =
+        kernel_state()->GetXboxLiveAPI()->GetFriendsGamerpicsAsync(
+            profile->xuid(), imgui_drawer);
+  }
+
+  if (friends_ui_args.immediate_gamerpics.valid()) {
+    if (friends_ui_args.immediate_gamerpics.wait_for(0s) ==
+        std::future_status::ready) {
+      friends_ui_args.immediate_gamerpics_result =
+          friends_ui_args.immediate_gamerpics.get();
+    }
+  }
+
+  xeDrawFriendsContent(imgui_drawer, profile, friends_ui_args.content_args,
+                       friends_ui_args.friends_presence,
+                       friends_ui_args.immediate_gamerpics_result);
+
+  return friends_ui_args.content_args.friends_open;
 }
 
 }  // namespace ui
