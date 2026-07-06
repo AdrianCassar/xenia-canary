@@ -1668,7 +1668,6 @@ std::unique_ptr<FriendsPresenceObjectJSON> XLiveAPI::GetFriendsPresence(
       std::make_unique<FriendsPresenceObjectJSON>();
 
   if (xuids.empty()) {
-    XELOGI("Skipping friends presence check.");
     return friends;
   }
 
@@ -1892,21 +1891,26 @@ std::unique_ptr<FindUsersObjectJSON> XLiveAPI::GetFindUsers(
 
 PresenceObjectJSON XLiveAPI::BuildRichPresenceRequest(
     std::set<uint64_t> xuids) {
-  PresenceObjectJSON presence = PresenceObjectJSON();
+  PresenceObjectJSON presence = {};
 
   for (const auto& xuid : xuids) {
-    const auto user_profile = kernel_state()->xam_state()->GetUserProfile(xuid);
+    const auto user_profile =
+        kernel_state()->xam_state()->GetUserProfileAny(xuid);
 
-    if (user_profile) {
-      FriendPresenceObjectJSON profile_presence = FriendPresenceObjectJSON();
-
-      if (user_profile->IsLiveEnabled()) {
-        profile_presence.XUID(user_profile->GetOnlineXUID());
-        profile_presence.RichPresence(user_profile->GetPresenceString());
-      }
-
-      presence.AddPresence(profile_presence);
+    if (!user_profile) {
+      continue;
     }
+
+    if (!user_profile->IsLiveEnabled()) {
+      continue;
+    }
+
+    FriendPresenceObjectJSON profile_presence = {};
+
+    profile_presence.XUID(user_profile->GetOnlineXUID());
+    profile_presence.RichPresence(user_profile->GetPresenceString());
+
+    presence.AddPresence(profile_presence);
   }
 
   return presence;
@@ -2408,100 +2412,6 @@ std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::PraseResponse(
   }
 
   return response;
-}
-
-std::future<std::vector<FriendPresenceObjectJSON>>
-XLiveAPI::GetFriendsPresenceAsync(uint64_t xuid) {
-  return std::async(std::launch::async, &XLiveAPI::GetAllFriendsPresence, this,
-                    xuid);
-}
-
-// TODO(Adrian): Take advantage of periodic maintenance.
-std::vector<FriendPresenceObjectJSON> XLiveAPI::GetAllFriendsPresence(
-    uint64_t xuid) {
-  auto offline_peer_presences = GetOfflineFriendsPresence(xuid);
-  std::map<uint64_t, FriendPresenceObjectJSON> online_peer_presences = {};
-
-  online_peer_presences = GetOnlineFriendsPresence(xuid);
-
-  std::map<uint64_t, FriendPresenceObjectJSON> merged_peer_presences =
-      online_peer_presences;
-
-  merged_peer_presences.merge(offline_peer_presences);
-
-  std::vector<FriendPresenceObjectJSON> peer_presences;
-
-  std::ranges::transform(
-      merged_peer_presences, std::back_inserter(peer_presences),
-      &std::pair<const uint64_t, FriendPresenceObjectJSON>::second);
-
-  std::sort(peer_presences.begin(), peer_presences.end(),
-            [](const FriendPresenceObjectJSON& peer_1,
-               FriendPresenceObjectJSON& peer_2) {
-              uint32_t peer_1_state = peer_1.State() & 0xFF;
-              uint32_t peer_2_state = peer_2.State() & 0xFF;
-
-              if (peer_1_state == peer_2_state &&
-                  (peer_1.SessionID() || peer_2.SessionID())) {
-                if (peer_1.SessionID() && peer_2.SessionID()) {
-                  return true;
-                }
-
-                return peer_1.SessionID() ? true : false;
-              }
-
-              return peer_1_state > peer_2_state;
-            });
-
-  return peer_presences;
-}
-
-std::map<uint64_t, FriendPresenceObjectJSON>
-XLiveAPI::GetOfflineFriendsPresence(uint64_t xuid) {
-  const auto user_profile = kernel_state()->xam_state()->GetUserProfile(xuid);
-
-  if (!user_profile) {
-    return {};
-  }
-
-  std::map<uint64_t, FriendPresenceObjectJSON> peer_presences = {};
-
-  const auto friends_xuids =
-      kernel_state()->friends_manager()->GetFriendsXUIDs(user_profile->xuid());
-
-  for (uint32_t count = 1; const auto& xuid : friends_xuids) {
-    FriendPresenceObjectJSON peer = {};
-    peer.Gamertag(std::format("Friend {}", count));
-    peer.XUID(xuid);
-
-    count++;
-    peer_presences[xuid] = peer;
-  }
-
-  return peer_presences;
-}
-
-std::map<uint64_t, FriendPresenceObjectJSON> XLiveAPI::GetOnlineFriendsPresence(
-    uint64_t xuid) {
-  const auto user_profile = kernel_state()->xam_state()->GetUserProfile(xuid);
-
-  if (!user_profile) {
-    return {};
-  }
-  std::map<uint64_t, FriendPresenceObjectJSON> peer_presences = {};
-
-  const auto friends_xuids =
-      kernel_state()->friends_manager()->GetFriendsXUIDs(user_profile->xuid());
-
-  const auto friends_presence_responce = GetFriendsPresence(friends_xuids);
-
-  const auto& friends_presence = friends_presence_responce->PlayersPresence();
-
-  for (const auto& presence : friends_presence) {
-    peer_presences[presence.XUID()] = presence;
-  }
-
-  return peer_presences;
 }
 
 }  // namespace kernel

@@ -1399,117 +1399,6 @@ void UserTracker::RefreshTitleSummary(uint64_t xuid, uint32_t title_id) {
   user->WriteGpd(kDashboardID);
 }
 
-PresenceSyncState UserTracker::IsPresenceOutOfSync(
-    uint64_t xuid, std::vector<FriendPresenceObjectJSON> presence_info) const {
-  PresenceSyncState sync_state = {};
-
-  auto user = kernel_state()->xam_state()->GetUserProfile(xuid);
-  if (!user) {
-    return sync_state;
-  }
-
-  if (presence_info.empty()) {
-    return sync_state;
-  }
-
-  for (const auto& player : presence_info) {
-    const uint64_t xuid = player.XUID();
-
-    const auto friends_manager = kernel_state()->friends_manager();
-
-    if (!friends_manager->IsFriend(user->xuid(), xuid) &&
-        !user->IsSubscribed(xuid)) {
-      XELOGI("Requested unknown peer presence: {} - {:016X}", player.Gamertag(),
-             xuid);
-      continue;
-    }
-
-    if (sync_state.friends && sync_state.peers) {
-      break;
-    }
-
-    const auto online_friend = friends_manager->GetFriend(user->xuid(), xuid);
-
-    if (online_friend.has_value()) {
-      const X_ONLINE_FRIEND peer = online_friend.value();
-      const X_ONLINE_FRIEND updated_peer_presence = player.GetFriendPresence();
-
-      if (std::memcmp(&peer, &updated_peer_presence, sizeof(X_ONLINE_FRIEND)) !=
-          0) {
-        sync_state.friends = true;
-      }
-    } else if (user->IsSubscribed(xuid) && !sync_state.peers) {
-      X_ONLINE_PRESENCE peer = {};
-
-      if (user->GetSubscriptionFromXUID(xuid, &peer)) {
-        const X_ONLINE_PRESENCE updated_peer_presence =
-            player.ToOnlineRichPresence();
-
-        if (std::memcmp(&peer, &updated_peer_presence,
-                        sizeof(X_ONLINE_PRESENCE)) != 0) {
-          sync_state.peers = true;
-        }
-      }
-    }
-  }
-
-  return sync_state;
-}
-
-void UserTracker::RefershFriendsAndSubscribersPresence(uint64_t xuid) const {
-  auto user = kernel_state()->xam_state()->GetUserProfile(xuid);
-  if (!user) {
-    return;
-  }
-
-  const auto friends_manager = kernel_state()->friends_manager();
-
-  const auto friends_xuids = friends_manager->GetFriendsXUIDs(user->xuid());
-  const auto subscribed_xuids = user->GetSubscribedXUIDs();
-  std::set<uint64_t> friends_and_subscribed_xuids = {};
-
-  std::set_union(friends_xuids.cbegin(), friends_xuids.cend(),
-                 subscribed_xuids.cbegin(), subscribed_xuids.cend(),
-                 std::inserter(friends_and_subscribed_xuids,
-                               friends_and_subscribed_xuids.cbegin()));
-
-  const auto presences = kernel_state()->GetXboxLiveAPI()->GetFriendsPresence(
-      friends_and_subscribed_xuids);
-
-  const auto presence_sync_state =
-      IsPresenceOutOfSync(xuid, presences->PlayersPresence());
-
-  if (!presence_sync_state.IsOutOfSync()) {
-    return;
-  }
-
-  XELOGD("Friends/Subscribed peers presence state changed.");
-
-  for (const auto& player : presences->PlayersPresence()) {
-    const uint64_t xuid = player.XUID();
-
-    if (friends_manager->IsFriend(user->xuid(), xuid)) {
-      friends_manager->UpdateFriend(user->xuid(), player.GetFriendPresence());
-    } else if (user->IsSubscribed(xuid)) {
-      X_ONLINE_PRESENCE presence = player.ToOnlineRichPresence();
-      user->SetSubscriptionFromXUID(xuid, &presence);
-    }
-  }
-
-  if (presence_sync_state.friends) {
-    const uint32_t user_index =
-        kernel_state()->xam_state()->GetUserIndexAssignedToProfileFromXUID(
-            xuid);
-
-    kernel_state()->BroadcastNotification(kXNotificationFriendsPresenceChanged,
-                                          user_index);
-  }
-
-  if (presence_sync_state.peers) {
-    kernel_state()->BroadcastNotification(kXNotificationLivePresenceChanged, 0);
-  }
-}
-
 void UserTracker::AddOwnedSession(uint64_t xuid,
                                   uint32_t session_handle) const {
   auto user = kernel_state()->xam_state()->GetUserProfile(xuid);
@@ -1580,14 +1469,13 @@ void UserTracker::PeriodicMaintenance(uint64_t xuid,
     return;
   }
 
-  // Check if presence string needs updating.
-  const bool presence_string_update_available =
-      user->IsPresenceStringUpdateAvailable();
+  const auto presence_manager = kernel_state()->presence_manager();
+
+  const bool updated_presence_string =
+      presence_manager->UpdateLocalPresence(user->xuid());
 
   // Update discord rich presence before checking live state.
-  if (presence_string_update_available) {
-    user->BuildPresenceString(true, nullptr);
-
+  if (updated_presence_string) {
     const std::u16string updated_presence = user->GetPresenceString();
 
     XELOGI("Periodic Maintenance (Presence): {} - {}", user->name(),
@@ -1607,7 +1495,8 @@ void UserTracker::PeriodicMaintenance(uint64_t xuid,
       kernel_state()->xam_state()->GetUserIndexAssignedToProfileFromXUID(xuid);
 
   // Discord invites
-  if (cvars::discord && cvars::discord_presence_user_index == user_index) {
+  if (cvars::discord && cvars::discord_presence_user_index == user_index &&
+      HasOwnedSessions(xuid)) {
     const auto valid_session = user->FindValidInviteSession();
 
     if (valid_session.has_value()) {
@@ -1649,13 +1538,20 @@ void UserTracker::PeriodicMaintenance(uint64_t xuid,
     return;
   }
 
-  // Check every 3nd iteration to reduce backend requests.
+  // 58410826 doesn't initialize presence, but we still want to update presence
+  // information. We want to synchronize for friends UI which is part of Guide
+  // which is independent of game.
+  //
+  // Possibly it's due to not distinguishing between X_ONLINE_FRIEND and
+  // X_ONLINE_PRESENCE?
+
+  //  Check every 3nd iteration to reduce backend requests.
   if (!(iteration_count % 3)) {
-    RefershFriendsAndSubscribersPresence(xuid);
+    presence_manager->SyncPresence(xuid);
   }
 
-  if (presence_string_update_available) {
-    kernel_state()->GetXboxLiveAPI()->SetPresence({user->xuid()});
+  if (updated_presence_string) {
+    presence_manager->UpdateXboxLiveLocalUsersPresence({user->xuid()});
   }
 
   if (HasOwnedSessions(xuid)) {
