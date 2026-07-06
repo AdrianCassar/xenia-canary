@@ -34,6 +34,8 @@ XamState::XamState(Emulator* emulator, KernelState* kernel_state)
   friends_manager_ =
       std::make_unique<FriendsManager>(kernel_state, profile_manager_.get());
   achievement_manager_ = std::make_unique<AchievementManager>();
+  presence_manager_ = std::make_unique<PresenceManager>(
+      kernel_state, profile_manager_.get(), friends_manager_.get());
 
   LoadOnlineFriends();
   LoadOnlineSchema();

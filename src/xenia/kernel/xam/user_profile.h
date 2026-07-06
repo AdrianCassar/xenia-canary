@@ -178,25 +178,16 @@ class UserProfile {
   friend class UserTracker;
   friend class GpdAchievementBackend;
   friend class FriendsManager;
-
-  bool SetSubscriptionFromXUID(const uint64_t xuid, X_ONLINE_PRESENCE* peer);
-  bool GetSubscriptionFromXUID(const uint64_t xuid, X_ONLINE_PRESENCE* peer);
-  bool SubscribeFromXUID(const uint64_t xuid);
-  bool UnsubscribeFromXUID(const uint64_t xuid);
-  bool IsSubscribed(const uint64_t xuid);
+  friend class PresenceManager;
 
   void SetSelfInvite(X_INVITE_INFO invite_info);
   X_INVITE_INFO GetSelfInvite() { return self_invite; };
-
-  const std::set<uint64_t> GetSubscribedXUIDs() const;
 
   bool MutePlayer(uint64_t xuid);
   bool UnmutePlayer(uint64_t xuid);
   bool IsPlayerMuted(uint64_t xuid) const;
 
   std::u16string GetPresenceString() const;
-  bool IsPresenceStringUpdateAvailable();
-  bool BuildPresenceString(bool update, std::u16string* presence_string);
 
   std::optional<object_ref<XSession>> FindValidInviteSession();
   void SetDiscordInviteSessionDetails(

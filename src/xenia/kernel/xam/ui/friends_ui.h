@@ -19,6 +19,16 @@ namespace kernel {
 namespace xam {
 namespace ui {
 
+struct FriendsUIArgs {
+  FriendsContentArgs content_args = {};
+  std::future<void> friends_presence_sync;
+  std::vector<X_ONLINE_FRIEND> friends_presence;
+  std::future<std::map<uint64_t, std::shared_ptr<xe::ui::ImmediateTexture>>>
+      immediate_gamerpics;
+  std::map<uint64_t, std::shared_ptr<xe::ui::ImmediateTexture>>
+      immediate_gamerpics_result;
+};
+
 class FriendsUI : public XamDialog {
  public:
   FriendsUI(xe::ui::ImGuiDrawer* imgui_drawer, UserProfile* profile);
@@ -27,14 +37,11 @@ class FriendsUI : public XamDialog {
   void OnDraw(ImGuiIO& io) override;
 
   UserProfile* profile_;
-  ui::FriendsContentArgs args = {};
-  std::future<std::vector<FriendPresenceObjectJSON>> friends_presence_;
-  std::vector<FriendPresenceObjectJSON> friends_presence_result_;
-  std::future<std::map<uint64_t, std::shared_ptr<xe::ui::ImmediateTexture>>>
-      immediate_gamerpics_;
-  std::map<uint64_t, std::shared_ptr<xe::ui::ImmediateTexture>>
-      immediate_gamerpics_result_;
+  ui::FriendsUIArgs friends_ui_args_ = {};
 };
+
+bool xeDrawFriendsUI(xe::ui::ImGuiDrawer* imgui_drawer, UserProfile* profile,
+                     FriendsUIArgs& args);
 
 }  // namespace ui
 }  // namespace xam

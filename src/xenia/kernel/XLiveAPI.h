@@ -234,18 +234,6 @@ class XLiveAPI {
 
   std::unique_ptr<HTTPResponseObjectJSON> PraseResponse(response_data response);
 
-  std::future<std::vector<FriendPresenceObjectJSON>> GetFriendsPresenceAsync(
-      const uint64_t xuid);
-
-  std::vector<FriendPresenceObjectJSON> GetAllFriendsPresence(
-      const uint64_t xuid);
-
-  std::map<uint64_t, FriendPresenceObjectJSON> GetOfflineFriendsPresence(
-      const uint64_t xuid);
-
-  std::map<uint64_t, FriendPresenceObjectJSON> GetOnlineFriendsPresence(
-      const uint64_t xuid);
-
   sockaddr_in OnlineIP() const { return online_ip_; };
 
   std::string OnlineIP_str() const { return ip_to_string(online_ip_); };

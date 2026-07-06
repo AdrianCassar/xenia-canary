@@ -8,6 +8,7 @@
  */
 
 #include "xenia/kernel/xam/friends_manager.h"
+#include "xenia/base/logging.h"
 #include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/util/friends_util.h"
 #include "xenia/kernel/xam/profile_manager.h"
@@ -58,7 +59,8 @@ bool FriendsManager::AddFriend(const uint64_t xuid, const uint64_t friend_xuid,
 
   X_ONLINE_FRIEND peer = {.xuid = friend_xuid};
 
-  const std::string default_gamertag = fmt::format("{:016X}", friend_xuid);
+  const std::string default_gamertag =
+      fmt::format("Friend {}", user->friends_.size() + 1);
 
   xe::string_util::copy_truncating(peer.Gamertag, default_gamertag.c_str(),
                                    xe::countof(peer.Gamertag));
@@ -225,6 +227,46 @@ std::vector<X_ONLINE_FRIEND>::iterator FriendsManager::FindFriend(
                       [&friend_xuid](const X_ONLINE_FRIEND& peer) {
                         return peer.xuid == friend_xuid;
                       });
+}
+
+bool FriendsManager::IsPresenceOutOfSync(
+    uint64_t xuid, std::vector<FriendPresenceObjectJSON> friends) const {
+  if (friends.empty()) {
+    return false;
+  }
+
+  const auto user = profile_manager_->GetProfileAny(xuid);
+  if (!user) {
+    return false;
+  }
+
+  bool sync_state = false;
+
+  for (const auto& player : friends) {
+    const uint64_t friend_xuid = player.XUID();
+
+    if (!IsFriend(xuid, friend_xuid)) {
+      XELOGI("Requested unknown peer presence: {} - {:016X}", player.Gamertag(),
+             friend_xuid);
+      continue;
+    }
+
+    if (sync_state) {
+      break;
+    }
+
+    const auto friend_ = GetFriend(xuid, friend_xuid);
+
+    if (friend_.has_value()) {
+      const X_ONLINE_FRIEND peer = friend_.value();
+      const X_ONLINE_FRIEND updated_peer_presence = player.GetFriendPresence();
+
+      sync_state =
+          std::memcmp(&peer, &updated_peer_presence, sizeof(X_ONLINE_FRIEND));
+    }
+  }
+
+  return sync_state;
 }
 
 // Convert X_ONLINE_FRIEND to X_ONLINE_PRESENCE

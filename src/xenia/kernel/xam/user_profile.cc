@@ -233,70 +233,8 @@ bool UserProfile::RemoveGpd(const uint32_t title_id) {
   return true;
 }
 
-bool UserProfile::SetSubscriptionFromXUID(const uint64_t xuid,
-                                          X_ONLINE_PRESENCE* peer) {
-  if (peer == nullptr) {
-    return false;
-  }
-
-  memcpy(&subscriptions_[xuid], &peer, sizeof(X_ONLINE_PRESENCE));
-
-  return true;
-}
-
-bool UserProfile::GetSubscriptionFromXUID(const uint64_t xuid,
-                                          X_ONLINE_PRESENCE* peer) {
-  if (!IsSubscribed(xuid)) {
-    return false;
-  }
-
-  if (peer == nullptr) {
-    return false;
-  }
-
-  memcpy(peer, &subscriptions_[xuid], sizeof(X_ONLINE_PRESENCE));
-
-  return true;
-}
-
-bool UserProfile::SubscribeFromXUID(const uint64_t xuid) {
-  if (subscriptions_.size() >= X_ONLINE_PEER_SUBSCRIPTIONS) {
-    return false;
-  }
-
-  subscriptions_[xuid] = {};
-
-  return true;
-}
-
-bool UserProfile::UnsubscribeFromXUID(const uint64_t xuid) {
-  if (!IsSubscribed(xuid)) {
-    return true;
-  }
-
-  if (subscriptions_.erase(xuid)) {
-    return true;
-  }
-
-  return false;
-}
-
-bool UserProfile::IsSubscribed(const uint64_t xuid) {
-  return subscriptions_.count(xuid) != 0;
-}
-
 void UserProfile::SetSelfInvite(X_INVITE_INFO invite_info) {
   self_invite = invite_info;
-}
-
-const std::set<uint64_t> UserProfile::GetSubscribedXUIDs() const {
-  std::set<uint64_t> subscribed_xuids;
-
-  for (const auto& [key, _] : subscriptions_) {
-    subscribed_xuids.insert(key);
-  }
-
-  return subscribed_xuids;
 }
 
 bool UserProfile::MutePlayer(uint64_t xuid) {
@@ -327,17 +265,6 @@ bool UserProfile::IsPlayerMuted(uint64_t xuid) const {
 
 std::u16string UserProfile::GetPresenceString() const {
   return online_presence_desc_;
-}
-
-bool UserProfile::IsPresenceStringUpdateAvailable() {
-  const std::u16string current_presence = GetPresenceString();
-  std::u16string updated_presence = u"";
-
-  if (!BuildPresenceString(false, &updated_presence)) {
-    return false;
-  }
-
-  return current_presence != updated_presence;
 }
 
 std::optional<object_ref<XSession>> UserProfile::FindValidInviteSession() {
@@ -376,47 +303,6 @@ void UserProfile::SetDiscordInviteSessionDetails(
 
 XSESSION_LOCAL_DETAILS UserProfile::GetDiscordInviteSessionDetails() const {
   return discord_invite_session_details_;
-}
-
-bool UserProfile::BuildPresenceString(bool update,
-                                      std::u16string* presence_string) {
-  bool completed = false;
-
-  const xam::Property* presence_prop =
-      kernel_state()->xam_state()->user_tracker()->GetProperty(
-          xuid_, XCONTEXT_PRESENCE);
-
-  if (!presence_prop) {
-    return completed;
-  }
-
-  const auto gdb = kernel_state()->emulator()->game_info_database();
-
-  if (!gdb->HasXLast()) {
-    return completed;
-  }
-
-  const auto xlast = gdb->GetXLast();
-
-  const std::u16string raw_presence =
-      xlast->GetPresenceRawString(presence_prop);
-
-  const auto presence_string_formatter =
-      util::AttributeStringFormatter(raw_presence, xlast, xuid_);
-
-  completed = presence_string_formatter.IsComplete();
-
-  const auto presence_parsed = presence_string_formatter.GetPresenceString();
-
-  if (completed && update) {
-    online_presence_desc_ = presence_parsed;
-  }
-
-  if (completed && presence_string) {
-    *presence_string = presence_parsed;
-  }
-
-  return completed;
 }
 
 }  // namespace xam

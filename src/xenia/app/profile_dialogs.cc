@@ -505,20 +505,29 @@ void ManagerDialog::Initialize(ui::ImGuiDrawer* imgui_drawer,
     return;
   }
 
-  friends_presence_ =
-      emulator_->GetXboxLiveAPI()->GetFriendsPresenceAsync(profile->xuid());
-  immediate_gamerpics_ = emulator_->GetXboxLiveAPI()->GetFriendsGamerpicsAsync(
-      profile->xuid(), imgui_drawer);
+  // If title is open we can assume periodic maintenance is running, therefore
+  // presence sync isn't needed.
+  if (!emulator_->is_title_open()) {
+    friends_ui_args_.friends_presence_sync =
+        emulator_->kernel_state()->presence_manager()->SyncPresenceAsync(
+            profile->xuid());
+  } else {
+    friends_ui_args_.friends_presence =
+        emulator_->kernel_state()
+            ->xam_state()
+            ->presence_manager()
+            ->GetFriendsPresenceSorted(profile->xuid());
+  }
+
+  friends_ui_args_.immediate_gamerpics =
+      emulator_->GetXboxLiveAPI()->GetFriendsGamerpicsAsync(profile->xuid(),
+                                                            imgui_drawer);
 }
 
 void ManagerDialog::OnDraw(ImGuiIO& io) {
   if (!manager_opened_) {
     manager_opened_ = true;
     ImGui::OpenPopup("Manager");
-
-    if (emulator_->GetXboxLiveAPI()->IsConnectedToServer()) {
-      friends_args.filter_offline = true;
-    }
 
     sessions_args.filter_own = true;
   }
@@ -548,7 +557,13 @@ void ManagerDialog::OnDraw(ImGuiIO& io) {
 
     ImGui::BeginDisabled(is_profile_signed_in);
     if (ImGui::Button("Friends", btn_size)) {
-      friends_args.friends_open = true;
+      friends_ui_args_.content_args.friends_open = true;
+      friends_ui_args_.content_args.first_draw = true;
+
+      if (emulator_->kernel_state()->GetXboxLiveAPI()->IsConnectedToServer()) {
+        friends_ui_args_.content_args.filter_offline = true;
+      }
+
       ImGui::OpenPopup("Friends");
     }
     ImGui::EndDisabled();
@@ -592,42 +607,13 @@ void ManagerDialog::OnDraw(ImGuiIO& io) {
 
     ImGui::SetWindowFontScale(1.0f);
 
-    if (!friends_args.friends_open) {
-      friends_args.first_draw = false;
-    }
-
     if (!sessions_args.sessions_open) {
       sessions_args.first_draw = false;
       sessions_args.refresh_sessions_sync = true;
       sessions.clear();
     }
 
-    if (friends_presence_.valid()) {
-      if (friends_presence_.wait_for(0s) == std::future_status::ready) {
-        friends_presence_result_ = friends_presence_.get();
-      }
-    }
-
-    if (friends_args.refresh_presence) {
-      friends_presence_result_ = {};
-      friends_args.refresh_presence = false;
-
-      friends_presence_ =
-          emulator_->GetXboxLiveAPI()->GetFriendsPresenceAsync(profile->xuid());
-      immediate_gamerpics_ =
-          emulator_->GetXboxLiveAPI()->GetFriendsGamerpicsAsync(profile->xuid(),
-                                                                imgui_drawer());
-    }
-
-    if (immediate_gamerpics_.valid()) {
-      if (immediate_gamerpics_.wait_for(0s) == std::future_status::ready) {
-        immediate_gamerpics_result_.merge(immediate_gamerpics_.get());
-      }
-    }
-
-    xeDrawFriendsContent(imgui_drawer(), profile, friends_args,
-                         &friends_presence_result_,
-                         immediate_gamerpics_result_);
+    xeDrawFriendsUI(imgui_drawer(), profile, friends_ui_args_);
 
     xeDrawSessionsContent(imgui_drawer(), profile, sessions_args, &sessions);
 
