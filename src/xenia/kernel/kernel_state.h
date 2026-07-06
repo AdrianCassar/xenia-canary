@@ -198,6 +198,9 @@ class KernelState {
   xam::FriendsManager* friends_manager() const {
     return xam_state()->friends_manager();
   }
+  xam::PresenceManager* presence_manager() const {
+    return xam_state()->presence_manager();
+  }
 
   XmpVolumePatch* xmp_volume_patch() const { return xmp_volume_patch_.get(); }
   void InitXmpVolumePatch();

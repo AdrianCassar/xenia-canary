@@ -16,6 +16,7 @@
 #include "xenia/kernel/xam/app_manager.h"
 #include "xenia/kernel/xam/content_manager.h"
 #include "xenia/kernel/xam/friends_manager.h"
+#include "xenia/kernel/xam/presence_manager.h"
 #include "xenia/kernel/xam/profile_manager.h"
 #include "xenia/kernel/xam/user_tracker.h"
 #include "xenia/kernel/xam/xam.h"
@@ -46,6 +47,7 @@ class XamState {
   }
   ProfileManager* profile_manager() const { return profile_manager_.get(); }
   FriendsManager* friends_manager() const { return friends_manager_.get(); }
+  PresenceManager* presence_manager() const { return presence_manager_.get(); }
 
   UserTracker* user_tracker() const { return user_tracker_.get(); }
   SpaInfo* spa_info() const { return spa_info_.get(); }
@@ -101,6 +103,7 @@ class XamState {
   std::unique_ptr<AchievementManager> achievement_manager_;
   std::unique_ptr<ProfileManager> profile_manager_;
   std::unique_ptr<FriendsManager> friends_manager_;
+  std::unique_ptr<PresenceManager> presence_manager_;
 
   std::unique_ptr<SpaInfo> spa_info_;
 

@@ -925,7 +925,7 @@ bool xeDrawProfileContent(xe::ui::ImGuiDrawer* imgui_drawer,
 bool xeDrawFriendContent(xe::ui::ImGuiDrawer* imgui_drawer,
                          UserProfile* profile,
                          std::shared_ptr<xe::ui::ImmediateTexture> icon_texture,
-                         FriendPresenceObjectJSON& presence,
+                         const X_ONLINE_FRIEND& presence,
                          uint64_t* selected_xuid_, uint64_t* removed_xuid_) {
   if (icon_texture) {
     ImGui::Image(reinterpret_cast<ImTextureID>(icon_texture.get()),
@@ -940,29 +940,26 @@ bool xeDrawFriendContent(xe::ui::ImGuiDrawer* imgui_drawer,
 
   ImVec2 start_drawing_position = ImGui::GetCursorPos();
 
-  ImGui::TextUnformatted(presence.Gamertag().c_str());
+  ImGui::TextUnformatted(presence.Gamertag);
 
   uint32_t index = 1;
 
-  const uint32_t title_id = presence.TitleIDValue();
+  const uint32_t title_id = presence.title_id.get();
 
-  if (!presence.TitleID().empty()) {
+  if (title_id) {
     ImGui::SameLine();
     ImGui::SetCursorPos(start_drawing_position);
     ImGui::SetCursorPosY(start_drawing_position.y + ImGui::GetTextLineHeight());
 
-    if (title_id) {
-      if (title_id == kernel_state()->title_id()) {
-        ImGui::TextUnformatted(
-            fmt::format("Game: {}", kernel_state()->emulator()->title_name())
-                .c_str());
-      } else {
-        ImGui::TextUnformatted(
-            fmt::format("Title ID: {}", presence.TitleID()).c_str());
-      }
-
-      index++;
+    if (title_id == kernel_state()->title_id()) {
+      ImGui::TextUnformatted(
+          fmt::format("Game: {}", kernel_state()->emulator()->title_name())
+              .c_str());
+    } else {
+      ImGui::TextUnformatted(fmt::format("Title ID: {}", title_id).c_str());
     }
+
+    index++;
   }
 
   ImGui::SameLine();
@@ -970,21 +967,24 @@ bool xeDrawFriendContent(xe::ui::ImGuiDrawer* imgui_drawer,
   ImGui::SetCursorPosY(start_drawing_position.y +
                        index * ImGui::GetTextLineHeight());
 
-  const uint64_t friend_xuid = presence.XUID();
+  const uint64_t friend_xuid = presence.xuid.get();
   const std::string friend_xuid_str = fmt::format("{:016X}", friend_xuid);
 
   ImGui::TextUnformatted(
       fmt::format("Online XUID: {:016X}\n", friend_xuid).c_str());
   index++;
 
-  if (!presence.RichPresence().empty()) {
+  const std::u16string rich_presence = xe::string_util::read_u16string_and_swap(
+      reinterpret_cast<const char16_t*>(presence.wszRichPresence));
+
+  if (!rich_presence.empty()) {
     ImGui::SameLine();
     ImGui::SetCursorPos(start_drawing_position);
     ImGui::SetCursorPosY(start_drawing_position.y +
                          index * ImGui::GetTextLineHeight());
 
     std::string presense_string =
-        xe::string_util::trim(xe::to_utf8(presence.RichPresence()));
+        xe::string_util::trim(xe::to_utf8(rich_presence));
 
     presense_string =
         std::regex_replace(presense_string, std::regex("\\n"), ", ");
@@ -1005,7 +1005,7 @@ bool xeDrawFriendContent(xe::ui::ImGuiDrawer* imgui_drawer,
 
   bool are_friends =
       kernel_state()->friends_manager()->IsFriend(profile->xuid(), friend_xuid);
-  bool is_self = profile->GetOnlineXUID() == presence.XUID();
+  bool is_self = profile->GetOnlineXUID() == presence.xuid.get();
 
   const std::string join_label =
       std::format("Join Session##{}", friend_xuid_str);
@@ -1019,12 +1019,12 @@ bool xeDrawFriendContent(xe::ui::ImGuiDrawer* imgui_drawer,
   if (!is_self) {
     ImGui::Spacing();
 
-    ImGui::BeginDisabled(!presence.SessionID() || !same_title);
+    ImGui::BeginDisabled(!presence.session_id.as_uint64() || !same_title);
     if (ImGui::Button(join_label.c_str(), half_width_btn)) {
       X_INVITE_INFO invite = {};
 
       invite.xuid_invitee = profile->GetOnlineXUID();
-      invite.xuid_inviter = presence.XUID();
+      invite.xuid_inviter = presence.xuid.get();
       invite.title_id = kernel_state()->title_id();
       invite.from_game_invite = false;
 
@@ -1044,7 +1044,7 @@ bool xeDrawFriendContent(xe::ui::ImGuiDrawer* imgui_drawer,
         ImGui::SetTooltip("Join gaming session");
       } else {
         ImGui::SetTooltip(
-            fmt::format("{} is playing a different game", presence.Gamertag())
+            fmt::format("{} is playing a different game", presence.Gamertag)
                 .c_str());
       }
     }
@@ -1060,8 +1060,9 @@ bool xeDrawFriendContent(xe::ui::ImGuiDrawer* imgui_drawer,
           *removed_xuid_ = friend_xuid;
         }
 
-        std::string description =
-            !presence.Gamertag().empty() ? presence.Gamertag() : "Success";
+        const std::string gamertag(presence.Gamertag);
+
+        std::string description = !gamertag.empty() ? gamertag : "Success";
 
         kernel_state()
             ->emulator()
@@ -1083,8 +1084,9 @@ bool xeDrawFriendContent(xe::ui::ImGuiDrawer* imgui_drawer,
       bool added = kernel_state()->friends_manager()->AddFriend(profile->xuid(),
                                                                 friend_xuid);
 
-      std::string description =
-          !presence.Gamertag().empty() ? presence.Gamertag() : "Success";
+      const std::string gamertag(presence.Gamertag);
+
+      std::string description = !gamertag.empty() ? gamertag : "Success";
 
       if (!added) {
         description = "Failed!";
@@ -1134,7 +1136,7 @@ bool xeDrawFriendContent(xe::ui::ImGuiDrawer* imgui_drawer,
     if (ImGui::BeginPopupContextItem(context_label.c_str())) {
       if (ImGui::BeginMenu("Copy")) {
         if (ImGui::MenuItem("Gamertag")) {
-          ImGui::SetClipboardText(presence.Gamertag().c_str());
+          ImGui::SetClipboardText(presence.Gamertag);
         }
 
         ImGui::Separator();
@@ -1308,11 +1310,10 @@ bool xeDrawAddFriend(xe::ui::ImGuiDrawer* imgui_drawer, UserProfile* profile,
 
 bool xeDrawFriendsContent(
     xe::ui::ImGuiDrawer* imgui_drawer, UserProfile* profile,
-    ui::FriendsContentArgs& args,
-    std::vector<FriendPresenceObjectJSON>* presences,
+    ui::FriendsContentArgs& args, std::vector<X_ONLINE_FRIEND>& presences,
     std::map<uint64_t, std::shared_ptr<xe::ui::ImmediateTexture>>&
         immediate_gamerpics) {
-  if (!profile || !presences) {
+  if (!profile) {
     return false;
   }
 
@@ -1450,22 +1451,21 @@ bool xeDrawFriendsContent(
     ImGui::Separator();
     ImGui::Spacing();
 
-    for (uint32_t index = 0; auto& presence : *presences) {
-      bool filter_gamertags =
-          args.filter.PassFilter(presence.Gamertag().c_str());
+    for (uint32_t index = 0; auto& presence : presences) {
+      bool filter_gamertags = args.filter.PassFilter(presence.Gamertag);
       bool filter_xuid = args.filter.PassFilter(
-          fmt::format("{:016X}", presence.XUID().get()).c_str());
+          fmt::format("{:016X}", presence.xuid.get()).c_str());
 
       if (filter_gamertags || filter_xuid) {
-        if (profile->GetOnlineXUID() == presence.XUID()) {
+        if (profile->GetOnlineXUID() == presence.xuid.get()) {
           continue;
         }
 
         const bool same_title =
-            presence.TitleIDValue() &&
-            presence.TitleIDValue() == kernel_state()->title_id();
+            presence.title_id.get() == kernel_state()->title_id();
 
-        if (args.filter_joinable && (!presence.SessionID() || !same_title)) {
+        if (args.filter_joinable &&
+            (!presence.session_id.as_uint64() || !same_title)) {
           continue;
         }
 
@@ -1474,14 +1474,14 @@ bool xeDrawFriendsContent(
         }
 
         if (args.filter_offline &&
-            (!presence.State() || !IsValidXUID(presence.XUID()))) {
+            (!presence.state.get() || !IsValidXUID(presence.xuid.get()))) {
           continue;
         }
 
         std::shared_ptr<xe::ui::ImmediateTexture> gamerpic = {};
 
-        if (immediate_gamerpics.contains(presence.XUID())) {
-          gamerpic = immediate_gamerpics.at(presence.XUID());
+        if (immediate_gamerpics.contains(presence.xuid.get())) {
+          gamerpic = immediate_gamerpics.at(presence.xuid.get());
         }
 
         uint64_t selected_xuid_ = 0;
@@ -1490,7 +1490,7 @@ bool xeDrawFriendsContent(
                             &selected_xuid_, &removed_xuid_);
 
         if (removed_xuid_) {
-          presences->erase(presences->begin() + index);
+          presences.erase(presences.begin() + index);
           removed_xuid_ = 0;
         }
 
@@ -1520,8 +1520,6 @@ bool xeDrawFriendsContent(
 
       if (ImGui::Button("Yes", btn_size)) {
         kernel_state()->friends_manager()->ClearFriends(profile->xuid());
-
-        args.refresh_presence = true;
 
         kernel_state()
             ->emulator()
