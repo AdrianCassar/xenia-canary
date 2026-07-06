@@ -23,13 +23,18 @@ FriendsManager::FriendsManager(KernelState* kernel_state,
 
 void FriendsManager::AddFriends(const uint64_t xuid,
                                 const std::set<uint64_t>& xuids) const {
+  const auto user = profile_manager_->GetProfileAny(xuid);
+  if (!user) {
+    return;
+  }
+
   for (const auto& friend_xuid : xuids) {
-    AddFriend(xuid, friend_xuid);
+    AddFriend(xuid, friend_xuid, false);
   }
 }
 
-bool FriendsManager::AddFriend(const uint64_t xuid,
-                               const uint64_t friend_xuid) const {
+bool FriendsManager::AddFriend(const uint64_t xuid, const uint64_t friend_xuid,
+                               bool notify) const {
   const auto user = profile_manager_->GetProfileAny(xuid);
   if (!user) {
     return false;
@@ -60,40 +65,44 @@ bool FriendsManager::AddFriend(const uint64_t xuid,
 
   user->friends_.push_back(peer);
 
+  AddFriendToConfig(friend_xuid);
+
+  if (notify) {
+    kernel_state_->BroadcastNotification(
+        kXNotificationFriendsFriendAdded,
+        profile_manager_->GetUserIndexAssignedToProfile(user->xuid()));
+  }
+
   return true;
 }
 
 bool FriendsManager::AddFriend(const uint64_t xuid,
                                const X_ONLINE_FRIEND& peer) const {
-  bool added = false;
-
-  if (AddFriend(xuid, peer.xuid)) {
-    added = UpdateFriend(xuid, peer);
-  }
-
-  return added;
+  // Technically we should broadcast added friend be after update.
+  return AddFriend(xuid, peer.xuid) && UpdateFriend(xuid, peer);
 }
 
 bool FriendsManager::UpdateFriend(const uint64_t xuid,
-                                  const X_ONLINE_FRIEND& update_peer) const {
+                                  const X_ONLINE_FRIEND& update_friend) const {
   const auto user = profile_manager_->GetProfileAny(xuid);
   if (!user) {
     return false;
   }
 
-  auto it = FindFriend(user->friends_, update_peer.xuid);
+  auto it = FindFriend(user->friends_, update_friend.xuid);
 
   if (it == user->friends_.end()) {
     return false;
   }
 
-  *it = update_peer;
+  *it = update_friend;
 
   return true;
 }
 
 bool FriendsManager::RemoveFriend(const uint64_t xuid,
-                                  const uint64_t friend_xuid) const {
+                                  const uint64_t friend_xuid,
+                                  bool notify) const {
   const auto user = profile_manager_->GetProfileAny(xuid);
   if (!user) {
     return false;
@@ -106,6 +115,14 @@ bool FriendsManager::RemoveFriend(const uint64_t xuid,
   }
 
   user->friends_.erase(it);
+
+  RemoveFriendFromConfig(friend_xuid);
+
+  if (notify) {
+    kernel_state_->BroadcastNotification(
+        kXNotificationFriendsFriendRemoved,
+        profile_manager_->GetUserIndexAssignedToProfile(user->xuid()));
+  }
 
   return true;
 }
@@ -126,11 +143,13 @@ void FriendsManager::ClearFriends(const uint64_t xuid) const {
     return;
   }
 
-  for (const auto& peer_xuid : GetFriendsXUIDs(xuid)) {
-    if (RemoveFriend(xuid, peer_xuid)) {
-      RemoveFriendFromConfig(peer_xuid);
-    }
+  for (const auto& friend_xuid : GetFriendsXUIDs(xuid)) {
+    RemoveFriend(xuid, friend_xuid, false);
   }
+
+  kernel_state_->BroadcastNotification(
+      kXNotificationFriendsFriendRemoved,
+      profile_manager_->GetUserIndexAssignedToProfile(user->xuid()));
 }
 
 std::optional<X_ONLINE_FRIEND> FriendsManager::GetFriendFromIndex(
