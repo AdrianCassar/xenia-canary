@@ -41,13 +41,15 @@ class FriendsManager {
 
   void AddFriends(const uint64_t xuid, const std::set<uint64_t>& xuids) const;
 
-  bool AddFriend(const uint64_t xuid, const uint64_t friend_xuid) const;
+  bool AddFriend(const uint64_t xuid, const uint64_t friend_xuid,
+                 bool notify = true) const;
   bool AddFriend(const uint64_t xuid, const X_ONLINE_FRIEND& peer) const;
 
   bool UpdateFriend(const uint64_t xuid,
                     const X_ONLINE_FRIEND& update_peer) const;
 
-  bool RemoveFriend(const uint64_t xuid, const uint64_t friend_xuid) const;
+  bool RemoveFriend(const uint64_t xuid, const uint64_t friend_xuid,
+                    bool notify = true) const;
 
   bool IsFriend(const uint64_t xuid, const uint64_t friend_xuid) const;
 
