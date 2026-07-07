@@ -65,7 +65,10 @@ bool FriendsManager::AddFriend(const uint64_t xuid, const uint64_t friend_xuid,
 
   user->friends_.push_back(peer);
 
-  AddFriendToConfig(friend_xuid);
+  // Check if we're adding or loading existing friend.
+  if (!ParseFriendsXUIDs().contains(friend_xuid)) {
+    AddFriendToConfig(friend_xuid);
+  }
 
   if (notify) {
     kernel_state_->BroadcastNotification(
