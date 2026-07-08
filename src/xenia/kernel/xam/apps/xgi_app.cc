@@ -231,6 +231,11 @@ X_HRESULT XgiApp::ExecuteDispatchMessage(uint32_t message, uint32_t buffer_ptr,
         return X_E_INVALIDARG;
       }
 
+      // 4D53082D
+      if (!kernel_state()->xam_state()->user_tracker()->LoggedInToLive()) {
+        return X_ONLINE_E_LOGON_NOT_LOGGED_ON;
+      }
+
       // 584107D7 caches results
       X_USER_STATS_READ_RESULTS* results =
           kernel_memory()->TranslateVirtual<X_USER_STATS_READ_RESULTS*>(

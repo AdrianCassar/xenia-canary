@@ -297,7 +297,7 @@ uint32_t XamUserReadProfileSettingsEx(
     if (xuids) {
       for (const auto xuid : profile_xuids) {
         if (IsOnlineXUID(xuid) &&
-            cvars::network_mode != NETWORK_MODE::XBOXLIVE) {
+            !kernel_state()->xam_state()->user_tracker()->LoggedInToLive()) {
           extended_error = X_ONLINE_E_USER_NOT_LOGGED_ON;
           return X_ERROR_FUNCTION_FAILED;
         }
@@ -617,8 +617,10 @@ dword_result_t XamUserCheckPrivilege_entry(dword_t user_index, dword_t mask,
     return X_ERROR_NO_SUCH_USER;
   }
 
-  if (kernel_state()->xam_state()->GetUserProfile(user_index)->signin_state() !=
-      X_USER_SIGNIN_STATE::SignedInToLive) {
+  if (!kernel_state()
+           ->xam_state()
+           ->GetUserProfile(user_index)
+           ->IsSignedInToLive()) {
     return X_ERROR_NOT_LOGGED_ON;
   }
 
@@ -737,7 +739,7 @@ dword_result_t XamUserAreUsersFriends_entry(
       const auto& user_profile =
           kernel_state()->xam_state()->GetUserProfile(user_index);
 
-      if (user_profile->signin_state() != X_USER_SIGNIN_STATE::SignedInToLive) {
+      if (!user_profile->IsSignedInToLive()) {
         result = X_ERROR_NOT_LOGGED_ON;
       } else {
         uint32_t friends_count = 0;
@@ -798,7 +800,7 @@ dword_result_t XamUserGetAgeGroup_entry(
                                          uint32_t& length) -> X_RESULT {
     X_RESULT result = X_ERROR_SUCCESS;
 
-    if (cvars::network_mode != NETWORK_MODE::XBOXLIVE) {
+    if (!kernel_state()->xam_state()->user_tracker()->LoggedInToLive()) {
       result = X_ERROR_NO_SUCH_USER;
     }
 
@@ -850,7 +852,7 @@ dword_result_t XamUserGetAge_entry(dword_t user_index, lpdword_t age_ptr,
                                    uint32_t& length) -> X_RESULT {
     X_RESULT result = X_ERROR_SUCCESS;
 
-    if (cvars::network_mode != NETWORK_MODE::XBOXLIVE) {
+    if (!kernel_state()->xam_state()->user_tracker()->LoggedInToLive()) {
       result = X_ERROR_NO_SUCH_USER;
     }
 

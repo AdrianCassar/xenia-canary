@@ -605,7 +605,7 @@ void XamShowDirtyDiscErrorUI_entry(dword_t user_index) {
 DECLARE_XAM_EXPORT1(XamShowDirtyDiscErrorUI, kUI, kImplemented);
 
 dword_result_t XamShowPartyUI_entry(dword_t user_index) {
-  if (cvars::network_mode != NETWORK_MODE::XBOXLIVE) {
+  if (!kernel_state()->xam_state()->user_tracker()->LoggedInToLive()) {
     return X_ERROR_ACCESS_DENIED;
   }
 
@@ -2265,7 +2265,8 @@ dword_result_t XamShowGamerCardUIForXUID_entry(dword_t user_index,
     return X_ERROR_INVALID_PARAMETER;
   }
 
-  if (IsOnlineXUID(xuid) && cvars::network_mode != NETWORK_MODE::XBOXLIVE) {
+  if (IsOnlineXUID(xuid) &&
+      !kernel_state()->xam_state()->user_tracker()->LoggedInToLive()) {
     return X_ERROR_ACCESS_DENIED;
   }
 

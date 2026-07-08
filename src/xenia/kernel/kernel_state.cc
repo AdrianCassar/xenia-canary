@@ -1065,13 +1065,7 @@ void KernelState::RegisterNotifyListener(XNotifyListener* listener) {
   if (!has_notified_live_startup_ && listener->mask() & kXNotifyLive) {
     has_notified_live_startup_ = true;
 
-    const uint32_t live_connection_state =
-        cvars::network_mode == NETWORK_MODE::XBOXLIVE
-            ? X_ONLINE_S_LOGON_CONNECTION_ESTABLISHED
-            : X_ONLINE_S_LOGON_DISCONNECTED;
-
-    listener->EnqueueNotification(kXNotificationLiveConnectionChanged,
-                                  live_connection_state);
+    listener->EnqueueNotification(kXNotificationLiveVoicechatAway, 0);
   }
 
   // 4E4D07ED, 58410869. Fixes creating Xbox Live sessions.
@@ -1083,11 +1077,6 @@ void KernelState::RegisterNotifyListener(XNotifyListener* listener) {
 
     listener->EnqueueNotification(kXNotificationSystemSignInChanged,
                                   signed_in_players);
-  }
-
-  if (!has_notified_xparty_ && listener->mask() & kXNotifyParty) {
-    has_notified_xparty_ = true;
-    listener->EnqueueNotification(kXNotificationPartyMembersChanged, 0);
   }
 }
 
