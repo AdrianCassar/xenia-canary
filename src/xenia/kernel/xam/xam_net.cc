@@ -183,7 +183,7 @@ struct X_TIMEVAL {
 static_assert_size(X_TIMEVAL, 0x8);
 
 // Initialize sockaddr to its default state
-static void InitalizeSockaddr(XSOCKADDR_IN* sockaddr_ptr) {
+static void InitializeSockaddr(XSOCKADDR_IN* sockaddr_ptr) {
   if (sockaddr_ptr) {
     std::memset(sockaddr_ptr, 0, sizeof(XSOCKADDR_IN));
     sockaddr_ptr->address_family = XSocket::AddressFamily::X_AF_INET;
@@ -483,7 +483,7 @@ dword_result_t NetDll_WSARecvFrom_entry(
     dword_t num_buffers, lpdword_t num_bytes_recv_ptr, lpdword_t flags_ptr,
     pointer_t<XSOCKADDR_IN> from_ptr, lpdword_t fromlen_ptr,
     pointer_t<XWSAOVERLAPPED> overlapped_ptr, lpvoid_t completion_routine_ptr) {
-  InitalizeSockaddr(from_ptr);
+  InitializeSockaddr(from_ptr);
 
   auto socket =
       kernel_state()->object_table()->LookupObject<XSocket>(socket_handle);
@@ -2395,7 +2395,7 @@ dword_result_t NetDll_recvfrom_entry(dword_t caller, dword_t socket_handle,
                                      pointer_t<XSOCKADDR_IN> from_ptr,
                                      lpdword_t fromlen_ptr) {
   // Fixed 415607D6, 4E4D07DC
-  InitalizeSockaddr(from_ptr);
+  InitializeSockaddr(from_ptr);
 
   auto socket =
       kernel_state()->object_table()->LookupObject<XSocket>(socket_handle);
@@ -2546,7 +2546,7 @@ DECLARE_XAM_EXPORT1(NetDll_getpeername, kNetworking, kImplemented);
 dword_result_t NetDll_getsockname_entry(dword_t caller, dword_t socket_handle,
                                         pointer_t<XSOCKADDR_IN> addr_ptr,
                                         lpdword_t addrlen_ptr) {
-  InitalizeSockaddr(addr_ptr);
+  InitializeSockaddr(addr_ptr);
 
   if (!addr_ptr) {
     XThread::SetLastError(uint32_t(X_WSAError::X_WSAEFAULT));

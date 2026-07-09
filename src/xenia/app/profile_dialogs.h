@@ -68,12 +68,12 @@ class ManagerDialog final : public ui::ImGuiDialog {
  public:
   ManagerDialog(ui::ImGuiDrawer* imgui_drawer, EmulatorWindow* emulator_window)
       : ui::ImGuiDialog(imgui_drawer), emulator_window_(emulator_window) {
-    Initalize(imgui_drawer, 0);
+    Initialize(imgui_drawer, 0);
   }
 
  protected:
   void OnDraw(ImGuiIO& io) override;
-  void Initalize(ui::ImGuiDrawer* imgui_drawer, uint32_t user_index);
+  void Initialize(ui::ImGuiDrawer* imgui_drawer, uint32_t user_index);
 
  private:
   bool manager_opened_ = false;
