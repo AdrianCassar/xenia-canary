@@ -35,7 +35,7 @@ auto item_getter = [](void* data, int idx) {
   return vector.at(idx).c_str();
 };
 
-void TitleGamerpicBrowser::Initalize() {
+void TitleGamerpicBrowser::Initialize() {
   kernel_state_ = emulator_window_->emulator()->kernel_state();
 
   for (uint32_t slot = 0; slot < XUserMaxUserCount; slot++) {
@@ -427,7 +427,7 @@ void TitleGamerpicBrowser::OnDraw(ImGuiIO& io) {
 
     ImVec2 table_size = ImVec2(-1, 425);
 
-    // Set page table focus very plage load so navigation via gamepad works
+    // Set page table focus every page load so navigation via gamepad works
     // continuously.
     if (page_changed_) {
       if (!gamerpic_args_.browser_open) {
