@@ -29,7 +29,7 @@ void CreateProfileUI::OnDraw(ImGuiIO& io) {
   }
 }
 
-void CreateProfileUI::Initalize() {
+void CreateProfileUI::Initialize() {
   const auto gamerpic_key = GetDefaultGamerPictureKey();
 
   if (gamerpic_key.has_value()) {

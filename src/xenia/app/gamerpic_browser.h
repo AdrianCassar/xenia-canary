@@ -40,7 +40,7 @@ class TitleGamerpicBrowser final : public ui::ImGuiDialog {
     auto browser_ptr =
         std::make_unique<TitleGamerpicBrowser>(imgui_drawer, emulator_window);
 
-    browser_ptr->Initalize();
+    browser_ptr->Initialize();
 
     return browser_ptr;
   }
@@ -91,7 +91,7 @@ class TitleGamerpicBrowser final : public ui::ImGuiDialog {
   using AtomicImmediateTitleGamerpics =
       std::atomic<std::shared_ptr<const ImmediateGamerpicsMap>>;
 
-  void Initalize();
+  void Initialize();
 
   void DrawPageSelection(xe::kernel::PageGamerpicsObjectJSON page,
                          std::string title);

@@ -494,8 +494,8 @@ void ProfileConfigDialog::OnDraw(ImGuiIO& io) {
   ImGui::End();
 }
 
-void ManagerDialog::Initalize(ui::ImGuiDrawer* imgui_drawer,
-                              uint32_t user_index) {
+void ManagerDialog::Initialize(ui::ImGuiDrawer* imgui_drawer,
+                               uint32_t user_index) {
   emulator_ = emulator_window_->emulator();
 
   const auto profile =
