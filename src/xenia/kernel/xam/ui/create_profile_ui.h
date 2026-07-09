@@ -37,7 +37,7 @@ class CreateProfileUI final : public XamDialog {
                   bool with_migration = false)
       : XamDialog(imgui_drawer), emulator_(emulator) {
     create_profile_args_.migration = with_migration;
-    Initalize();
+    Initialize();
   }
 
   ~CreateProfileUI() = default;
@@ -47,7 +47,7 @@ class CreateProfileUI final : public XamDialog {
  private:
   void OnDraw(ImGuiIO& io) override;
 
-  void Initalize();
+  void Initialize();
 
   Emulator* emulator_;
   CreateProfileUIArgs create_profile_args_ = {};
