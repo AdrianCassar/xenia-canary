@@ -18,6 +18,12 @@
 
 #include "xenia/base/threading.h"
 
+#if XE_PLATFORM_WIN32
+#include <winsock2.h>
+#elif XE_PLATFORM_LINUX
+#include <netdb.h>
+#endif
+
 using namespace std::chrono_literals;
 
 namespace xe {
@@ -148,7 +154,7 @@ class UPnP {
   std::mutex igd_mutex_;
   IGDdatas igd_data_ = {};
   UPNPUrls igd_urls_ = {};
-  char lan_addr_[64] = {};
+  char lan_addr_[NI_MAXHOST] = {};
 
   const std::chrono::seconds default_lease_time_ = 1h;
   const std::chrono::minutes refresh_ports_interval_ = 45min;
