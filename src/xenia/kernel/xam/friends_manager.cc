@@ -20,7 +20,9 @@ namespace xam {
 
 FriendsManager::FriendsManager(KernelState* kernel_state,
                                ProfileManager* profile_manager)
-    : kernel_state_(kernel_state), profile_manager_(profile_manager) {}
+    : kernel_state_(kernel_state),
+      profile_manager_(profile_manager),
+      mute_list_manager_(kernel_state_, profile_manager_) {}
 
 void FriendsManager::AddFriends(const uint64_t xuid,
                                 const std::set<uint64_t>& xuids) const {
@@ -387,6 +389,21 @@ void FriendsManager::AddDummyFriends(const uint64_t xuid,
 
     AddFriend(xuid, dummy);
   }
+}
+
+bool FriendsManager::AddMuteListUser(const uint64_t xuid,
+                                     const uint64_t remote_xuid) const {
+  return mute_list_manager_.AddMuteListUser(xuid, remote_xuid);
+}
+
+bool FriendsManager::RemoveMuteListUser(const uint64_t xuid,
+                                        const uint64_t remote_xuid) const {
+  return mute_list_manager_.RemoveMuteListUser(xuid, remote_xuid);
+}
+
+bool FriendsManager::QueryMuteListUser(const uint64_t xuid,
+                                       const uint64_t remote_talker) const {
+  return mute_list_manager_.QueryMuteListUser(xuid, remote_talker);
 }
 
 }  // namespace xam

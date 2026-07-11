@@ -14,6 +14,7 @@
 #include <set>
 
 #include "xenia/kernel/json/friend_presence_object_json.h"
+#include "xenia/kernel/xam/mute_list_manager.h"
 #include "xenia/kernel/xnet.h"
 
 namespace xe {
@@ -76,6 +77,14 @@ class FriendsManager {
   bool IsPresenceOutOfSync(uint64_t xuid,
                            std::vector<FriendPresenceObjectJSON> friends) const;
 
+  bool AddMuteListUser(const uint64_t xuid, const uint64_t remote_xuid) const;
+
+  bool RemoveMuteListUser(const uint64_t xuid,
+                          const uint64_t remote_xuid) const;
+
+  bool QueryMuteListUser(const uint64_t xuid,
+                         const uint64_t remote_talker) const;
+
  private:
   std::vector<X_ONLINE_FRIEND>::iterator FindFriend(
       std::vector<X_ONLINE_FRIEND>& friends, const uint64_t friend_xuid) const;
@@ -84,6 +93,7 @@ class FriendsManager {
 
   KernelState* kernel_state_;
   ProfileManager* profile_manager_;
+  MuteListManager mute_list_manager_;
 };
 
 }  // namespace xam
