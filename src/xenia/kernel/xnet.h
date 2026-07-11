@@ -127,6 +127,7 @@ using namespace xe::literals;
 #define X_MAX_RICHPRESENCE_SIZE_EXTRA                       100 // 4D5308AB uses rich presence string > 64
 #define X_ONLINE_MAX_XINVITE_DISPLAY_STRING                 255
 #define X_ONLINE_MAX_STATS_ESTIMATE_RATING_COUNT            101
+#define X_ONLINE_MAX_MUSTLIST                               250
 
 #define X_PARTY_MAX_USERS                                   32
 #define X_PARTY_USER_ISLOCAL                                0x00000001
@@ -857,6 +858,7 @@ struct X_MUTE_SET_STATE {
   xe::be<uint64_t> remote_xuid;
   xe::be<uint32_t> set_muted;
 };
+static_assert_size(X_MUTE_SET_STATE, 0x18);
 
 struct X_CREATE_FRIENDS_ENUMERATOR {
   X_ARGUMENT_ENTRY user_index;
