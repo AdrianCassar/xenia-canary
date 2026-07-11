@@ -179,13 +179,10 @@ class UserProfile {
   friend class GpdAchievementBackend;
   friend class FriendsManager;
   friend class PresenceManager;
+  friend class MuteListManager;
 
   void SetSelfInvite(X_INVITE_INFO invite_info);
   X_INVITE_INFO GetSelfInvite() { return self_invite; };
-
-  bool MutePlayer(uint64_t xuid);
-  bool UnmutePlayer(uint64_t xuid);
-  bool IsPlayerMuted(uint64_t xuid) const;
 
   std::u16string GetPresenceString() const;
 
@@ -253,7 +250,8 @@ class UserProfile {
   std::map<uint64_t, X_ONLINE_PRESENCE> subscriptions_;
   std::mutex subscriptions_mutex_;
 
-  std::vector<uint64_t> muted_players_;
+  std::set<uint64_t> mute_list_;  // XONLINE_MUTELIST_INTERNAL
+  std::mutex mute_list_mutex_;
 
   std::map<XTileType, std::vector<uint8_t>> profile_images_;
   std::u16string online_presence_desc_ = u"";
