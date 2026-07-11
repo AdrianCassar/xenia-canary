@@ -1055,18 +1055,19 @@ X_HRESULT XLiveBaseApp::XUserMuteListQuery(uint32_t buffer_ptr,
     return X_E_INVALIDARG;
   }
 
-  if (!kernel_state_->xam_state()->IsUserSignedIn(
-          remote_player_ptr->user_index)) {
+  const auto user_profile =
+      kernel_state_->xam_state()->GetUserProfile(remote_player_ptr->user_index);
+
+  if (!user_profile) {
     return X_ONLINE_E_LOGON_NOT_LOGGED_ON;
   }
-
-  auto user_profile =
-      kernel_state_->xam_state()->GetUserProfile(remote_player_ptr->user_index);
 
   xe::be<uint32_t>* mute_list_ptr =
       memory_->TranslateVirtual<xe::be<uint32_t>*>(buffer_length);
 
-  *mute_list_ptr = user_profile->IsPlayerMuted(remote_player_ptr->remote_xuid);
+  *mute_list_ptr =
+      kernel_state_->xam_state()->friends_manager()->QueryMuteListUser(
+          user_profile->xuid(), remote_player_ptr->remote_xuid.get());
 
   return X_E_SUCCESS;
 }
@@ -1083,20 +1084,15 @@ X_HRESULT XLiveBaseApp::XUserMuteListAdd(uint32_t buffer_ptr) {
     return X_E_INVALIDARG;
   }
 
-  if (!kernel_state_->xam_state()->IsUserSignedIn(
-          remote_player_ptr->user_index)) {
+  const auto user_profile =
+      kernel_state_->xam_state()->GetUserProfile(remote_player_ptr->user_index);
+
+  if (!user_profile) {
     return X_ONLINE_E_LOGON_NOT_LOGGED_ON;
   }
 
-  auto user_profile =
-      kernel_state_->xam_state()->GetUserProfile(remote_player_ptr->user_index);
-
-  bool muted = user_profile->MutePlayer(remote_player_ptr->remote_xuid);
-
-  if (muted) {
-    kernel_state_->BroadcastNotification(kXNotificationSystemMuteListChanged,
-                                         0);
-  }
+  bool muted = kernel_state_->xam_state()->friends_manager()->AddMuteListUser(
+      user_profile->xuid(), remote_player_ptr->remote_xuid.get());
 
   return X_E_SUCCESS;
 }
@@ -1113,20 +1109,16 @@ X_HRESULT XLiveBaseApp::XUserMuteListRemove(uint32_t buffer_ptr) {
     return X_E_INVALIDARG;
   }
 
-  if (!kernel_state_->xam_state()->IsUserSignedIn(
-          remote_player_ptr->user_index)) {
+  const auto user_profile =
+      kernel_state_->xam_state()->GetUserProfile(remote_player_ptr->user_index);
+
+  if (!user_profile) {
     return X_ONLINE_E_LOGON_NOT_LOGGED_ON;
   }
 
-  auto user_profile =
-      kernel_state_->xam_state()->GetUserProfile(remote_player_ptr->user_index);
-
-  bool unmuted = user_profile->UnmutePlayer(remote_player_ptr->remote_xuid);
-
-  if (unmuted) {
-    kernel_state_->BroadcastNotification(kXNotificationSystemMuteListChanged,
-                                         0);
-  }
+  bool unmuted =
+      kernel_state_->xam_state()->friends_manager()->RemoveMuteListUser(
+          user_profile->xuid(), remote_player_ptr->remote_xuid.get());
 
   return X_E_SUCCESS;
 }
