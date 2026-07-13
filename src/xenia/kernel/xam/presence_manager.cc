@@ -464,32 +464,26 @@ std::vector<X_ONLINE_FRIEND> PresenceManager::GetFriendsPresenceSorted(
     return {};
   }
 
-  const auto friends_presence_ref = friends_manager_->GetFriends(xuid);
+  const auto opt_friends_presence = friends_manager_->GetFriends(xuid);
 
-  if (!friends_presence_ref.has_value()) {
+  if (!opt_friends_presence.has_value()) {
     return {};
   }
 
-  std::vector<X_ONLINE_FRIEND> friends_presence =
-      friends_presence_ref.value().get();
+  std::vector<X_ONLINE_FRIEND> friends_presence = opt_friends_presence.value();
 
-  std::sort(
-      friends_presence.begin(), friends_presence.end(),
-      [](X_ONLINE_FRIEND& peer_1, X_ONLINE_FRIEND& peer_2) {
-        uint32_t peer_1_state = peer_1.state & 0xFF;
-        uint32_t peer_2_state = peer_2.state & 0xFF;
+  std::sort(friends_presence.begin(), friends_presence.end(),
+            [](const X_ONLINE_FRIEND& peer_1, const X_ONLINE_FRIEND& peer_2) {
+              const uint32_t peer_1_state = peer_1.state & 0xFF;
+              const uint32_t peer_2_state = peer_2.state & 0xFF;
 
-        if (peer_1_state == peer_2_state &&
-            (peer_1.session_id.as_uint64() || peer_2.session_id.as_uint64())) {
-          if (peer_1.session_id.as_uint64() && peer_2.session_id.as_uint64()) {
-            return true;
-          }
+              if (peer_1_state != peer_2_state) {
+                return peer_1_state > peer_2_state;
+              }
 
-          return peer_1.session_id.as_uint64() ? true : false;
-        }
-
-        return peer_1_state > peer_2_state;
-      });
+              return peer_1.session_id.as_uint64() != 0 &&
+                     peer_2.session_id.as_uint64() == 0;
+            });
 
   return friends_presence;
 }
