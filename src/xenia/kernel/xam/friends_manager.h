@@ -61,8 +61,8 @@ class FriendsManager {
   std::optional<X_ONLINE_FRIEND> GetFriend(const uint64_t xuid,
                                            const uint64_t friend_xuid) const;
 
-  std::optional<std::reference_wrapper<const std::vector<X_ONLINE_FRIEND>>>
-  GetFriends(const uint64_t xuid) const;
+  std::optional<std::vector<X_ONLINE_FRIEND>> GetFriends(
+      const uint64_t xuid) const;
 
   std::set<uint64_t> GetFriendsXUIDs(const uint64_t xuid) const;
 
