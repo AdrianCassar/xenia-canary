@@ -41,8 +41,11 @@ bool FriendsManager::AddFriend(const uint64_t xuid, const uint64_t friend_xuid,
     return false;
   }
 
-  if (user->friends_.size() >= X_ONLINE_MAX_FRIENDS) {
-    return false;
+  {
+    std::lock_guard<std::mutex> lock(user->friends_mutex_);
+    if (user->friends_.size() >= X_ONLINE_MAX_FRIENDS) {
+      return false;
+    }
   }
 
   if (!IsOnlineXUID(friend_xuid)) {
@@ -65,7 +68,10 @@ bool FriendsManager::AddFriend(const uint64_t xuid, const uint64_t friend_xuid,
   xe::string_util::copy_truncating(peer.Gamertag, default_gamertag.c_str(),
                                    xe::countof(peer.Gamertag));
 
-  user->friends_.push_back(peer);
+  {
+    std::lock_guard<std::mutex> lock(user->friends_mutex_);
+    user->friends_.push_back(peer);
+  }
 
   // Check if we're adding or loading existing friend.
   // Skip saving dummy friends.
@@ -96,6 +102,8 @@ bool FriendsManager::UpdateFriend(const uint64_t xuid,
     return false;
   }
 
+  std::lock_guard<std::mutex> lock(user->friends_mutex_);
+
   auto it = FindFriend(user->friends_, update_friend.xuid);
 
   if (it == user->friends_.end()) {
@@ -114,6 +122,8 @@ bool FriendsManager::RemoveFriend(const uint64_t xuid,
   if (!user) {
     return false;
   }
+
+  std::lock_guard<std::mutex> lock(user->friends_mutex_);
 
   const auto it = FindFriend(user->friends_, friend_xuid);
 
@@ -144,6 +154,8 @@ bool FriendsManager::IsFriend(const uint64_t xuid,
     return false;
   }
 
+  std::lock_guard<std::mutex> lock(user->friends_mutex_);
+
   return FindFriend(user->friends_, friend_xuid) != user->friends_.end();
 }
 
@@ -169,6 +181,8 @@ std::optional<X_ONLINE_FRIEND> FriendsManager::GetFriendFromIndex(
     return std::nullopt;
   }
 
+  std::lock_guard<std::mutex> lock(user->friends_mutex_);
+
   if (index >= X_ONLINE_MAX_FRIENDS || index >= user->friends_.size()) {
     return std::nullopt;
   }
@@ -182,6 +196,8 @@ std::optional<X_ONLINE_FRIEND> FriendsManager::GetFriend(
   if (!user) {
     return std::nullopt;
   }
+
+  std::lock_guard<std::mutex> lock(user->friends_mutex_);
 
   const auto it = FindFriend(user->friends_, friend_xuid);
 
@@ -199,6 +215,9 @@ std::optional<std::vector<X_ONLINE_FRIEND>> FriendsManager::GetFriends(
     return std::nullopt;
   }
 
+  std::lock_guard<std::mutex> lock(user->friends_mutex_);
+
+  // Copy vector so it's thread safe, although it's less efficient.
   return user->friends_;
 }
 
@@ -211,6 +230,7 @@ std::set<uint64_t> FriendsManager::GetFriendsXUIDs(const uint64_t xuid) const {
   std::set<uint64_t> xuids;
 
   for (const auto& peer : user->friends_) {
+    std::lock_guard<std::mutex> lock(user->friends_mutex_);
     xuids.insert(peer.xuid);
   }
 
@@ -222,6 +242,8 @@ size_t FriendsManager::GetFriendsCount(const uint64_t xuid) const {
   if (!user) {
     return 0;
   }
+
+  std::lock_guard<std::mutex> lock(user->friends_mutex_);
 
   return user->friends_.size();
 }
@@ -352,8 +374,11 @@ void FriendsManager::AddDummyFriends(const uint64_t xuid,
     return;
   }
 
-  if (user->friends_.size() >= X_ONLINE_MAX_FRIENDS) {
-    return;
+  {
+    std::lock_guard<std::mutex> lock(user->friends_mutex_);
+    if (user->friends_.size() >= X_ONLINE_MAX_FRIENDS) {
+      return;
+    }
   }
 
   for (uint32_t i = 0; i < friends_count; i++) {
