@@ -253,6 +253,7 @@ class UserProfile {
   std::mutex prop_mutex;              // 5841089C
 
   std::vector<X_ONLINE_FRIEND> friends_;
+  std::set<uint64_t> dummy_friend_xuids_;
   std::map<uint64_t, X_ONLINE_PRESENCE> subscriptions_;
   std::vector<uint64_t> muted_players_;
 

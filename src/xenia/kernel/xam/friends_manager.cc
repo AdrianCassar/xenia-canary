@@ -68,7 +68,9 @@ bool FriendsManager::AddFriend(const uint64_t xuid, const uint64_t friend_xuid,
   user->friends_.push_back(peer);
 
   // Check if we're adding or loading existing friend.
-  if (!ParseFriendsXUIDs().contains(friend_xuid)) {
+  // Skip saving dummy friends.
+  if (!ParseFriendsXUIDs().contains(friend_xuid) &&
+      !user->dummy_friend_xuids_.contains(friend_xuid)) {
     AddFriendToConfig(friend_xuid);
   }
 
@@ -115,11 +117,14 @@ bool FriendsManager::RemoveFriend(const uint64_t xuid,
 
   const auto it = FindFriend(user->friends_, friend_xuid);
 
-  if (it == user->friends_.cend()) {
+  if (it == user->friends_.end()) {
     return false;
   }
 
   user->friends_.erase(it);
+
+  // Skip erasing from user->dummy_friend_xuids_ so dummy friend cannot be added
+  // to config.
 
   RemoveFriendFromConfig(friend_xuid);
 
@@ -139,7 +144,7 @@ bool FriendsManager::IsFriend(const uint64_t xuid,
     return false;
   }
 
-  return FindFriend(user->friends_, friend_xuid) != user->friends_.cend();
+  return FindFriend(user->friends_, friend_xuid) != user->friends_.end();
 }
 
 void FriendsManager::ClearFriends(const uint64_t xuid) const {
@@ -180,21 +185,21 @@ std::optional<X_ONLINE_FRIEND> FriendsManager::GetFriend(
 
   const auto it = FindFriend(user->friends_, friend_xuid);
 
-  if (it == user->friends_.cend()) {
+  if (it == user->friends_.end()) {
     return std::nullopt;
   }
 
   return *it;
 }
 
-std::optional<std::reference_wrapper<const std::vector<X_ONLINE_FRIEND>>>
-FriendsManager::GetFriends(const uint64_t xuid) const {
+std::optional<std::vector<X_ONLINE_FRIEND>> FriendsManager::GetFriends(
+    const uint64_t xuid) const {
   const auto user = profile_manager_->GetProfileAny(xuid);
   if (!user) {
     return std::nullopt;
   }
 
-  return std::cref(user->friends_);
+  return user->friends_;
 }
 
 std::set<uint64_t> FriendsManager::GetFriendsXUIDs(const uint64_t xuid) const {
@@ -352,7 +357,10 @@ void FriendsManager::AddDummyFriends(const uint64_t xuid,
   }
 
   for (uint32_t i = 0; i < friends_count; i++) {
-    AddFriend(xuid, GenerateDummyFriend());
+    const auto dummy = GenerateDummyFriend();
+    user->dummy_friend_xuids_.insert(dummy.xuid.get());
+
+    AddFriend(xuid, dummy);
   }
 }
 
