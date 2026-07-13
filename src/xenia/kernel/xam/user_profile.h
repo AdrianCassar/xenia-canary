@@ -245,9 +245,14 @@ class UserProfile {
   GpdInfoProfile dashboard_gpd_;
   std::map<uint32_t, GpdInfoTitle> games_gpd_;
   std::vector<Property> properties_;  // Includes contexts!
+
   std::vector<X_ONLINE_FRIEND> friends_;
+  std::mutex friends_mutex_;
   std::set<uint64_t> dummy_friend_xuids_;
+
   std::map<uint64_t, X_ONLINE_PRESENCE> subscriptions_;
+  std::mutex subscriptions_mutex_;
+
   std::vector<uint64_t> muted_players_;
 
   std::map<XTileType, std::vector<uint8_t>> profile_images_;
