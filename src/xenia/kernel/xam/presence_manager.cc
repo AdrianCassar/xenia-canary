@@ -165,6 +165,8 @@ bool PresenceManager::UpdateSubscription(const uint64_t xuid,
     return false;
   }
 
+  std::lock_guard<std::mutex> lock(user->subscriptions_mutex_);
+
   user->subscriptions_[peer.xuid] = peer;
 
   return true;
@@ -180,6 +182,8 @@ std::optional<X_ONLINE_PRESENCE> PresenceManager::GetSubscription(
   if (!IsSubscribed(xuid, subscriber_xuid)) {
     return std::nullopt;
   }
+
+  std::lock_guard<std::mutex> lock(user->subscriptions_mutex_);
 
   return user->subscriptions_[subscriber_xuid];
 }
@@ -202,8 +206,11 @@ bool PresenceManager::Subscribe(const uint64_t xuid,
     return false;
   }
 
-  if (user->subscriptions_.size() >= kMaxUserSubscriptions) {
-    return false;
+  {
+    std::lock_guard<std::mutex> lock(user->subscriptions_mutex_);
+    if (user->subscriptions_.size() >= kMaxUserSubscriptions) {
+      return false;
+    }
   }
 
   if (!IsOnlineXUID(subscriber_xuid)) {
@@ -223,6 +230,8 @@ bool PresenceManager::Subscribe(const uint64_t xuid,
     return true;
   }
 
+  std::lock_guard<std::mutex> lock(user->subscriptions_mutex_);
+
   user->subscriptions_[subscriber_xuid] = {};
 
   return true;
@@ -239,6 +248,8 @@ bool PresenceManager::Unsubscribe(const uint64_t xuid,
     return true;
   }
 
+  std::lock_guard<std::mutex> lock(user->subscriptions_mutex_);
+
   return user->subscriptions_.erase(xuid);
 }
 
@@ -253,6 +264,8 @@ bool PresenceManager::IsSubscribed(const uint64_t xuid,
     return false;
   }
 
+  std::lock_guard<std::mutex> lock(user->subscriptions_mutex_);
+
   return user->subscriptions_.contains(subscriber_xuid);
 }
 
@@ -262,6 +275,8 @@ std::set<uint64_t> PresenceManager::GetSubscribedXUIDs(
   if (!user) {
     return {};
   }
+
+  std::lock_guard<std::mutex> lock(user->subscriptions_mutex_);
 
   const auto subscribed_xuids_view = std::views::keys(user->subscriptions_);
 
@@ -282,6 +297,7 @@ uint32_t PresenceManager::GetSubscribedPeersTotal() const {
     const auto profile = profile_manager_->GetProfile(user_index);
 
     if (profile) {
+      std::lock_guard<std::mutex> lock(profile->subscriptions_mutex_);
       total_subscribed_peers += profile->subscriptions_.size();
     }
   }
