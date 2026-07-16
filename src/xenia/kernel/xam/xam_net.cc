@@ -1584,7 +1584,6 @@ dword_result_t NetDll_XHttpStartup_entry(dword_t caller, dword_t reserved,
     return 1;
   }
 
-  // 584111F7 - Prevents Minecraft from loading
   // We're suppose to set error code if we fail function
   // XThread::SetLastError(XHTTP_ERROR_CONNECTION_ERROR);
   return cvars::xhttp;
@@ -1603,7 +1602,9 @@ dword_result_t NetDll_XHttpCrackUrl_entry(
     return false;
   }
 
-  const bool insufficient_buffer =
+  // X_ICU_ESCAPE is unsupported ignore it.
+
+  bool insufficient_buffer =
       url_components_ptr->scheme_ptr && !url_components_ptr->scheme_length ||
       url_components_ptr->host_name_ptr &&
           !url_components_ptr->host_name_length ||
@@ -1616,27 +1617,29 @@ dword_result_t NetDll_XHttpCrackUrl_entry(
       url_components_ptr->extra_info_ptr &&
           !url_components_ptr->extra_info_length;
 
-  // ICU decode is only supported with user provided buffers
-  if (flags & X_ICU_DECODE) {
-    const bool invalid_paramater =
-        !url_components_ptr->scheme_ptr && url_components_ptr->scheme_length ||
-        !url_components_ptr->host_name_ptr &&
-            url_components_ptr->host_name_length ||
-        !url_components_ptr->user_name_ptr &&
-            url_components_ptr->user_name_length ||
-        !url_components_ptr->password_ptr &&
-            url_components_ptr->password_length ||
-        !url_components_ptr->url_path_ptr &&
-            url_components_ptr->url_path_length ||
-        !url_components_ptr->extra_info_ptr &&
-            url_components_ptr->extra_info_length;
+  auto decode_string = [](const std::string encoded_component) -> std::string {
+    CURL* curl = curl_easy_init();
 
-    // Invalid or provided buffer is insufficient
-    if (invalid_paramater || insufficient_buffer) {
-      XThread::SetLastError(X_ERROR_INVALID_PARAMETER);
-      return false;
+    if (!curl) {
+      return "";
     }
-  }
+
+    std::string decoded_component;
+    int component_length = 0;
+
+    char* decoded_output =
+        curl_easy_unescape(curl, encoded_component.c_str(),
+                           decoded_component.size(), &component_length);
+
+    if (decoded_output) {
+      decoded_component = std::string(decoded_output, component_length);
+      curl_free(decoded_output);
+    }
+
+    curl_easy_cleanup(curl);
+
+    return decoded_component;
+  };
 
   std::string url_to_process = url_ptr.value();
 
@@ -1645,26 +1648,18 @@ dword_result_t NetDll_XHttpCrackUrl_entry(
   }
 
   CURLU* url = curl_url();
-  CURLUcode rc = curl_url_set(url, CURLUPART_URL, url_to_process.c_str(), 0);
 
-  // Assert if URL is bad format
-  assert_zero(rc);
+  if (url) {
+    CURLUcode rc = curl_url_set(url, CURLUPART_URL, url_to_process.c_str(), 0);
 
-  if (rc) {
-    url_components_ptr->scheme = -1;
-  }
+    // Assert if URL is bad format
+    assert_zero(rc);
 
-  if (flags & X_ICU_DECODE) {
-    CURL* curl = curl_easy_init();
-    int output_length = 0;
+    if (rc) {
+      url_components_ptr->scheme = -1;
+    }
 
-    char* decoded_output = curl_easy_unescape(curl, url_to_process.c_str(),
-                                              url_length, &output_length);
-
-    url_to_process = std::string(decoded_output, output_length);
-
-    curl_free(decoded_output);
-    curl_easy_cleanup(curl);
+    curl_url_cleanup(url);
   }
 
   std::regex url_regex(
@@ -1673,13 +1668,16 @@ dword_result_t NetDll_XHttpCrackUrl_entry(
 
   std::smatch matches;
 
-  auto ProcessComponent = [kernel_state = kernel_state()](
+  auto ProcessComponent = [decode_string, flags, kernel_state = kernel_state()](
                               const uint32_t component_result_ptr,
                               uint32_t& component_ptr,
                               uint32_t& component_length_ptr, uint32_t size) {
     if (component_ptr) {
-      if (!component_length_ptr || component_length_ptr < size + 1) {
-        component_length_ptr = size + 1;  // Null Terminator
+      // Include null terminator
+      const uint32_t min_buffer_size = size + 1;
+
+      if (!component_length_ptr || component_length_ptr < min_buffer_size) {
+        component_length_ptr = min_buffer_size;
         return false;
       }
 
@@ -1689,9 +1687,13 @@ dword_result_t NetDll_XHttpCrackUrl_entry(
       char* result_src_ptr =
           kernel_state->memory()->TranslateVirtual<char*>(component_result_ptr);
 
-      std::copy_n(result_src_ptr, size, result_dst_ptr);
-      result_dst_ptr[size] = '\0';  // Null terminator
-      component_length_ptr = size;
+      const std::string component_data(result_src_ptr, size);
+      const std::string processed_data =
+          flags & X_ICU_DECODE ? decode_string(component_data) : component_data;
+
+      xe::string_util::copy_truncating(result_dst_ptr, processed_data.c_str(),
+                                       component_length_ptr);
+      component_length_ptr = processed_data.size();
     } else if (component_length_ptr) {
       component_ptr = component_result_ptr;
       component_length_ptr = size;
@@ -1700,7 +1702,7 @@ dword_result_t NetDll_XHttpCrackUrl_entry(
     return true;
   };
 
-  bool ret = true;
+  bool result = true;
 
   if (std::regex_match(url_to_process, matches, url_regex)) {
     for (size_t i = 0; i < matches.size(); ++i) {
@@ -1734,7 +1736,7 @@ dword_result_t NetDll_XHttpCrackUrl_entry(
                 url_components_ptr->scheme_ptr = scheme_ptr_out;
               }
             } else {
-              ret = false;
+              insufficient_buffer = true;
             }
 
             const char* scheme_data_ptr =
@@ -1769,7 +1771,7 @@ dword_result_t NetDll_XHttpCrackUrl_entry(
                 url_components_ptr->user_name_ptr = username_ptr_out;
               }
             } else {
-              ret = false;
+              insufficient_buffer = true;
             }
           } break;
           case X_URL_COMPONENTS::Password: {
@@ -1786,7 +1788,7 @@ dword_result_t NetDll_XHttpCrackUrl_entry(
                 url_components_ptr->password_ptr = password_ptr_out;
               }
             } else {
-              ret = false;
+              insufficient_buffer = true;
             }
           } break;
           case X_URL_COMPONENTS::Host: {
@@ -1803,7 +1805,7 @@ dword_result_t NetDll_XHttpCrackUrl_entry(
                 url_components_ptr->host_name_ptr = host_ptr_out;
               }
             } else {
-              ret = false;
+              insufficient_buffer = true;
             }
           } break;
           case X_URL_COMPONENTS::Port: {
@@ -1831,7 +1833,7 @@ dword_result_t NetDll_XHttpCrackUrl_entry(
                 url_components_ptr->url_path_ptr = path_ptr_out;
               }
             } else {
-              ret = false;
+              insufficient_buffer = true;
             }
           } break;
           case X_URL_COMPONENTS::Query: {
@@ -1848,25 +1850,24 @@ dword_result_t NetDll_XHttpCrackUrl_entry(
                 url_components_ptr->extra_info_ptr = extra_ptr_out;
               }
             } else {
-              ret = false;
+              insufficient_buffer = true;
             }
           } break;
         }
       }
     }
   } else {
-    ret = false;
+    XThread::SetLastError(X_ERROR_INVALID_PARAMETER);
+    result = false;
   }
-
-  curl_url_cleanup(url);
 
   // Return after processing so the component length is set
   if (insufficient_buffer) {
     XThread::SetLastError(X_ERROR_INSUFFICIENT_BUFFER);
-    ret = false;
+    result = false;
   }
 
-  return ret;
+  return result;
 }
 DECLARE_XAM_EXPORT1(NetDll_XHttpCrackUrl, kNetworking, kImplemented);
 
