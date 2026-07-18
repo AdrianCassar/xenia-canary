@@ -109,6 +109,10 @@ static uint32_t XTitleServerCreateEnumerator(
     uint32_t user_index, uint32_t app_id, uint32_t open_message,
     uint32_t close_message, uint32_t extra_size, uint32_t item_count,
     uint32_t flags, uint32_t& out_handle) {
+  if (item_count > X_TITLE_SERVER_MAX_LSP_INFO) {
+    return X_ERROR_INVALID_PARAMETER;
+  }
+
   auto e = make_object<XStaticEnumerator<X_TITLE_SERVER>>(kernel_state(),
                                                           item_count);
 
