@@ -197,6 +197,8 @@ using namespace xe::literals;
 #define X_ICU_DECODE 0x10000000  // Convert %XX escape sequences to characters
 #define X_ICU_ESCAPE 0x80000000  // (un)escape URL characters
 
+#define X_TITLE_SERVER_MAX_LSP_INFO                         1000
+
 constexpr bool IsOnlineError(uint32_t error) {
   return (error & 0xFFFF0000) == X_ONLINE_E_BASE;
 }
