@@ -294,6 +294,16 @@ uint32_t XamUserReadProfileSettingsEx(
       return X_ERROR_FUNCTION_FAILED;
     }
 
+    if (xuids) {
+      for (const auto xuid : profile_xuids) {
+        if (IsOnlineXUID(xuid) &&
+            cvars::network_mode != NETWORK_MODE::XBOXLIVE) {
+          extended_error = X_ONLINE_E_USER_NOT_LOGGED_ON;
+          return X_ERROR_FUNCTION_FAILED;
+        }
+      }
+    }
+
     // 455607DB uses invalid setting IDs
     auto valid_requested_settings_view =
         settings_ids | std::views::filter([](uint32_t setting_id) {
@@ -394,11 +404,6 @@ uint32_t XamUserReadProfileSettingsEx(
         total_profile_xuids.push_back(user_profile->xuid());
         local_user_settings[user_profile->xuid()] = settings;
       }
-    }
-
-    if (local_user_settings.empty() && remote_user_settings.empty()) {
-      extended_error = X_E_NO_SUCH_USER;
-      return X_ERROR_FUNCTION_FAILED;
     }
 
     // The order of xuids isn't preserved.
