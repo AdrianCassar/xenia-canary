@@ -321,22 +321,19 @@ void ProfileManager::Logout(const uint8_t user_index, bool notify) {
   DismountProfile(profile->second->xuid());
   logged_profiles_.erase(profile);
   if (notify) {
-    kernel_state_->BroadcastNotification(kXNotificationSystemSignInChanged,
-                                         GetUsedUserSlots().to_ulong());
+    kernel_state_->BroadcastNotification(kXNotificationSystemSignInChanged, 0);
   }
   UpdateConfig(0, user_index);
 }
 
 void ProfileManager::LoginMultiple(
     const std::map<uint8_t, uint64_t>& profiles) {
-  int slots_mask = 0;
-  for (auto [slot, xuid] : profiles) {
+  for (auto& [slot, xuid] : profiles) {
     Login(xuid, slot, false);
-    slots_mask |= (1 << slot);
   }
 
   kernel_state_->BroadcastNotification(kXNotificationSystemSignInChanged,
-                                       slots_mask);
+                                       GetUsedUserSlots().to_ulong());
 }
 
 std::vector<uint64_t> ProfileManager::FindProfiles() const {
@@ -391,16 +388,7 @@ uint8_t ProfileManager::FindFirstFreeProfileSlot() const {
 }
 
 std::bitset<XUserMaxUserCount> ProfileManager::GetUsedUserSlots() const {
-  std::bitset<XUserMaxUserCount> used_slots = {};
-  for (const auto& [index, entry] : logged_profiles_) {
-    if (!entry) {
-      continue;
-    }
-
-    used_slots.set(index);
-  }
-
-  return used_slots;
+  return logged_profiles_.size();
 }
 
 uint8_t ProfileManager::GetUserIndexAssignedToProfile(

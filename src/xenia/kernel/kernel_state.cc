@@ -1025,7 +1025,7 @@ void KernelState::RegisterNotifyListener(XNotifyListener* listener) {
     has_notified_startup_ = true;
     listener->EnqueueNotification(kXNotificationSystemUI,
                                   xam_state()->IsUIActive());
-    listener->EnqueueNotification(kXNotificationSystemSignInChanged, 1);
+    listener->EnqueueNotification(kXNotificationSystemSignInChanged, 0);
   }
   if (!has_notified_live_startup_ && listener->mask() & kXNotifyLive) {
     has_notified_live_startup_ = true;
