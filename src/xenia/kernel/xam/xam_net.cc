@@ -879,14 +879,11 @@ dword_result_t NetDll_XNetXnAddrToInAddr_entry(dword_t caller,
     return X_ERROR_SUCCESS;
   }
 
-  if (kernel_state()
-          ->emulator()
-          ->GetNetworkAdapterManager()
-          ->IsInterfaceSelected()) {
+  if (cvars::network_mode == NETWORK_MODE::LAN) {
     in_addr->s_addr = xn_addr->ina.s_addr;
   }
 
-  if (kernel_state()->GetXboxLiveAPI()->IsConnectedToServer()) {
+  if (cvars::network_mode == NETWORK_MODE::XBOXLIVE) {
     in_addr->s_addr = xn_addr->inaOnline.s_addr;
   }
 
