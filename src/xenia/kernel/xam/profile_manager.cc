@@ -331,8 +331,7 @@ void ProfileManager::Login(const uint64_t xuid, const uint8_t user_index,
   }
   UpdateConfig(xuid, assigned_user_slot);
 
-  if (kernel_state_->GetXboxLiveAPI()->GetInitState() ==
-      XLiveAPI::InitState::Success) {
+  if (kernel_state_->GetXboxLiveAPI()->IsConnectedToServer()) {
     // TODO(Adrian):
     // Netplay doesn't support multiple local profiles too well.
     // Only register user index 0 on backend for now to reduce issues.

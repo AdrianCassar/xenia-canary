@@ -110,6 +110,8 @@ class UserProfile {
 
   void LoadFriends();
 
+  bool IsSignedInToLive() const;
+
   uint64_t xuid() const { return xuid_; }
   uint64_t GetOnlineXUID() const {
     return IsLiveEnabled() ? static_cast<uint64_t>(account_info_.xuid_online)
@@ -123,11 +125,7 @@ class UserProfile {
   }
 
   std::string name() const { return account_info_.GetGamertagString(); }
-  X_USER_SIGNIN_STATE signin_state() const {
-    return IsLiveEnabled() && cvars::network_mode == NETWORK_MODE::XBOXLIVE
-               ? X_USER_SIGNIN_STATE::SignedInToLive
-               : X_USER_SIGNIN_STATE::SignedInLocally;
-  }
+  X_USER_SIGNIN_STATE signin_state() const;
 
   uint32_t GetReservedFlags() const {
     return account_info_.GetReservedFlags();

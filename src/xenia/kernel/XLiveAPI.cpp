@@ -73,10 +73,41 @@ using namespace rapidjson;
 namespace xe {
 namespace kernel {
 
-XLiveAPI::XLiveAPI() {}
+XLiveAPI::XLiveAPI() {
+  if (cvars::network_mode == NETWORK_MODE::OFFLINE) {
+    initialized_ = InitState::Failed;
+  }
+
+  if (cvars::logging) {
+    PrintLibcurlDetails();
+  }
+}
 
 XLiveAPI::~XLiveAPI() {
   // TODO(Adrian): Cleanup libcurl multiplexing handles.
+}
+
+void XLiveAPI::PrintLibcurlDetails() {
+  curl_version_info_data* curl_info = curl_version_info(CURLVERSION_NOW);
+
+  uint32_t major = (curl_info->version_num >> 16) & 0xFF;
+  uint32_t minor = (curl_info->version_num >> 8) & 0xFF;
+  uint32_t patch = curl_info->version_num & 0xFF;
+
+  XELOGI("libcurl version {}.{}.{}", major, minor, patch);
+
+  if (curl_info->features & CURL_VERSION_SSL) {
+    XELOGI("SSL support: Yes");
+  } else {
+    assert_always();
+    XELOGI("SSL support: No");
+  }
+
+  if (curl_info->features & CURL_VERSION_HTTP2) {
+    XELOGI("HTTP/2 support: Yes");
+  } else {
+    XELOGI("HTTP/2 support: No");
+  }
 }
 
 void XLiveAPI::IpGetConsoleXnAddr(XNADDR* XnAddr_ptr) {
@@ -88,15 +119,16 @@ void XLiveAPI::IpGetConsoleXnAddr(XNADDR* XnAddr_ptr) {
   const bool is_WAN_routing = adapter_manager->IsSelectedAdapterWANRouting();
   const auto adapter_local_ip = adapter_manager->GetSelectedAdapterLocalIP();
   const auto xbl_api = kernel_state()->GetXboxLiveAPI();
+  const auto user_tracker = kernel_state()->xam_state()->user_tracker();
 
-  if (cvars::network_mode == NETWORK_MODE::XBOXLIVE) {
+  if (user_tracker->LoggedInToLive()) {
     XnAddr_ptr->ina = xbl_api->OnlineIP().sin_addr;
     XnAddr_ptr->inaOnline = xbl_api->OnlineIP().sin_addr;
   } else if (cvars::network_mode == NETWORK_MODE::LAN) {
     XnAddr_ptr->ina = adapter_local_ip.sin_addr;
   }
 
-  if (cvars::network_mode == NETWORK_MODE::XBOXLIVE) {
+  if (kernel_state()->xam_state()->user_tracker()->LoggedInToLive()) {
     XnAddr_ptr->wPortOnline = xbl_api->GetPlayerPort();
   }
 
@@ -201,27 +233,73 @@ void XLiveAPI::SetAPIAddress(std::string address) {
   }
 }
 
-void XLiveAPI::SetNetworkMode(uint32_t mode) {
+void XLiveAPI::BroadcastNetworkStatus() const {
+  switch (cvars::network_mode) {
+    case xe::kernel::NETWORK_MODE::OFFLINE: {
+      kernel_state()->BroadcastNotification(kXNotificationLiveConnectionChanged,
+                                            X_ONLINE_S_LOGON_DISCONNECTED);
+
+      kernel_state()->BroadcastNotification(kXNotificationLiveLinkStateChanged,
+                                            0);
+    } break;
+    case xe::kernel::NETWORK_MODE::LAN: {
+      kernel_state()->BroadcastNotification(kXNotificationLiveConnectionChanged,
+                                            X_ONLINE_S_LOGON_DISCONNECTED);
+
+      kernel_state()->BroadcastNotification(kXNotificationLiveLinkStateChanged,
+                                            1);
+    } break;
+    case xe::kernel::NETWORK_MODE::XBOXLIVE: {
+      kernel_state()->BroadcastNotification(
+          kXNotificationLiveConnectionChanged,
+          X_ONLINE_S_LOGON_CONNECTION_ESTABLISHED);
+
+      kernel_state()->BroadcastNotification(kXNotificationLiveLinkStateChanged,
+                                            1);
+    } break;
+  }
+}
+
+void XLiveAPI::SetNetworkMode(uint32_t mode) const {
   OVERRIDE_int32(network_mode, mode);
+}
+
+bool XLiveAPI::SelectNetworkMode(uint32_t mode) {
+  if (!kernel_state()->is_title_open()) {
+    return true;
+  }
 
   if (mode == NETWORK_MODE::OFFLINE) {
-    if (IsConnectedToServer()) {
-      DeleteAllSessionsByMac();
-    }
+    cvars::network_mode = mode;
 
+    DeleteAllSessionsByMac();
+
+    initialized_ = InitState::Failed;
     online_ip_ = {};
+    xlsp_servers_cached_ = false;
+    qos_payload_cache_.clear();
+
+    BroadcastNetworkStatus();
+
+    return true;
   }
 
-  // Initialize Server
-  if (initialized_ != InitState::Pending) {
-    initialized_ = InitState::Pending;
+  // Don't automatically upgrade to Xbox-Live if LAN selected.
+  bool lan_limit = mode == NETWORK_MODE::LAN;
 
-    if (mode != NETWORK_MODE::OFFLINE) {
-      StartWhoamiAsync();
-    }
-
-    Init();
+  if (mode == NETWORK_MODE::XBOXLIVE) {
+    StartWhoamiAsync();
   }
+
+  RefreshNetworkMode(lan_limit);
+
+  const bool switched_mode = cvars::network_mode == mode;
+
+  if (switched_mode) {
+    BroadcastNetworkStatus();
+  }
+
+  return switched_mode;
 }
 
 void XLiveAPI::SetLogging(bool state) const { OVERRIDE_bool(logging, state); }
@@ -260,47 +338,9 @@ void XLiveAPI::Init() {
     return;
   }
 
-  if (cvars::logging) {
-    curl_version_info_data* curl_info = curl_version_info(CURLVERSION_NOW);
-
-    uint32_t major = (curl_info->version_num >> 16) & 0xFF;
-    uint32_t minor = (curl_info->version_num >> 8) & 0xFF;
-    uint32_t patch = curl_info->version_num & 0xFF;
-
-    XELOGI("libcurl version {}.{}.{}", major, minor, patch);
-
-    if (curl_info->features & CURL_VERSION_SSL) {
-      XELOGI("SSL support: Yes");
-    } else {
-      assert_always();
-      XELOGI("SSL support: No");
-    }
-
-    if (curl_info->features & CURL_VERSION_HTTP2) {
-      XELOGI("HTTP/2 support: Yes");
-    } else {
-      XELOGI("HTTP/2 support: No");
-    }
-  }
-
-  if (cvars::network_mode == NETWORK_MODE::OFFLINE) {
-    XELOGI("XLiveAPI:: Offline mode enabled!");
-    initialized_ = InitState::Failed;
-    return;
-  }
-
-  // Using future so we don't block this function. This prevents blocking the
-  // games thread during network initialization.
-  if (whoami_result_.valid()) {
-    online_ip_ = whoami_result_.get();
-  }
+  RefreshNetworkMode(false);
 
   if (!IsConnectedToServer()) {
-    // Assign online ip as local ip to ensure XNADDR is not 0 for systemlink
-    // online_ip_ = local_ip_;
-
-    XELOGE("XLiveAPI:: Cannot reach API server.");
-    initialized_ = InitState::Failed;
     return;
   }
 
@@ -322,21 +362,89 @@ void XLiveAPI::Init() {
                                                        dummy_friends_count_);
   }
 
-  initialized_ = InitState::Success;
-
   // Delete sessions on start-up.
   DeleteAllSessions();
+}
+
+NETWORK_MODE XLiveAPI::RefreshNetworkMode(bool lan_limit) {
+  const bool is_initialized = initialized_ != InitState::Pending;
+
+  const auto adapter_manager =
+      kernel_state()->emulator()->GetNetworkAdapterManager();
+
+  if (!adapter_manager->IsInterfaceSelected()) {
+    XELOGI("XLiveAPI:: No interfaces found, enabling offline mode!");
+
+    initialized_ = InitState::Failed;
+    cvars::network_mode = NETWORK_MODE::OFFLINE;
+
+    return static_cast<NETWORK_MODE>(cvars::network_mode);
+  }
+
+  if (!is_initialized && cvars::network_mode == NETWORK_MODE::OFFLINE) {
+    XELOGI("XLiveAPI:: Offline mode enabled!");
+    initialized_ = InitState::Failed;
+    return static_cast<NETWORK_MODE>(cvars::network_mode);
+  }
+
+  if (!is_initialized && cvars::network_mode == NETWORK_MODE::LAN) {
+    lan_limit = true;
+  }
+
+  // Using future so we don't block this function. This prevents blocking the
+  // games thread during network initialization.
+  if (whoami_result_.valid()) {
+    online_ip_ = whoami_result_.get();
+  }
+
+  bool connected = false;
+
+  // We don't need the online IP in LAN mode, instead just use heartbeat.
+  // Server is needed for XNetQosLookup.
+  if (lan_limit) {
+    connected = Heartbeat();
+  } else {
+    connected = online_ip_.sin_addr.s_addr != 0;
+  }
+
+  if (connected) {
+    initialized_ = InitState::Success;
+  } else {
+    initialized_ = InitState::Failed;
+  }
+
+  if (!IsConnectedToServer()) {
+    // Assign online ip as local ip to ensure XNADDR is not 0 for systemlink
+    // online_ip_ = local_ip_;
+
+    cvars::network_mode = NETWORK_MODE::LAN;
+
+    XELOGE("XLiveAPI:: Cannot reach API server.");
+    initialized_ = InitState::Failed;
+    return static_cast<NETWORK_MODE>(cvars::network_mode);
+  }
+
+  // We don't want to automatically upgrade to Xbox-Live.
+  if (lan_limit) {
+    cvars::network_mode = NETWORK_MODE::LAN;
+  } else {
+    cvars::network_mode = NETWORK_MODE::XBOXLIVE;
+  }
+
+  return static_cast<NETWORK_MODE>(cvars::network_mode);
 }
 
 XLiveAPI::InitState XLiveAPI::GetInitState() const { return initialized_; }
 
 // If online NAT open, otherwise strict.
 uint32_t XLiveAPI::GetNatType() const {
-  return IsConnectedToServer() ? X_NAT_TYPE::NAT_OPEN : X_NAT_TYPE::NAT_STRICT;
+  return kernel_state()->xam_state()->user_tracker()->LoggedInToLive()
+             ? X_NAT_TYPE::NAT_OPEN
+             : X_NAT_TYPE::NAT_STRICT;
 }
 
 bool XLiveAPI::IsConnectedToServer() const {
-  return OnlineIP().sin_addr.s_addr != 0;
+  return initialized_ == InitState::Success;
 }
 
 uint16_t XLiveAPI::GetPlayerPort() const { return 36000; }
@@ -727,7 +835,7 @@ std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::RegisterPlayer(
     return response;
   }
 
-  if (cvars::network_mode == NETWORK_MODE::XBOXLIVE &&
+  if (kernel_state()->xam_state()->user_tracker()->LoggedInToLive() &&
       !user_profile->IsLiveEnabled()) {
     XELOGE("Cancelled registering profile, profile is not live enabled!");
     return response;
@@ -1234,6 +1342,12 @@ void XLiveAPI::DeleteAllSessionsByMac() {
   const std::string endpoint = BuildEndpoint(
       fmt::format("DeleteSessions/{}", GetConsoleMacAddress().to_string()));
 
+  // Since we usually delete on close, we don't want to block main thread on
+  // close.
+  if (!IsConnectedToServer()) {
+    return;
+  }
+
   std::unique_ptr<HTTPResponseObjectJSON> response = Delete(endpoint);
 
   if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_OK) {
@@ -1493,6 +1607,10 @@ std::vector<X_TITLE_SERVER> XLiveAPI::GetServers() {
   std::string endpoint = BuildEndpoint(
       fmt::format("title/{:08X}/servers", kernel_state()->title_id()));
 
+  if (!kernel_state()->xam_state()->user_tracker()->LoggedInToLive()) {
+    return {};
+  }
+
   if (xlsp_servers_cached_) {
     return xlsp_servers_;
   }
@@ -1549,6 +1667,38 @@ std::unique_ptr<ServicesObjectJSON> XLiveAPI::GetServices() {
   services = response->Deserialize<ServicesObjectJSON>();
 
   return services;
+}
+
+bool XLiveAPI::Heartbeat() const {
+  CURL* curl = curl_easy_init();
+
+  if (!curl) {
+    return false;
+  }
+
+  std::string endpoint = GetApiAddress();
+  bool accessible = false;
+
+  curl_easy_setopt(curl, CURLOPT_URL, endpoint.c_str());
+  curl_easy_setopt(curl, CURLOPT_NOBODY, 1L);
+  curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5L);
+  curl_easy_setopt(curl, CURLOPT_TIMEOUT, 8L);
+
+  CURLcode result = curl_easy_perform(curl);
+
+  if (result == CURLE_OK) {
+    long response_code = 0;
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
+
+    if (response_code >= HTTP_STATUS_CODE::HTTP_OK &&
+        response_code < HTTP_STATUS_CODE::HTTP_BAD_REQUEST) {
+      accessible = true;
+    }
+  }
+
+  curl_easy_cleanup(curl);
+
+  return accessible;
 }
 
 void XLiveAPI::SessionJoinRemote(uint64_t sessionId,

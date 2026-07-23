@@ -89,8 +89,7 @@ X_RESULT XSession::CreateSession(uint32_t user_index, uint8_t public_slots,
   // If a session requires online features but we're offline then we must fail.
   // e.g. Trying to create a SINGLEPLAYER_WITH_STATS session while not connected
   // to live.
-  if (IsXboxLiveSession() && user_profile->signin_state() !=
-                                 xam::X_USER_SIGNIN_STATE::SignedInToLive) {
+  if (IsXboxLiveSession() && !user_profile->IsSignedInToLive()) {
     return X_ONLINE_E_SESSION_NOT_LOGGED_ON;
   }
 
@@ -944,6 +943,12 @@ X_RESULT XSession::FlushStats() {
 }
 
 X_RESULT XSession::StartSession(XGI_SESSION_STATE* state) {
+  const auto profile = kernel_state()->xam_state()->GetUserProfile(owner_xuid_);
+
+  if (IsXboxLiveSession() && !profile->IsSignedInToLive()) {
+    return X_ONLINE_E_SESSION_NOT_LOGGED_ON;
+  }
+
   local_details_.eState = XSESSION_STATE::INGAME;
 
   return X_ERROR_SUCCESS;
@@ -977,6 +982,13 @@ X_RESULT XSession::GetSessions(KernelState* kernel_state,
     search_data->results_buffer_size =
         sizeof(XSESSION_SEARCHRESULT) * search_data->num_results;
     return X_ONLINE_E_SESSION_INSUFFICIENT_BUFFER;
+  }
+
+  const auto profile =
+      kernel_state->xam_state()->GetUserProfile(search_data->user_index);
+
+  if (!profile->IsSignedInToLive()) {
+    return X_ONLINE_E_SESSION_NOT_LOGGED_ON;
   }
 
   const auto sessions =
