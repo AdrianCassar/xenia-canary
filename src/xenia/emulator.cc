@@ -1757,17 +1757,24 @@ X_STATUS Emulator::CompleteLaunch(const std::filesystem::path& path,
     }
   }
 
-  // Resume the main thread now.
-  // If the debugger has requested a suspend this will just decrement the
-  // suspend count without resuming it until the debugger wants.
-  main_thread_->Resume();
-
   if (cvars::upnp) {
     upnp_->Start();
   }
 
-  GetXboxLiveAPI()->StartWhoamiAsync();
+  // 565507E0, and 415607F2 don't call XNetStartup or WSAStartup.
+  // Initialize server connection ourself.
+  // Titles can still be logged into Xbox-Live even if network layer isn't
+  // initialized.
+  // Initialize before title calls any XNet functions that depend on XNADDR e.g.
+  // NetDll_XNetGetTitleXnAddr
+  kernel_state()->GetXboxLiveAPI()->Init();
+
   kernel_state()->xam_state()->StartPeriodicMaintenance();
+
+  // Resume the main thread now.
+  // If the debugger has requested a suspend this will just decrement the
+  // suspend count without resuming it until the debugger wants.
+  main_thread_->Resume();
 
   return X_STATUS_SUCCESS;
 }

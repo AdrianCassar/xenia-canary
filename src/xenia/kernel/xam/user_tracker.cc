@@ -26,6 +26,7 @@
 #include "xenia/kernel/xam/user_settings.h"
 #include "xenia/kernel/xam/user_tracker.h"
 #include "xenia/kernel/xam/xdbf/gpd_info.h"
+#include "xenia/ui/imgui_host_notification.h"
 
 DECLARE_int32(discord_presence_user_index);
 
@@ -121,7 +122,7 @@ bool UserTracker::UnlockAchievement(uint64_t xuid, uint32_t achievement_id) {
   gpd_achievement->flags = gpd_achievement->flags |
                            static_cast<uint32_t>(AchievementFlags::kAchieved);
 
-  if (user->signin_state() == X_USER_SIGNIN_STATE::SignedInToLive) {
+  if (user->IsSignedInToLive()) {
     gpd_achievement->flags =
         gpd_achievement->flags |
         static_cast<uint32_t>(AchievementFlags::kAchievedOnline);
@@ -1399,6 +1400,24 @@ void UserTracker::RefreshTitleSummary(uint64_t xuid, uint32_t title_id) {
   user->WriteGpd(kDashboardID);
 }
 
+uint32_t UserTracker::GetLogonState() const {
+  const NETWORK_MODE network_state =
+      static_cast<NETWORK_MODE>(cvars::network_mode);
+
+  // What status do we return if we're not connected to any network?
+  // if (network_state == NETWORK_MODE::OFFLINE) {
+  //   return X_ONLINE_E_LOGON_NO_NETWORK_CONNECTION;
+  // }
+
+  return network_state == NETWORK_MODE::XBOXLIVE
+             ? X_ONLINE_S_LOGON_CONNECTION_ESTABLISHED
+             : X_ONLINE_S_LOGON_DISCONNECTED;
+}
+
+bool UserTracker::LoggedInToLive() const {
+  return GetLogonState() == X_ONLINE_S_LOGON_CONNECTION_ESTABLISHED;
+}
+
 void UserTracker::AddOwnedSession(uint64_t xuid,
                                   uint32_t session_handle) const {
   auto user = kernel_state()->xam_state()->GetUserProfile(xuid);
@@ -1458,8 +1477,7 @@ void UserTracker::CleanupOwnedSessions(uint64_t xuid) const {
 }
 
 // Should periodic maintenance be per-user or all users?
-void UserTracker::PeriodicMaintenance(uint64_t xuid,
-                                      size_t iteration_count) const {
+void UserTracker::PeriodicMaintenance(uint64_t xuid, size_t iteration_count) {
   if (!kernel_state()->emulator()->is_title_open()) {
     return;
   }
@@ -1532,9 +1550,61 @@ void UserTracker::PeriodicMaintenance(uint64_t xuid,
     xe::discord::DiscordPresence::Update();
   }
 
-  if (user->signin_state() != X_USER_SIGNIN_STATE::SignedInToLive ||
-      kernel_state()->GetXboxLiveAPI()->GetInitState() !=
-          XLiveAPI::InitState::Success) {
+  const auto xbox_live_api = kernel_state()->GetXboxLiveAPI();
+
+  // If we are in offline mode then don't try connecting to backend.
+  if (cvars::network_mode == NETWORK_MODE::OFFLINE) {
+    return;
+  }
+
+  // Check heartbeat every 10s.
+  const auto heartbeat_modulo = 10s / periodic_maintenance_interval_;
+
+  if (iteration_count == 0) {
+    backend_avalability_ = xbox_live_api->Heartbeat();
+  }
+
+  if (!(iteration_count % heartbeat_modulo)) {
+    if (xbox_live_api->Heartbeat()) {
+      // Refresh connection.
+      if (!xbox_live_api->IsConnectedToServer() && !backend_avalability_) {
+        if (xbox_live_api->SelectNetworkMode(cvars::network_mode)) {
+          if (LoggedInToLive()) {
+            new xe::ui::HostNotificationWindow(
+                kernel_state()->emulator()->imgui_drawer(),
+                "Connected to Xbox Live", "Xbox Live", 0);
+          } else {
+            new xe::ui::HostNotificationWindow(
+                kernel_state()->emulator()->imgui_drawer(),
+                "Xbox Live is now available", "Xbox Live", 0);
+          }
+        }
+
+        backend_avalability_ = true;
+      }
+    } else {
+      if (xbox_live_api->IsConnectedToServer() && backend_avalability_) {
+        const NETWORK_MODE current_mode =
+            static_cast<NETWORK_MODE>(cvars::network_mode);
+
+        if (xbox_live_api->SelectNetworkMode(NETWORK_MODE::LAN)) {
+          if (current_mode == NETWORK_MODE::XBOXLIVE) {
+            new xe::ui::HostNotificationWindow(
+                kernel_state()->emulator()->imgui_drawer(),
+                "Disconnected from Xbox Live", "Xbox Live", 0);
+          } else {
+            new xe::ui::HostNotificationWindow(
+                kernel_state()->emulator()->imgui_drawer(),
+                "Xbox Live is unavailable", "Xbox Live", 0);
+          }
+
+          backend_avalability_ = false;
+        }
+      }
+    }
+  }
+
+  if (!xbox_live_api->IsConnectedToServer()) {
     return;
   }
 
@@ -1568,8 +1638,8 @@ void UserTracker::PeriodicMaintenance(uint64_t xuid,
           continue;
         }
 
-        if (kernel_state()->GetXboxLiveAPI()->SessionPropertiesSet(
-                session->GetSessionID(), user->xuid())) {
+        if (xbox_live_api->SessionPropertiesSet(session->GetSessionID(),
+                                                user->xuid())) {
           session->CacheLiveProperties(user->properties_);
         }
       }

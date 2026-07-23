@@ -62,6 +62,10 @@ class UserTracker {
   bool UnlockAchievement(uint64_t xuid, uint32_t achievement_id);
   void RefreshTitleSummary(uint64_t xuid, uint32_t title_id);
 
+  uint32_t GetLogonState() const;
+
+  bool LoggedInToLive() const;
+
   // XSessions
   void AddOwnedSession(const uint64_t xuid,
                        const uint32_t session_handle) const;
@@ -71,8 +75,7 @@ class UserTracker {
   void CleanupOwnedSessions(const uint64_t xuid) const;
 
   // Periodic Maintenance
-  void PeriodicMaintenance(const uint64_t xuid,
-                           const size_t iteration_count) const;
+  void PeriodicMaintenance(const uint64_t xuid, const size_t iteration_count);
   void StartPeriodicMaintenance(const uint64_t xuid) const;
   void StopPeriodicMaintenance(const uint64_t xuid) const;
 
@@ -164,6 +167,7 @@ class UserTracker {
   std::set<uint64_t> tracked_xuids_;
 
   const std::chrono::seconds periodic_maintenance_interval_ = 5s;
+  std::atomic<bool> backend_avalability_ = false;
 
   struct CaseInsensitive {
     bool operator()(const std::u16string lhs, const std::u16string rhs) const {

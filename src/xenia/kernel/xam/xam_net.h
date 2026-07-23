@@ -28,6 +28,10 @@ std::mutex qos_lookup_mutex;
 std::map<uint32_t, std::stop_source> dns_lookup_threads;
 std::mutex dns_lookup_mutex;
 
+std::atomic<bool> initialized_xnet_ = false;
+
+std::atomic<uint32_t> winsock_reference_count_ = 0;
+
 static void CleanupUPnPActions();
 
 }  // namespace xam
