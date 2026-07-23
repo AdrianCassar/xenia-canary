@@ -209,12 +209,9 @@ void Update_XNetStartupParams(XNetStartupParams& dest,
 
 dword_result_t NetDll_XNetStartup_entry(dword_t caller,
                                         pointer_t<XNetStartupParams> params) {
-  if (kernel_state()->GetXboxLiveAPI()->GetInitState() !=
-      XLiveAPI::InitState::Pending) {
-    return 0;
+  if (initialized_xnet_) {
+    return X_ERROR_SUCCESS;
   }
-
-  kernel_state()->GetXboxLiveAPI()->Init();
 
   if (params) {
     assert_true(params->cfgSizeOfStruct == sizeof(XNetStartupParams));
@@ -238,6 +235,8 @@ dword_result_t NetDll_XNetStartup_entry(dword_t caller,
     }
   }
 
+  initialized_xnet_ = true;
+
   auto xam = kernel_state()->GetKernelModule<XamModule>("xam.xex");
 
   /*
@@ -249,7 +248,7 @@ dword_result_t NetDll_XNetStartup_entry(dword_t caller,
   }
   */
 
-  return 0;
+  return X_ERROR_SUCCESS;
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetStartup, kNetworking, kImplemented);
 
@@ -262,6 +261,12 @@ dword_result_t NetDll_XNetStartupEx_entry(dword_t caller,
 DECLARE_XAM_EXPORT1(NetDll_XNetStartupEx, kNetworking, kImplemented);
 
 dword_result_t NetDll_XNetCleanup_entry(dword_t caller) {
+  if (!initialized_xnet_) {
+    return static_cast<uint32_t>(X_WSAError::X_WSANOTINITIALISED);
+  }
+
+  initialized_xnet_ = false;
+
   auto xam = kernel_state()->GetKernelModule<XamModule>("xam.xex");
   // auto xnet = xam->xnet();
   // xam->set_xnet(nullptr);
@@ -269,9 +274,9 @@ dword_result_t NetDll_XNetCleanup_entry(dword_t caller) {
   // TODO: Shut down and delete.
   // delete xnet;
 
-  return X_STATUS_SUCCESS;
+  return X_ERROR_SUCCESS;
 }
-DECLARE_XAM_EXPORT1(NetDll_XNetCleanup, kNetworking, kImplemented);
+DECLARE_XAM_EXPORT1(NetDll_XNetCleanup, kNetworking, kStub);
 
 dword_result_t XNetLogonGetMachineID_entry(lpqword_t machine_id_ptr) {
   *machine_id_ptr = GetLocalMachineId(GetConsoleMacAddress());
@@ -407,8 +412,6 @@ dword_result_t NetDll_WSAStartup_entry(dword_t caller, word_t version,
   // NetDll_WSAStartup is called multiple times?
   XELOGI("NetDll_WSAStartup");
 
-  kernel_state()->GetXboxLiveAPI()->Init();
-
   // TODO(benvanik): abstraction layer needed.
   int ret = 0;
 
@@ -441,6 +444,12 @@ dword_result_t NetDll_WSAStartup_entry(dword_t caller, word_t version,
 #endif
   }
 
+  // WSAStartup implicitly calls XNetStartup.
+  if (!ret) {
+    winsock_reference_count_++;
+    initialized_xnet_ = true;
+  }
+
   // DEBUG
   /*
   auto xam = kernel_state()->GetKernelModule<XamModule>("xam.xex");
@@ -464,10 +473,22 @@ dword_result_t NetDll_WSAStartupEx_entry(dword_t caller, word_t version,
 DECLARE_XAM_EXPORT1(NetDll_WSAStartupEx, kNetworking, kImplemented);
 
 dword_result_t NetDll_WSACleanup_entry(dword_t caller) {
-  // This does nothing. Xenia needs WSA running.
-  return 0;
+  if (!winsock_reference_count_) {
+    XThread::SetLastError(
+        static_cast<uint32_t>(X_WSAError::X_WSANOTINITIALISED));
+    return X_SOCKET_ERROR;
+  }
+
+  --winsock_reference_count_;
+
+  if (!winsock_reference_count_) {
+    // Cleanup Resources...
+    // Close all XSockets...
+  }
+
+  return X_ERROR_SUCCESS;
 }
-DECLARE_XAM_EXPORT1(NetDll_WSACleanup, kNetworking, kImplemented);
+DECLARE_XAM_EXPORT1(NetDll_WSACleanup, kNetworking, kStub);
 
 // Instead of using dedicated storage for WSA error like on OS.
 // Xbox shares space between normal error codes and WSA errors.
@@ -674,10 +695,6 @@ dword_result_t NetDll_XNetGetTitleXnAddr_entry(dword_t caller,
   // 415607D1, 4D5307E6
   // XNetStartup, WSAStartup, WSAStartupEx were not called before
   // XNetGetTitleXnAddr.
-  if (kernel_state()->GetXboxLiveAPI()->GetInitState() ==
-      XLiveAPI::InitState::Pending) {
-    kernel_state()->GetXboxLiveAPI()->Init();
-  }
 
   uint32_t status = 0;
 
@@ -785,8 +802,8 @@ dword_result_t NetDll_XNetServerToInAddr_entry(dword_t caller,
                                                pointer_t<in_addr> pina) {
   XELOGI("XNetServerToInAddr");
 
-  if (kernel_state()->GetXboxLiveAPI()->GetInitState() !=
-      XLiveAPI::InitState::Success) {
+  if (kernel_state()->GetXboxLiveAPI()->GetInitState() ==
+      XLiveAPI::InitState::Pending) {
     return static_cast<uint32_t>(X_WSAError::X_WSANOTINITIALISED);
   }
 
@@ -1161,6 +1178,11 @@ dword_result_t NetDll_XNetQosServiceLookup_entry(dword_t caller, dword_t flags,
 
   auto run = [=](std::stop_token stop_token) {
     if (stop_token.stop_requested()) {
+      return;
+    }
+
+    if (!kernel_state()->xam_state()->user_tracker()->LoggedInToLive()) {
+      qos->count_pending = 0;
       return;
     }
 
@@ -1547,7 +1569,7 @@ dword_result_t XampXAuthStartup_entry(pointer_t<XAUTH_SETTINGS> setttings) {
     return 0x80158401;
   }
 
-  if (cvars::network_mode != NETWORK_MODE::XBOXLIVE) {
+  if (!kernel_state()->xam_state()->user_tracker()->LoggedInToLive()) {
     return 0x80158406;
   }
 
