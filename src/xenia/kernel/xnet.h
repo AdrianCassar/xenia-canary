@@ -321,7 +321,7 @@ constexpr uint32_t XEX_PRIVILEGE_CROSSPLATFORM_SYSTEM_LINK = 14;
 constexpr uint32_t RankedTrueSkillViewIdMask = 0xFFFF0000;
 constexpr uint32_t StandardTrueSkillViewIdMask = 0xFFFE0000;
 
-constexpr uint32_t XUserMaxReadStatsViews = 5;
+constexpr uint32_t XUserMaxReadStatsSpec = 64;
 
 inline bool IsRankedTrueSkillViewID(const uint32_t view_id) {
   return (view_id & RankedTrueSkillViewIdMask) == RankedTrueSkillViewIdMask;
