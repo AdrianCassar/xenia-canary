@@ -89,14 +89,11 @@ void XLiveAPI::IpGetConsoleXnAddr(XNADDR* XnAddr_ptr) {
   const auto adapter_local_ip = adapter_manager->GetSelectedAdapterLocalIP();
   const auto xbl_api = kernel_state()->GetXboxLiveAPI();
 
-  if (cvars::network_mode != NETWORK_MODE::OFFLINE) {
-    if (xbl_api->IsConnectedToServer() && is_WAN_routing) {
-      XnAddr_ptr->ina = xbl_api->OnlineIP().sin_addr;
-      XnAddr_ptr->inaOnline = xbl_api->OnlineIP().sin_addr;
-    } else {
-      XnAddr_ptr->ina = adapter_local_ip.sin_addr;
-      XnAddr_ptr->inaOnline = adapter_local_ip.sin_addr;
-    }
+  if (cvars::network_mode == NETWORK_MODE::XBOXLIVE) {
+    XnAddr_ptr->ina = xbl_api->OnlineIP().sin_addr;
+    XnAddr_ptr->inaOnline = xbl_api->OnlineIP().sin_addr;
+  } else if (cvars::network_mode == NETWORK_MODE::LAN) {
+    XnAddr_ptr->ina = adapter_local_ip.sin_addr;
   }
 
   if (cvars::network_mode == NETWORK_MODE::XBOXLIVE) {
