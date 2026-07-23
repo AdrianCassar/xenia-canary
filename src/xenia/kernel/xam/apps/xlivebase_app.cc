@@ -197,9 +197,7 @@ X_HRESULT XLiveBaseApp::ExecuteDispatchMessage(uint32_t message,
       // Called on startup of dashboard
       XELOGD("XLiveBaseLogonGetHR({:08X}, {:08X})", buffer_ptr, buffer_length);
       const uint32_t live_connection_state =
-          cvars::network_mode == NETWORK_MODE::XBOXLIVE
-              ? X_ONLINE_S_LOGON_CONNECTION_ESTABLISHED
-              : X_ONLINE_S_LOGON_DISCONNECTED;
+          kernel_state_->xam_state()->user_tracker()->GetLogonState();
 
       return live_connection_state;
     }
@@ -787,7 +785,7 @@ X_HRESULT XLiveBaseApp::XOnlineQuerySearch(uint32_t buffer_ptr) {
 // Check whether XLSP services are available
 X_HRESULT XLiveBaseApp::XOnlineGetServiceInfo(uint32_t serviceid,
                                               uint32_t serviceinfo) {
-  if (!kernel_state_->GetXboxLiveAPI()->IsConnectedToServer()) {
+  if (!kernel_state_->xam_state()->user_tracker()->LoggedInToLive()) {
     return X_ONLINE_E_LOGON_NOT_LOGGED_ON;
   }
 
@@ -1057,6 +1055,8 @@ X_HRESULT XLiveBaseApp::XUserMuteListQuery(uint32_t buffer_ptr,
 
   const auto user_profile =
       kernel_state_->xam_state()->GetUserProfile(remote_player_ptr->user_index);
+
+  // Is mute list used with systemlink?
 
   if (!user_profile) {
     return X_ONLINE_E_LOGON_NOT_LOGGED_ON;
@@ -1943,6 +1943,10 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
                ->GetOnlineXUID();
   }
 
+  if (!kernel_state_->xam_state()->user_tracker()->LoggedInToLive()) {
+    return X_ONLINE_E_LOGON_NOT_LOGGED_ON;
+  }
+
   if (!args->server_path_length_ptr) {
     return X_E_INVALIDARG;
   }
@@ -2103,7 +2107,7 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
         build_result == X_STORAGE_BUILD_SERVER_PATH_RESULT::Found) {
       result = X_E_SUCCESS;
     } else {
-      result = X_E_FAIL;
+      result = X_ERROR_FUNCTION_FAILED;
     }
   }
 

@@ -658,7 +658,7 @@ dword_result_t XamShowNuiDirtyDiscErrorUI_entry(dword_t tracking_id) {
 DECLARE_XAM_EXPORT1(XamShowNuiDirtyDiscErrorUI, kUI, kStub);
 
 dword_result_t XamShowPartyUI_entry(dword_t user_index) {
-  if (cvars::network_mode != NETWORK_MODE::XBOXLIVE) {
+  if (!kernel_state()->xam_state()->user_tracker()->LoggedInToLive()) {
     return X_ERROR_ACCESS_DENIED;
   }
 
@@ -2366,7 +2366,8 @@ dword_result_t XamShowGamerCardUIForXUID_entry(dword_t user_index,
     return X_ERROR_INVALID_PARAMETER;
   }
 
-  if (IsOnlineXUID(xuid) && cvars::network_mode != NETWORK_MODE::XBOXLIVE) {
+  if (IsOnlineXUID(xuid) &&
+      !kernel_state()->xam_state()->user_tracker()->LoggedInToLive()) {
     return X_ERROR_ACCESS_DENIED;
   }
 
