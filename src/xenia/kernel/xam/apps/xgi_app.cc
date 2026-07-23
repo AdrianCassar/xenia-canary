@@ -210,6 +210,23 @@ X_HRESULT XgiApp::ExecuteDispatchMessage(uint32_t message, uint32_t buffer_ptr,
       XGI_XUSER_READ_STATS* data =
           reinterpret_cast<XGI_XUSER_READ_STATS*>(buffer);
 
+      if (!data->xuids_count || data->xuids_count > X_STATS_MAX_USER_COUNT) {
+        return X_E_INVALIDARG;
+      }
+
+      if (!data->xuids_ptr) {
+        return X_E_INVALIDARG;
+      }
+
+      if (!data->specs_ptr) {
+        return X_E_INVALIDARG;
+      }
+
+      // 545107D4 specs_count = xuids_count
+      if (!data->specs_count || data->specs_count > XUserMaxReadStatsSpec) {
+        return X_E_INVALIDARG;
+      }
+
       if (!data->results_ptr) {
         return X_E_INVALIDARG;
       }
@@ -219,18 +236,9 @@ X_HRESULT XgiApp::ExecuteDispatchMessage(uint32_t message, uint32_t buffer_ptr,
           kernel_memory()->TranslateVirtual<X_USER_STATS_READ_RESULTS*>(
               data->results_ptr);
 
+      // TODO(Adrian):
+      // Use provided buffer from XGI call.
       std::memset(results, 0, sizeof(X_USER_STATS_READ_RESULTS));
-
-      if (data->xuids_count > X_STATS_MAX_USER_COUNT) {
-        return X_E_INVALIDARG;
-      }
-
-      // 4D5307EA reads 6 leaderboards, 5 standard and 1 skill.
-      assert_false(data->specs_count > XUserMaxReadStatsViews + 1);
-
-      if (data->specs_count > XUserMaxReadStatsViews + 1) {
-        return X_E_INVALIDARG;
-      }
 
       std::unique_ptr<LeaderboardObjectJSON> leaderboards =
           kernel_state()->GetXboxLiveAPI()->LeaderboardsFind(*data);
