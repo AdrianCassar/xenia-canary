@@ -120,10 +120,13 @@ X_HRESULT XgiApp::ExecuteDispatchMessage(uint32_t message, uint32_t buffer_ptr,
              data->flags.get(), data->maxPublicSlots.get(),
              data->maxPrivateSlots.get());
 
-      uint8_t* obj_ptr = memory_->TranslateVirtual<uint8_t*>(data->obj_ptr);
+      const X_KSESSION* obj_ptr =
+          memory_->TranslateVirtual<X_KSESSION*>(data->obj_ptr);
 
-      auto session =
-          XObject::GetNativeObject<XSession>(kernel_state(), obj_ptr);
+      const auto session =
+          kernel_state()->object_table()->LookupObject<XSession>(
+              obj_ptr->handle);
+
       if (!session) {
         return X_STATUS_INVALID_HANDLE;
       }
@@ -166,10 +169,13 @@ X_HRESULT XgiApp::ExecuteDispatchMessage(uint32_t message, uint32_t buffer_ptr,
       XGI_SESSION_DETAILS* data =
           reinterpret_cast<XGI_SESSION_DETAILS*>(buffer);
 
-      uint8_t* obj_ptr = memory_->TranslateVirtual<uint8_t*>(data->obj_ptr);
+      const X_KSESSION* obj_ptr =
+          memory_->TranslateVirtual<X_KSESSION*>(data->obj_ptr);
 
-      auto session =
-          XObject::GetNativeObject<XSession>(kernel_state(), obj_ptr);
+      const auto session =
+          kernel_state()->object_table()->LookupObject<XSession>(
+              obj_ptr->handle);
+
       if (!session) {
         return X_STATUS_INVALID_HANDLE;
       }
@@ -184,10 +190,13 @@ X_HRESULT XgiApp::ExecuteDispatchMessage(uint32_t message, uint32_t buffer_ptr,
       XGI_SESSION_MIGRATE* data =
           reinterpret_cast<XGI_SESSION_MIGRATE*>(buffer);
 
-      uint8_t* obj_ptr = memory_->TranslateVirtual<uint8_t*>(data->obj_ptr);
+      const X_KSESSION* obj_ptr =
+          memory_->TranslateVirtual<X_KSESSION*>(data->obj_ptr);
 
-      auto session =
-          XObject::GetNativeObject<XSession>(kernel_state(), obj_ptr);
+      const auto session =
+          kernel_state()->object_table()->LookupObject<XSession>(
+              obj_ptr->handle);
+
       if (!session) {
         return X_STATUS_INVALID_HANDLE;
       }
@@ -303,10 +312,13 @@ X_HRESULT XgiApp::ExecuteDispatchMessage(uint32_t message, uint32_t buffer_ptr,
           data->obj_ptr.get(), data->flags.get(), data->session_nonce.get(),
           data->results_buffer_size.get(), data->results_ptr.get());
 
-      uint8_t* obj_ptr = memory_->TranslateVirtual<uint8_t*>(data->obj_ptr);
+      const X_KSESSION* obj_ptr =
+          memory_->TranslateVirtual<X_KSESSION*>(data->obj_ptr);
 
-      auto session =
-          XObject::GetNativeObject<XSession>(kernel_state(), obj_ptr);
+      const auto session =
+          kernel_state()->object_table()->LookupObject<XSession>(
+              obj_ptr->handle);
+
       if (!session) {
         return X_STATUS_INVALID_HANDLE;
       }
@@ -441,10 +453,12 @@ X_HRESULT XgiApp::ExecuteDispatchMessage(uint32_t message, uint32_t buffer_ptr,
 
       XGI_SESSION_CREATE* data = reinterpret_cast<XGI_SESSION_CREATE*>(buffer);
 
-      uint8_t* obj_ptr = memory_->TranslateVirtual<uint8_t*>(data->obj_ptr);
+      const X_KSESSION* obj_ptr =
+          memory_->TranslateVirtual<X_KSESSION*>(data->obj_ptr);
 
-      auto session =
-          XObject::GetNativeObject<XSession>(kernel_state(), obj_ptr);
+      const auto session =
+          kernel_state()->object_table()->LookupObject<XSession>(
+              obj_ptr->handle);
 
       if (!session) {
         return X_STATUS_INVALID_HANDLE;
@@ -463,10 +477,12 @@ X_HRESULT XgiApp::ExecuteDispatchMessage(uint32_t message, uint32_t buffer_ptr,
 
       XGI_SESSION_STATE* data = reinterpret_cast<XGI_SESSION_STATE*>(buffer);
 
-      uint8_t* obj_ptr = memory_->TranslateVirtual<uint8_t*>(data->obj_ptr);
+      const X_KSESSION* obj_ptr =
+          memory_->TranslateVirtual<X_KSESSION*>(data->obj_ptr);
 
-      auto session =
-          XObject::GetNativeObject<XSession>(kernel_state(), obj_ptr);
+      const auto session =
+          kernel_state()->object_table()->LookupObject<XSession>(
+              obj_ptr->handle);
 
       if (!session) {
         return X_STATUS_INVALID_HANDLE;
@@ -483,10 +499,14 @@ X_HRESULT XgiApp::ExecuteDispatchMessage(uint32_t message, uint32_t buffer_ptr,
       XELOGI("XSessionJoin");
 
       XGI_SESSION_MANAGE* data = reinterpret_cast<XGI_SESSION_MANAGE*>(buffer);
-      uint8_t* obj_ptr = memory_->TranslateVirtual<uint8_t*>(data->obj_ptr);
 
-      auto session =
-          XObject::GetNativeObject<XSession>(kernel_state(), obj_ptr);
+      const X_KSESSION* obj_ptr =
+          memory_->TranslateVirtual<X_KSESSION*>(data->obj_ptr);
+
+      const auto session =
+          kernel_state()->object_table()->LookupObject<XSession>(
+              obj_ptr->handle);
+
       if (!session) {
         return X_STATUS_INVALID_HANDLE;
       }
@@ -502,10 +522,13 @@ X_HRESULT XgiApp::ExecuteDispatchMessage(uint32_t message, uint32_t buffer_ptr,
 
       const auto data = reinterpret_cast<XGI_SESSION_MANAGE*>(buffer);
 
-      uint8_t* obj_ptr = memory_->TranslateVirtual<uint8_t*>(data->obj_ptr);
+      const X_KSESSION* obj_ptr =
+          memory_->TranslateVirtual<X_KSESSION*>(data->obj_ptr);
 
-      auto session =
-          XObject::GetNativeObject<XSession>(kernel_state(), obj_ptr);
+      const auto session =
+          kernel_state()->object_table()->LookupObject<XSession>(
+              obj_ptr->handle);
+
       if (!session) {
         return X_STATUS_INVALID_HANDLE;
       }
@@ -523,10 +546,12 @@ X_HRESULT XgiApp::ExecuteDispatchMessage(uint32_t message, uint32_t buffer_ptr,
 
       XGI_SESSION_STATE* data = reinterpret_cast<XGI_SESSION_STATE*>(buffer);
 
-      uint8_t* obj_ptr = memory_->TranslateVirtual<uint8_t*>(data->obj_ptr);
+      const X_KSESSION* obj_ptr =
+          memory_->TranslateVirtual<X_KSESSION*>(data->obj_ptr);
 
-      auto session =
-          XObject::GetNativeObject<XSession>(kernel_state(), obj_ptr);
+      const auto session =
+          kernel_state()->object_table()->LookupObject<XSession>(
+              obj_ptr->handle);
 
       if (!session) {
         return X_STATUS_INVALID_HANDLE;
@@ -541,10 +566,12 @@ X_HRESULT XgiApp::ExecuteDispatchMessage(uint32_t message, uint32_t buffer_ptr,
 
       XGI_SESSION_STATE* data = reinterpret_cast<XGI_SESSION_STATE*>(buffer);
 
-      uint8_t* obj_ptr = memory_->TranslateVirtual<uint8_t*>(data->obj_ptr);
+      const X_KSESSION* obj_ptr =
+          memory_->TranslateVirtual<X_KSESSION*>(data->obj_ptr);
 
-      auto session =
-          XObject::GetNativeObject<XSession>(kernel_state(), obj_ptr);
+      const auto session =
+          kernel_state()->object_table()->LookupObject<XSession>(
+              obj_ptr->handle);
 
       if (!session) {
         return X_STATUS_INVALID_HANDLE;
@@ -561,10 +588,13 @@ X_HRESULT XgiApp::ExecuteDispatchMessage(uint32_t message, uint32_t buffer_ptr,
              data->obj_ptr.get(), data->xuid.get(), data->num_views.get(),
              data->views_ptr.get());
 
-      uint8_t* obj_ptr = memory_->TranslateVirtual<uint8_t*>(data->obj_ptr);
+      const X_KSESSION* obj_ptr =
+          memory_->TranslateVirtual<X_KSESSION*>(data->obj_ptr);
 
-      auto session =
-          XObject::GetNativeObject<XSession>(kernel_state(), obj_ptr);
+      const auto session =
+          kernel_state()->object_table()->LookupObject<XSession>(
+              obj_ptr->handle);
+
       if (!session) {
         return X_STATUS_INVALID_HANDLE;
       }
@@ -624,10 +654,13 @@ X_HRESULT XgiApp::ExecuteDispatchMessage(uint32_t message, uint32_t buffer_ptr,
              data->obj_ptr.get(), data->xuid.get(), data->num_views.get(),
              data->views_ptr.get());
 
-      uint8_t* obj_ptr = memory_->TranslateVirtual<uint8_t*>(data->obj_ptr);
+      const X_KSESSION* obj_ptr =
+          memory_->TranslateVirtual<X_KSESSION*>(data->obj_ptr);
 
-      auto session =
-          XObject::GetNativeObject<XSession>(kernel_state(), obj_ptr);
+      const auto session =
+          kernel_state()->object_table()->LookupObject<XSession>(
+              obj_ptr->handle);
+
       if (!session) {
         return X_STATUS_INVALID_HANDLE;
       }
@@ -642,10 +675,13 @@ X_HRESULT XgiApp::ExecuteDispatchMessage(uint32_t message, uint32_t buffer_ptr,
       XGI_SESSION_MODIFYSKILL* data =
           reinterpret_cast<XGI_SESSION_MODIFYSKILL*>(buffer);
 
-      uint8_t* obj_ptr = memory_->TranslateVirtual<uint8_t*>(data->obj_ptr);
+      const X_KSESSION* obj_ptr =
+          memory_->TranslateVirtual<X_KSESSION*>(data->obj_ptr);
 
-      auto session =
-          XObject::GetNativeObject<XSession>(kernel_state(), obj_ptr);
+      const auto session =
+          kernel_state()->object_table()->LookupObject<XSession>(
+              obj_ptr->handle);
+
       if (!session) {
         return X_STATUS_INVALID_HANDLE;
       }
