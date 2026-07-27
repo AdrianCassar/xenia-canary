@@ -76,6 +76,7 @@ void NetplaySettingsDialog::OnDraw(ImGuiIO& io) {
         if (ImGui::Selectable(api_address.c_str(), is_selected)) {
           selected_api_address_item_ = api_address.c_str();
           xlive_api->SetAPIAddress(selected_api_address_item_);
+          xlive_api->StartWhoamiAsync();
         }
 
         if (is_selected) {
