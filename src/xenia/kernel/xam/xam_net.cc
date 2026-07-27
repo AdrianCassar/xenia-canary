@@ -2654,6 +2654,36 @@ dword_result_t NetDll_XNetUnregisterKey_entry(dword_t caller,
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetUnregisterKey, kNetworking, kStub);
 
+dword_result_t XamBackgroundDownloadSetMode_entry(dword_t mode) {
+  download_mode_ = static_cast<X_BACKGROUND_DOWNLOAD_MODE>(mode.value());
+  return X_ERROR_SUCCESS;
+}
+DECLARE_XAM_EXPORT1(XamBackgroundDownloadSetMode, kMisc, kStub);
+
+dword_result_t XamBackgroundDownloadGetMode_entry() {
+  return static_cast<uint32_t>(download_mode_);
+}
+DECLARE_XAM_EXPORT1(XamBackgroundDownloadGetMode, kMisc, kStub);
+
+dword_result_t XamBackgroundDownloadItemGetStatus_entry(
+    dword_t user_index, pointer_t<XCONTENT_DATA_INTERNAL> content_ptr,
+    dword_t validate_content, dword_t unkn1, lpdword_t unkn2_ptr,
+    lpdword_t unkn3_ptr, lpdword_t unkn4_ptr) {
+  // Set either unkn2_ptr or unkn3_ptr to 1 so function succeeds.
+  *unkn2_ptr = 0;
+  *unkn3_ptr = 0;
+  *unkn4_ptr = 0;
+  return X_ERROR_SUCCESS;
+}
+DECLARE_XAM_EXPORT1(XamBackgroundDownloadItemGetStatus, kMisc, kStub);
+
+dword_result_t XamBackgroundDownloadItemGetHistoryStatus_entry(
+    dword_t user_index, pointer_t<XCONTENT_DATA_INTERNAL> content_ptr,
+    dword_t unkn1) {
+  return X_ERROR_NOT_FOUND;
+}
+DECLARE_XAM_EXPORT1(XamBackgroundDownloadItemGetHistoryStatus, kMisc, kStub);
+
 // Remove completed UPnP actions
 void CleanupUPnPActions() {
   auto completed_actions =
