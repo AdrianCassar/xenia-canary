@@ -1065,6 +1065,17 @@ void KernelState::RegisterNotifyListener(XNotifyListener* listener) {
   if (!has_notified_live_startup_ && listener->mask() & kXNotifyLive) {
     has_notified_live_startup_ = true;
 
+    // Expects notification:
+    // 415707D1 fails to join sessions.
+    // 4E4D07D3 gets stuck in online menus.
+    const uint32_t live_connection_state =
+        xam_state()->user_tracker()->LoggedInToLive()
+            ? X_ONLINE_S_LOGON_CONNECTION_ESTABLISHED
+            : X_ONLINE_S_LOGON_DISCONNECTED;
+
+    listener->EnqueueNotification(kXNotificationLiveConnectionChanged,
+                                  live_connection_state);
+
     listener->EnqueueNotification(kXNotificationLiveVoicechatAway, 0);
   }
 
