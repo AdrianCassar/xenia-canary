@@ -400,6 +400,8 @@ enum DMP_STATUS_TYPE : uint32_t {
   DMP_STATUS_CLOSED = 2
 };
 
+enum class X_BACKGROUND_DOWNLOAD_MODE { ALWAYS_ALLOW = 1, AUTO = 2 };
+
 enum class X_INTERNET_SCHEME : uint32_t { HTTP = 1, HTTPS = 2 };
 
 enum class X_URL_COMPONENTS {
