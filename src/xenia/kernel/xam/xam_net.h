@@ -32,6 +32,8 @@ std::atomic<bool> initialized_xnet_ = false;
 
 std::atomic<uint32_t> winsock_reference_count_ = 0;
 
+X_BACKGROUND_DOWNLOAD_MODE download_mode_ = X_BACKGROUND_DOWNLOAD_MODE::AUTO;
+
 static void CleanupUPnPActions();
 
 }  // namespace xam
