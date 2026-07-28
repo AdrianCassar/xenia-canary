@@ -153,6 +153,10 @@ X_HRESULT XLiveBaseApp::ExecuteDispatchMessage(uint32_t message,
       // 454107DB, 4D530AA5, 454107F1
       return XAccountGetUserInfo(buffer_ptr);
     }
+    case 0x00050010: {
+      // 45418979
+      return XAccountGetUserInfo(buffer_ptr);
+    }
     case 0x0005006E: {
       // 4D5307D3, 4D5307D1, 545407E2, 545407E3, 545407D2, 545407D3, 534507D4
       return XOnlineQuerySearch(buffer_ptr);
