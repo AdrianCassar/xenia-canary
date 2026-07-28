@@ -1627,29 +1627,43 @@ dword_result_t XamUserCreateStatsEnumerator_entry(
     } break;
   }
 
-  const uint32_t page_size =
-      kernel_state()->memory()->GetPhysicalHeap()->page_size();
+  const uint32_t rows = num_rows;
+  const uint32_t extra_column_data = 4;  // Why extra 4 bytes per column?
+  const uint32_t column_size = sizeof(X_USER_STATS_COLUMN) + extra_column_data;
 
-  // sizeof(X_USER_STATS_VIEW) becomes page_size of 4096.
-  const uint32_t view_address =
-      kernel_state()->memory()->SystemHeapAlloc(page_size);
-
-  X_USER_STATS_VIEW* views_ptr =
-      kernel_state()->memory()->TranslateVirtual<X_USER_STATS_VIEW*>(
-          view_address);
-
-  uint32_t rows = num_rows.value();
-
-  uint32_t total_rows_size = 0;
-  uint32_t total_columns_size = 0;
-
-  // Tell game we have no rows to display
-  rows = 0;
+  uint32_t buffer_size = num_stats_specs * (sizeof(X_USER_STATS_ROW) * rows +
+                                            sizeof(X_USER_STATS_VIEW)) +
+                         sizeof(X_USER_STATS_READ_RESULTS);
 
   const X_USER_STATS_SPEC* stat_specs_ptr = stats_ptr;
 
   for (size_t view_index = 0; view_index < num_stats_specs; view_index++) {
     const X_USER_STATS_SPEC& stat_spec_ptr = stat_specs_ptr[view_index];
+    const uint32_t columns_count = stat_spec_ptr.num_column_ids;
+
+    buffer_size += column_size * rows * columns_count;
+  }
+
+  // Do not add result to enumerator if we don't have any results.
+  // If we're not connected to Xbox-Live then we cannot retrieve results.
+  if (cvars::network_mode != NETWORK_MODE::XBOXLIVE) {
+    *buffer_size_ptr = buffer_size;
+    *handle_ptr = e->handle();
+    return X_ERROR_SUCCESS;
+  }
+
+  // 4E4D07D1 expects result to create session.
+
+  const uint32_t view_address =
+      kernel_state()->memory()->SystemHeapAlloc(buffer_size);
+
+  X_USER_STATS_VIEW* views_ptr =
+      kernel_state()->memory()->TranslateVirtual<X_USER_STATS_VIEW*>(
+          view_address);
+
+  for (size_t view_index = 0; view_index < num_stats_specs; view_index++) {
+    const X_USER_STATS_SPEC& stat_spec_ptr = stat_specs_ptr[view_index];
+
     X_USER_STATS_VIEW& view_ptr = views_ptr[view_index];
     const uint32_t view_id = stat_spec_ptr.view_id;
 
@@ -1663,18 +1677,12 @@ dword_result_t XamUserCreateStatsEnumerator_entry(
     // 4B5607E8 expects view id otherwise crashes.
     view_ptr.view_id = view_id;
     view_ptr.total_view_rows = rows;
+
+    // 545107D1 expects > 0 otherwise crashes.
     view_ptr.num_rows = rows;
 
-    // 545107D1 wants this set to prevent XUserReadStats
-    // from crashing?
-    // view_ptr->num_rows = num_rows.value();
-
-    const uint32_t rows_size = sizeof(X_USER_STATS_ROW) * rows;
-
-    total_rows_size += rows_size;
-
     const uint32_t rows_address =
-        kernel_state()->memory()->SystemHeapAlloc(rows_size);
+        kernel_state()->memory()->SystemHeapAlloc(buffer_size);
 
     X_USER_STATS_ROW* rows_ptr =
         kernel_state()->memory()->TranslateVirtual<X_USER_STATS_ROW*>(
@@ -1705,16 +1713,13 @@ dword_result_t XamUserCreateStatsEnumerator_entry(
       }
 
       const uint32_t columns_count = stat_spec_ptr.num_column_ids;
-      const uint32_t columns_size = sizeof(X_USER_STATS_COLUMN) * columns_count;
 
       const uint32_t columns_address =
-          kernel_state()->memory()->SystemHeapAlloc(columns_size);
+          kernel_state()->memory()->SystemHeapAlloc(buffer_size);
 
       X_USER_STATS_COLUMN* columns_ptr =
           kernel_state()->memory()->TranslateVirtual<X_USER_STATS_COLUMN*>(
               columns_address);
-
-      total_columns_size += columns_size;
 
       row_ptr.num_columns = columns_count;
       row_ptr.columns_ptr = columns_address;
@@ -1753,11 +1758,7 @@ dword_result_t XamUserCreateStatsEnumerator_entry(
   results->num_views = num_stats_specs.value();
   results->views_ptr = view_address;
 
-  *buffer_size_ptr = sizeof(X_USER_STATS_READ_RESULTS) +
-                     (num_stats_specs * sizeof(X_USER_STATS_VIEW)) +
-                     total_rows_size + total_columns_size;
-
-  assert_false(*buffer_size_ptr == 0);
+  *buffer_size_ptr = buffer_size;
 
   *handle_ptr = e->handle();
   return X_ERROR_SUCCESS;
