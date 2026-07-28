@@ -1579,15 +1579,6 @@ dword_result_t XamUserCreateStatsEnumerator_entry(
     return X_ERROR_INVALID_PARAMETER;
   }
 
-  auto e = new XStaticEnumerator<X_USER_STATS_READ_RESULTS>(kernel_state(), 1);
-
-  const X_STATUS result =
-      e->Initialize(XUserIndexNone, 0xFB, 0xB0023, 0xB0024, 0);
-
-  if (XFAILED(result)) {
-    return result;
-  }
-
   const X_STATS_ENUMERATOR_TYPE type =
       static_cast<X_STATS_ENUMERATOR_TYPE>(enumerator_type.value());
 
@@ -1633,6 +1624,16 @@ dword_result_t XamUserCreateStatsEnumerator_entry(
     buffer_size += column_size * rows * columns_count;
   }
 
+  auto e = object_ref<XStaticUntypedEnumerator>(
+      new XStaticUntypedEnumerator(kernel_state(), 1, buffer_size));
+
+  const X_STATUS result =
+      e->Initialize(XUserIndexNone, 0xFB, 0xB0023, 0xB0024, 0);
+
+  if (XFAILED(result)) {
+    return result;
+  }
+
   // Do not add result to enumerator if we don't have any results.
   // If we're not connected to Xbox-Live then we cannot retrieve results.
   if (cvars::network_mode != NETWORK_MODE::XBOXLIVE) {
@@ -1641,20 +1642,39 @@ dword_result_t XamUserCreateStatsEnumerator_entry(
     return X_ERROR_SUCCESS;
   }
 
+  // Memory Layout:
+  // X_USER_STATS_READ_RESULTS
+  // X_USER_STATS_VIEW[]
+  // X_USER_STATS_ROW[]
+  // X_USER_STATS_COLUMN[]
+
   // 4E4D07D1 expects result to create session.
 
-  const uint32_t view_address =
+  const uint32_t results_address =
       kernel_state()->memory()->SystemHeapAlloc(buffer_size);
 
+  X_USER_STATS_READ_RESULTS* results =
+      kernel_state()->memory()->TranslateVirtual<X_USER_STATS_READ_RESULTS*>(
+          results_address);
+
   X_USER_STATS_VIEW* views_ptr =
-      kernel_state()->memory()->TranslateVirtual<X_USER_STATS_VIEW*>(
-          view_address);
+      reinterpret_cast<X_USER_STATS_VIEW*>(results + 1);
+
+  const uint32_t views_address =
+      kernel_memory()->HostToGuestVirtual(std::to_address(views_ptr));
+
+  X_USER_STATS_ROW* rows_ptr =
+      reinterpret_cast<X_USER_STATS_ROW*>(views_ptr + num_stats_specs);
+
+  results->num_views = num_stats_specs.value();
+  results->views_ptr = views_address;
 
   for (size_t view_index = 0; view_index < num_stats_specs; view_index++) {
     const X_USER_STATS_SPEC& stat_spec_ptr = stat_specs_ptr[view_index];
 
     X_USER_STATS_VIEW& view_ptr = views_ptr[view_index];
     const uint32_t view_id = stat_spec_ptr.view_id;
+    const uint32_t columns_count = stat_spec_ptr.num_column_ids;
 
     const auto spa_stats_view =
         kernel_state()->emulator()->game_info_database()->GetStatsView(view_id);
@@ -1667,19 +1687,15 @@ dword_result_t XamUserCreateStatsEnumerator_entry(
     view_ptr.view_id = view_id;
     view_ptr.total_view_rows = rows;
 
-    // 545107D1 expects > 0 otherwise crashes.
     view_ptr.num_rows = rows;
 
     const uint32_t rows_address =
-        kernel_state()->memory()->SystemHeapAlloc(buffer_size);
+        kernel_memory()->HostToGuestVirtual(std::to_address(rows_ptr));
 
-    X_USER_STATS_ROW* rows_ptr =
-        kernel_state()->memory()->TranslateVirtual<X_USER_STATS_ROW*>(
-            rows_address);
-
-    // 584111FA and 5841089F want rows pointer even if row count is 0 to prevent
-    // crashing.
     view_ptr.rows_ptr = rows_address;
+
+    X_USER_STATS_COLUMN* columns_ptr =
+        reinterpret_cast<X_USER_STATS_COLUMN*>(rows_ptr + rows);
 
     for (uint32_t row_index = 0; row_index < rows; row_index++) {
       X_USER_STATS_ROW& row_ptr = rows_ptr[row_index];
@@ -1701,14 +1717,8 @@ dword_result_t XamUserCreateStatsEnumerator_entry(
         continue;
       }
 
-      const uint32_t columns_count = stat_spec_ptr.num_column_ids;
-
       const uint32_t columns_address =
-          kernel_state()->memory()->SystemHeapAlloc(buffer_size);
-
-      X_USER_STATS_COLUMN* columns_ptr =
-          kernel_state()->memory()->TranslateVirtual<X_USER_STATS_COLUMN*>(
-              columns_address);
+          kernel_memory()->HostToGuestVirtual(std::to_address(columns_ptr));
 
       row_ptr.num_columns = columns_count;
       row_ptr.columns_ptr = columns_address;
@@ -1739,13 +1749,16 @@ dword_result_t XamUserCreateStatsEnumerator_entry(
           }
         }
       }
+
+      columns_ptr += columns_count;
     }
+
+    rows_ptr = reinterpret_cast<X_USER_STATS_ROW*>(columns_ptr + 1);
   }
 
-  X_USER_STATS_READ_RESULTS* results = e->AppendItem();
+  uint8_t* results_out_ptr = reinterpret_cast<uint8_t*>(e->AppendItem());
 
-  results->num_views = num_stats_specs.value();
-  results->views_ptr = view_address;
+  std::memcpy(results_out_ptr, results, buffer_size);
 
   *buffer_size_ptr = buffer_size;
 
