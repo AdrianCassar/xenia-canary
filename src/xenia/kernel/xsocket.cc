@@ -622,6 +622,8 @@ int XSocket::WSASendTo(XWSABUF* buffers, uint32_t num_buffers,
       X_WSA_ERROR(send_async_data.overlapped->internal.get());
 
   if (overlapped_ptr && wsa_error == X_WSA_ERROR(X_STATUS_PENDING)) {
+    xboxkrnl::xeNtClearEvent(overlapped_ptr->event_handle);
+
     if (!send_polling_task_.valid()) {
       send_polling_task_ =
           std::async(std::launch::async, &XSocket::PollWSASendTo, this, true,
@@ -844,13 +846,7 @@ int XSocket::WSARecvFrom(XWSABUF* buffers, uint32_t num_buffers,
       X_WSA_ERROR(receive_async_data.overlapped->internal.get());
 
   if (overlapped_ptr && wsa_error == X_WSA_ERROR(X_STATUS_PENDING)) {
-    // Fix:
-    // FM2, Halo Wars, FlatOut: Ultimate Carnage, Shadowrun
-    // if (receive_polling_task_.valid()) {
-    //  if (receive_polling_task_.wait_for(0ms) == std::future_status::ready) {
-    //    receive_polling_task_ = {};
-    //  }
-    // }
+    xboxkrnl::xeNtClearEvent(overlapped_ptr->event_handle);
 
     if (!receive_polling_task_.valid()) {
       receive_async_data.flags = nullptr;
@@ -860,15 +856,6 @@ int XSocket::WSARecvFrom(XWSABUF* buffers, uint32_t num_buffers,
           std::async(std::launch::async, &XSocket::PollWSARecvFrom, this, true,
                      receive_async_data);
     }
-
-    // Fix:
-    // Split/Second, Pure, Top Gun, Ghostbusters
-    // if (receive_polling_task_.valid()) {
-    //  if (receive_polling_task_.wait_for(0ms) == std::future_status::ready)
-    //  {
-    //    receive_polling_task_ = {};
-    //  }
-    // }
 
     XWSASetLastError(X_WSA_ERROR::X_WSA_IO_PENDING);
   } else {
