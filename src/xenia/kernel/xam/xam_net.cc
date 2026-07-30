@@ -522,8 +522,7 @@ dword_result_t NetDll_WSARecvFrom_entry(
   }
 
   // Wait for WSARecvFrom to finish writing to overlapped_ptr
-  std::unique_lock socket_lock =
-      std::unique_lock(socket->receive_socket_mutex_);
+  std::lock_guard socket_lock(socket->receive_socket_mutex_);
 
   int ret =
       socket->WSARecvFrom(buffers, num_buffers, num_bytes_recv_ptr, flags_ptr,
@@ -579,7 +578,7 @@ dword_result_t NetDll_WSASendTo_entry(
   }
 
   // Wait for WSASendTo to finish writing to overlapped_ptr
-  std::unique_lock socket_lock = std::unique_lock(socket->send_socket_mutex_);
+  std::lock_guard socket_lock(socket->send_socket_mutex_);
 
   int result = socket->WSASendTo(buffers, num_buffers, num_bytes_sent, flags,
                                  to_ptr, to_len, overlapped);
