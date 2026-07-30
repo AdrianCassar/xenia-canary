@@ -12,8 +12,10 @@
 
 #include <cstring>
 #include <future>
+#include <map>
 #include <queue>
 #include <set>
+#include <vector>
 
 #include "xenia/base/byte_order.h"
 #include "xenia/kernel/xobject.h"
@@ -274,18 +276,15 @@ class XSocket : public XObject {
   std::mutex incoming_packet_mutex_;
   std::queue<uint8_t*> incoming_packets_;
 
-  std::future<int32_t> send_polling_task_;
-  std::future<int32_t> receive_polling_task_;
+  std::map<XWSAOVERLAPPED*, std::future<int32_t>> send_polling_tasks_;
+  std::map<XWSAOVERLAPPED*, std::future<int32_t>> receive_polling_tasks_;
 
   uint16_t GetImplicitlyBoundPort() const;
 
   std::atomic<bool> cancel_overlapped_ = false;
 
-  // True is WSASendTo, false is WSARecvFrom
-  std::map<XWSAOVERLAPPED*, bool> pending_overlapped_io_;
-  std::mutex map_mutex_;
-
   std::set<uint32_t> cancelled_overlapped_io_;
+  std::mutex cancelled_overlapped_io_mutex_;
 
   int WSAPollWrite(bool wait, X_WSA_ERROR* error);
 
