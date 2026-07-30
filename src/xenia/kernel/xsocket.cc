@@ -411,28 +411,40 @@ int XSocket::RecvFrom(uint8_t* buf, uint32_t buf_len, uint32_t flags,
 }
 
 // If wait is true then block until data is available for writing
-int XSocket::WSAPollWrite(bool wait, X_WSA_ERROR* error) {
-  WSAPOLLFD fds = {};
-  fds.fd = native_handle_;
-  fds.events = POLLOUT;
-
+int XSocket::WSASelectWrite(bool wait, X_WSA_ERROR* error) {
   int activity = 0;
 
   do {
-    activity = WSAPoll(&fds, 1, wait ? 1000 : 0);
+    fd_set writefds = {};
+    FD_ZERO(&writefds);
+
+#if XE_PLATFORM_WIN32
+    SOCKET s = static_cast<SOCKET>(native_handle_);
+    FD_SET(s, &writefds);
+    int nfds = 0;
+#else
+    int s = static_cast<int>(native_handle_);
+    FD_SET(s, &writefds);
+    int nfds = s + 1;
+#endif
+
+    timeval tv = {};
+    tv.tv_sec = wait ? 1 : 0;
+    tv.tv_usec = 0;
+
+    activity = select(nfds, nullptr, &writefds, nullptr, &tv);
 
     if (cancel_overlapped_) {
       if (error) {
         *error = X_WSA_ERROR::X_WSAECANCELLED;
-        // *error = X_HRESULT_FROM_WIN32( X_WSA_ERROR::X_WSAECANCELLED);
-        activity = X_SOCKET_ERROR;
+        // *error = X_HRESULT_FROM_WIN32(X_WSA_ERROR::X_WSAECANCELLED);
       }
+
+      activity = X_SOCKET_ERROR;
     }
 
-    if (cvars::logging) {
-      if (wait) {
-        XELOGI("{} Blocking...", __func__);
-      }
+    if (cvars::logging && wait) {
+      XELOGI("{} Blocking...", __func__);
     }
   } while (activity == 0 && wait);
 
@@ -446,7 +458,7 @@ int XSocket::PollWSASendTo(bool wait, WSASendToData send_async_data,
 
   X_WSA_ERROR poll_write_error = X_WSA_ERROR::X_WSA_NO_ERROR;
 
-  int result = WSAPollWrite(wait, &poll_write_error);
+  int result = WSASelectWrite(wait, &poll_write_error);
 
   if (wait) {
     // Sync is already locked, therefore only lock for async
@@ -454,7 +466,7 @@ int XSocket::PollWSASendTo(bool wait, WSASendToData send_async_data,
   }
 
   if (result == X_SOCKET_ERROR) {
-    // Checking for available data for reading failed.
+    // Checking for available data for writing failed.
     uint32_t error = 0;
 
     if (poll_write_error != X_WSA_ERROR::X_WSA_NO_ERROR) {
@@ -465,7 +477,7 @@ int XSocket::PollWSASendTo(bool wait, WSASendToData send_async_data,
 
     send_async_data.overlapped->internal = error;
 
-    XELOGE("WSAPollWrite failed with error {}", error);
+    XELOGE("WSASelectWrite failed with error {}", error);
 
     return X_SOCKET_ERROR;
   } else if (result == X_ERROR_SUCCESS) {
@@ -635,28 +647,40 @@ int XSocket::WSASendTo(XWSABUF* buffers, uint32_t num_buffers,
 }
 
 // If wait is true then block until data is available for reading
-int XSocket::WSAPollRead(bool wait, X_WSA_ERROR* error) {
-  WSAPOLLFD fds = {};
-  fds.fd = native_handle_;
-  fds.events = POLLIN;
-
+int XSocket::WSASelectRead(bool wait, X_WSA_ERROR* error) {
   int activity = 0;
 
   do {
-    activity = WSAPoll(&fds, 1, wait ? 1000 : 0);
+    fd_set readfds = {};
+    FD_ZERO(&readfds);
+
+#if XE_PLATFORM_WIN32
+    SOCKET s = static_cast<SOCKET>(native_handle_);
+    FD_SET(s, &readfds);
+    int nfds = 0;
+#else
+    int s = static_cast<int>(native_handle_);
+    FD_SET(s, &readfds);
+    int nfds = s + 1;
+#endif
+
+    timeval tv = {};
+    tv.tv_sec = wait ? 1 : 0;
+    tv.tv_usec = 0;
+
+    activity = select(nfds, &readfds, nullptr, nullptr, &tv);
 
     if (cancel_overlapped_) {
       if (error) {
         *error = X_WSA_ERROR::X_WSAECANCELLED;
-        // *error = X_HRESULT_FROM_WIN32( X_WSA_ERROR::X_WSAECANCELLED);
-        activity = X_SOCKET_ERROR;
+        // *error = X_HRESULT_FROM_WIN32(X_WSA_ERROR::X_WSAECANCELLED);
       }
+
+      activity = X_SOCKET_ERROR;
     }
 
-    if (cvars::logging) {
-      if (wait) {
-        XELOGI("{} Blocking...", __func__);
-      }
+    if (cvars::logging && wait) {
+      XELOGI("{} Blocking...", __func__);
     }
   } while (activity == 0 && wait);
 
@@ -669,7 +693,7 @@ int XSocket::PollWSARecvFrom(bool wait, WSARecvFromData receive_async_data) {
 
   X_WSA_ERROR poll_read_error = X_WSA_ERROR::X_WSA_NO_ERROR;
 
-  int result = WSAPollRead(wait, &poll_read_error);
+  int result = WSASelectRead(wait, &poll_read_error);
 
   if (wait) {
     // Sync is already locked, therefore only lock for async
@@ -688,7 +712,7 @@ int XSocket::PollWSARecvFrom(bool wait, WSARecvFromData receive_async_data) {
 
     receive_async_data.overlapped->internal = error;
 
-    XELOGE("WSAPollRead failed with error {}", error);
+    XELOGE("WSASelectRead failed with error {}", error);
 
     return X_SOCKET_ERROR;
   } else if (result == X_ERROR_SUCCESS) {
