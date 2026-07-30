@@ -286,12 +286,12 @@ class XSocket : public XObject {
   std::set<uint32_t> cancelled_overlapped_io_;
   std::mutex cancelled_overlapped_io_mutex_;
 
-  int WSAPollWrite(bool wait, X_WSA_ERROR* error);
+  int WSASelectWrite(bool wait, X_WSA_ERROR* error);
 
   int PollWSASendTo(bool wait, WSASendToData send_async_data,
                     uint32_t* num_bytes_sent);
 
-  int WSAPollRead(bool wait, X_WSA_ERROR* error);
+  int WSASelectRead(bool wait, X_WSA_ERROR* error);
 
   int PollWSARecvFrom(bool wait, WSARecvFromData receive_async_data);
 
