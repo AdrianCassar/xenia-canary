@@ -89,14 +89,14 @@ X_STATUS XSocket::Initialize(AddressFamily af, Type type, Protocol proto) {
   }
 
   native_handle_ = socket(af, type_, proto_);
-  if (native_handle_ == -1) {
+  if (native_handle_ == X_INVALID_SOCKET) {
     return X_STATUS_UNSUCCESSFUL;
   }
 
   return X_STATUS_SUCCESS;
 }
 
-X_STATUS XSocket::Close() {
+int XSocket::Close() {
   std::unique_lock lock(receive_mutex_);
   if (active_overlapped_ && !(active_overlapped_->offset_high & 1)) {
     active_overlapped_->offset_high |= 2;
@@ -104,20 +104,24 @@ X_STATUS XSocket::Close() {
   lock.unlock();
 
   std::unique_lock socket_lock(receive_socket_mutex_);
+
+  int ret = X_ERROR_SUCCESS;
+
 #if XE_PLATFORM_WIN32
-  int ret = closesocket(native_handle_);
+  ret = closesocket(static_cast<SOCKET>(native_handle_));
 #else
-  int ret = close(native_handle_);
+  ret = close(static_cast<int>(native_handle_));
 #endif
   socket_lock.unlock();
 
-  if (ret != 0) {
-    return X_STATUS_UNSUCCESSFUL;
+  if (ret == X_ERROR_SUCCESS) {
+    socket_closed_ = true;
+    native_handle_ = X_INVALID_SOCKET;
+  } else {
+    XELOGE("Socket close failed: {}", WSAGetLastError());
   }
 
-  socket_closed_ = true;
-
-  return X_STATUS_SUCCESS;
+  return ret;
 }
 
 X_STATUS XSocket::GetOption(uint32_t level, uint32_t optname, void* optval_ptr,
@@ -201,7 +205,7 @@ int XSocket::SetOption(uint32_t level, uint32_t optname, void* optval_ptr,
   if (ret < 0) {
     // TODO: WSAGetLastError()
     XELOGE("XSocket::SetOption: failed with error {:08X}", GetLastWSAError());
-    return -1;
+    return X_SOCKET_ERROR;
   }
 
   if (level == 0xFFFF && optname == 0x0020) {
@@ -320,12 +324,15 @@ X_STATUS XSocket::Bind(const XSOCKADDR_IN* name, int name_len) {
 }
 
 uint16_t XSocket::GetImplicitlyBoundPort() const {
-  sockaddr_in sock_name = {};
-  int sock_name_len = sizeof(sockaddr);
+  sockaddr_storage storage = {};
+  socklen_t addr_len = sizeof(storage);
 
-  if (!getsockname(native_handle_, reinterpret_cast<sockaddr*>(&sock_name),
-                   &sock_name_len)) {
-    return xe::byte_swap(sock_name.sin_port);
+  if (getsockname(native_handle_, reinterpret_cast<sockaddr*>(&storage),
+                  &addr_len) == 0) {
+    if (storage.ss_family == AF_INET) {
+      const sockaddr_in* sockaddr = reinterpret_cast<sockaddr_in*>(&storage);
+      return xe::byte_swap(sockaddr->sin_port);
+    }
   }
 
   assert_always();
@@ -343,7 +350,7 @@ X_STATUS XSocket::Listen(int backlog) {
 
 object_ref<XSocket> XSocket::Accept(XSOCKADDR_IN* name, int* name_len) {
   sockaddr sa = {};
-  socklen_t addrlen = 0;
+  socklen_t addrlen = sizeof(sockaddr);
   const bool is_name_and_name_len_available = name && name_len;
 
   if (is_name_and_name_len_available) {
@@ -352,7 +359,7 @@ object_ref<XSocket> XSocket::Accept(XSOCKADDR_IN* name, int* name_len) {
 
   const uint64_t socket_handle = accept(native_handle_, name ? &sa : nullptr,
                                         name_len ? &addrlen : nullptr);
-  if (socket_handle == -1) {
+  if (socket_handle == X_INVALID_SOCKET) {
     return nullptr;
   }
 
@@ -396,12 +403,11 @@ int XSocket::RecvFrom(uint8_t* buf, uint32_t buf_len, uint32_t flags,
   int ret = recvfrom(native_handle_, reinterpret_cast<char*>(buf), buf_len,
                      flags, from ? &sa : nullptr, from_len);
 
-  // TCP ignores from and from_len.
   // 555307EE expects port even with TCP, include IP anyway.
   // Verified on console.
   if (proto_ == X_IPPROTO_TCP) {
-    socklen_t peer_addar_len = sizeof(sockaddr);
-    getpeername(native_handle_, &sa, &peer_addar_len);
+    socklen_t peer_addr_len = sizeof(sockaddr);
+    getpeername(native_handle_, &sa, &peer_addr_len);
   }
 
   if (from) {
