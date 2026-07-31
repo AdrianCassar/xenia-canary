@@ -2019,9 +2019,10 @@ dword_result_t NetDll_closesocket_entry(dword_t caller, dword_t socket_handle) {
     }
   }
 
-  socket->Close();
+  // Release the handle on failure?
+  int result = socket->Close();
   socket->ReleaseHandle();
-  return 0;
+  return result;
 }
 DECLARE_XAM_EXPORT1(NetDll_closesocket, kNetworking, kImplemented);
 
