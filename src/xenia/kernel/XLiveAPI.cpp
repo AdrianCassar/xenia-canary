@@ -19,6 +19,7 @@
 #include "xenia/base/cvar.h"
 #include "xenia/base/logging.h"
 #include "xenia/base/string_util.h"
+#include "xenia/base/utf8.h"
 #include "xenia/emulator.h"
 #include "xenia/kernel/XLiveAPI.h"
 #include "xenia/kernel/user_module.h"
@@ -346,6 +347,8 @@ void XLiveAPI::Init() {
 
   // Download ports mappings before initializing UPnP.
   DownloadPortMappings();
+
+  DownloadHostRedirects();
 
   // TODO(Adrian):
   // Netplay doesn't support multiple local profiles too well.
@@ -818,6 +821,37 @@ void XLiveAPI::DownloadPortMappings() {
   }
 
   XELOGI("Requested Port Mappings");
+  return;
+}
+
+void XLiveAPI::DownloadHostRedirects() {
+  const std::string endpoint = BuildEndpoint(
+      fmt::format("title/{:08X}/hosts", kernel_state()->title_id()));
+
+  std::unique_ptr<HTTPResponseObjectJSON> response = Get(endpoint);
+
+  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_OK) {
+    XELOGE("DownloadHostRedirects error message: {}", response->Message());
+    return;
+  }
+
+  Document doc;
+  doc.Parse(response->RawResponse().response);
+
+  if (!doc.IsObject()) {
+    return;
+  }
+
+  for (const auto& redirect : doc.GetObj()) {
+    if (!redirect.value.IsString()) {
+      continue;
+    }
+
+    host_redirects_[xe::utf8::lower_ascii(redirect.name.GetString())] =
+        redirect.value.GetString();
+  }
+
+  XELOGI("Requested {} Host Redirects", host_redirects_.size());
   return;
 }
 
@@ -1687,6 +1721,18 @@ std::vector<X_TITLE_SERVER> XLiveAPI::GetServers() {
   }
 
   return xlsp_servers_;
+}
+
+// Hostnames the title reaches over XHTTP and the addresses they are redirected
+// to (src/titles/<TITLEID>/hosts.json on the backend).
+std::string XLiveAPI::GetHostRedirect(const std::string& host) {
+  const auto redirect = host_redirects_.find(xe::utf8::lower_ascii(host));
+
+  if (redirect == host_redirects_.end()) {
+    return "";
+  }
+
+  return redirect->second;
 }
 
 std::unique_ptr<ServicesObjectJSON> XLiveAPI::GetServices() {
