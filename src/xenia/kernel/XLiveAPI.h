@@ -112,6 +112,8 @@ class XLiveAPI {
 
   void DownloadPortMappings();
 
+  void DownloadHostRedirects();
+
   std::unique_ptr<HTTPResponseObjectJSON> RegisterPlayer(const uint64_t xuid);
 
   const std::map<uint64_t, std::string> DeleteMyProfiles();
@@ -162,6 +164,10 @@ class XLiveAPI {
   SessionObjectJSON XSessionGet(uint64_t sessionId);
 
   std::vector<X_TITLE_SERVER> GetServers();
+
+  // Address XHTTP traffic for `host` should be sent to, or an empty string if
+  // the title has no entry for it.
+  std::string GetHostRedirect(const std::string& host);
 
   std::unique_ptr<ServicesObjectJSON> GetServices();
 
@@ -290,6 +296,9 @@ class XLiveAPI {
   bool xlsp_servers_cached_ = false;
 
   std::vector<X_TITLE_SERVER> xlsp_servers_ = {};
+
+  // Lowercased hostname -> address to redirect it to.
+  std::map<std::string, std::string> host_redirects_ = {};
 
   uint64_t systemlink_id_ = 0;
 
