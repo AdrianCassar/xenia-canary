@@ -404,6 +404,8 @@ enum class X_BACKGROUND_DOWNLOAD_MODE { ALWAYS_ALLOW = 1, AUTO = 2 };
 
 enum class X_INTERNET_SCHEME : uint32_t { HTTP = 1, HTTPS = 2 };
 
+// Capture groups of the URL regex in xam_net_http.cc. Resource is the whole
+// path/query/fragment tail, the three that follow are its pieces.
 enum class X_URL_COMPONENTS {
   Full,
   Protocol,
@@ -411,8 +413,10 @@ enum class X_URL_COMPONENTS {
   Password,
   Host,
   Port,
+  Resource,
   Path,
-  Query
+  Query,
+  Fragment
 };
 
 struct XONLINE_SCHEMA_DATA {
