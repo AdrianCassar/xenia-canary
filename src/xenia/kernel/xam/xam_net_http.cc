@@ -43,14 +43,7 @@ namespace xe {
 namespace kernel {
 namespace xam {
 
-// XHTTP is xam's HTTP client, an ANSI port of desktop WinHTTP. Sessions
-// (XHttpOpen) own connections (XHttpConnect) own requests (XHttpOpenRequest).
-//
-// Requests run through libcurl. Hostnames listed in the backend's host table
-// are swapped for the address it maps them to, everything else goes out as-is;
-// either way the original host is kept in the Host header so the target can
-// route by domain. Async requests do their I/O on a worker thread and queue the
-// guest callback for XHttpDoWork to run on the title's own thread.
+// XHTTP is xam's HTTP client. Requests run through libcurl.
 namespace {
 
 // Query info levels: attribute in the low 16 bits, flags above. xam does not
