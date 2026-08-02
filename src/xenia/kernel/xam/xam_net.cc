@@ -1837,27 +1837,12 @@ dword_result_t NetDll_connect_entry(dword_t caller, dword_t socket_handle,
     return -1;
   }
 
-  // Temporary diagnostics for Destiny DW lobby connect failures
-  // (bdLobbyConnection socket error -1). Shows guest target before native
-  // connect(); IP octets printed without masking so we can see loopback vs
-  // virtual xnaddr.
-  if (name) {
-    const uint32_t ip_n = name->address_ip.s_addr;  // network order
-    const uint8_t* ip = reinterpret_cast<const uint8_t*>(&ip_n);
-    XELOGI(
-        "NetDll_connect: sock={:08X} -> {}.{}.{}.{}:{} (family={})",
-        socket_handle.value(), ip[0], ip[1], ip[2], ip[3],
-        static_cast<uint16_t>(name->address_port),
-        static_cast<uint16_t>(name->address_family));
-  }
-
   X_STATUS status = socket->Connect(name, namelen);
   if (XFAILED(status)) {
     XThread::SetLastError(socket->XWSAGetLastError());
     return -1;
   }
 
-  XELOGI("NetDll_connect: ok sock={:08X}", socket_handle.value());
   return 0;
 }
 DECLARE_XAM_EXPORT1(NetDll_connect, kNetworking, kImplemented);
