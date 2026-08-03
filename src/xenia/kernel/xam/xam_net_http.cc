@@ -791,6 +791,27 @@ dword_result_t NetDll_XHttpCrackUrl_entry(
     result = false;
   }
 
+  if (result && !insufficient_buffer) {
+    if (!url_components_ptr->scheme_ptr) {
+      url_components_ptr->scheme_length = 0;
+    }
+    if (!url_components_ptr->host_name_ptr) {
+      url_components_ptr->host_name_length = 0;
+    }
+    if (!url_components_ptr->user_name_ptr) {
+      url_components_ptr->user_name_length = 0;
+    }
+    if (!url_components_ptr->password_ptr) {
+      url_components_ptr->password_length = 0;
+    }
+    if (!url_components_ptr->url_path_ptr) {
+      url_components_ptr->url_path_length = 0;
+    }
+    if (!url_components_ptr->extra_info_ptr) {
+      url_components_ptr->extra_info_length = 0;
+    }
+  }
+
   return result;
 }
 DECLARE_XAM_EXPORT1(NetDll_XHttpCrackUrl, kNetworking, kImplemented);
@@ -946,6 +967,27 @@ dword_result_t NetDll_XHttpCrackUrlW_entry(
   if (insufficient_buffer) {
     XThread::SetLastError(X_ERROR_INSUFFICIENT_BUFFER);
     return false;
+  }
+
+  // Same as the ANSI path: don't leave pointer-return sentinels on absent
+  // components.
+  if (!url_components_ptr->scheme_ptr) {
+    url_components_ptr->scheme_length = 0;
+  }
+  if (!url_components_ptr->host_name_ptr) {
+    url_components_ptr->host_name_length = 0;
+  }
+  if (!url_components_ptr->user_name_ptr) {
+    url_components_ptr->user_name_length = 0;
+  }
+  if (!url_components_ptr->password_ptr) {
+    url_components_ptr->password_length = 0;
+  }
+  if (!url_components_ptr->url_path_ptr) {
+    url_components_ptr->url_path_length = 0;
+  }
+  if (!url_components_ptr->extra_info_ptr) {
+    url_components_ptr->extra_info_length = 0;
   }
 
   return true;
