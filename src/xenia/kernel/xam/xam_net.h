@@ -13,6 +13,8 @@
 #include <future>
 #include <mutex>
 
+#include "xenia/kernel/xnet.h"
+
 namespace xe {
 namespace kernel {
 namespace xam {

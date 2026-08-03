@@ -154,6 +154,10 @@ object_ref<XObject> XObject::Restore(KernelState* kernel_state, Type type,
       return XThread::Restore(kernel_state, stream);
     case Type::Timer:
       break;
+    case Type::Device:
+      break;
+    case Type::Http:
+      break;
     case Type::Undefined:
       break;
   }

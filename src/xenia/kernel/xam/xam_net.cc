@@ -28,6 +28,7 @@
 #include "xenia/kernel/util/net_utils.h"
 #include "xenia/kernel/util/network_adapter_manager.h"
 #include "xenia/kernel/util/shim_utils.h"
+#include "xenia/kernel/xam/content_manager.h"
 #include "xenia/kernel/xam/xam_module.h"
 #include "xenia/kernel/xam/xam_net.h"
 #include "xenia/kernel/xam/xam_private.h"
@@ -35,6 +36,7 @@
 #include "xenia/kernel/xboxkrnl/xboxkrnl_modules.h"
 #include "xenia/kernel/xboxkrnl/xboxkrnl_threading.h"
 #include "xenia/kernel/xevent.h"
+#include "xenia/kernel/xhttp.h"
 #include "xenia/kernel/xsocket.h"
 #include "xenia/kernel/xthread.h"
 #include "xenia/xbox.h"
@@ -2349,6 +2351,187 @@ dword_result_t XamBackgroundDownloadItemGetHistoryStatus_entry(
   return X_ERROR_NOT_FOUND;
 }
 DECLARE_XAM_EXPORT1(XamBackgroundDownloadItemGetHistoryStatus, kMisc, kStub);
+
+dword_result_t NetDll_XHttpStartup_entry(dword_t caller, dword_t reserved,
+                                         dword_t reserved_ptr) {
+  return XHttp::Startup();
+}
+DECLARE_XAM_EXPORT1(NetDll_XHttpStartup, kNetworking, kStub);
+
+void NetDll_XHttpShutdown_entry(dword_t caller) { XHttp::Shutdown(); }
+DECLARE_XAM_EXPORT1(NetDll_XHttpShutdown, kNetworking, kStub);
+
+dword_result_t NetDll_XHttpOpen_entry(dword_t caller, lpstring_t user_agent,
+                                      dword_t access_type,
+                                      lpstring_t proxy_name,
+                                      lpstring_t proxy_bypass, dword_t flags) {
+  return XHttp::Open(user_agent ? user_agent.value() : std::string(), flags);
+}
+DECLARE_XAM_EXPORT1(NetDll_XHttpOpen, kNetworking, kImplemented);
+
+dword_result_t NetDll_XHttpCloseHandle_entry(dword_t caller, dword_t handle) {
+  return XHttp::CloseHandle(handle) ? 1 : 0;
+}
+DECLARE_XAM_EXPORT1(NetDll_XHttpCloseHandle, kNetworking, kImplemented);
+
+dword_result_t NetDll_XHttpCrackUrl_entry(
+    dword_t caller, lpstring_t url_ptr, dword_t url_length, dword_t flags,
+    pointer_t<XHTTP_URL_COMPONENTS> url_components_ptr) {
+  if (!url_ptr || !url_components_ptr) {
+    XThread::SetLastError(X_ERROR_INVALID_PARAMETER);
+    return 0;
+  }
+  return XHttp::CrackUrl(url_ptr.value(), url_ptr.guest_address(), url_length,
+                         flags, url_components_ptr)
+             ? 1
+             : 0;
+}
+DECLARE_XAM_EXPORT1(NetDll_XHttpCrackUrl, kNetworking, kImplemented);
+
+dword_result_t NetDll_XHttpCrackUrlW_entry(
+    dword_t caller, lpu16string_t url_ptr, dword_t url_length, dword_t flags,
+    pointer_t<XHTTP_URL_COMPONENTS> url_components_ptr) {
+  if (!url_ptr || !url_components_ptr) {
+    XThread::SetLastError(X_ERROR_INVALID_PARAMETER);
+    return 0;
+  }
+  return XHttp::CrackUrlW(url_ptr.value(), url_ptr.guest_address(), url_length,
+                          flags, url_components_ptr)
+             ? 1
+             : 0;
+}
+DECLARE_XAM_EXPORT1(NetDll_XHttpCrackUrlW, kNetworking, kImplemented);
+
+dword_result_t NetDll_XHttpDoWork_entry(dword_t caller, dword_t handle,
+                                        dword_t unk) {
+  return XHttp::DoWork();
+}
+DECLARE_XAM_EXPORT1(NetDll_XHttpDoWork, kNetworking, kImplemented);
+
+dword_result_t NetDll_XHttpSetOption_entry(dword_t caller, dword_t handle,
+                                           dword_t option, lpvoid_t buffer,
+                                           dword_t buffer_length) {
+  return XHttp::SetOption(handle, option,
+                          buffer ? buffer.as<const void*>() : nullptr,
+                          buffer_length)
+             ? 1
+             : 0;
+}
+DECLARE_XAM_EXPORT1(NetDll_XHttpSetOption, kNetworking, kStub);
+
+dword_result_t NetDll_XHttpQueryOption_entry(dword_t caller, dword_t handle,
+                                             dword_t option, lpvoid_t buffer,
+                                             lpdword_t buffer_length) {
+  uint32_t length = buffer_length ? static_cast<uint32_t>(*buffer_length) : 0;
+  const bool ok = XHttp::QueryOption(
+      handle, option, buffer ? buffer.as<void*>() : nullptr,
+      buffer_length ? &length : nullptr);
+  if (buffer_length) {
+    *buffer_length = length;
+  }
+  return ok ? 1 : 0;
+}
+DECLARE_XAM_EXPORT1(NetDll_XHttpQueryOption, kNetworking, kStub);
+
+dword_result_t NetDll_XHttpOpenRequest_entry(
+    dword_t caller, dword_t connect_handle, lpstring_t verb, lpstring_t path,
+    lpstring_t version, lpstring_t referrer, lpstring_t reserved,
+    dword_t flag) {
+  return XHttp::OpenRequest(connect_handle, verb ? verb.value() : std::string(),
+                            path ? path.value() : std::string(), flag);
+}
+DECLARE_XAM_EXPORT1(NetDll_XHttpOpenRequest, kNetworking, kImplemented);
+
+dword_result_t NetDll_XHttpSetStatusCallback_entry(dword_t caller,
+                                                   dword_t handle,
+                                                   lpdword_t callback_ptr,
+                                                   dword_t flags, dword_t unk) {
+  return XHttp::SetStatusCallback(
+      handle,
+      callback_ptr ? static_cast<uint32_t>(callback_ptr.guest_address()) : 0);
+}
+DECLARE_XAM_EXPORT1(NetDll_XHttpSetStatusCallback, kNetworking, kImplemented);
+
+dword_result_t NetDll_XHttpSendRequest_entry(dword_t caller, dword_t hrequest,
+                                             lpstring_t headers,
+                                             dword_t hlength, lpvoid_t optional,
+                                             dword_t optional_length,
+                                             dword_t total_length,
+                                             dword_t context) {
+  const std::string headers_str = headers ? headers.value() : std::string();
+  return XHttp::SendRequest(
+             hrequest, headers ? headers_str.c_str() : nullptr, hlength,
+             optional ? optional.as<const void*>() : nullptr, optional_length,
+             total_length, context)
+             ? 1
+             : 0;
+}
+DECLARE_XAM_EXPORT1(NetDll_XHttpSendRequest, kNetworking, kImplemented);
+
+dword_result_t NetDll_XHttpWriteData_entry(dword_t caller, dword_t hrequest,
+                                           lpvoid_t buffer,
+                                           dword_t bytes_to_write,
+                                           lpdword_t bytes_written_ptr) {
+  uint32_t written = 0;
+  const bool ok = XHttp::WriteData(
+      hrequest, buffer ? buffer.as<const void*>() : nullptr, bytes_to_write,
+      bytes_written_ptr ? &written : nullptr);
+  if (ok && bytes_written_ptr) {
+    *bytes_written_ptr = written;
+  }
+  return ok ? 1 : 0;
+}
+DECLARE_XAM_EXPORT1(NetDll_XHttpWriteData, kNetworking, kImplemented);
+
+dword_result_t NetDll_XHttpReceiveResponse_entry(dword_t caller,
+                                                 dword_t hrequest,
+                                                 dword_t reserved) {
+  return XHttp::ReceiveResponse(hrequest) ? 1 : 0;
+}
+DECLARE_XAM_EXPORT1(NetDll_XHttpReceiveResponse, kNetworking, kImplemented);
+
+dword_result_t NetDll_XHttpQueryHeaders_entry(dword_t caller, dword_t hrequest,
+                                              dword_t info_level,
+                                              lpstring_t name, lpvoid_t buffer,
+                                              lpdword_t buffer_length_ptr,
+                                              lpdword_t index_ptr) {
+  uint32_t length =
+      buffer_length_ptr ? static_cast<uint32_t>(*buffer_length_ptr) : 0;
+  const std::string name_str = name ? name.value() : std::string();
+  const bool ok = XHttp::QueryHeaders(
+      hrequest, info_level, name ? name_str.c_str() : nullptr,
+      buffer ? buffer.as<void*>() : nullptr, length,
+      buffer_length_ptr ? &length : nullptr);
+  if (buffer_length_ptr) {
+    *buffer_length_ptr = length;
+  }
+  return ok ? 1 : 0;
+}
+DECLARE_XAM_EXPORT1(NetDll_XHttpQueryHeaders, kNetworking, kImplemented);
+
+dword_result_t NetDll_XHttpReadData_entry(dword_t caller, dword_t hrequest,
+                                          lpvoid_t buffer,
+                                          dword_t bytes_to_read,
+                                          lpdword_t bytes_read_ptr) {
+  uint32_t read = 0;
+  const bool ok = XHttp::ReadData(
+      hrequest, buffer ? buffer.as<void*>() : nullptr,
+      buffer ? buffer.guest_address() : 0, bytes_to_read,
+      bytes_read_ptr ? &read : nullptr);
+  if (ok && bytes_read_ptr) {
+    *bytes_read_ptr = read;
+  }
+  return ok ? 1 : 0;
+}
+DECLARE_XAM_EXPORT1(NetDll_XHttpReadData, kNetworking, kImplemented);
+
+dword_result_t NetDll_XHttpConnect_entry(dword_t caller, dword_t hSession,
+                                         lpstring_t host, dword_t port,
+                                         dword_t flags) {
+  return XHttp::Connect(hSession, host ? host.value() : std::string(),
+                        static_cast<uint16_t>(port), flags);
+}
+DECLARE_XAM_EXPORT1(NetDll_XHttpConnect, kNetworking, kImplemented);
 
 // Remove completed UPnP actions
 void CleanupUPnPActions() {
