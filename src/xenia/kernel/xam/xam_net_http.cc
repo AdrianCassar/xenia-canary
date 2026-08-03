@@ -372,9 +372,8 @@ void InvokeGuestCallback(uint32_t guest_callback, uint32_t handle,
   }
 
   uint64_t args[] = {handle, context, status, info_ptr, info_len};
-  kernel_state()->processor()->Execute(thread->thread_state(),
-                                       guest_callback & ~1u, args,
-                                       xe::countof(args));
+  kernel_state()->processor()->Execute(
+      thread->thread_state(), guest_callback & ~1u, args, xe::countof(args));
 }
 
 // Throwaway guest thread, so `work` can block on the network without holding
@@ -437,8 +436,8 @@ void ExecuteCompletion(const XHttpCompletion& c) {
     const uint32_t count_ptr =
         kernel_state()->memory()->SystemHeapAlloc(sizeof(uint32_t));
     if (count_ptr) {
-      *kernel_state()->memory()->TranslateVirtual<xe::be<uint32_t>*>(count_ptr) =
-          c.write_count;
+      *kernel_state()->memory()->TranslateVirtual<xe::be<uint32_t>*>(
+          count_ptr) = c.write_count;
     }
     InvokeGuestCallback(c.callback, c.handle, c.context, c.status, count_ptr,
                         sizeof(uint32_t));
@@ -1189,9 +1188,11 @@ dword_result_t NetDll_XHttpReceiveResponse_entry(dword_t caller,
 }
 DECLARE_XAM_EXPORT1(NetDll_XHttpReceiveResponse, kNetworking, kImplemented);
 
-dword_result_t NetDll_XHttpQueryHeaders_entry(
-    dword_t caller, dword_t hrequest, dword_t info_level, lpstring_t name,
-    lpvoid_t buffer, lpdword_t buffer_length_ptr, lpdword_t index_ptr) {
+dword_result_t NetDll_XHttpQueryHeaders_entry(dword_t caller, dword_t hrequest,
+                                              dword_t info_level,
+                                              lpstring_t name, lpvoid_t buffer,
+                                              lpdword_t buffer_length_ptr,
+                                              lpdword_t index_ptr) {
   auto request = xhttp_manager.Lookup(hrequest);
   if (!request || request->type != XHttpHandleType::kRequest) {
     XThread::SetLastError(XHTTP_ERROR_INCORRECT_HANDLE_TYPE);
