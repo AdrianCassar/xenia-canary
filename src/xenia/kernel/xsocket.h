@@ -145,7 +145,7 @@ class XSocket : public XObject {
   }
 
   X_STATUS Initialize(AddressFamily af, Type type, Protocol proto);
-  X_STATUS Close();
+  int Close();
 
   X_STATUS GetOption(uint32_t level, uint32_t optname, void* optval_ptr,
                      uint32_t* optlen);
@@ -198,7 +198,7 @@ class XSocket : public XObject {
 
  private:
   XSocket(KernelState* kernel_state, uint64_t native_handle);
-  uint64_t native_handle_ = -1;
+  uint64_t native_handle_ = X_INVALID_SOCKET;
   bool socket_closed_ = false;
 
   AddressFamily af_;     // Address family

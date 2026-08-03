@@ -297,7 +297,7 @@ uint32_t XamUserReadProfileSettingsEx(
     if (xuids) {
       for (const auto xuid : profile_xuids) {
         if (IsOnlineXUID(xuid) &&
-            cvars::network_mode != NETWORK_MODE::XBOXLIVE) {
+            !kernel_state()->xam_state()->user_tracker()->LoggedInToLive()) {
           extended_error = X_ONLINE_E_USER_NOT_LOGGED_ON;
           return X_ERROR_FUNCTION_FAILED;
         }
@@ -617,8 +617,10 @@ dword_result_t XamUserCheckPrivilege_entry(dword_t user_index, dword_t mask,
     return X_ERROR_NO_SUCH_USER;
   }
 
-  if (kernel_state()->xam_state()->GetUserProfile(user_index)->signin_state() !=
-      X_USER_SIGNIN_STATE::SignedInToLive) {
+  if (!kernel_state()
+           ->xam_state()
+           ->GetUserProfile(user_index)
+           ->IsSignedInToLive()) {
     return X_ERROR_NOT_LOGGED_ON;
   }
 
@@ -737,7 +739,7 @@ dword_result_t XamUserAreUsersFriends_entry(
       const auto& user_profile =
           kernel_state()->xam_state()->GetUserProfile(user_index);
 
-      if (user_profile->signin_state() != X_USER_SIGNIN_STATE::SignedInToLive) {
+      if (!user_profile->IsSignedInToLive()) {
         result = X_ERROR_NOT_LOGGED_ON;
       } else {
         uint32_t friends_count = 0;
@@ -798,7 +800,7 @@ dword_result_t XamUserGetAgeGroup_entry(
                                          uint32_t& length) -> X_RESULT {
     X_RESULT result = X_ERROR_SUCCESS;
 
-    if (cvars::network_mode != NETWORK_MODE::XBOXLIVE) {
+    if (!kernel_state()->xam_state()->user_tracker()->LoggedInToLive()) {
       result = X_ERROR_NO_SUCH_USER;
     }
 
@@ -850,7 +852,7 @@ dword_result_t XamUserGetAge_entry(dword_t user_index, lpdword_t age_ptr,
                                    uint32_t& length) -> X_RESULT {
     X_RESULT result = X_ERROR_SUCCESS;
 
-    if (cvars::network_mode != NETWORK_MODE::XBOXLIVE) {
+    if (!kernel_state()->xam_state()->user_tracker()->LoggedInToLive()) {
       result = X_ERROR_NO_SUCH_USER;
     }
 
@@ -1588,15 +1590,6 @@ dword_result_t XamUserCreateStatsEnumerator_entry(
     return X_ERROR_INVALID_PARAMETER;
   }
 
-  auto e = new XStaticEnumerator<X_USER_STATS_READ_RESULTS>(kernel_state(), 1);
-
-  const X_STATUS result =
-      e->Initialize(XUserIndexNone, 0xFB, 0xB0023, 0xB0024, 0);
-
-  if (XFAILED(result)) {
-    return result;
-  }
-
   const X_STATS_ENUMERATOR_TYPE type =
       static_cast<X_STATS_ENUMERATOR_TYPE>(enumerator_type.value());
 
@@ -1625,31 +1618,74 @@ dword_result_t XamUserCreateStatsEnumerator_entry(
     } break;
   }
 
-  const uint32_t page_size =
-      kernel_state()->memory()->GetPhysicalHeap()->page_size();
+  const uint32_t rows = num_rows;
+  const uint32_t extra_column_data = 4;  // Why extra 4 bytes per column?
+  const uint32_t column_size = sizeof(X_USER_STATS_COLUMN) + extra_column_data;
 
-  // sizeof(X_USER_STATS_VIEW) becomes page_size of 4096.
-  const uint32_t view_address =
-      kernel_state()->memory()->SystemHeapAlloc(page_size);
-
-  X_USER_STATS_VIEW* views_ptr =
-      kernel_state()->memory()->TranslateVirtual<X_USER_STATS_VIEW*>(
-          view_address);
-
-  uint32_t rows = num_rows.value();
-
-  uint32_t total_rows_size = 0;
-  uint32_t total_columns_size = 0;
-
-  // Tell game we have no rows to display
-  rows = 0;
+  uint32_t buffer_size = num_stats_specs * (sizeof(X_USER_STATS_ROW) * rows +
+                                            sizeof(X_USER_STATS_VIEW)) +
+                         sizeof(X_USER_STATS_READ_RESULTS);
 
   const X_USER_STATS_SPEC* stat_specs_ptr = stats_ptr;
 
   for (size_t view_index = 0; view_index < num_stats_specs; view_index++) {
     const X_USER_STATS_SPEC& stat_spec_ptr = stat_specs_ptr[view_index];
+    const uint32_t columns_count = stat_spec_ptr.num_column_ids;
+
+    buffer_size += column_size * rows * columns_count;
+  }
+
+  auto e = object_ref<XStaticUntypedEnumerator>(
+      new XStaticUntypedEnumerator(kernel_state(), 1, buffer_size));
+
+  const X_STATUS result =
+      e->Initialize(XUserIndexNone, 0xFB, 0xB0023, 0xB0024, 0);
+
+  if (XFAILED(result)) {
+    return result;
+  }
+
+  // Do not add result to enumerator if we don't have any results.
+  // If we're not connected to Xbox-Live then we cannot retrieve results.
+  if (cvars::network_mode != NETWORK_MODE::XBOXLIVE) {
+    *buffer_size_ptr = buffer_size;
+    *handle_ptr = e->handle();
+    return X_ERROR_SUCCESS;
+  }
+
+  // Memory Layout:
+  // X_USER_STATS_READ_RESULTS
+  // X_USER_STATS_VIEW[]
+  // X_USER_STATS_ROW[]
+  // X_USER_STATS_COLUMN[]
+
+  // 4E4D07D1 expects result to create session.
+
+  const uint32_t results_address =
+      kernel_state()->memory()->SystemHeapAlloc(buffer_size);
+
+  X_USER_STATS_READ_RESULTS* results =
+      kernel_state()->memory()->TranslateVirtual<X_USER_STATS_READ_RESULTS*>(
+          results_address);
+
+  X_USER_STATS_VIEW* views_ptr =
+      reinterpret_cast<X_USER_STATS_VIEW*>(results + 1);
+
+  const uint32_t views_address =
+      kernel_memory()->HostToGuestVirtual(std::to_address(views_ptr));
+
+  X_USER_STATS_ROW* rows_ptr =
+      reinterpret_cast<X_USER_STATS_ROW*>(views_ptr + num_stats_specs);
+
+  results->num_views = num_stats_specs.value();
+  results->views_ptr = views_address;
+
+  for (size_t view_index = 0; view_index < num_stats_specs; view_index++) {
+    const X_USER_STATS_SPEC& stat_spec_ptr = stat_specs_ptr[view_index];
+
     X_USER_STATS_VIEW& view_ptr = views_ptr[view_index];
     const uint32_t view_id = stat_spec_ptr.view_id;
+    const uint32_t columns_count = stat_spec_ptr.num_column_ids;
 
     const auto spa_stats_view =
         kernel_state()->emulator()->game_info_database()->GetStatsView(view_id);
@@ -1661,26 +1697,16 @@ dword_result_t XamUserCreateStatsEnumerator_entry(
     // 4B5607E8 expects view id otherwise crashes.
     view_ptr.view_id = view_id;
     view_ptr.total_view_rows = rows;
+
     view_ptr.num_rows = rows;
 
-    // 545107D1 wants this set to prevent XUserReadStats
-    // from crashing?
-    // view_ptr->num_rows = num_rows.value();
-
-    const uint32_t rows_size = sizeof(X_USER_STATS_ROW) * rows;
-
-    total_rows_size += rows_size;
-
     const uint32_t rows_address =
-        kernel_state()->memory()->SystemHeapAlloc(rows_size);
+        kernel_memory()->HostToGuestVirtual(std::to_address(rows_ptr));
 
-    X_USER_STATS_ROW* rows_ptr =
-        kernel_state()->memory()->TranslateVirtual<X_USER_STATS_ROW*>(
-            rows_address);
-
-    // 584111FA and 5841089F want rows pointer even if row count is 0 to prevent
-    // crashing.
     view_ptr.rows_ptr = rows_address;
+
+    X_USER_STATS_COLUMN* columns_ptr =
+        reinterpret_cast<X_USER_STATS_COLUMN*>(rows_ptr + rows);
 
     for (uint32_t row_index = 0; row_index < rows; row_index++) {
       X_USER_STATS_ROW& row_ptr = rows_ptr[row_index];
@@ -1702,17 +1728,8 @@ dword_result_t XamUserCreateStatsEnumerator_entry(
         continue;
       }
 
-      const uint32_t columns_count = stat_spec_ptr.num_column_ids;
-      const uint32_t columns_size = sizeof(X_USER_STATS_COLUMN) * columns_count;
-
       const uint32_t columns_address =
-          kernel_state()->memory()->SystemHeapAlloc(columns_size);
-
-      X_USER_STATS_COLUMN* columns_ptr =
-          kernel_state()->memory()->TranslateVirtual<X_USER_STATS_COLUMN*>(
-              columns_address);
-
-      total_columns_size += columns_size;
+          kernel_memory()->HostToGuestVirtual(std::to_address(columns_ptr));
 
       row_ptr.num_columns = columns_count;
       row_ptr.columns_ptr = columns_address;
@@ -1743,19 +1760,18 @@ dword_result_t XamUserCreateStatsEnumerator_entry(
           }
         }
       }
+
+      columns_ptr += columns_count;
     }
+
+    rows_ptr = reinterpret_cast<X_USER_STATS_ROW*>(columns_ptr + 1);
   }
 
-  X_USER_STATS_READ_RESULTS* results = e->AppendItem();
+  uint8_t* results_out_ptr = reinterpret_cast<uint8_t*>(e->AppendItem());
 
-  results->num_views = num_stats_specs.value();
-  results->views_ptr = view_address;
+  std::memcpy(results_out_ptr, results, buffer_size);
 
-  *buffer_size_ptr = sizeof(X_USER_STATS_READ_RESULTS) +
-                     (num_stats_specs * sizeof(X_USER_STATS_VIEW)) +
-                     total_rows_size + total_columns_size;
-
-  assert_false(*buffer_size_ptr == 0);
+  *buffer_size_ptr = buffer_size;
 
   *handle_ptr = e->handle();
   return X_ERROR_SUCCESS;

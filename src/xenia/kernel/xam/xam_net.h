@@ -10,6 +10,7 @@
 #ifndef XENIA_KERNEL_XAM_XAM_NET_H_
 #define XENIA_KERNEL_XAM_XAM_NET_H_
 
+#include <atomic>
 #include <future>
 #include <mutex>
 
@@ -29,6 +30,10 @@ std::mutex qos_lookup_mutex;
 
 std::map<uint32_t, std::stop_source> dns_lookup_threads;
 std::mutex dns_lookup_mutex;
+
+std::atomic<bool> initialized_xnet_ = false;
+
+std::atomic<uint32_t> winsock_reference_count_ = 0;
 
 X_BACKGROUND_DOWNLOAD_MODE download_mode_ = X_BACKGROUND_DOWNLOAD_MODE::AUTO;
 

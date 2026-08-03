@@ -67,6 +67,8 @@ class XLiveAPI {
 
   enum class InitState { Success, Failed, Pending };
 
+  void PrintLibcurlDetails();
+
   static void IpGetConsoleXnAddr(XNADDR* XnAddr_ptr);
 
   static void GetXnAddrFromSessionObject(SessionObjectJSON session,
@@ -80,7 +82,11 @@ class XLiveAPI {
 
   void SetAPIAddress(std::string address);
 
-  void SetNetworkMode(uint32_t mode);
+  void BroadcastNetworkStatus() const;
+
+  void SetNetworkMode(uint32_t mode) const;
+
+  bool SelectNetworkMode(uint32_t mode);
 
   void SetLogging(bool state) const;
 
@@ -93,6 +99,8 @@ class XLiveAPI {
   static std::string BuildEndpoint(std::string endpoint);
 
   void Init();
+
+  NETWORK_MODE RefreshNetworkMode(bool lan_limit);
 
   InitState GetInitState() const;
 
@@ -170,6 +178,8 @@ class XLiveAPI {
   std::string GetHostRedirect(const std::string& host);
 
   std::unique_ptr<ServicesObjectJSON> GetServices();
+
+  bool Heartbeat() const;
 
   void SessionJoinRemote(uint64_t sessionId,
                          const std::unordered_map<uint64_t, bool> members);

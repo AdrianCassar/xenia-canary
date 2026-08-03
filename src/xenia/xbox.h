@@ -137,8 +137,8 @@ typedef uint32_t X_HRESULT;
 #define X_E_INSUFFICIENT_BUFFER                 X_HRESULT_FROM_WIN32(X_ERROR_INSUFFICIENT_BUFFER)
 
 // Sockets/networking.
-#define X_INVALID_SOCKET (uint32_t)(~0)
-#define X_SOCKET_ERROR (uint32_t)(-1)
+#define X_INVALID_SOCKET (uint64_t)(~0)
+#define X_SOCKET_ERROR (int32_t)(-1)
 #define X_FD_SETSIZE 64
 
 // clang-format on

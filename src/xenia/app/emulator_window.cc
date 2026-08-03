@@ -325,6 +325,13 @@ void EmulatorWindow::OnEmulatorInitialized() {
     update_info_ = updater_->StartupUpdateCheckAsync(cancel_request, callback);
   }
 #endif
+
+  if (emulator_->kernel_state()
+          ->xam_state()
+          ->user_tracker()
+          ->LoggedInToLive()) {
+    emulator()->GetXboxLiveAPI()->StartWhoamiAsync();
+  }
 }
 
 void EmulatorWindow::ShowUpdateAvailableDialog(const std::string& commit,
