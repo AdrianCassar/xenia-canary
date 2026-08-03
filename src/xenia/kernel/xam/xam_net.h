@@ -13,6 +13,8 @@
 #include <future>
 #include <mutex>
 
+#include "xenia/kernel/xnet.h"
+
 namespace xe {
 namespace kernel {
 namespace xam {
@@ -27,6 +29,8 @@ std::mutex qos_lookup_mutex;
 
 std::map<uint32_t, std::stop_source> dns_lookup_threads;
 std::mutex dns_lookup_mutex;
+
+X_BACKGROUND_DOWNLOAD_MODE download_mode_ = X_BACKGROUND_DOWNLOAD_MODE::AUTO;
 
 static void CleanupUPnPActions();
 
