@@ -955,35 +955,33 @@ bool XSocket::WSAGetOverlappedResult(XWSAOVERLAPPED* overlapped_ptr,
     }
   }
 
-  // TODO(Adrian): Wait for event handle to be signaled instead of waiting for
-  // future to complete.
-  if (sending_io) {
-    if (current_task_ptr && current_task_ptr->valid()) {
-      if (wait) {
-        XELOGI("{}:: WSASendTo blocking until completion!", __func__);
-        current_task_ptr->wait();
-      } else if (current_task_ptr->wait_for(0ms) != std::future_status::ready) {
-        XWSASetLastError(X_WSA_ERROR::X_WSA_IO_INCOMPLETE);
-        return false;
-      }
-
-      int32_t result = current_task_ptr->get();
-    } else {
-      XELOGI("{}:: WSASendTo already completed!", __func__);
+  if (wait && cvars::logging) {
+    if (sending_io) {
+      XELOGI("{}:: WSASendTo blocking until completion!", __func__);
+    } else if (receiving_io) {
+      XELOGI("{}:: WSARecvFrom Blocking until completion!", __func__);
     }
-  } else if (receiving_io) {
-    if (current_task_ptr && current_task_ptr->valid()) {
-      if (wait) {
-        XELOGI("{}:: WSARecvFrom Blocking until completion!", __func__);
+
+    auto event = kernel_state()->object_table()->LookupObject<XEvent>(
+        overlapped_ptr->event_handle);
+
+    if (event) {
+      event->Wait(3, 1, 0, nullptr);
+    } else {
+      // If we don't have an event then we must wait for the future to complete.
+      // This should never happen because overlapped_ptr->event_handle should
+      // always have a valid event handle.
+      assert_always();
+      if (current_task_ptr && current_task_ptr->valid()) {
         current_task_ptr->wait();
-      } else if (current_task_ptr->wait_for(0ms) != std::future_status::ready) {
+      }
+    }
+  } else {
+    if (current_task_ptr && current_task_ptr->valid()) {
+      if (current_task_ptr->wait_for(0ms) != std::future_status::ready) {
         XWSASetLastError(X_WSA_ERROR::X_WSA_IO_INCOMPLETE);
         return false;
       }
-
-      int32_t result = current_task_ptr->get();
-    } else {
-      XELOGI("{}:: WSARecvFrom already completed!", __func__);
     }
   }
 
