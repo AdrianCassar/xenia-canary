@@ -56,6 +56,7 @@ namespace {
 // titles ask for; everything else falls through to a header lookup by name.
 constexpr uint32_t XHTTP_QUERY_STATUS_CODE = 0xFFFE;
 constexpr uint32_t XHTTP_QUERY_CONTENT_LENGTH = 9;
+constexpr uint32_t XHTTP_QUERY_RAW_HEADERS_CRLF = 22;
 
 constexpr uint32_t XHTTP_QUERY_ATTRIBUTE_MASK = 0x0000FFFF;
 constexpr uint32_t XHTTP_QUERY_FLAG_NUMBER = 0x20000000;
@@ -1158,6 +1159,9 @@ bool XHttp::QueryHeaders(uint32_t hrequest, uint32_t info_level,
     case XHTTP_QUERY_CONTENT_LENGTH:
       result = std::to_string(request->response_body.size());
       break;
+    case XHTTP_QUERY_RAW_HEADERS_CRLF:
+      result = request->response_headers;
+      break;
     default: {
       // Anything else is a header lookup by name.
       if (!name) {
@@ -1171,11 +1175,10 @@ bool XHttp::QueryHeaders(uint32_t hrequest, uint32_t info_level,
     } break;
   }
 
-  // Either way WinHTTP reports the length without the null, but the buffer
-  // has to be big enough to hold it.
   const uint32_t required = static_cast<uint32_t>(result.size()) + 1;
   if (!buffer || buffer_size < required) {
-    *length_out = static_cast<uint32_t>(result.size());
+    // Return number of bytes the app must allocate.
+    *length_out = required;
     XThread::SetLastError(X_ERROR_INSUFFICIENT_BUFFER);
     return false;
   }
@@ -1183,6 +1186,8 @@ bool XHttp::QueryHeaders(uint32_t hrequest, uint32_t info_level,
   char* buffer_out = static_cast<char*>(buffer);
   std::memcpy(buffer_out, result.data(), result.size());
   buffer_out[result.size()] = '\0';
+
+  // Return string length in bytes minus null terminator.
   *length_out = static_cast<uint32_t>(result.size());
 
   XThread::SetLastError(X_ERROR_SUCCESS);
@@ -1218,7 +1223,7 @@ bool XHttp::ReadData(uint32_t hrequest, void* buffer,
     completion.context = request->context;
     completion.callback = request->ResolveStatusCallback();
     completion.status = XHTTP_CALLBACK_STATUS_READ_COMPLETE;
-    completion.info_ptr = buffer_guest_address;
+    completion.info_ptr = to_copy ? buffer_guest_address : 0; // Possible undocumented behavior (53510804 needs this).
     completion.info_len = static_cast<uint32_t>(to_copy);
     DeliverCompletion(std::move(completion));
 
