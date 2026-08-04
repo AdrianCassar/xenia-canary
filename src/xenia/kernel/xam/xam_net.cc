@@ -114,6 +114,25 @@ enum {
   NUM_XNCALLER_TYPES = 0x4,
 };
 
+uint64_t SessionIdForInAddrNbo(uint32_t ip_nbo) {
+  auto it = XLiveAPI::sessionIdCache.find(ip_nbo);
+  if (it == XLiveAPI::sessionIdCache.end()) {
+    return 0;
+  }
+  return it->second;
+}
+
+bool ShouldEstablishIceForInAddr(uint32_t ip_nbo) {
+  if (!cvars::ice_enabled || !XNetIce::IsPrivateOnlineAddress(ip_nbo)) {
+    return false;
+  }
+  const uint64_t session_id = SessionIdForInAddrNbo(ip_nbo);
+  if (session_id && IsSystemlink(session_id)) {
+    return false;
+  }
+  return session_id == 0 || IsOnlinePeer(session_id);
+}
+
 struct XNDNS {
   xe::be<int32_t> status;
   xe::be<uint32_t> cina;
@@ -782,9 +801,11 @@ dword_result_t NetDll_XNetUnregisterInAddr_entry(dword_t caller, dword_t addr) {
   XELOGI("NetDll_XNetUnregisterInAddr({:08X})",
          cvars::log_mask_ips ? 0 : addr.value());
 
+  const uint32_t ip_nbo = xe::byte_swap(addr.value());
+  XLiveAPI::sessionIdCache.erase(ip_nbo);
+
   if (cvars::ice_enabled) {
-    XNetIce::Instance().ClosePeer(xe::byte_swap(addr.value()),
-                                  XNetPeerType::kTitle);
+    XNetIce::Instance().ClosePeer(ip_nbo, XNetPeerType::kTitle);
   }
 
   return X_ERROR_SUCCESS;
@@ -794,12 +815,17 @@ DECLARE_XAM_EXPORT1(NetDll_XNetUnregisterInAddr, kNetworking, kImplemented);
 dword_result_t NetDll_XNetConnect_entry(dword_t caller, dword_t addr) {
   XELOGI("XNetConnect({:08X})", cvars::log_mask_ips ? 0 : addr.value());
 
-  if (cvars::ice_enabled) {
-    const uint32_t ip_nbo = xe::byte_swap(addr.value());
-    if (XNetIce::IsPrivateOnlineAddress(ip_nbo)) {
-      XNetIce::Instance().Establish(ip_nbo, XNetPeerType::kTitle);
-      return X_ERROR_SUCCESS;
-    }
+  const uint32_t ip_nbo = xe::byte_swap(addr.value());
+  const uint64_t session_id = SessionIdForInAddrNbo(ip_nbo);
+
+  if (session_id && IsSystemlink(session_id)) {
+    xe::threading::Sleep(150ms);
+    return X_ERROR_SUCCESS;
+  }
+
+  if (ShouldEstablishIceForInAddr(ip_nbo)) {
+    XNetIce::Instance().Establish(ip_nbo, XNetPeerType::kTitle);
+    return X_ERROR_SUCCESS;
   }
 
   xe::threading::Sleep(150ms);
@@ -811,19 +837,23 @@ dword_result_t NetDll_XNetGetConnectStatus_entry(dword_t caller, dword_t addr) {
   XELOGI("XNetGetConnectStatus({:08X})",
          cvars::log_mask_ips ? 0 : addr.value());
 
-  if (cvars::ice_enabled) {
-    const uint32_t ip_nbo = xe::byte_swap(addr.value());
-    if (XNetIce::IsPrivateOnlineAddress(ip_nbo)) {
-      auto status =
-          XNetIce::Instance().GetConnectStatus(ip_nbo, XNetPeerType::kTitle);
-      if (status == XNetIceConnectStatus::kConnected) {
-        return STATUS_CONNECTED;
-      }
-      if (status == XNetIceConnectStatus::kFailed) {
-        return STATUS_LOST;
-      }
-      return XNET_CONNECT_STATUS_PENDING;
+  const uint32_t ip_nbo = xe::byte_swap(addr.value());
+  const uint64_t session_id = SessionIdForInAddrNbo(ip_nbo);
+
+  if (session_id && IsSystemlink(session_id)) {
+    return STATUS_CONNECTED;
+  }
+
+  if (ShouldEstablishIceForInAddr(ip_nbo)) {
+    auto status =
+        XNetIce::Instance().GetConnectStatus(ip_nbo, XNetPeerType::kTitle);
+    if (status == XNetIceConnectStatus::kConnected) {
+      return STATUS_CONNECTED;
     }
+    if (status == XNetIceConnectStatus::kFailed) {
+      return STATUS_LOST;
+    }
+    return XNET_CONNECT_STATUS_PENDING;
   }
 
   return STATUS_CONNECTED;
@@ -931,16 +961,25 @@ dword_result_t NetDll_XNetXnAddrToInAddr_entry(dword_t caller,
     return X_ERROR_SUCCESS;
   }
 
-  if (cvars::network_mode == NETWORK_MODE::LAN) {
-    in_addr->s_addr = xn_addr->ina.s_addr;
-  }
+  const uint64_t session_id = xid ? xid->as_uintBE64() : 0;
 
-  if (cvars::network_mode == NETWORK_MODE::XBOXLIVE) {
+  if (session_id && IsSystemlink(session_id)) {
+    in_addr->s_addr = xn_addr->ina.s_addr;
+    XLiveAPI::sessionIdCache[in_addr->s_addr] = session_id;
+  } else if (IsOnlinePeer(session_id)) {
+    in_addr->s_addr = xn_addr->inaOnline.s_addr;
+    XLiveAPI::sessionIdCache[in_addr->s_addr] = session_id;
+    if (cvars::ice_enabled &&
+        XNetIce::IsPrivateOnlineAddress(in_addr->s_addr)) {
+      XNetIce::Instance().Establish(in_addr->s_addr, XNetPeerType::kTitle);
+    }
+  } else if (cvars::network_mode == NETWORK_MODE::LAN) {
+    in_addr->s_addr = xn_addr->ina.s_addr;
+  } else if (cvars::network_mode == NETWORK_MODE::XBOXLIVE) {
     in_addr->s_addr = xn_addr->inaOnline.s_addr;
     if (cvars::ice_enabled &&
-        XNetIce::IsPrivateOnlineAddress(xn_addr->inaOnline.s_addr)) {
-      XNetIce::Instance().Establish(xn_addr->inaOnline.s_addr,
-                                    XNetPeerType::kTitle);
+        XNetIce::IsPrivateOnlineAddress(in_addr->s_addr)) {
+      XNetIce::Instance().Establish(in_addr->s_addr, XNetPeerType::kTitle);
     }
   }
 

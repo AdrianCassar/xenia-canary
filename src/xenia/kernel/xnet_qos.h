@@ -107,6 +107,12 @@ class XNetQos {
                     const XNetQosListener& listener);
   bool PeerInUseLocked(uint32_t online_ip_nbo, uint32_t except_lookup_id) const;
 
+  bool UseIceForSession(uint64_t session_id) const;
+  bool EnsureSocketLocked();
+  void CloseSocketLocked();
+  void ReceiveUdpPackets();
+  bool SendUdp(uint32_t ip_nbo, const uint8_t* data, size_t len);
+
   struct QueuedPacket {
     uint32_t from_online_ip = 0;
     std::vector<uint8_t> data;
@@ -118,6 +124,9 @@ class XNetQos {
   std::unordered_map<uint32_t, XNetQosPendingLookup> lookups_;
   uint32_t next_lookup_id_ = 1;
   std::vector<QueuedPacket> inbound_;
+
+  // Native UDP socket (INVALID_SOCKET / -1 when closed).
+  intptr_t socket_ = -1;
 };
 
 }  // namespace kernel

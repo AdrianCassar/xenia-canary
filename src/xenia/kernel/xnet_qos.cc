@@ -9,11 +9,34 @@
 
 #include "xenia/kernel/xnet_qos.h"
 
+#include "xenia/base/cvar.h"
 #include "xenia/base/logging.h"
+#include "xenia/base/platform.h"
+#include "xenia/kernel/xnet.h"
 #include "xenia/kernel/xnet_ice.h"
 
 #include <chrono>
 #include <cstring>
+
+#ifdef XE_PLATFORM_WIN32
+#include <WS2tcpip.h>
+#include <WinSock2.h>
+#else
+#include <arpa/inet.h>
+#include <fcntl.h>
+#include <netinet/in.h>
+#include <sys/ioctl.h>
+#include <unistd.h>
+#ifndef INVALID_SOCKET
+#define INVALID_SOCKET (-1)
+#endif
+#ifndef SOCKET_ERROR
+#define SOCKET_ERROR (-1)
+#endif
+#define closesocket close
+#endif
+
+DECLARE_bool(ice_enabled);
 
 namespace xe {
 namespace kernel {
@@ -25,6 +48,16 @@ uint64_t NowMsec() {
           std::chrono::steady_clock::now().time_since_epoch())
           .count());
 }
+
+bool SocketValid(intptr_t s) {
+  return s != static_cast<intptr_t>(INVALID_SOCKET);
+}
+
+#ifdef XE_PLATFORM_WIN32
+SOCKET AsNative(intptr_t s) { return static_cast<SOCKET>(s); }
+#else
+int AsNative(intptr_t s) { return static_cast<int>(s); }
+#endif
 }  // namespace
 
 XNetQos& XNetQos::Instance() {
@@ -32,9 +65,128 @@ XNetQos& XNetQos::Instance() {
   return instance;
 }
 
+bool XNetQos::UseIceForSession(uint64_t session_id) const {
+  // Ares: ICE only for online-peer IDs when ICE is compiled in.
+  // Runtime killswitch mirrors compile-disabled ICE → pure Winsock QoS.
+  return cvars::ice_enabled && IsOnlinePeer(session_id);
+}
+
+bool XNetQos::EnsureSocketLocked() {
+  if (SocketValid(socket_)) {
+    return true;
+  }
+
+  const auto created = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+  if (created == INVALID_SOCKET) {
+    XELOGW("XNetQos: failed to create UDP socket");
+    return false;
+  }
+  socket_ = static_cast<intptr_t>(created);
+
+  int reuse = 1;
+  setsockopt(AsNative(socket_), SOL_SOCKET, SO_REUSEADDR,
+             reinterpret_cast<const char*>(&reuse), sizeof(reuse));
+
+  sockaddr_in bind_addr = {};
+  bind_addr.sin_family = AF_INET;
+  bind_addr.sin_port = htons(kPort);
+  bind_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+  if (::bind(AsNative(socket_), reinterpret_cast<const sockaddr*>(&bind_addr),
+             sizeof(bind_addr)) != 0) {
+    XELOGW("XNetQos: failed to bind UDP port {}", kPort);
+    closesocket(AsNative(socket_));
+    socket_ = static_cast<intptr_t>(INVALID_SOCKET);
+    return false;
+  }
+
+#ifdef XE_PLATFORM_WIN32
+  u_long nonblock = 1;
+  if (ioctlsocket(AsNative(socket_), FIONBIO, &nonblock) != 0) {
+#else
+  const int flags = fcntl(AsNative(socket_), F_GETFL, 0);
+  if (flags < 0 || fcntl(AsNative(socket_), F_SETFL, flags | O_NONBLOCK) != 0) {
+#endif
+    XELOGW("XNetQos: failed to set non-blocking");
+    closesocket(AsNative(socket_));
+    socket_ = static_cast<intptr_t>(INVALID_SOCKET);
+    return false;
+  }
+
+  XELOGI("XNetQos: UDP socket bound on port {}", kPort);
+  return true;
+}
+
+void XNetQos::CloseSocketLocked() {
+  if (SocketValid(socket_)) {
+    closesocket(AsNative(socket_));
+    socket_ = static_cast<intptr_t>(INVALID_SOCKET);
+  }
+}
+
+bool XNetQos::SendUdp(uint32_t ip_nbo, const uint8_t* data, size_t len) {
+  if (!ip_nbo || !data || !len) {
+    return false;
+  }
+  if (!EnsureSocketLocked()) {
+    return false;
+  }
+
+  sockaddr_in dest = {};
+  dest.sin_family = AF_INET;
+  dest.sin_port = htons(kPort);
+  dest.sin_addr.s_addr = ip_nbo;
+
+  const int sent = static_cast<int>(::sendto(
+      AsNative(socket_), reinterpret_cast<const char*>(data),
+      static_cast<int>(len), 0, reinterpret_cast<const sockaddr*>(&dest),
+      sizeof(dest)));
+  return sent == static_cast<int>(len);
+}
+
+void XNetQos::ReceiveUdpPackets() {
+  std::vector<QueuedPacket> received;
+  {
+    std::lock_guard lock(mutex_);
+    if (!initialized_ || !EnsureSocketLocked()) {
+      return;
+    }
+
+    for (;;) {
+      uint8_t buffer[2048];
+      sockaddr_in from = {};
+#ifdef XE_PLATFORM_WIN32
+      int fromlen = sizeof(from);
+#else
+      socklen_t fromlen = sizeof(from);
+#endif
+      const int n =
+          ::recvfrom(AsNative(socket_), reinterpret_cast<char*>(buffer),
+                     sizeof(buffer), 0, reinterpret_cast<sockaddr*>(&from),
+                     &fromlen);
+      if (n <= 0) {
+        break;
+      }
+      if (received.size() >= 256) {
+        break;
+      }
+      QueuedPacket packet;
+      packet.from_online_ip = from.sin_addr.s_addr;
+      packet.data.assign(buffer, buffer + n);
+      received.push_back(std::move(packet));
+    }
+  }
+
+  for (auto& packet : received) {
+    ProcessPacket(packet.from_online_ip, packet.data.data(),
+                  packet.data.size());
+  }
+}
+
 void XNetQos::Initialize() {
   std::lock_guard lock(mutex_);
   initialized_ = true;
+  EnsureSocketLocked();
   XNetIce::Instance().SetQosRecvHandler(
       [this](uint32_t from, const uint8_t* data, size_t len) {
         OnIcePacket(from, data, len);
@@ -45,6 +197,7 @@ void XNetQos::Shutdown() {
   std::lock_guard lock(mutex_);
   listeners_.clear();
   lookups_.clear();
+  CloseSocketLocked();
   initialized_ = false;
 }
 
@@ -88,6 +241,8 @@ uint32_t XNetQos::StartLookup(const std::vector<uint32_t>& online_ips_nbo,
                               const std::vector<uint64_t>& session_ids,
                               uint32_t probes, uint32_t bits_per_sec) {
   std::lock_guard lock(mutex_);
+  EnsureSocketLocked();
+
   XNetQosPendingLookup lookup;
   lookup.lookup_id = next_lookup_id_++;
   if (lookup.lookup_id == 0) {
@@ -101,7 +256,8 @@ uint32_t XNetQos::StartLookup(const std::vector<uint32_t>& online_ips_nbo,
     target.session_id = i < session_ids.size() ? session_ids[i] : 0;
     target.probe_count = probes ? probes : 1;
     target.ice_start_msec = NowMsec();
-    if (target.online_ip_nbo) {
+    // Ares only ICE-establishes for online-peer IDs (when ICE enabled).
+    if (target.online_ip_nbo && UseIceForSession(target.session_id)) {
       XNetIce::Instance().Establish(target.online_ip_nbo, XNetPeerType::kQos);
     }
     lookup.targets.push_back(std::move(target));
@@ -148,7 +304,8 @@ void XNetQos::ReleaseLookup(uint32_t lookup_id) {
       return;
     }
     for (auto& t : it->second.targets) {
-      if (t.online_ip_nbo && !PeerInUseLocked(t.online_ip_nbo, lookup_id)) {
+      if (t.online_ip_nbo && UseIceForSession(t.session_id) &&
+          !PeerInUseLocked(t.online_ip_nbo, lookup_id)) {
         close_ips.push_back(t.online_ip_nbo);
       }
     }
@@ -183,11 +340,21 @@ void XNetQos::SendProbe(XNetQosPendingLookup& lookup,
   req.session_id = target.session_id;
   req.lookup_id = lookup.lookup_id;
   req.probe_id = target.probes_sent;
-  XNetIce::Instance().SendQos(target.online_ip_nbo,
-                              reinterpret_cast<const uint8_t*>(&req),
-                              sizeof(req));
-  target.last_send_msec = NowMsec();
-  target.probes_sent++;
+
+  bool sent = false;
+  if (UseIceForSession(target.session_id)) {
+    sent = XNetIce::Instance().SendQos(target.online_ip_nbo,
+                                       reinterpret_cast<const uint8_t*>(&req),
+                                       sizeof(req)) >= 0;
+  } else {
+    sent = SendUdp(target.online_ip_nbo, reinterpret_cast<const uint8_t*>(&req),
+                   sizeof(req));
+  }
+
+  if (sent) {
+    target.last_send_msec = NowMsec();
+    target.probes_sent++;
+  }
 }
 
 void XNetQos::SendResponse(uint32_t to_online_ip,
@@ -208,7 +375,14 @@ void XNetQos::SendResponse(uint32_t to_online_ip,
     std::memcpy(packet.data() + sizeof(hdr), listener.data.data(),
                 hdr.data_size);
   }
-  XNetIce::Instance().SendQos(to_online_ip, packet.data(), packet.size());
+
+  // Ares: reply over ICE when a QoS peer exists, otherwise Winsock.
+  if (cvars::ice_enabled &&
+      XNetIce::Instance().HasPeer(to_online_ip, XNetPeerType::kQos)) {
+    XNetIce::Instance().SendQos(to_online_ip, packet.data(), packet.size());
+  } else {
+    SendUdp(to_online_ip, packet.data(), packet.size());
+  }
 }
 
 void XNetQos::ProcessPacket(uint32_t from_online_ip, const uint8_t* data,
@@ -274,6 +448,8 @@ void XNetQos::ProcessPacket(uint32_t from_online_ip, const uint8_t* data,
 }
 
 void XNetQos::Tick() {
+  ReceiveUdpPackets();
+
   std::vector<QueuedPacket> inbound;
   {
     std::lock_guard lock(mutex_);
@@ -291,17 +467,29 @@ void XNetQos::Tick() {
       if (target.complete) {
         continue;
       }
-      const auto status = XNetIce::Instance().GetConnectStatus(
-          target.online_ip_nbo, XNetPeerType::kQos);
-      if (status != XNetIceConnectStatus::kConnected) {
-        // ICE failure / connect timeout → complete with no contact (unreachable),
-        // never TARGET_DISABLED.
-        if (status == XNetIceConnectStatus::kFailed ||
-            now - target.ice_start_msec > 10000) {
-          target.complete = true;
-        }
+      if (!target.online_ip_nbo) {
+        target.complete = true;
         continue;
       }
+
+      if (UseIceForSession(target.session_id)) {
+        const auto status = XNetIce::Instance().GetConnectStatus(
+            target.online_ip_nbo, XNetPeerType::kQos);
+        if (status != XNetIceConnectStatus::kConnected) {
+          // ICE failure / connect timeout → unreachable, never TARGET_DISABLED.
+          if (status == XNetIceConnectStatus::kFailed ||
+              now - target.ice_start_msec > 10000) {
+            target.complete = true;
+          } else if (status == XNetIceConnectStatus::kIdle ||
+                     status == XNetIceConnectStatus::kPending) {
+            XNetIce::Instance().Establish(target.online_ip_nbo,
+                                          XNetPeerType::kQos);
+          }
+          continue;
+        }
+      }
+
+      // ICE connected, or Winsock path (ICE off / system-link): send probes.
       if (target.probes_sent < target.probe_count) {
         if (!target.last_send_msec || now - target.last_send_msec >= 500) {
           SendProbe(lookup, target);
