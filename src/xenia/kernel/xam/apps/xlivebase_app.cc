@@ -2305,21 +2305,15 @@ X_HRESULT XLiveBaseApp::XUserFindUsers(uint32_t buffer_ptr) {
                           resolved.end());
   }
 
-  uint32_t results_size = sizeof(FIND_USERS_RESPONSE) +
-                          (unmarshaller.NumUsers() * sizeof(FIND_USER_INFO));
-
   uint32_t users_address =
       memory_->HostToGuestVirtual(std::to_address(results_ptr + 1));
 
   FIND_USER_INFO* user_results_ptr =
       memory_->TranslateVirtual<FIND_USER_INFO*>(users_address);
 
-  for (uint32_t i = 0; const auto& user : resolved_users) {
-    memcpy(&user_results_ptr[i], &user, sizeof(FIND_USER_INFO));
-    i++;
-  }
+  std::copy(resolved_users.cbegin(), resolved_users.cend(), user_results_ptr);
 
-  results_ptr->results_size = results_size;
+  results_ptr->results_size = static_cast<uint32_t>(resolved_users.size());
   results_ptr->users_address = users_address;
 
   return X_E_SUCCESS;
