@@ -15,6 +15,10 @@
 #include <unordered_set>
 
 #include "xenia/base/byte_order.h"
+#include "xenia/kernel/xnet_ice.h"
+#include "xenia/kernel/xnet_qos.h"
+#include "xenia/kernel/xnet_signalling.h"
+#include "xenia/kernel/xnet_stream.h"
 #include "xenia/kernel/upnp.h"
 #include "xenia/kernel/util/net_utils.h"
 #include "xenia/kernel/xam/user_settings.h"
@@ -127,13 +131,6 @@ class XLiveAPI {
   const std::map<uint64_t, std::string> DeleteMyProfiles();
 
   std::unique_ptr<PlayerObjectJSON> FindPlayer(std::string ip);
-
-  bool UpdateQoSCache(const uint64_t sessionId,
-                      const std::vector<uint8_t> qos_payloade);
-
-  void QoSPost(uint64_t sessionId, uint8_t* qosData, size_t qosLength);
-
-  response_data QoSGet(uint64_t sessionId);
 
   void SessionModify(uint64_t sessionId, XGI_SESSION_MODIFY* data);
 
@@ -254,6 +251,14 @@ class XLiveAPI {
 
   std::string OnlineIP_str() const { return ip_to_string(online_ip_); };
 
+  sockaddr_in XnOnlineIP() const { return xn_online_ip_; };
+
+  std::string XnOnlineIP_str() const { return ip_to_string(xn_online_ip_); };
+
+  void StartIceNetworking();
+  void StopIceNetworking();
+  void TickIceNetworking();
+
   std::string GetDefaultLocalServer() const { return default_local_server_; };
 
   std::string GetDefaultPublicServer() const { return default_public_server_; };
@@ -296,6 +301,9 @@ class XLiveAPI {
       "https://xenia-netplay-2a0298c0e3f4.herokuapp.com/";
 
   sockaddr_in online_ip_ = {};
+  sockaddr_in xn_online_ip_ = {};
+
+  std::unique_ptr<XNetSignalling> signalling_;
 
   InitState initialized_ = InitState::Pending;
 
@@ -313,8 +321,6 @@ class XLiveAPI {
   uint64_t systemlink_id_ = 0;
 
   uint32_t dummy_friends_count_ = 0;
-
-  std::map<uint64_t, std::vector<uint8_t>> qos_payload_cache_ = {};
 
   std::future<sockaddr_in> whoami_result_;
 

@@ -84,6 +84,16 @@ class SessionObjectJSON : public BaseObjectJSON {
     hostAddress_ = host_address;
   }
 
+  const std::string& LocalAddress() const { return localAddress_; }
+  void LocalAddress(const std::string& local_address) {
+    localAddress_ = local_address;
+  }
+
+  const std::string& OnlineAddress() const { return onlineAddress_; }
+  void OnlineAddress(const std::string& online_address) {
+    onlineAddress_ = online_address;
+  }
+
   const std::string& MacAddress() const { return macAddress_; }
   void MacAddress(const std::string& mac_address) { macAddress_ = mac_address; }
 
@@ -135,6 +145,8 @@ class SessionObjectJSON : public BaseObjectJSON {
   xe::be<uint32_t> privateSlotsCount_;
   uint32_t userIndex_;
   std::string hostAddress_;
+  std::string localAddress_;
+  std::string onlineAddress_;
   std::string macAddress_;
   xe::be<uint16_t> port_;
 

@@ -23,6 +23,7 @@ SessionObjectJSON::SessionObjectJSON()
       privateSlotsCount_(0),
       userIndex_(0),
       hostAddress_(""),
+      localAddress_(""),
       macAddress_(""),
       port_(0),
       openPublicSlotsCount_(0),
@@ -72,6 +73,14 @@ bool SessionObjectJSON::Deserialize(const rapidjson::Value& obj) {
 
   if (obj.HasMember("hostAddress")) {
     HostAddress(obj["hostAddress"].GetString());
+  }
+
+  if (obj.HasMember("localAddress")) {
+    LocalAddress(obj["localAddress"].GetString());
+  }
+
+  if (obj.HasMember("onlineAddress")) {
+    OnlineAddress(obj["onlineAddress"].GetString());
   }
 
   if (obj.HasMember("macAddress")) {
@@ -150,6 +159,11 @@ bool SessionObjectJSON::Serialize(
 
   writer->String("hostAddress");
   writer->String(hostAddress_);
+
+  if (!localAddress_.empty()) {
+    writer->String("localAddress");
+    writer->String(localAddress_);
+  }
 
   writer->String("macAddress");
   writer->String(macAddress_);

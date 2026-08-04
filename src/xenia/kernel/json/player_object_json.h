@@ -48,6 +48,11 @@ class PlayerObjectJSON : public BaseObjectJSON {
     hostAddress_ = hostAddress;
   }
 
+  const std::string& OnlineAddress() const { return onlineAddress_; }
+  void OnlineAddress(const std::string& onlineAddress) {
+    onlineAddress_ = onlineAddress;
+  }
+
   const std::map<uint32_t, std::vector<xam::UserSetting>>& Settings() const {
     return settings_;
   }
@@ -68,6 +73,7 @@ class PlayerObjectJSON : public BaseObjectJSON {
  private:
   xe::be<uint64_t> xuid_;
   std::string hostAddress_;
+  std::string onlineAddress_;
   std::string gamertag_;
   xe::be<uint64_t> machineId_;
   xe::be<uint64_t> macAddress_;  // 6 Bytes

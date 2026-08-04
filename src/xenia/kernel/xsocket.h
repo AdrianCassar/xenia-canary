@@ -36,6 +36,10 @@
 
 namespace xe {
 namespace kernel {
+
+struct XNetMuxPacket;
+void XNetDeliverUdpMux(const XNetMuxPacket& packet);
+
 enum class X_WSAError : uint32_t {
   X_WSA_INVALID_PARAMETER = 0x0057,
   X_WSA_OPERATION_ABORTED = 0x03E3,
@@ -196,6 +200,11 @@ class XSocket : public XObject {
   bool QueuePacket(uint32_t src_ip, uint16_t src_port, const uint8_t* buf,
                    size_t len);
 
+  bool HasQueuedPackets() const {
+    std::lock_guard lock(incoming_packet_mutex_);
+    return !incoming_packets_.empty();
+  }
+
  private:
   XSocket(KernelState* kernel_state, uint64_t native_handle);
   uint64_t native_handle_ = X_INVALID_SOCKET;
@@ -217,7 +226,7 @@ class XSocket : public XObject {
   bool broadcast_socket_ = false;
 
   std::unique_ptr<xe::threading::Event> event_;
-  std::mutex incoming_packet_mutex_;
+  mutable std::mutex incoming_packet_mutex_;
   std::queue<uint8_t*> incoming_packets_;
 
   std::future<int> polling_task_;

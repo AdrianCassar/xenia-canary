@@ -22,9 +22,18 @@
 #include "xenia/base/utf8.h"
 #include "xenia/emulator.h"
 #include "xenia/kernel/XLiveAPI.h"
+
+#include <memory>
+
+#include "xenia/base/cvar.h"
+
+DECLARE_bool(ice_enabled);
+DECLARE_string(stun_server);
+DECLARE_uint32(stun_port);
 #include "xenia/kernel/user_module.h"
 #include "xenia/kernel/util/friends_util.h"
 #include "xenia/kernel/util/shim_utils.h"
+#include "xenia/kernel/xsocket.h"
 
 DEFINE_string(api_address, "192.168.0.1:36000/",
               "Xenia Server Address e.g. IP:PORT", "Live");
@@ -85,7 +94,7 @@ XLiveAPI::XLiveAPI() {
 }
 
 XLiveAPI::~XLiveAPI() {
-  // TODO(Adrian): Cleanup libcurl multiplexing handles.
+  StopIceNetworking();
 }
 
 void XLiveAPI::PrintLibcurlDetails() {
@@ -117,14 +126,15 @@ void XLiveAPI::IpGetConsoleXnAddr(XNADDR* XnAddr_ptr) {
   const auto adapter_manager =
       kernel_state()->emulator()->GetNetworkAdapterManager();
 
-  const bool is_WAN_routing = adapter_manager->IsSelectedAdapterWANRouting();
   const auto adapter_local_ip = adapter_manager->GetSelectedAdapterLocalIP();
   const auto xbl_api = kernel_state()->GetXboxLiveAPI();
   const auto user_tracker = kernel_state()->xam_state()->user_tracker();
 
   if (user_tracker->LoggedInToLive()) {
-    XnAddr_ptr->ina = xbl_api->OnlineIP().sin_addr;
-    XnAddr_ptr->inaOnline = xbl_api->OnlineIP().sin_addr;
+    XnAddr_ptr->ina = adapter_local_ip.sin_addr;
+    XnAddr_ptr->inaOnline = xbl_api->XnOnlineIP().sin_addr.s_addr
+                                ? xbl_api->XnOnlineIP().sin_addr
+                                : xbl_api->OnlineIP().sin_addr;
   } else if (cvars::network_mode == NETWORK_MODE::LAN) {
     XnAddr_ptr->ina = adapter_local_ip.sin_addr;
   }
@@ -143,16 +153,22 @@ void XLiveAPI::GetXnAddrFromSessionObject(SessionObjectJSON session,
                                           XNADDR* XnAddr_ptr) {
   memset(XnAddr_ptr, 0, sizeof(XNADDR));
 
-  XnAddr_ptr->inaOnline = ip_to_in_addr(session.HostAddress());
-  XnAddr_ptr->ina = ip_to_in_addr(session.HostAddress());
+  const std::string connect_addr = !session.OnlineAddress().empty()
+                                       ? session.OnlineAddress()
+                                       : session.HostAddress();
+
+  // ina = LAN; inaOnline = allocated 0.x / connect address.
+  // Never expose public hostAddress (RealIP) to the title via XNADDR.
+  XnAddr_ptr->inaOnline = ip_to_in_addr(connect_addr);
+  if (!session.LocalAddress().empty()) {
+    XnAddr_ptr->ina = ip_to_in_addr(session.LocalAddress());
+  }
 
   const MacAddress mac_address = MacAddress(session.MacAddress());
   memcpy(XnAddr_ptr->abEnet, mac_address.raw(), MacAddress::MacAddressSize);
 
   XnAddr_ptr->wPortOnline = session.Port();
 
-  // 545407F2 will fail to join session if platform type does not match host's
-  // platform type
   XnAddr_ptr->abOnline.platform_type = PLATFORM_TYPE::Xbox360;
 }
 
@@ -278,7 +294,6 @@ bool XLiveAPI::SelectNetworkMode(uint32_t mode) {
     initialized_ = InitState::Failed;
     online_ip_ = {};
     xlsp_servers_cached_ = false;
-    qos_payload_cache_.clear();
 
     BroadcastNetworkStatus();
 
@@ -772,10 +787,12 @@ sockaddr_in XLiveAPI::Getwhoami() {
 
   XELOGI("Requesting Public IP");
 
-  const char* address_str = doc["address"].GetString();
+  if (doc.HasMember("address") && doc["address"].IsString()) {
+    addr = ip_to_sockaddr(doc["address"].GetString());
+  }
 
-  if (address_str) {
-    addr = ip_to_sockaddr(address_str);
+  if (doc.HasMember("onlineAddress") && doc["onlineAddress"].IsString()) {
+    xn_online_ip_ = ip_to_sockaddr(doc["onlineAddress"].GetString());
   }
 
   return addr;
@@ -865,7 +882,7 @@ std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::RegisterPlayer(
   }
 
   if (GetConsoleMacAddress().to_uint64() == 0) {
-    XELOGE("Cancelled registering profile!");
+    XELOGE("Cancelled registering profile, console MAC address is zero!");
     return response;
   }
 
@@ -940,21 +957,29 @@ std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::RegisterPlayer(
 
   response = Post(endpoint, player_register);
 
-  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_CREATED) {
+  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_CREATED &&
+      response->StatusCode() != HTTP_STATUS_CODE::HTTP_OK) {
     assert_always();
     return response;
   }
 
   XELOGI("POST Success");
 
+  if (response->RawResponse().response) {
+    Document doc;
+    doc.Parse(response->RawResponse().response);
+    if (doc.HasMember("onlineAddress") && doc["onlineAddress"].IsString()) {
+      xn_online_ip_ = ip_to_sockaddr(doc["onlineAddress"].GetString());
+      StartIceNetworking();
+    }
+  }
+
   auto player_lookup = FindPlayer(OnlineIP_str());
 
   // Check for erroneous profile lookup
-  if (player_lookup->XUID() != player.XUID()) {
+  if (player_lookup && player_lookup->XUID() != player.XUID()) {
     XELOGI("XLiveAPI:: {} XUID mismatch!", player.Gamertag());
     xuid_mismatch_ = true;
-
-    // assert_always();
   } else {
     xuid_mismatch_ = false;
   }
@@ -1009,56 +1034,6 @@ std::unique_ptr<PlayerObjectJSON> XLiveAPI::FindPlayer(std::string ip) {
   XELOGI("Requesting {:016X} player details.", player->XUID().get());
 
   return player;
-}
-
-bool XLiveAPI::UpdateQoSCache(const uint64_t sessionId,
-                              const std::vector<uint8_t> qos_payload) {
-  if (qos_payload_cache_[sessionId] != qos_payload) {
-    qos_payload_cache_[sessionId] = qos_payload;
-
-    XELOGI("Updated QoS Cache.");
-    return true;
-  }
-
-  return false;
-}
-
-// Send QoS binary data to the server
-void XLiveAPI::QoSPost(uint64_t sessionId, uint8_t* qosData, size_t qosLength) {
-  std::string endpoint =
-      BuildEndpoint(fmt::format("title/{:08X}/sessions/{:016x}/qos",
-                                kernel_state()->title_id(), sessionId));
-
-  std::unique_ptr<HTTPResponseObjectJSON> response =
-      Post(endpoint, qosData, qosLength);
-
-  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_CREATED) {
-    assert_always();
-    return;
-  }
-
-  XELOGI("Sent QoS data.");
-}
-
-// Get QoS binary data from the server
-response_data XLiveAPI::QoSGet(uint64_t sessionId) {
-  std::string endpoint =
-      BuildEndpoint(fmt::format("title/{:08X}/sessions/{:016x}/qos",
-                                kernel_state()->title_id(), sessionId));
-
-  std::unique_ptr<HTTPResponseObjectJSON> response = Get(endpoint);
-
-  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_OK &&
-      response->StatusCode() != HTTP_STATUS_CODE::HTTP_NO_CONTENT) {
-    XELOGE("QoSGet error message: {}", response->Message());
-    assert_always();
-
-    return response->RawResponse();
-  }
-
-  XELOGI("Requesting QoS data.");
-
-  return response->RawResponse();
 }
 
 void XLiveAPI::SessionModify(uint64_t sessionId, XGI_SESSION_MODIFY* data) {
@@ -1239,6 +1214,13 @@ std::unique_ptr<SessionObjectJSON> XLiveAPI::XSessionMigration(
 
   doc.AddMember("xuid", xuid_str, doc.GetAllocator());
   doc.AddMember("hostAddress", OnlineIP_str(), doc.GetAllocator());
+  doc.AddMember(
+      "localAddress",
+      kernel_state()
+          ->emulator()
+          ->GetNetworkAdapterManager()
+          ->GetSelectedAdapterLocalIPString(),
+      doc.GetAllocator());
   doc.AddMember("macAddress", GetConsoleMacAddress().to_string(),
                 doc.GetAllocator());
   doc.AddMember("port", GetPlayerPort(), doc.GetAllocator());
@@ -1369,7 +1351,6 @@ void XLiveAPI::DeleteSession(uint64_t sessionId) {
   }
 
   clearXnaddrCache();
-  qos_payload_cache_.erase(sessionId);
 }
 
 void XLiveAPI::DeleteAllSessionsByMac() {
@@ -1437,6 +1418,10 @@ void XLiveAPI::XSessionCreate(uint64_t sessionId, XGI_SESSION_CREATE* data) {
   session.PrivateSlotsCount(data->num_slots_private);
   session.UserIndex(data->user_index);
   session.HostAddress(OnlineIP_str());
+  session.LocalAddress(kernel_state()
+                           ->emulator()
+                           ->GetNetworkAdapterManager()
+                           ->GetSelectedAdapterLocalIPString());
   session.MacAddress(GetConsoleMacAddress().to_string());
   session.Port(GetPlayerPort());
 
@@ -2605,6 +2590,52 @@ std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::PraseResponse(
   }
 
   return response;
+}
+
+void XLiveAPI::StartIceNetworking() {
+  if (!cvars::ice_enabled) {
+    return;
+  }
+  if (xn_online_ip_.sin_addr.s_addr == 0) {
+    return;
+  }
+
+  XNetStream::Instance().Initialize();
+  XNetQos::Instance().Initialize();
+
+  const std::string peer_id =
+      XNetIce::OnlineIpToPeerId(xn_online_ip_.sin_addr.s_addr);
+  XNetIce::Instance().SetLocalPeerId(peer_id);
+
+  signalling_ = std::make_unique<XNetSignalling>();
+  XNetIce::Instance().Initialize(signalling_.get(), cvars::stun_server,
+                                 static_cast<uint16_t>(cvars::stun_port));
+
+  XNetIce::Instance().SetTitleRecvHandler([](const XNetMuxPacket& packet) {
+    if (packet.type == kXNetMuxUdp) {
+      XNetDeliverUdpMux(packet);
+    } else {
+      XNetStream::Instance().OnMuxPacket(packet);
+    }
+  });
+
+  signalling_->Start(GetApiAddress(), peer_id);
+  XELOGI("XNet ICE signalling started as {}", peer_id);
+}
+
+void XLiveAPI::StopIceNetworking() {
+  if (signalling_) {
+    signalling_->Stop();
+    signalling_.reset();
+  }
+  XNetQos::Instance().Shutdown();
+  XNetStream::Instance().Shutdown();
+  XNetIce::Instance().Shutdown();
+}
+
+void XLiveAPI::TickIceNetworking() {
+  XNetStream::Instance().Tick();
+  XNetQos::Instance().Tick();
 }
 
 }  // namespace kernel

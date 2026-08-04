@@ -7,21 +7,46 @@
  ******************************************************************************
  */
 
-#include "src/xenia/kernel/xsocket.h"
+#include "xenia/kernel/xsocket.h"
 
 #include <cstring>
+#include <mutex>
+#include <unordered_map>
 
 #include "xenia/base/platform.h"
 #include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/xam/xam_module.h"
 #include "xenia/kernel/xboxkrnl/xboxkrnl_threading.h"
+#include "xenia/kernel/xnet_ice.h"
+#include "xenia/kernel/xnet_stream.h"
+#include "xenia/base/cvar.h"
 
+DECLARE_bool(ice_enabled);
 DECLARE_bool(bind_interface);
 
 using namespace std::chrono_literals;
 
 namespace xe {
 namespace kernel {
+
+namespace {
+std::mutex g_udp_demux_mutex;
+std::unordered_map<uint16_t, XSocket*> g_udp_demux;  // port_nbo -> socket
+}  // namespace
+
+void XNetDeliverUdpMux(const XNetMuxPacket& packet) {
+  std::lock_guard lock(g_udp_demux_mutex);
+  auto it = g_udp_demux.find(xe::byte_swap(packet.id));
+  if (it == g_udp_demux.end() || !it->second) {
+    // packet.id is BE logical port already from mux
+    it = g_udp_demux.find(packet.id);
+  }
+  if (it == g_udp_demux.end() || !it->second) {
+    return;
+  }
+  it->second->QueuePacket(packet.from_online_ip, packet.id,
+                          packet.payload.data(), packet.payload.size());
+}
 
 // Translate socket options to native
 // Note:
@@ -102,6 +127,17 @@ int XSocket::Close() {
     active_overlapped_->offset_high |= 2;
   }
   lock.unlock();
+
+  {
+    std::lock_guard demux_lock(g_udp_demux_mutex);
+    auto it = g_udp_demux.find(bound_port_);
+    if (it != g_udp_demux.end() && it->second == this) {
+      g_udp_demux.erase(it);
+    }
+  }
+  if (cvars::ice_enabled) {
+    XNetStream::Instance().Close(this);
+  }
 
   std::unique_lock socket_lock(receive_socket_mutex_);
 
@@ -254,6 +290,19 @@ X_STATUS XSocket::IOControl(uint32_t cmd, uint32_t* arg_ptr) {
 X_STATUS XSocket::Connect(const XSOCKADDR_IN* name, int name_len) {
   XSOCKADDR_IN sa_in = *name;
 
+  if (cvars::ice_enabled &&
+      XNetIce::IsPrivateOnlineAddress(sa_in.address_ip.s_addr) &&
+      proto_ == X_IPPROTO_TCP) {
+    XNetIce::Instance().Establish(sa_in.address_ip.s_addr, XNetPeerType::kTitle);
+    if (XNetStream::Instance().Connect(this, sa_in.address_ip.s_addr,
+                                       sa_in.address_port) == 0) {
+      bound_port_ = sa_in.address_port;
+      bound_ = true;
+      return X_STATUS_SUCCESS;
+    }
+    return X_STATUS_UNSUCCESSFUL;
+  }
+
   const auto upnp = kernel_state()->emulator()->GetUPnP();
 
   if (upnp) {
@@ -320,6 +369,11 @@ X_STATUS XSocket::Bind(const XSOCKADDR_IN* name, int name_len) {
 
   bound_ = true;
 
+  {
+    std::lock_guard lock(g_udp_demux_mutex);
+    g_udp_demux[bound_port_] = this;
+  }
+
   return X_STATUS_SUCCESS;
 }
 
@@ -340,8 +394,16 @@ uint16_t XSocket::GetImplicitlyBoundPort() const {
 }
 
 X_STATUS XSocket::Listen(int backlog) {
+  if (cvars::ice_enabled && proto_ == X_IPPROTO_TCP && bound_) {
+    XNetStream::Instance().Listen(this, bound_port_);
+  }
+
   int ret = listen(native_handle_, backlog);
   if (ret < 0) {
+    // ICE listeners can still accept without a working native listen.
+    if (cvars::ice_enabled && proto_ == X_IPPROTO_TCP && bound_) {
+      return X_STATUS_SUCCESS;
+    }
     return X_STATUS_UNSUCCESSFUL;
   }
 
@@ -349,6 +411,39 @@ X_STATUS XSocket::Listen(int backlog) {
 }
 
 object_ref<XSocket> XSocket::Accept(XSOCKADDR_IN* name, int* name_len) {
+  if (cvars::ice_enabled && proto_ == X_IPPROTO_TCP &&
+      XNetStream::Instance().HasPendingAccept(this)) {
+    uint16_t stream_id = 0;
+    uint32_t remote_ip = 0;
+    uint16_t remote_port = 0;
+    if (XNetStream::Instance().TakeAccept(this, &stream_id, &remote_ip,
+                                          &remote_port)) {
+      const uint64_t socket_handle =
+          ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+      if (socket_handle == X_INVALID_SOCKET) {
+        return nullptr;
+      }
+      auto socket =
+          object_ref<XSocket>(new XSocket(kernel_state_, socket_handle));
+      socket->af_ = af_;
+      socket->type_ = type_;
+      socket->proto_ = proto_;
+      socket->vdp_ = vdp_;
+      socket->bound_port_ = bound_port_;
+      socket->bound_ = true;
+      XNetStream::Instance().AttachSocket(stream_id, socket.get());
+      if (name) {
+        name->address_family = XSocket::AddressFamily::X_AF_INET;
+        name->address_port = remote_port;
+        name->address_ip.s_addr = remote_ip;
+        if (name_len) {
+          *name_len = sizeof(XSOCKADDR_IN);
+        }
+      }
+      return socket;
+    }
+  }
+
   sockaddr sa = {};
   socklen_t addrlen = sizeof(sockaddr);
   const bool is_name_and_name_len_available = name && name_len;
@@ -368,18 +463,12 @@ object_ref<XSocket> XSocket::Accept(XSOCKADDR_IN* name, int* name_len) {
     *name_len = xe::byte_swap(addrlen);
   }
 
-  // Create a kernel object to represent the new socket, and copy parameters
-  // over.
   auto socket = object_ref<XSocket>(new XSocket(kernel_state_, socket_handle));
   socket->af_ = af_;
   socket->type_ = type_;
   socket->proto_ = proto_;
   socket->vdp_ = vdp_;
 
-  sockaddr_in sock_name = {};
-  int sock_name_len = sizeof(sockaddr);
-
-  // Implicit Bind
   socket->bound_port_ = bound_port_ = GetImplicitlyBoundPort();
   socket->bound_ = true;
 
@@ -388,12 +477,33 @@ object_ref<XSocket> XSocket::Accept(XSOCKADDR_IN* name, int* name_len) {
 
 int XSocket::Shutdown(int how) { return shutdown(native_handle_, how); }
 
-int XSocket::Recv(uint8_t* buf, uint32_t buf_len, uint32_t flags) {
-  return recv(native_handle_, reinterpret_cast<char*>(buf), buf_len, flags);
-}
-
 int XSocket::RecvFrom(uint8_t* buf, uint32_t buf_len, uint32_t flags,
                       XSOCKADDR_IN* from, socklen_t* from_len) {
+  {
+    std::lock_guard lock(incoming_packet_mutex_);
+    if (!incoming_packets_.empty()) {
+      auto* raw = incoming_packets_.front();
+      incoming_packets_.pop();
+      auto* pkt = reinterpret_cast<packet*>(raw);
+      const uint32_t copy =
+          std::min<uint32_t>(buf_len, pkt->data_len);
+      std::memcpy(buf, pkt->data, copy);
+      if (from) {
+        from->address_family = X_AF_INET;
+        from->address_port = pkt->src_port;
+        from->address_ip.s_addr = pkt->src_ip;
+        // Halo (and MCC) allocate sockaddr_in6 (28). If from_len stays 28,
+        // get_transport_address takes the AF_INET6 path and copies sin_zero
+        // as an all-zero IPv6 address → transport_address_valid IPV6 warning.
+        if (from_len) {
+          *from_len = sizeof(XSOCKADDR_IN);
+        }
+      }
+      delete[] raw;
+      return static_cast<int>(copy);
+    }
+  }
+
   sockaddr sa = {};
 
   if (from) {
@@ -403,8 +513,6 @@ int XSocket::RecvFrom(uint8_t* buf, uint32_t buf_len, uint32_t flags,
   int ret = recvfrom(native_handle_, reinterpret_cast<char*>(buf), buf_len,
                      flags, from ? &sa : nullptr, from_len);
 
-  // 555307EE expects port even with TCP, include IP anyway.
-  // Verified on console.
   if (proto_ == X_IPPROTO_TCP) {
     socklen_t peer_addr_len = sizeof(sockaddr);
     getpeername(native_handle_, &sa, &peer_addr_len);
@@ -664,21 +772,59 @@ bool XSocket::WSAGetOverlappedResult(XWSAOVERLAPPED* overlapped_ptr,
 }
 
 int XSocket::Send(const uint8_t* buf, uint32_t buf_len, uint32_t flags) {
+  if (cvars::ice_enabled && proto_ == X_IPPROTO_TCP) {
+    int sent = XNetStream::Instance().Send(this, buf, buf_len);
+    if (sent >= 0) {
+      return sent;
+    }
+  }
   return send(native_handle_, reinterpret_cast<const char*>(buf), buf_len,
               flags);
 }
 
+int XSocket::Recv(uint8_t* buf, uint32_t buf_len, uint32_t flags) {
+  if (cvars::ice_enabled && proto_ == X_IPPROTO_TCP) {
+    int got = XNetStream::Instance().Recv(this, buf, buf_len);
+    if (got == -2) {
+      SetLastWSAError(X_WSAError::X_WSAEWOULDBLOCK);
+      return -1;
+    }
+    if (got >= 0) {
+      return got;
+    }
+  }
+  return recv(native_handle_, reinterpret_cast<char*>(buf), buf_len, flags);
+}
+
 int XSocket::SendTo(uint8_t* buf, uint32_t buf_len, uint32_t flags,
                     XSOCKADDR_IN* to, uint32_t to_len) {
+  if (to && cvars::ice_enabled &&
+      XNetIce::IsPrivateOnlineAddress(to->address_ip.s_addr)) {
+    XNetIce::Instance().Establish(to->address_ip.s_addr, XNetPeerType::kTitle);
+    if (XNetIce::Instance().HasPeer(to->address_ip.s_addr,
+                                    XNetPeerType::kTitle)) {
+      if (!bound_) {
+        bound_port_ = GetImplicitlyBoundPort();
+        bound_ = true;
+        std::lock_guard lock(g_udp_demux_mutex);
+        g_udp_demux[bound_port_] = this;
+      }
+      int sent = XNetIce::Instance().SendMux(
+          to->address_ip.s_addr, kXNetMuxUdp, bound_port_, buf, buf_len);
+      if (sent >= 0) {
+        return sent;
+      }
+    }
+  }
+
   const auto upnp = kernel_state()->emulator()->GetUPnP();
 
-  if (upnp) {
+  if (upnp && to) {
     to->address_port = upnp->GetMappedBindPort(to->address_port);
   }
 
   sockaddr addr = to->to_host();
 
-  // Ensure the bound interface can route to the loopback interface/itself
   if (cvars::bind_interface) {
     sockaddr_in* addr_in = reinterpret_cast<sockaddr_in*>(&addr);
 
@@ -693,7 +839,6 @@ int XSocket::SendTo(uint8_t* buf, uint32_t buf_len, uint32_t flags,
   int ret = sendto(native_handle_, reinterpret_cast<char*>(buf), buf_len, flags,
                    to ? &addr : nullptr, to_len);
 
-  // Implicit Bind
   if (!bound_port_) {
     bound_port_ = GetImplicitlyBoundPort();
     bound_ = true;

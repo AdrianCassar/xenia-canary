@@ -41,6 +41,10 @@ bool PlayerObjectJSON::Deserialize(const rapidjson::Value& obj) {
     HostAddress(obj["hostAddress"].GetString());
   }
 
+  if (obj.HasMember("onlineAddress")) {
+    OnlineAddress(obj["onlineAddress"].GetString());
+  }
+
   if (obj.HasMember("gamertag")) {
     Gamertag(obj["gamertag"].GetString());
   }

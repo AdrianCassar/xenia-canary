@@ -839,7 +839,23 @@ add_library(libcurl STATIC ${CURL_SOURCES})
 target_link_libraries(libcurl PRIVATE crypt32 secur32)
 target_include_directories(libcurl PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/libcurl/lib ${CMAKE_CURRENT_SOURCE_DIR}/libcurl/include)
 target_compile_definitions(libcurl PRIVATE
-  BUILDING_LIBCURL HTTP_ONLY USE_SCHANNEL USE_WINDOWS_SSPI
+  BUILDING_LIBCURL
+  USE_SCHANNEL
+  USE_WINDOWS_SSPI
+  CURL_DISABLE_DICT
+  CURL_DISABLE_FILE
+  CURL_DISABLE_FTP
+  CURL_DISABLE_GOPHER
+  CURL_DISABLE_IMAP
+  CURL_DISABLE_LDAP
+  CURL_DISABLE_LDAPS
+  CURL_DISABLE_MQTT
+  CURL_DISABLE_POP3
+  CURL_DISABLE_RTSP
+  CURL_DISABLE_SMB
+  CURL_DISABLE_SMTP
+  CURL_DISABLE_TELNET
+  CURL_DISABLE_TFTP
 )
 
 # ==============================================================================
@@ -883,4 +899,20 @@ if(NOT WIN32)
     COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/miniupnp/miniupnpc/updateminiupnpcstrings.sh
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/miniupnp/miniupnpc
   )
+endif()
+# ==============================================================================
+# libjuice
+# ==============================================================================
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(NO_TESTS ON CACHE BOOL "" FORCE)
+set(NO_SERVER ON CACHE BOOL "" FORCE)
+add_subdirectory(libjuice EXCLUDE_FROM_ALL)
+
+# ==============================================================================
+# kcp
+# ==============================================================================
+add_library(kcp STATIC kcp/ikcp.c)
+target_include_directories(kcp PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/kcp)
+if(MSVC)
+  target_compile_definitions(kcp PRIVATE _CRT_SECURE_NO_WARNINGS)
 endif()

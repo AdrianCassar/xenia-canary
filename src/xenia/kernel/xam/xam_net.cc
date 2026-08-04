@@ -37,6 +37,9 @@
 #include "xenia/kernel/xboxkrnl/xboxkrnl_threading.h"
 #include "xenia/kernel/xevent.h"
 #include "xenia/kernel/xhttp.h"
+#include "xenia/kernel/xnet_ice.h"
+#include "xenia/kernel/xnet_qos.h"
+#include "xenia/kernel/xnet_stream.h"
 #include "xenia/kernel/xsocket.h"
 #include "xenia/kernel/xthread.h"
 #include "xenia/xbox.h"
@@ -58,6 +61,8 @@ DECLARE_bool(log_mask_ips);
 DECLARE_int32(network_mode);
 
 DECLARE_bool(bind_interface);
+
+DECLARE_bool(ice_enabled);
 
 enum XNET_QOS {
   LISTEN_ENABLE = 0x01,
@@ -777,29 +782,53 @@ dword_result_t NetDll_XNetUnregisterInAddr_entry(dword_t caller, dword_t addr) {
   XELOGI("NetDll_XNetUnregisterInAddr({:08X})",
          cvars::log_mask_ips ? 0 : addr.value());
 
-  // return static_cast<uint32_t>(X_WSAError::X_WSAEINVAL);
+  if (cvars::ice_enabled) {
+    XNetIce::Instance().ClosePeer(xe::byte_swap(addr.value()),
+                                  XNetPeerType::kTitle);
+  }
 
   return X_ERROR_SUCCESS;
 }
-DECLARE_XAM_EXPORT1(NetDll_XNetUnregisterInAddr, kNetworking, kStub);
+DECLARE_XAM_EXPORT1(NetDll_XNetUnregisterInAddr, kNetworking, kImplemented);
 
 dword_result_t NetDll_XNetConnect_entry(dword_t caller, dword_t addr) {
   XELOGI("XNetConnect({:08X})", cvars::log_mask_ips ? 0 : addr.value());
 
-  // 43430806, 43430821 and 5841124E fail to connect without sleep.
-  xe::threading::Sleep(150ms);
+  if (cvars::ice_enabled) {
+    const uint32_t ip_nbo = xe::byte_swap(addr.value());
+    if (XNetIce::IsPrivateOnlineAddress(ip_nbo)) {
+      XNetIce::Instance().Establish(ip_nbo, XNetPeerType::kTitle);
+      return X_ERROR_SUCCESS;
+    }
+  }
 
+  xe::threading::Sleep(150ms);
   return X_ERROR_SUCCESS;
 }
-DECLARE_XAM_EXPORT1(NetDll_XNetConnect, kNetworking, kStub);
+DECLARE_XAM_EXPORT1(NetDll_XNetConnect, kNetworking, kImplemented);
 
 dword_result_t NetDll_XNetGetConnectStatus_entry(dword_t caller, dword_t addr) {
   XELOGI("XNetGetConnectStatus({:08X})",
          cvars::log_mask_ips ? 0 : addr.value());
 
+  if (cvars::ice_enabled) {
+    const uint32_t ip_nbo = xe::byte_swap(addr.value());
+    if (XNetIce::IsPrivateOnlineAddress(ip_nbo)) {
+      auto status =
+          XNetIce::Instance().GetConnectStatus(ip_nbo, XNetPeerType::kTitle);
+      if (status == XNetIceConnectStatus::kConnected) {
+        return STATUS_CONNECTED;
+      }
+      if (status == XNetIceConnectStatus::kFailed) {
+        return STATUS_LOST;
+      }
+      return XNET_CONNECT_STATUS_PENDING;
+    }
+  }
+
   return STATUS_CONNECTED;
 }
-DECLARE_XAM_EXPORT1(NetDll_XNetGetConnectStatus, kNetworking, kStub);
+DECLARE_XAM_EXPORT1(NetDll_XNetGetConnectStatus, kNetworking, kImplemented);
 
 dword_result_t NetDll_XNetServerToInAddr_entry(dword_t caller,
                                                dword_t server_addr,
@@ -908,6 +937,11 @@ dword_result_t NetDll_XNetXnAddrToInAddr_entry(dword_t caller,
 
   if (cvars::network_mode == NETWORK_MODE::XBOXLIVE) {
     in_addr->s_addr = xn_addr->inaOnline.s_addr;
+    if (cvars::ice_enabled &&
+        XNetIce::IsPrivateOnlineAddress(xn_addr->inaOnline.s_addr)) {
+      XNetIce::Instance().Establish(xn_addr->inaOnline.s_addr,
+                                    XNetPeerType::kTitle);
+    }
   }
 
   return X_ERROR_SUCCESS;
@@ -1269,59 +1303,23 @@ dword_result_t NetDll_XNetQosListen_entry(
          caller.value(), sessionId.host_address(), data.host_address(),
          data_size.value(), bits_per_second.value(), flags.value());
 
-  if (flags & LISTEN_ENABLE) {
-    XELOGI("XNetQosListen LISTEN_ENABLE");
-  }
-
-  if (flags & LISTEN_DISABLE) {
-    XELOGI("XNetQosListen LISTEN_DISABLE");
-  }
-
-  if (flags & LISTEN_SET_BITSPERSEC) {
-    XELOGI("XNetQosListen LISTEN_SET_BITSPERSEC");
-  }
-
-  if (flags & XLISTEN_RELEASE) {
-    XELOGI("XNetQosListen XLISTEN_RELEASE");
-  }
-
-  if (data_size <= 0) {
-    return X_ERROR_SUCCESS;
-  }
-
   if (data_size > (uint32_t)(xnet_startup_params.cfgQosDataLimitDiv4 * 4)) {
     assert_always();
   }
 
-  if (data == nullptr) {
-    return X_ERROR_SUCCESS;
+  const uint64_t session_id = sessionId ? sessionId->as_uintBE64() : 0;
+  if (session_id) {
+    IsValidXNKID(session_id);
   }
 
-  const uint64_t session_id = sessionId->as_uintBE64();
-
-  IsValidXNKID(session_id);
-
-  if (flags & LISTEN_SET_DATA) {
-    std::vector<uint8_t> qos_buffer(data_size);
-    memcpy(qos_buffer.data(), data, data_size);
-
-    if (kernel_state()->GetXboxLiveAPI()->UpdateQoSCache(session_id,
-                                                         qos_buffer)) {
-      XELOGI("XNetQosListen LISTEN_SET_DATA");
-
-      auto run = [](uint64_t sessionId, std::vector<uint8_t> qosData) {
-        kernel_state()->GetXboxLiveAPI()->QoSPost(sessionId, qosData.data(),
-                                                  qosData.size());
-      };
-
-      std::thread qos_thread(run, session_id, qos_buffer);
-      qos_thread.detach();
-    }
-  }
-
+  const uint8_t* qos_data =
+      (data && data_size) ? reinterpret_cast<const uint8_t*>(data.host_address())
+                          : nullptr;
+  XNetQos::Instance().Listen(session_id, qos_data, data_size, bits_per_second,
+                             flags);
   return X_ERROR_SUCCESS;
 }
-DECLARE_XAM_EXPORT1(NetDll_XNetQosListen, kNetworking, kSketchy);
+DECLARE_XAM_EXPORT1(NetDll_XNetQosListen, kNetworking, kImplemented);
 
 dword_result_t NetDll_XNetQosLookup_entry(
     dword_t caller, dword_t num_remote_consoles,
@@ -1335,41 +1333,17 @@ dword_result_t NetDll_XNetQosLookup_entry(
     return static_cast<uint32_t>(X_WSAError::X_WSAEACCES);
   }
 
-  auto session_ids = std::make_shared<std::vector<XNKID>>();
-  auto remote_keys = std::make_shared<std::vector<XNKEY>>();
-  auto remote_addresses = std::make_shared<std::vector<XNADDR>>();
-  std::shared_ptr<std::vector<uint32_t>> service_ids;
-  std::shared_ptr<std::vector<in_addr>> security_gateways;
+  std::vector<uint32_t> online_ips;
+  std::vector<uint64_t> session_ids;
 
   if (sessionId_array_ptrs) {
     const xe::be<uint32_t>* session_id_ptrs_ptr =
         kernel_memory()->TranslateVirtual<xe::be<uint32_t>*>(
             sessionId_array_ptrs);
-
-    const auto session_ids_ptrs = std::vector<uint32_t>(
-        session_id_ptrs_ptr, session_id_ptrs_ptr + num_remote_consoles);
-
-    for (const auto& session_id_ptr : session_ids_ptrs) {
+    for (uint32_t i = 0; i < num_remote_consoles; ++i) {
       const XNKID session_id =
-          *kernel_memory()->TranslateVirtual<XNKID*>(session_id_ptr);
-
-      session_ids->push_back(session_id);
-    }
-  }
-
-  if (remote_keys_array_ptrs) {
-    const xe::be<uint32_t>* remote_keys_ptrs_ptr =
-        kernel_memory()->TranslateVirtual<xe::be<uint32_t>*>(
-            remote_keys_array_ptrs);
-
-    const auto remote_keys_ptrs = std::vector<uint32_t>(
-        remote_keys_ptrs_ptr, remote_keys_ptrs_ptr + num_remote_consoles);
-
-    for (const auto& remote_keys_ptr : remote_keys_ptrs) {
-      const XNKEY remote_key =
-          *kernel_memory()->TranslateVirtual<XNKEY*>(remote_keys_ptr);
-
-      remote_keys->push_back(remote_key);
+          *kernel_memory()->TranslateVirtual<XNKID*>(session_id_ptrs_ptr[i]);
+      session_ids.push_back(session_id.as_uintBE64());
     }
   }
 
@@ -1377,107 +1351,154 @@ dword_result_t NetDll_XNetQosLookup_entry(
     const xe::be<uint32_t>* remote_addresses_ptrs_ptr =
         kernel_memory()->TranslateVirtual<xe::be<uint32_t>*>(
             remote_addresses_array_ptrs);
-
-    const auto remote_addresses_ptrs =
-        std::vector<uint32_t>(remote_addresses_ptrs_ptr,
-                              remote_addresses_ptrs_ptr + num_remote_consoles);
-
-    for (const auto& remote_address_ptr : remote_addresses_ptrs) {
+    for (uint32_t i = 0; i < num_remote_consoles; ++i) {
       const XNADDR remote_address =
-          *kernel_memory()->TranslateVirtual<XNADDR*>(remote_address_ptr);
-
-      remote_addresses->push_back(remote_address);
+          *kernel_memory()->TranslateVirtual<XNADDR*>(
+              remote_addresses_ptrs_ptr[i]);
+      uint32_t ip = 0;
+      if (cvars::network_mode == NETWORK_MODE::XBOXLIVE) {
+        ip = remote_address.inaOnline.s_addr;
+      } else {
+        ip = remote_address.ina.s_addr;
+      }
+      online_ips.push_back(ip);
     }
   }
 
-  if (num_gateways) {
-    XELOGI("XNetQosLookup: Gateways & Service Ids");
+  while (online_ips.size() < session_ids.size()) {
+    online_ips.push_back(0);
   }
-
-  if (service_ids_array) {
-    const xe::be<uint32_t>* service_ids_ptr =
-        kernel_memory()->TranslateVirtual<xe::be<uint32_t>*>(service_ids_array);
-
-    service_ids = std::make_shared<std::vector<uint32_t>>(
-        service_ids_ptr, service_ids_ptr + num_gateways);
-  }
-
-  if (gateways_array) {
-    const xe::be<in_addr>* gateways_ptr =
-        kernel_memory()->TranslateVirtual<xe::be<in_addr>*>(gateways_array);
-
-    security_gateways = std::make_shared<std::vector<in_addr>>(
-        gateways_ptr, gateways_ptr + num_gateways);
+  while (session_ids.size() < online_ips.size()) {
+    session_ids.push_back(0);
   }
 
   const uint32_t count = num_remote_consoles + num_gateways;
-
   const uint32_t size = sizeof(XNQOS) + (sizeof(XNQOSINFO) * count);
   const uint32_t qos_address = kernel_memory()->SystemHeapAlloc(size);
   XNQOS* qos = kernel_memory()->TranslateVirtual<XNQOS*>(qos_address);
-
   *qos_ptr = qos_address;
+  qos->count = 0;
+  qos->count_pending = count ? count : 1;
 
-  // 415707D1 uses count_pending to determine completion relying on async
-  // implementation.
-  // Therefore it expects qos->count_pending != 0 on return, otherwise will
-  // cause QoS lookup spam.
-  qos->count_pending = count;
+  const uint32_t probes = probes_count.value();
+  const uint32_t bps = bits_per_second.value();
 
-  auto run = [=, shared_session_ids = session_ids](std::stop_token stop_token) {
-    for (uint32_t i = 0; i < count && !stop_token.stop_requested(); i++) {
-      XNQOSINFO& qos_info = qos->info[i];
+  const uint32_t lookup_id = XNetQos::Instance().StartLookup(
+      online_ips, session_ids, probes, bps);
 
-      response_data chunk = {.http_code = HTTP_STATUS_CODE::HTTP_NO_CONTENT};
+  auto run = [=](std::stop_token stop_token) {
+    const uint32_t data_limit =
+        static_cast<uint32_t>(xnet_startup_params.cfgQosDataLimitDiv4 * 4);
 
-      if (i < shared_session_ids->size()) {
-        const uint64_t session_id = shared_session_ids->at(i).as_uintBE64();
-        chunk = kernel_state()->GetXboxLiveAPI()->QoSGet(session_id);
+    while (!stop_token.stop_requested()) {
+      kernel_state()->GetXboxLiveAPI()->TickIceNetworking();
+
+      std::vector<XNetQosPendingTarget> targets;
+      if (!XNetQos::Instance().GetLookupResults(lookup_id, &targets)) {
+        break;
       }
 
-      if (chunk.http_code == HTTP_STATUS_CODE::HTTP_OK) {
-        if (chunk.response && chunk.size) {
-          uint32_t data_ptr = kernel_memory()->SystemHeapAlloc(
-              static_cast<uint16_t>(chunk.size));
-          uint8_t* data = kernel_memory()->TranslateVirtual<uint8_t*>(data_ptr);
+      if (targets.empty()) {
+        qos->count = 0;
+        for (uint32_t i = 0; i < count; ++i) {
+          XNQOSINFO& qos_info = qos->info[i];
+          qos_info.probes_xmit = static_cast<uint16_t>(probes);
+          qos_info.probes_recv = static_cast<uint16_t>(probes);
+          qos_info.rtt_min_in_msecs = 10;
+          qos_info.rtt_med_in_msecs = 10;
+          qos_info.up_bits_per_sec = static_cast<uint32_t>(5_MiB);
+          qos_info.down_bits_per_sec = static_cast<uint32_t>(5_MiB);
+          qos_info.flags =
+              XNET_XNQOSINFO::COMPLETE | XNET_XNQOSINFO::TARGET_CONTACTED;
+          qos->count++;
+        }
+        qos->count_pending = 0;
+        if (qos->count > 0 && event_handle) {
+          xboxkrnl::xeNtSetEvent(event_handle, nullptr);
+        }
+        break;
+      }
 
-          std::memcpy(data, chunk.response, chunk.size);
-
-          qos_info.data_ptr = data_ptr;
-          qos_info.data_len = static_cast<uint16_t>(chunk.size);
-          qos_info.flags |= XNET_XNQOSINFO::DATA_RECEIVED;
+      bool all_done = true;
+      uint32_t pending = 0;
+      for (size_t i = 0; i < targets.size(); ++i) {
+        if (!targets[i].complete) {
+          all_done = false;
+          pending++;
         }
       }
+      if (!all_done) {
+        qos->count_pending = pending ? pending : 1;
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        continue;
+      }
 
-      // 415607DD and 415607D4 expect probes count, otherwise spams lookup.
-      qos_info.probes_xmit = probes_count.value();
-      qos_info.probes_recv = probes_count.value();
-      qos_info.rtt_min_in_msecs = 10;
-      qos_info.rtt_med_in_msecs = 10;
-      qos_info.up_bits_per_sec = static_cast<uint32_t>(5_MiB);
-      qos_info.down_bits_per_sec = static_cast<uint32_t>(5_MiB);
-      qos_info.flags |=
-          XNET_XNQOSINFO::COMPLETE | XNET_XNQOSINFO::TARGET_CONTACTED;
+      qos->count = 0;
+      for (size_t i = 0; i < targets.size(); ++i) {
+        XNQOSINFO& qos_info = qos->info[i];
+        const auto& target = targets[i];
+        qos_info.probes_xmit = static_cast<uint16_t>(target.probes_sent);
+        qos_info.probes_recv = static_cast<uint16_t>(target.probes_recv);
+        qos_info.rtt_min_in_msecs = target.rtt_min_ms ? target.rtt_min_ms : 10;
+        qos_info.rtt_med_in_msecs = target.rtt_med_ms ? target.rtt_med_ms : 10;
+        qos_info.up_bits_per_sec =
+            bps ? bps : static_cast<uint32_t>(5_MiB);
+        qos_info.down_bits_per_sec = qos_info.up_bits_per_sec;
 
-      qos->count_pending =
-          std::max(static_cast<int32_t>(qos->count_pending - 1), 0);
-      qos->count++;
+        if (target.disabled) {
+          // Remote listened but reported disabled (XNET_QOSLISTEN_DISABLE).
+          qos_info.flags =
+              XNET_XNQOSINFO::COMPLETE | XNET_XNQOSINFO::TARGET_DISABLED;
+        } else if (!target.reply.empty()) {
+          const uint16_t copy =
+              static_cast<uint16_t>(std::min<size_t>(target.reply.size(), data_limit));
+          uint32_t data_ptr = kernel_memory()->SystemHeapAlloc(copy);
+          uint8_t* data = kernel_memory()->TranslateVirtual<uint8_t*>(data_ptr);
+          std::memcpy(data, target.reply.data(), copy);
+          qos_info.data_ptr = data_ptr;
+          qos_info.data_len = copy;
+          qos_info.flags = XNET_XNQOSINFO::COMPLETE |
+                           XNET_XNQOSINFO::TARGET_CONTACTED |
+                           XNET_XNQOSINFO::DATA_RECEIVED;
+        } else if (target.probes_recv > 0) {
+          qos_info.flags = XNET_XNQOSINFO::COMPLETE |
+                           XNET_XNQOSINFO::TARGET_CONTACTED;
+        } else {
+          // No reply / ICE never connected → unreachable, not refused.
+          qos_info.flags = XNET_XNQOSINFO::COMPLETE;
+        }
+        qos->count++;
+      }
+
+      // Gateway stubs keep previous fake-success behaviour for XLSP paths.
+      for (uint32_t i = static_cast<uint32_t>(targets.size()); i < count; ++i) {
+        XNQOSINFO& qos_info = qos->info[i];
+        qos_info.probes_xmit = static_cast<uint16_t>(probes);
+        qos_info.probes_recv = static_cast<uint16_t>(probes);
+        qos_info.rtt_min_in_msecs = 10;
+        qos_info.rtt_med_in_msecs = 10;
+        qos_info.up_bits_per_sec = static_cast<uint32_t>(5_MiB);
+        qos_info.down_bits_per_sec = static_cast<uint32_t>(5_MiB);
+        qos_info.flags =
+            XNET_XNQOSINFO::COMPLETE | XNET_XNQOSINFO::TARGET_CONTACTED;
+        qos->count++;
+      }
+
+      qos->count_pending = 0;
+      if (qos->count > 0 && event_handle) {
+        xboxkrnl::xeNtSetEvent(event_handle, nullptr);
+      }
+      break;
     }
 
-    // If COMPLETE or TARGET_CONTACTED flag is then set event.
-    if (qos->count > 0) {
-      xboxkrnl::xeNtSetEvent(event_handle, nullptr);
-    }
+    XNetQos::Instance().ReleaseLookup(lookup_id);
   };
 
   std::jthread qos_lookup_thread(run);
-
   std::unique_lock lock(qos_lookup_mutex);
   qos_lookup_threads[qos_address] = qos_lookup_thread.get_stop_source();
 
-  // 5345081A expects QoS results immediately on return, assume this behavior is
-  // expected due to probes count of 0.
-  if (probes_count) {
+  if (probes) {
     qos_lookup_thread.detach();
   } else {
     XELOGI("XNetQosLookup: Sync Lookup!");
@@ -1495,12 +1516,16 @@ dword_result_t NetDll_XNetQosGetListenStats_entry(
          xnkid_ptr.guest_address(), qos_stats_ptr.guest_address());
 
   if (qos_stats_ptr) {
-    qos_stats_ptr->requests_received_count = 1;
-    qos_stats_ptr->probes_received_count = 1;
-    qos_stats_ptr->slots_full_discards_count = 1;
-    qos_stats_ptr->data_replies_sent_count = 1;
-    qos_stats_ptr->data_reply_bytes_sent = 1;
-    qos_stats_ptr->probe_replies_sent_count = 1;
+    uint32_t probes = 0;
+    uint32_t replies = 0;
+    const uint64_t session_id = xnkid_ptr ? xnkid_ptr->as_uintBE64() : 0;
+    XNetQos::Instance().GetListenStats(session_id, &probes, &replies);
+    qos_stats_ptr->requests_received_count = probes;
+    qos_stats_ptr->probes_received_count = probes;
+    qos_stats_ptr->slots_full_discards_count = 0;
+    qos_stats_ptr->data_replies_sent_count = replies;
+    qos_stats_ptr->data_reply_bytes_sent = replies;
+    qos_stats_ptr->probe_replies_sent_count = replies;
   }
 
   return X_ERROR_SUCCESS;
@@ -2015,10 +2040,40 @@ int_result_t NetDll_select_entry(dword_t caller, dword_t nfds,
 
   if (handles_count == X_SOCKET_ERROR) {
     XThread::SetLastError(XSocket::GetLastWSAError());
+    return handles_count;
   }
 
   if (readfds) {
     host_readfds.UpdateFrom(&native_readfds);
+
+    // OR in sockets with queued ICE/UDP or TCP-stream data.
+    host_set ice_ready = {0};
+    ice_ready.Load(readfds);
+    for (uint32_t i = 0; i < ice_ready.count; ++i) {
+      auto& socket = ice_ready.sockets[i];
+      if (!socket) {
+        continue;
+      }
+      const bool ready =
+          socket->HasQueuedPackets() ||
+          XNetStream::Instance().HasRecvData(socket.get()) ||
+          XNetStream::Instance().HasPendingAccept(socket.get());
+      if (!ready) {
+        continue;
+      }
+      bool already = false;
+      for (uint32_t j = 0; j < host_readfds.count; ++j) {
+        if (host_readfds.sockets[j] &&
+            host_readfds.sockets[j]->handle() == socket->handle()) {
+          already = true;
+          break;
+        }
+      }
+      if (!already && host_readfds.count < X_FD_SETSIZE) {
+        host_readfds.sockets[host_readfds.count++] = socket;
+      }
+    }
+
     host_readfds.Store(readfds);
   }
   if (writefds) {
@@ -2030,9 +2085,17 @@ int_result_t NetDll_select_entry(dword_t caller, dword_t nfds,
     host_exceptfds.Store(exceptfds);
   }
 
-  // TODO(gibbed): modify ret to be what's actually copied to the guest
-  // fd_sets?
-  return handles_count;
+  int result = handles_count;
+  if (result >= 0 && readfds) {
+    result = static_cast<int>(host_readfds.count);
+    if (writefds) {
+      result += static_cast<int>(host_writefds.count);
+    }
+    if (exceptfds) {
+      result += static_cast<int>(host_exceptfds.count);
+    }
+  }
+  return result;
 }
 DECLARE_XAM_EXPORT1(NetDll_select, kNetworking, kImplemented);
 
