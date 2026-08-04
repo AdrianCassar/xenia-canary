@@ -154,7 +154,8 @@ class UserData {
   }
 
   static uint16_t get_max_size(uint32_t id) {
-    return static_cast<uint16_t>(id >> 16) & kMaxUserDataSize;
+    return std::min<uint16_t>(static_cast<uint16_t>(id >> 16),
+                              kMaxUserDataSize);
   }
 
   static bool requires_additional_data(uint32_t id) {
