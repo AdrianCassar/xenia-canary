@@ -116,7 +116,6 @@ int XSocket::Close() {
 
   if (ret == X_ERROR_SUCCESS) {
     socket_closed_ = true;
-    native_handle_ = X_INVALID_SOCKET;
   } else {
     XELOGE("Socket close failed: {}", WSAGetLastError());
   }
