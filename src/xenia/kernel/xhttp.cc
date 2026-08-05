@@ -1223,7 +1223,9 @@ bool XHttp::ReadData(uint32_t hrequest, void* buffer,
     completion.context = request->context;
     completion.callback = request->ResolveStatusCallback();
     completion.status = XHTTP_CALLBACK_STATUS_READ_COMPLETE;
-    completion.info_ptr = to_copy ? buffer_guest_address : 0; // Possible undocumented behavior (53510804 needs this).
+    completion.info_ptr =
+        to_copy ? buffer_guest_address
+                : 0;  // Possible undocumented behavior (53510804 needs this).
     completion.info_len = static_cast<uint32_t>(to_copy);
     DeliverCompletion(std::move(completion));
 
