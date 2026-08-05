@@ -44,8 +44,8 @@ class XEvent : public XObject {
                                     ByteStream* stream);
 
   uint64_t native_handle() const {
-    const uint64_t native_handle =
-        reinterpret_cast<uint64_t>(event_->native_handle());
+    const uint64_t native_handle = static_cast<uint64_t>(
+        reinterpret_cast<uintptr_t>(event_->native_handle()));
     return native_handle;
   }
 

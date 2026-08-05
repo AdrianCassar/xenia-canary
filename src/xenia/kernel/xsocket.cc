@@ -165,6 +165,10 @@ X_STATUS XSocket::GetOption(uint32_t level, uint32_t optname, void* optval_ptr,
   int ret =
       getsockopt(native_handle_, level, optname, static_cast<char*>(optval_ptr),
                  reinterpret_cast<socklen_t*>(optlen));
+  if (ret < 0) {
+    // TODO: WSAGetLastError()
+    return X_STATUS_UNSUCCESSFUL;
+  }
 
   // Because values provided in optval_ptr are in LE we must to somehow save
   // them in BE.
@@ -185,10 +189,6 @@ X_STATUS XSocket::GetOption(uint32_t level, uint32_t optname, void* optval_ptr,
       break;
   }
 
-  if (ret < 0) {
-    // TODO: WSAGetLastError()
-    return X_STATUS_UNSUCCESSFUL;
-  }
   return X_STATUS_SUCCESS;
 }
 
@@ -445,7 +445,7 @@ object_ref<XSocket> XSocket::Accept(XSOCKADDR_IN* name, int* name_len) {
   }
 
   sockaddr sa = {};
-  socklen_t addrlen = sizeof(sockaddr);
+  socklen_t addrlen = 0;
   const bool is_name_and_name_len_available = name && name_len;
 
   if (is_name_and_name_len_available) {
@@ -469,6 +469,7 @@ object_ref<XSocket> XSocket::Accept(XSOCKADDR_IN* name, int* name_len) {
   socket->proto_ = proto_;
   socket->vdp_ = vdp_;
 
+  // Implicit Bind
   socket->bound_port_ = bound_port_ = GetImplicitlyBoundPort();
   socket->bound_ = true;
 
@@ -849,8 +850,9 @@ int XSocket::SendTo(uint8_t* buf, uint32_t buf_len, uint32_t flags,
 
 int XSocket::WSAEventSelect(uint64_t socket_handle, uint64_t event_handle,
                             uint32_t flags) {
-  return ::WSAEventSelect(socket_handle, reinterpret_cast<HANDLE>(event_handle),
-                          flags);
+  const HANDLE hEvent =
+      reinterpret_cast<HANDLE>(static_cast<uintptr_t>(event_handle));
+  return ::WSAEventSelect(socket_handle, hEvent, flags);
 }
 
 bool XSocket::QueuePacket(uint32_t src_ip, uint16_t src_port,

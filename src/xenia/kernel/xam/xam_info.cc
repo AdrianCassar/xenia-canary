@@ -240,11 +240,15 @@ dword_result_t XamGetLiveHiveValueW_entry(
 DECLARE_XAM_EXPORT1(XamGetLiveHiveValueW, kMisc, kStub);
 
 dword_result_t XamGetErrorStringFromWebService_entry(
-    lpu16string_t status_code_desc_ptr, dword_t buffer_size,
-    dword_t status_code, pointer_t<XAM_OVERLAPPED> overlapped_ptr) {
-  if (!status_code_desc_ptr || !buffer_size || !status_code) {
+    dword_t status_code_desc_address, dword_t buffer_size, dword_t status_code,
+    pointer_t<XAM_OVERLAPPED> overlapped_ptr) {
+  if (!status_code_desc_address || !buffer_size || !status_code) {
     return X_E_INVALIDARG;
   }
+
+  char16_t* status_code_desc_ptr =
+      kernel_state()->memory()->TranslateVirtual<char16_t*>(
+          status_code_desc_address);
 
   auto run = [=](uint32_t& length, uint32_t& extended_error) -> X_RESULT {
     length = 0;
