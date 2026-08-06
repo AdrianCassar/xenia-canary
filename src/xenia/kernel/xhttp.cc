@@ -83,7 +83,6 @@ object_ref<XHttp> LookupXHttp(uint32_t handle) {
 
 KernelState* CurrentKernelState() { return kernel_state(); }
 
-
 // https://curl.se/libcurl/c/CURLOPT_WRITEFUNCTION.html
 size_t XHttpWriteCallback(void* data, size_t size, size_t nmemb,
                           void* clientp) {
@@ -179,7 +178,6 @@ std::string ResolveRedirectHost(const std::string& host) {
 }
 
 // Runs the transaction once; later callers wait here and then return.
-
 
 // void callback(hInternet, dwContext, dwInternetStatus, lpvStatusInformation,
 //               dwStatusInformationLength)
@@ -281,9 +279,8 @@ void DeliverCompletion(XHttpCompletion completion) {
   g_xhttp_pump_queue.push_back(std::move(completion));
 }
 
-void DeliverReceiveResponse(const object_ref<XHttp>& request,
-                            uint32_t handle, uint32_t context,
-                            uint32_t callback) {
+void DeliverReceiveResponse(const object_ref<XHttp>& request, uint32_t handle,
+                            uint32_t context, uint32_t callback) {
   RunXHttpWorker([request, handle, context, callback]() {
     request->Perform();
 
@@ -377,8 +374,7 @@ void XHttp::Perform() {
   const CURLcode result = curl_easy_perform(curl_handle);
   if (result == CURLE_OK) {
     this->succeeded = true;
-    curl_easy_getinfo(curl_handle, CURLINFO_RESPONSE_CODE,
-                      &this->status_code);
+    curl_easy_getinfo(curl_handle, CURLINFO_RESPONSE_CODE, &this->status_code);
     XELOGI("XHttp: {} {} -> status {} ({} body bytes)", verb, path,
            this->status_code, body_chunk.response ? body_chunk.size : 0);
 
@@ -386,8 +382,7 @@ void XHttp::Perform() {
       this->response_body.assign(body_chunk.response, body_chunk.size);
     }
     if (header_chunk.response) {
-      this->response_headers.assign(header_chunk.response,
-                                       header_chunk.size);
+      this->response_headers.assign(header_chunk.response, header_chunk.size);
     }
   } else {
     XELOGE("XHttp: request failed, CURL error {}",
@@ -425,7 +420,6 @@ uint32_t XHttp::ResolveStatusCallback() const {
   }
   return 0;
 }
-
 
 uint32_t XHttp::Startup() {
   // Console returns 1 even without network access
@@ -497,7 +491,8 @@ bool XHttp::CrackUrl(const std::string& url, uint32_t url_guest_address,
   CURLU* curl_url_handle = curl_url();
 
   if (curl_url_handle) {
-    CURLUcode rc = curl_url_set(curl_url_handle, CURLUPART_URL, url_to_process.c_str(), 0);
+    CURLUcode rc =
+        curl_url_set(curl_url_handle, CURLUPART_URL, url_to_process.c_str(), 0);
 
     // Assert if URL is bad format
     assert_zero(rc);
@@ -552,8 +547,8 @@ bool XHttp::CrackUrl(const std::string& url, uint32_t url_guest_address,
       std::ssub_match sub_match = matches[i];
 
       if (sub_match.matched) {
-        const uint32_t result_ptr = url_guest_address +
-                                    static_cast<uint32_t>(matches.position(i));
+        const uint32_t result_ptr =
+            url_guest_address + static_cast<uint32_t>(matches.position(i));
 
         uint32_t length = static_cast<uint32_t>(sub_match.length());
 
@@ -584,7 +579,8 @@ bool XHttp::CrackUrl(const std::string& url, uint32_t url_guest_address,
             }
 
             const char* scheme_data_ptr =
-                CurrentKernelState()->memory()->TranslateVirtual<char*>(result_ptr);
+                CurrentKernelState()->memory()->TranslateVirtual<char*>(
+                    result_ptr);
 
             std::string schema_data = std::string(scheme_data_ptr, length);
 
@@ -945,12 +941,12 @@ uint32_t XHttp::DoWork() {
 // Timeouts, security flags and the like mean nothing to the local transport,
 // but Destiny checks the result, so claim success.
 bool XHttp::SetOption(uint32_t handle, uint32_t option, const void* buffer,
-                       uint32_t buffer_length) {
+                      uint32_t buffer_length) {
   return true;
 }
 
 bool XHttp::QueryOption(uint32_t handle, uint32_t option, void* buffer,
-                         uint32_t* buffer_length) {
+                        uint32_t* buffer_length) {
   return true;
 }
 
@@ -1210,8 +1206,8 @@ bool XHttp::ReadData(uint32_t hrequest, void* buffer,
       std::min<size_t>(remaining, static_cast<size_t>(bytes_to_read));
 
   if (to_copy && buffer) {
-    std::memcpy(buffer,
-                request->response_body.data() + request->read_offset, to_copy);
+    std::memcpy(buffer, request->response_body.data() + request->read_offset,
+                to_copy);
     request->read_offset += to_copy;
   }
 
@@ -1249,8 +1245,8 @@ uint32_t XHttp::Connect(uint32_t session_handle, const std::string& host,
     return 0;
   }
 
-  auto connection =
-      object_ref<XHttp>(new XHttp(CurrentKernelState(), XHttp::Kind::kConnection));
+  auto connection = object_ref<XHttp>(
+      new XHttp(CurrentKernelState(), XHttp::Kind::kConnection));
   connection->async = session->async;
   connection->session_handle = session_handle;
   connection->host = host;
