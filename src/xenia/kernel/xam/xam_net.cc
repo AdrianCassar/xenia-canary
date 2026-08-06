@@ -2423,9 +2423,9 @@ dword_result_t NetDll_XHttpQueryOption_entry(dword_t caller, dword_t handle,
                                              dword_t option, lpvoid_t buffer,
                                              lpdword_t buffer_length) {
   uint32_t length = buffer_length ? static_cast<uint32_t>(*buffer_length) : 0;
-  const bool ok = XHttp::QueryOption(
-      handle, option, buffer ? buffer.as<void*>() : nullptr,
-      buffer_length ? &length : nullptr);
+  const bool ok =
+      XHttp::QueryOption(handle, option, buffer ? buffer.as<void*>() : nullptr,
+                         buffer_length ? &length : nullptr);
   if (buffer_length) {
     *buffer_length = length;
   }
@@ -2459,10 +2459,10 @@ dword_result_t NetDll_XHttpSendRequest_entry(dword_t caller, dword_t hrequest,
                                              dword_t total_length,
                                              dword_t context) {
   const std::string headers_str = headers ? headers.value() : std::string();
-  return XHttp::SendRequest(
-             hrequest, headers ? headers_str.c_str() : nullptr, hlength,
-             optional ? optional.as<const void*>() : nullptr, optional_length,
-             total_length, context)
+  return XHttp::SendRequest(hrequest, headers ? headers_str.c_str() : nullptr,
+                            hlength,
+                            optional ? optional.as<const void*>() : nullptr,
+                            optional_length, total_length, context)
              ? 1
              : 0;
 }
@@ -2473,9 +2473,9 @@ dword_result_t NetDll_XHttpWriteData_entry(dword_t caller, dword_t hrequest,
                                            dword_t bytes_to_write,
                                            lpdword_t bytes_written_ptr) {
   uint32_t written = 0;
-  const bool ok = XHttp::WriteData(
-      hrequest, buffer ? buffer.as<const void*>() : nullptr, bytes_to_write,
-      bytes_written_ptr ? &written : nullptr);
+  const bool ok =
+      XHttp::WriteData(hrequest, buffer ? buffer.as<const void*>() : nullptr,
+                       bytes_to_write, bytes_written_ptr ? &written : nullptr);
   if (ok && bytes_written_ptr) {
     *bytes_written_ptr = written;
   }
@@ -2514,10 +2514,10 @@ dword_result_t NetDll_XHttpReadData_entry(dword_t caller, dword_t hrequest,
                                           dword_t bytes_to_read,
                                           lpdword_t bytes_read_ptr) {
   uint32_t read = 0;
-  const bool ok = XHttp::ReadData(
-      hrequest, buffer ? buffer.as<void*>() : nullptr,
-      buffer ? buffer.guest_address() : 0, bytes_to_read,
-      bytes_read_ptr ? &read : nullptr);
+  const bool ok =
+      XHttp::ReadData(hrequest, buffer ? buffer.as<void*>() : nullptr,
+                      buffer ? buffer.guest_address() : 0, bytes_to_read,
+                      bytes_read_ptr ? &read : nullptr);
   if (ok && bytes_read_ptr) {
     *bytes_read_ptr = read;
   }
