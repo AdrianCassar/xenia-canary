@@ -991,10 +991,13 @@ bool XHttp::SendRequest(uint32_t hrequest, const char* headers,
   }
 
   if (headers) {
-    std::string request_headers = headers;
-    if (headers_length != static_cast<uint32_t>(-1) &&
-        headers_length < request_headers.size()) {
-      request_headers = request_headers.substr(0, headers_length);
+    std::string request_headers;
+
+    if (headers_length == static_cast<uint32_t>(-1)) {
+      request_headers = std::string(headers);
+      headers_length = static_cast<uint32_t>(request_headers.size());
+    } else {
+      request_headers = std::string(headers, headers_length);
     }
 
     for (const auto& header : GetHeaders(request_headers)) {
@@ -1004,7 +1007,7 @@ bool XHttp::SendRequest(uint32_t hrequest, const char* headers,
 
   // More body may still follow via XHttpWriteData.
   if (optional && optional_length) {
-    request->request_body.append(static_cast<const char*>(optional),
+    request->request_body.append(reinterpret_cast<const char*>(optional),
                                  static_cast<size_t>(optional_length));
   }
 
