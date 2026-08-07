@@ -2402,8 +2402,8 @@ dword_result_t NetDll_XHttpCrackUrlW_entry(
 }
 DECLARE_XAM_EXPORT1(NetDll_XHttpCrackUrlW, kNetworking, kImplemented);
 
-dword_result_t NetDll_XHttpDoWork_entry(dword_t caller, dword_t handle,
-                                        dword_t unk) {
+dword_result_t NetDll_XHttpDoWork_entry(dword_t caller, dword_t hSession,
+                                        dword_t wait_ms) {
   return XHttp::DoWork();
 }
 DECLARE_XAM_EXPORT1(NetDll_XHttpDoWork, kNetworking, kImplemented);

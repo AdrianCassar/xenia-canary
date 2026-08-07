@@ -934,8 +934,7 @@ uint32_t XHttp::DoWork() {
     ExecuteCompletion(completion);
   }
 
-  XThread::SetLastError(X_ERROR_SUCCESS);
-  return 0;
+  return true;
 }
 
 // Timeouts, security flags and the like mean nothing to the local transport,
