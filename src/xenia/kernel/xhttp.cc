@@ -190,8 +190,8 @@ void InvokeGuestCallback(uint32_t guest_callback, uint32_t handle,
   }
 
   uint64_t args[] = {handle, context, status, info_ptr, info_len};
-  kernel_state()->processor()->Execute(
-      thread->thread_state(), guest_callback & ~1u, args, xe::countof(args));
+  kernel_state()->processor()->Execute(thread->thread_state(), guest_callback,
+                                       args, xe::countof(args));
 }
 
 // Throwaway guest thread, so `work` can block on the network without holding
