@@ -103,26 +103,21 @@ size_t XHttpWriteCallback(void* data, size_t size, size_t nmemb,
   return realsize;
 }
 
-std::vector<std::string> SplitHeaderLines(const std::string& headers) {
-  std::vector<std::string> lines;
-  size_t start = 0;
-  while (start < headers.size()) {
-    size_t end = headers.find("\r\n", start);
-    if (end == std::string::npos) {
-      end = headers.size();
-    }
-    if (end > start) {
-      lines.emplace_back(headers.substr(start, end - start));
-    }
-    start = end + 2;
-  }
-  return lines;
+static std::vector<std::string> GetHeaders(std::string request_headers) {
+  std::regex newlines(R"([\r\n]+)");
+
+  std::sregex_token_iterator it(request_headers.cbegin(),
+                                request_headers.cend(), newlines, -1);
+  std::sregex_token_iterator end;
+  std::vector<std::string> headers_split(it, end);
+
+  return headers_split;
 }
 
 // Case-insensitive, as header names are.
 bool FindHeaderValue(const std::string& raw_headers, const std::string& name,
                      std::string* out_value) {
-  for (const auto& line : SplitHeaderLines(raw_headers)) {
+  for (const auto& line : GetHeaders(raw_headers)) {
     const size_t colon = line.find(':');
     if (colon == std::string::npos) {
       continue;
@@ -1002,8 +997,8 @@ bool XHttp::SendRequest(uint32_t hrequest, const char* headers,
       request_headers = request_headers.substr(0, headers_length);
     }
 
-    for (auto& header : SplitHeaderLines(request_headers)) {
-      request->request_headers.emplace_back(std::move(header));
+    for (const auto& header : GetHeaders(request_headers)) {
+      request->request_headers.push_back(header);
     }
   }
 
