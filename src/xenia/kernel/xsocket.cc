@@ -1050,6 +1050,8 @@ bool XSocket::WSAGetOverlappedResult(XWSAOVERLAPPED* overlapped_ptr,
   //   internal_result = X_WSA_ERROR(XThread::GetLastError());
   // }
 
+  bool result = false;
+
   switch (internal_result) {
     case X_WSA_ERROR::X_WSA_NO_ERROR: {
       if (cvars::logging) {
@@ -1081,25 +1083,28 @@ bool XSocket::WSAGetOverlappedResult(XWSAOVERLAPPED* overlapped_ptr,
 
       current_task_ptr = nullptr;
 
-      return true;
+      result = true;
     } break;
     case X_WSA_ERROR::X_WSAECANCELLED: {
       XELOGD("{}:: Operation Cancelled!", __func__);
       XWSASetLastError(internal_result);
+      result = false;
     } break;
     case X_WSA_ERROR(X_STATUS_PENDING):
     case X_WSA_ERROR::X_WSAEWOULDBLOCK: {
       XWSASetLastError(X_WSA_ERROR::X_WSA_IO_INCOMPLETE);
+      result = false;
     } break;
     default: {
       XWSASetLastError(internal_result);
       XELOGI("{}:: failed with error code {}", __func__,
              overlapped_ptr->internal.get());
+      result = false;
       break;
     }
   }
 
-  return false;
+  return result;
 }
 
 int XSocket::WSACancelOverlappedIO() {
