@@ -1283,16 +1283,14 @@ dword_result_t XamReadTileToTextureEx_entry(
         &height, &channels, STBI_rgb_alpha);
 
     const size_t icon_dimmension_size = size_t(width) * size_t(height);
-    for (int i = 0; i < icon_dimmension_size; i++) {
-      unsigned char* pixel = &imageData[i * sizeof(uint32_t)];
 
-      // RGBA to ARGB. TODO: Find faster method!
-      // RGBA->AGBR
-      std::swap(pixel[0], pixel[3]);
-      // AGBR->ARBG
-      std::swap(pixel[1], pixel[3]);
-      // ARBG->ARGB
-      std::swap(pixel[2], pixel[3]);
+    // Efficent RGBA -> ARGB conversion:
+    // This moves R,G,B left by 8 bits and places A into the low byte.
+    uint32_t* pixels = reinterpret_cast<uint32_t*>(imageData);
+
+    for (size_t i = 0; i < icon_dimmension_size; i++) {
+      uint32_t pixel = pixels[i];
+      pixels[i] = ((pixel & 0x00FFFFFFu) << 8) | (pixel >> 24);
     }
 
     const size_t row_size_bytes = width * sizeof(uint32_t);
