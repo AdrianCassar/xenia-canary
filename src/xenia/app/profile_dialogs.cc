@@ -241,6 +241,19 @@ void ProfileConfigDialog::OnDraw(ImGuiIO& io) {
                                   ->xam_state()
                                   ->user_tracker();
 
+    // Detect sign out from outside this dialog. e.g. another dialog.
+    const bool signed_out = user_index == XUserIndexAny;
+
+    if (profile_gamerpic_key_.contains(xuid) && signed_out) {
+      profile_gamerpic_key_.erase(xuid);
+    }
+
+    if (profile_icon_.contains(xuid) && signed_out) {
+      if (profile_icon_[xuid]) {
+        profile_icon_[xuid].release();
+      }
+    }
+
     if (user_tracker && profile_gamerpic_key_.contains(xuid)) {
       const auto gamerpic_key = user_tracker->GetUserGamerpicSetting(xuid);
 
