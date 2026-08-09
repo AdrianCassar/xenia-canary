@@ -1090,11 +1090,22 @@ dword_result_t XamParseGamerTileKey_entry(pointer_t<X_USER_DATA> key_ptr,
     return X_ERROR_INVALID_PARAMETER;
   }
 
-  const std::string tile_key = xe::to_utf8(string_util::read_u16string_and_swap(
+  const char16_t* title_key_ptr =
       kernel_memory()->TranslateVirtual<const char16_t*>(
-          key_ptr->data.unicode.ptr)));
+          key_ptr->data.unicode.ptr);
 
-  if (tile_key.empty() || tile_key.size() != sizeof(GamerPictureKey)) {
+  std::vector<char16_t> tile_key_data(sizeof(GamerPictureKey) + 1);
+
+  // 584109DB doesn't include the null terminator.
+  xe::string_util::copy_and_swap_truncating(tile_key_data.data(), title_key_ptr,
+                                            sizeof(GamerPictureKey) + 1);
+
+  // Remove null terminator.
+  tile_key_data.pop_back();
+
+  const std::string tile_key = xe::to_utf8(tile_key_data.data());
+
+  if (tile_key.empty()) {
     return X_ERROR_INVALID_PARAMETER;
   }
 
