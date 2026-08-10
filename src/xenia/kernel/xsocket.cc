@@ -1112,7 +1112,7 @@ bool XSocket::WSAGetOverlappedResult(XWSAOVERLAPPED* overlapped_ptr,
 int XSocket::WSACancelOverlappedIO() {
   cancel_overlapped_ = true;
 
-  auto set_cancelled_state = [=](XWSAOVERLAPPED* overlapped_ptr) {
+  auto set_cancelled_state = [this](XWSAOVERLAPPED* overlapped_ptr) {
     xboxkrnl::xeNtSetEvent(overlapped_ptr->event_handle, nullptr);
 
     overlapped_ptr->internal =
