@@ -986,7 +986,9 @@ bool XSocket::WSAGetOverlappedResult(XWSAOVERLAPPED* overlapped_ptr,
 
   // 4D530808 does this.
   if (!pending_io) {
-    XELOGI("Overlap not in operation!");
+    if (cvars::logging) {
+      XELOGI("Overlap not in operation!");
+    }
 
     *bytes_transferred = overlapped_ptr->internal_high;
     *flags_ptr = overlapped_ptr->offset;
