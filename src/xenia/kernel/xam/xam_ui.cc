@@ -1103,7 +1103,7 @@ bool xeDrawFriendContent(xe::ui::ImGuiDrawer* imgui_drawer,
       invite.xuid_invitee = profile->GetOnlineXUID();
       invite.xuid_inviter = presence.xuid.get();
       invite.title_id = kernel_state()->title_id();
-      invite.from_game_invite = false;
+      invite.from_game_invite = true;
 
       profile->SetSelfInvite(invite);
 
@@ -1710,7 +1710,7 @@ bool xeDrawSessionContent(xe::ui::ImGuiDrawer* imgui_drawer,
     invite.xuid_invitee = profile->GetOnlineXUID();
     invite.xuid_inviter = session->XUID_UInt();
     invite.title_id = kernel_state()->title_id();
-    invite.from_game_invite = false;
+    invite.from_game_invite = true;
 
     profile->SetSelfInvite(invite);
 
