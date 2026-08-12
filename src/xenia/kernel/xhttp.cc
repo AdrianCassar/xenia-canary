@@ -156,14 +156,19 @@ static std::vector<std::string> GetHeaders(std::string request_headers) {
 }
 
 // Case-insensitive, as header names are.
-bool FindHeaderValue(const std::string& raw_headers, const std::string& name,
+bool FindHeaderValue(const std::string& raw_headers, const char* name,
                      std::string* out_value) {
+  if (!name) {
+    return false;
+  }
+
   for (const auto& line : GetHeaders(raw_headers)) {
     const size_t colon = line.find(':');
     if (colon == std::string::npos) {
       continue;
     }
-    if (xe::utf8::equal_case(line.substr(0, colon).c_str(), name.c_str())) {
+
+    if (xe::utf8::equal_case(line.substr(0, colon).c_str(), name)) {
       size_t value_start = colon + 1;
       while (value_start < line.size() && line[value_start] == ' ') {
         ++value_start;
@@ -1176,18 +1181,51 @@ bool XHttp::QueryHeaders(uint32_t hrequest, uint32_t info_level,
     request->Perform();
   }
 
-  // Unimplemented flag.
+  const uint32_t attribute = info_level & XHTTP_QUERY_ATTRIBUTE_MASK;
+  const bool query_decimal = (info_level & XHTTP_QUERY_FLAG_NUMBER) != 0;
+
   if (info_level & XHTTP_QUERY_FLAG_FILETIME) {
-    assert_always();
+    if (!buffer || buffer_size < sizeof(X_FILETIME)) {
+      *buffer_length_ptr = sizeof(X_FILETIME);
+      XThread::SetLastError(X_ERROR_INSUFFICIENT_BUFFER);
+      return false;
+    }
+
+    std::string header_value;
+
+    switch (attribute) {
+      case XHTTP_QUERY_EXPIRES: {
+        const std::string header_name = name ? name : "Expires";
+
+        if (!FindHeaderValue(request->response_headers, header_name.c_str(),
+                             &header_value)) {
+          XThread::SetLastError(XHTTP_ERROR_HEADER_NOT_FOUND);
+          return false;
+        }
+
+        X_FILETIME* expires = reinterpret_cast<X_FILETIME*>(buffer);
+        time_t expires_time = curl_getdate(header_value.c_str(), nullptr);
+
+        if (expires_time == static_cast<time_t>(-1)) {
+          XThread::SetLastError(XHTTP_ERROR_HEADER_NOT_FOUND);
+          return false;
+        }
+
+        *expires = X_FILETIME(expires_time);
+        *buffer_length_ptr = sizeof(X_FILETIME);
+
+        return true;
+      }
+      default: {
+        assert_always();
+      } break;
+    }
   }
 
   // Unimplemented flag.
   if (info_level & XHTTP_QUERY_FLAG_SYSTEMTIME) {
     assert_always();
   }
-
-  const uint32_t attribute = info_level & XHTTP_QUERY_ATTRIBUTE_MASK;
-  const bool query_decimal = (info_level & XHTTP_QUERY_FLAG_NUMBER) != 0;
 
   XELOGI(
       "XHttp QueryHeaders: info_level={:08X} attribute={} number={} "
