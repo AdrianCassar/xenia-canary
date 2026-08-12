@@ -77,10 +77,6 @@ constexpr uint32_t XHTTP_API_READ_DATA = 3;
 constexpr uint32_t XHTTP_API_WRITE_DATA = 4;
 constexpr uint32_t XHTTP_API_SEND_REQUEST = 5;
 
-object_ref<XHttp> LookupXHttp(uint32_t handle) {
-  return kernel_state()->object_table()->LookupObject<XHttp>(handle);
-}
-
 KernelState* CurrentKernelState() { return kernel_state(); }
 
 // https://curl.se/libcurl/c/CURLOPT_WRITEFUNCTION.html
@@ -305,7 +301,8 @@ void XHttp::Perform() {
     return;
   }
 
-  const auto connection = LookupXHttp(this->connection_handle);
+  const auto connection = kernel_state()->object_table()->LookupObject<XHttp>(
+      this->connection_handle);
   const std::string host = connection ? connection->host : std::string();
   const uint16_t host_port = connection ? connection->port : 0;
 
@@ -403,12 +400,18 @@ uint32_t XHttp::ResolveStatusCallback() const {
   if (status_callback) {
     return status_callback;
   }
-  const auto connection = LookupXHttp(connection_handle);
+
+  const auto connection =
+      kernel_state()->object_table()->LookupObject<XHttp>(connection_handle);
+
   if (connection) {
     if (connection->status_callback) {
       return connection->status_callback;
     }
-    const auto session = LookupXHttp(connection->session_handle);
+
+    const auto session = kernel_state()->object_table()->LookupObject<XHttp>(
+        connection->session_handle);
+
     if (session && session->status_callback) {
       return session->status_callback;
     }
@@ -441,7 +444,9 @@ uint32_t XHttp::Open(const std::string& user_agent, uint32_t flags) {
 }
 
 bool XHttp::CloseHandle(uint32_t handle) {
-  auto handle_obj = LookupXHttp(handle);
+  const auto handle_obj =
+      CurrentKernelState()->object_table()->LookupObject<XHttp>(handle);
+
   if (!handle_obj) {
     XThread::SetLastError(X_ERROR_INVALID_HANDLE);
     return false;
@@ -945,7 +950,9 @@ bool XHttp::QueryOption(uint32_t handle, uint32_t option, void* buffer,
 
 uint32_t XHttp::OpenRequest(uint32_t connect_handle, const std::string& verb,
                             const std::string& path, uint32_t flags) {
-  auto connection = LookupXHttp(connect_handle);
+  const auto connection =
+      CurrentKernelState()->object_table()->LookupObject<XHttp>(connect_handle);
+
   if (!connection || connection->kind() != XHttp::Kind::kConnection) {
     XThread::SetLastError(XHTTP_ERROR_INCORRECT_HANDLE_TYPE);
     return 0;
@@ -965,7 +972,9 @@ uint32_t XHttp::OpenRequest(uint32_t connect_handle, const std::string& verb,
 
 uint32_t XHttp::SetStatusCallback(uint32_t handle,
                                   uint32_t callback_guest_address) {
-  auto handle_obj = LookupXHttp(handle);
+  const auto handle_obj =
+      CurrentKernelState()->object_table()->LookupObject<XHttp>(handle);
+
   if (!handle_obj) {
     XThread::SetLastError(XHTTP_ERROR_INCORRECT_HANDLE_TYPE);
     return static_cast<uint32_t>(-1);
@@ -982,7 +991,9 @@ bool XHttp::SendRequest(uint32_t hrequest, const char* headers,
                         uint32_t headers_length, const void* optional,
                         uint32_t optional_length, uint32_t total_length,
                         uint32_t context) {
-  auto request = LookupXHttp(hrequest);
+  const auto request =
+      CurrentKernelState()->object_table()->LookupObject<XHttp>(hrequest);
+
   if (!request || request->kind() != XHttp::Kind::kRequest) {
     XThread::SetLastError(XHTTP_ERROR_INCORRECT_HANDLE_TYPE);
     return false;
@@ -1025,7 +1036,9 @@ bool XHttp::SendRequest(uint32_t hrequest, const char* headers,
 
 bool XHttp::WriteData(uint32_t hrequest, const void* buffer,
                       uint32_t bytes_to_write, uint32_t* bytes_written_out) {
-  auto request = LookupXHttp(hrequest);
+  const auto request =
+      CurrentKernelState()->object_table()->LookupObject<XHttp>(hrequest);
+
   if (!request || request->kind() != XHttp::Kind::kRequest) {
     XThread::SetLastError(XHTTP_ERROR_INCORRECT_HANDLE_TYPE);
     return false;
@@ -1058,7 +1071,9 @@ bool XHttp::WriteData(uint32_t hrequest, const void* buffer,
 
 // Where the transaction actually runs.
 bool XHttp::ReceiveResponse(uint32_t hrequest) {
-  auto request = LookupXHttp(hrequest);
+  const auto request =
+      CurrentKernelState()->object_table()->LookupObject<XHttp>(hrequest);
+
   if (!request || request->kind() != XHttp::Kind::kRequest) {
     XThread::SetLastError(XHTTP_ERROR_INCORRECT_HANDLE_TYPE);
     return false;
@@ -1086,7 +1101,9 @@ bool XHttp::ReceiveResponse(uint32_t hrequest) {
 bool XHttp::QueryHeaders(uint32_t hrequest, uint32_t info_level,
                          const char* name, void* buffer, uint32_t buffer_size,
                          uint32_t* buffer_length_inout) {
-  auto request = LookupXHttp(hrequest);
+  const auto request =
+      CurrentKernelState()->object_table()->LookupObject<XHttp>(hrequest);
+
   if (!request || request->kind() != XHttp::Kind::kRequest) {
     XThread::SetLastError(XHTTP_ERROR_INCORRECT_HANDLE_TYPE);
     return false;
@@ -1181,7 +1198,9 @@ bool XHttp::QueryHeaders(uint32_t hrequest, uint32_t info_level,
 bool XHttp::ReadData(uint32_t hrequest, void* buffer,
                      uint32_t buffer_guest_address, uint32_t bytes_to_read,
                      uint32_t* bytes_read_out) {
-  auto request = LookupXHttp(hrequest);
+  const auto request =
+      CurrentKernelState()->object_table()->LookupObject<XHttp>(hrequest);
+
   if (!request || request->kind() != XHttp::Kind::kRequest) {
     XThread::SetLastError(XHTTP_ERROR_INCORRECT_HANDLE_TYPE);
     return false;
@@ -1225,7 +1244,9 @@ bool XHttp::ReadData(uint32_t hrequest, void* buffer,
 
 uint32_t XHttp::Connect(uint32_t session_handle, const std::string& host,
                         uint16_t port, uint32_t flags) {
-  auto session = LookupXHttp(session_handle);
+  const auto session =
+      CurrentKernelState()->object_table()->LookupObject<XHttp>(session_handle);
+
   if (!session || session->kind() != XHttp::Kind::kSession) {
     XThread::SetLastError(XHTTP_ERROR_INCORRECT_HANDLE_TYPE);
     return 0;
