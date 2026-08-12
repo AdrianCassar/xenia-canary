@@ -89,8 +89,9 @@ class XHttp : public XObject {
                         uint32_t bytes_to_write, uint32_t* bytes_written_out);
   static bool ReceiveResponse(uint32_t hrequest);
   static bool QueryHeaders(uint32_t hrequest, uint32_t info_level,
-                           const char* name, void* buffer, uint32_t buffer_size,
-                           uint32_t* buffer_length_inout);
+                           const char* name, uint8_t* buffer,
+                           xe::be<uint32_t>* buffer_length_ptr,
+                           xe::be<uint32_t>* index_ptr);
   static bool ReadData(uint32_t hrequest, void* buffer,
                        uint32_t buffer_guest_address, uint32_t bytes_to_read,
                        uint32_t* bytes_read_out);
