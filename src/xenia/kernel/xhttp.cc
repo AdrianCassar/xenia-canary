@@ -437,7 +437,6 @@ uint32_t XHttp::Open(const std::string& user_agent, uint32_t flags) {
   session->async = (flags & XHTTP_FLAG_ASYNC) != 0;
   session->user_agent = user_agent;
 
-  XThread::SetLastError(X_ERROR_SUCCESS);
   return session->handle();
 }
 
@@ -449,7 +448,7 @@ bool XHttp::CloseHandle(uint32_t handle) {
   }
 
   handle_obj->ReleaseHandle();
-  XThread::SetLastError(X_ERROR_SUCCESS);
+
   return true;
 }
 
@@ -961,7 +960,6 @@ uint32_t XHttp::OpenRequest(uint32_t connect_handle, const std::string& verb,
 
   XELOGI("XHttp OpenRequest: {} {}", request->verb, request->path);
 
-  XThread::SetLastError(X_ERROR_SUCCESS);
   return request->handle();
 }
 
@@ -1013,8 +1011,6 @@ bool XHttp::SendRequest(uint32_t hrequest, const char* headers,
 
   request->context = context;
 
-  XThread::SetLastError(X_ERROR_SUCCESS);
-
   if (request->async) {
     XHttpCompletion completion = {};
     completion.handle = hrequest;
@@ -1039,8 +1035,6 @@ bool XHttp::WriteData(uint32_t hrequest, const void* buffer,
     request->request_body.append(static_cast<const char*>(buffer),
                                  static_cast<size_t>(bytes_to_write));
   }
-
-  XThread::SetLastError(X_ERROR_SUCCESS);
 
   if (request->async) {
     XHttpCompletion completion = {};
@@ -1076,7 +1070,7 @@ bool XHttp::ReceiveResponse(uint32_t hrequest) {
   if (request->async) {
     DeliverReceiveResponse(request, hrequest, request->context,
                            request->ResolveStatusCallback());
-    XThread::SetLastError(X_ERROR_SUCCESS);
+
     return true;
   }
 
@@ -1086,7 +1080,6 @@ bool XHttp::ReceiveResponse(uint32_t hrequest) {
     return false;
   }
 
-  XThread::SetLastError(X_ERROR_SUCCESS);
   return true;
 }
 
@@ -1140,7 +1133,6 @@ bool XHttp::QueryHeaders(uint32_t hrequest, uint32_t info_level,
     *static_cast<xe::be<uint32_t>*>(buffer) = value;
     *length_out = sizeof(uint32_t);
 
-    XThread::SetLastError(X_ERROR_SUCCESS);
     return true;
   }
 
@@ -1183,7 +1175,6 @@ bool XHttp::QueryHeaders(uint32_t hrequest, uint32_t info_level,
   // Return string length in bytes minus null terminator.
   *length_out = static_cast<uint32_t>(result.size());
 
-  XThread::SetLastError(X_ERROR_SUCCESS);
   return true;
 }
 
@@ -1222,7 +1213,6 @@ bool XHttp::ReadData(uint32_t hrequest, void* buffer,
     completion.info_len = static_cast<uint32_t>(to_copy);
     DeliverCompletion(std::move(completion));
 
-    XThread::SetLastError(X_ERROR_SUCCESS);
     return true;
   }
 
@@ -1230,7 +1220,6 @@ bool XHttp::ReadData(uint32_t hrequest, void* buffer,
     *bytes_read_out = static_cast<uint32_t>(to_copy);
   }
 
-  XThread::SetLastError(X_ERROR_SUCCESS);
   return true;
 }
 
@@ -1253,7 +1242,6 @@ uint32_t XHttp::Connect(uint32_t session_handle, const std::string& host,
     XELOGI("XHttp Connect: {}:{}", connection->host, connection->port);
   }
 
-  XThread::SetLastError(X_ERROR_SUCCESS);
   return connection->handle();
 }
 
