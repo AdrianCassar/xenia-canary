@@ -2486,17 +2486,8 @@ dword_result_t NetDll_XHttpQueryHeaders_entry(dword_t caller, dword_t hrequest,
                                               lpstring_t name, lpvoid_t buffer,
                                               lpdword_t buffer_length_ptr,
                                               lpdword_t index_ptr) {
-  uint32_t length =
-      buffer_length_ptr ? static_cast<uint32_t>(*buffer_length_ptr) : 0;
-  const std::string name_str = name ? name.value() : std::string();
-  const bool ok = XHttp::QueryHeaders(
-      hrequest, info_level, name ? name_str.c_str() : nullptr,
-      buffer ? buffer.as<void*>() : nullptr, length,
-      buffer_length_ptr ? &length : nullptr);
-  if (buffer_length_ptr) {
-    *buffer_length_ptr = length;
-  }
-  return ok;
+  return XHttp::QueryHeaders(hrequest, info_level, name, buffer.as<uint8_t*>(),
+                             buffer_length_ptr, index_ptr);
 }
 DECLARE_XAM_EXPORT1(NetDll_XHttpQueryHeaders, kNetworking, kImplemented);
 
