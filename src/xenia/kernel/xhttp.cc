@@ -51,15 +51,60 @@ XHttp::XHttp(KernelState* kernel_state, Kind kind)
 // XHTTP is xam's HTTP client. Requests run through libcurl.
 namespace {
 
-// Query info levels: attribute in the low 16 bits, flags above. xam does not
-// use WinHTTP's attribute numbering, so these are only the two we have seen
-// titles ask for; everything else falls through to a header lookup by name.
 constexpr uint32_t XHTTP_QUERY_STATUS_CODE = 0xFFFE;
+
+constexpr uint32_t XHTTP_QUERY_ACCEPT = 0;
+constexpr uint32_t XHTTP_QUERY_ACCEPT_CHARSET = 1;
+constexpr uint32_t XHTTP_QUERY_ACCEPT_ENCODING = 2;
+constexpr uint32_t XHTTP_QUERY_ACCEPT_LANGUAGE = 3;
+constexpr uint32_t XHTTP_QUERY_ACCEPT_RANGES = 4;
+constexpr uint32_t XHTTP_QUERY_ALLOW = 5;
+constexpr uint32_t XHTTP_QUERY_CACHE_CONTROL = 6;
+constexpr uint32_t XHTTP_QUERY_CONNECTION = 7;
+constexpr uint32_t XHTTP_QUERY_CONTENT_LANGUAGE = 8;
 constexpr uint32_t XHTTP_QUERY_CONTENT_LENGTH = 9;
+constexpr uint32_t XHTTP_QUERY_CONTENT_TRANSFER_ENCODING = 10;
+constexpr uint32_t XHTTP_QUERY_CONTENT_TYPE = 11;
+constexpr uint32_t XHTTP_QUERY_DATE = 12;
+constexpr uint32_t XHTTP_QUERY_EXPIRES = 13;
+constexpr uint32_t XHTTP_QUERY_EXT = 14;
+constexpr uint32_t XHTTP_QUERY_HOST = 15;
+constexpr uint32_t XHTTP_QUERY_IF_MATCH = 16;
+constexpr uint32_t XHTTP_QUERY_IF_MODIFIED_SINCE = 17;
+constexpr uint32_t XHTTP_QUERY_IF_NONE_MATCH = 18;
+constexpr uint32_t XHTTP_QUERY_IF_RANGE = 19;
+constexpr uint32_t XHTTP_QUERY_IF_UNMODIFIED_SINCE = 20;
+constexpr uint32_t XHTTP_QUERY_LAST_MODIFIED = 21;
 constexpr uint32_t XHTTP_QUERY_RAW_HEADERS_CRLF = 22;
+constexpr uint32_t XHTTP_QUERY_MAN = 23;
+constexpr uint32_t XHTTP_QUERY_MIME_VERSION = 24;
+constexpr uint32_t XHTTP_QUERY_MX = 25;
+constexpr uint32_t XHTTP_QUERY_NT = 26;
+constexpr uint32_t XHTTP_QUERY_NTS = 27;
+constexpr uint32_t XHTTP_QUERY_RANGE = 28;
+constexpr uint32_t XHTTP_QUERY_REFERRER = 29;
+constexpr uint32_t XHTTP_QUERY_SERVER = 30;
+constexpr uint32_t XHTTP_QUERY_SEQ = 31;
+constexpr uint32_t XHTTP_QUERY_SID = 32;
+constexpr uint32_t XHTTP_QUERY_ST = 33;
+constexpr uint32_t XHTTP_QUERY_TIMEOUT = 34;
+constexpr uint32_t XHTTP_QUERY_TRANSFER_ENCODING = 35;
+constexpr uint32_t XHTTP_QUERY_UNLESS_MODIFIED_SINCE = 36;
+constexpr uint32_t XHTTP_QUERY_USER_AGENT = 37;
+constexpr uint32_t XHTTP_QUERY_USN = 38;
+constexpr uint32_t XHTTP_QUERY_X_DELAY = 39;
+constexpr uint32_t XHTTP_QUERY_X_DELAYFLAGS = 40;
+constexpr uint32_t XHTTP_QUERY_X_ERR = 41;
+constexpr uint32_t XHTTP_QUERY_MAX = 42;
+
+// XHTTP Info Header Flags
+constexpr uint32_t XHTTP_QUERY_CUSTOM = 0xFFFF;
+constexpr uint32_t XHTTP_QUERY_FLAG_REQUEST_HEADERS = 0x80000000;
+constexpr uint32_t XHTTP_QUERY_FLAG_SYSTEMTIME = 0x40000000;
+constexpr uint32_t XHTTP_QUERY_FLAG_NUMBER = 0x20000000;
+constexpr uint32_t XHTTP_QUERY_FLAG_FILETIME = 0x10000000;
 
 constexpr uint32_t XHTTP_QUERY_ATTRIBUTE_MASK = 0x0000FFFF;
-constexpr uint32_t XHTTP_QUERY_FLAG_NUMBER = 0x20000000;
 
 constexpr uint32_t XHTTP_FLAG_ASYNC = 0x10000000;
 
@@ -1099,8 +1144,15 @@ bool XHttp::ReceiveResponse(uint32_t hrequest) {
 }
 
 bool XHttp::QueryHeaders(uint32_t hrequest, uint32_t info_level,
-                         const char* name, void* buffer, uint32_t buffer_size,
-                         uint32_t* buffer_length_inout) {
+                         const char* name, uint8_t* buffer,
+                         xe::be<uint32_t>* buffer_length_ptr,
+                         xe::be<uint32_t>* index_ptr) {
+  // Index enumeration unimplemented.
+  if (index_ptr) {
+    assert_always();
+    XELOGI("{}: query header index enumeration unimplemented!", __func__);
+  }
+
   const auto request =
       CurrentKernelState()->object_table()->LookupObject<XHttp>(hrequest);
 
@@ -1109,88 +1161,103 @@ bool XHttp::QueryHeaders(uint32_t hrequest, uint32_t info_level,
     return false;
   }
 
-  // Titles can query without ever calling XHttpReceiveResponse.
-  request->Perform();
+  uint32_t buffer_size = buffer_length_ptr ? buffer_length_ptr->get() : 0;
+
+  // Unimplemented flag.
+  if (info_level & XHTTP_QUERY_FLAG_REQUEST_HEADERS) {
+    assert_always();
+  } else {
+    // Titles can query without ever calling XHttpReceiveResponse.
+    request->Perform();
+  }
+
+  // Unimplemented flag.
+  if (info_level & XHTTP_QUERY_FLAG_FILETIME) {
+    assert_always();
+  }
+
+  // Unimplemented flag.
+  if (info_level & XHTTP_QUERY_FLAG_SYSTEMTIME) {
+    assert_always();
+  }
 
   const uint32_t attribute = info_level & XHTTP_QUERY_ATTRIBUTE_MASK;
-  const bool want_number = (info_level & XHTTP_QUERY_FLAG_NUMBER) != 0;
+  const bool query_decimal = (info_level & XHTTP_QUERY_FLAG_NUMBER) != 0;
 
   XELOGI(
       "XHttp QueryHeaders: info_level={:08X} attribute={} number={} "
       "status_code={}",
-      static_cast<uint32_t>(info_level), attribute, want_number,
-      request->status_code);
+      info_level, attribute, query_decimal, request->status_code);
 
-  if (!buffer_length_inout) {
-    XThread::SetLastError(X_ERROR_INVALID_PARAMETER);
-    return false;
-  }
-  uint32_t* length_out = buffer_length_inout;
-
-  if (want_number) {
+  if (query_decimal) {
     uint32_t value = 0;
+
     switch (attribute) {
-      case XHTTP_QUERY_STATUS_CODE:
+      case XHTTP_QUERY_STATUS_CODE: {
         value = static_cast<uint32_t>(request->status_code);
-        break;
-      case XHTTP_QUERY_CONTENT_LENGTH:
+      } break;
+      case XHTTP_QUERY_CONTENT_LENGTH: {
         value = static_cast<uint32_t>(request->response_body.size());
-        break;
-      default:
+      } break;
+      default: {
+        XELOGI("{} Unimplemented query header - Attribute: {:08X}", __func__,
+               attribute);
+
+        assert_always();
         XThread::SetLastError(XHTTP_ERROR_HEADER_NOT_FOUND);
         return false;
+      }
     }
 
-    if (!buffer || buffer_size < sizeof(uint32_t)) {
-      *length_out = sizeof(uint32_t);
+    if (buffer_length_ptr && buffer_size < sizeof(uint32_t)) {
+      *buffer_length_ptr = sizeof(uint32_t);
       XThread::SetLastError(X_ERROR_INSUFFICIENT_BUFFER);
       return false;
     }
 
-    *static_cast<xe::be<uint32_t>*>(buffer) = value;
-    *length_out = sizeof(uint32_t);
+    if (buffer) {
+      xe::store_and_swap<uint32_t>(buffer, value);
+    }
+
+    if (buffer_length_ptr) {
+      *buffer_length_ptr = sizeof(uint32_t);
+    }
 
     return true;
   }
 
-  std::string result;
+  std::string response;
+
   switch (attribute) {
-    case XHTTP_QUERY_STATUS_CODE:
-      result = std::to_string(request->status_code);
-      break;
-    case XHTTP_QUERY_CONTENT_LENGTH:
-      result = std::to_string(request->response_body.size());
-      break;
-    case XHTTP_QUERY_RAW_HEADERS_CRLF:
-      result = request->response_headers;
-      break;
-    default: {
-      // Anything else is a header lookup by name.
-      if (!name) {
-        XThread::SetLastError(XHTTP_ERROR_HEADER_NOT_FOUND);
-        return false;
-      }
-      if (!FindHeaderValue(request->response_headers, name, &result)) {
+    case XHTTP_QUERY_RAW_HEADERS_CRLF: {
+      response = request->response_headers;
+    } break;
+    case XHTTP_QUERY_CUSTOM: {
+      if (!FindHeaderValue(request->response_headers, name, &response)) {
         XThread::SetLastError(XHTTP_ERROR_HEADER_NOT_FOUND);
         return false;
       }
     } break;
+    default: {
+      XELOGI("{} Unimplemented query header - Name: {} Attribute: {:08X}",
+             __func__, name, attribute);
+    } break;
   }
 
-  const uint32_t required = static_cast<uint32_t>(result.size()) + 1;
-  if (!buffer || buffer_size < required) {
-    // Return number of bytes the app must allocate.
-    *length_out = required;
-    XThread::SetLastError(X_ERROR_INSUFFICIENT_BUFFER);
-    return false;
+  const uint32_t required_size = xe::string_util::size_in_bytes(response);
+
+  if (buffer && buffer_length_ptr) {
+    if (buffer_size < required_size) {
+      *buffer_length_ptr = required_size;
+      XThread::SetLastError(X_ERROR_INSUFFICIENT_BUFFER);
+      return false;
+    }
+
+    xe::string_util::copy_truncating(reinterpret_cast<char*>(buffer),
+                                     response.c_str(), *buffer_length_ptr);
+
+    *buffer_length_ptr = static_cast<uint32_t>(response.size());
   }
-
-  char* buffer_out = static_cast<char*>(buffer);
-  std::memcpy(buffer_out, result.data(), result.size());
-  buffer_out[result.size()] = '\0';
-
-  // Return string length in bytes minus null terminator.
-  *length_out = static_cast<uint32_t>(result.size());
 
   return true;
 }
