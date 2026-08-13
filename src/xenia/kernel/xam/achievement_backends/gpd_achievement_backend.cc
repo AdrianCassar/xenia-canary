@@ -75,7 +75,7 @@ bool GpdAchievementBackend::IsAchievementUnlocked(
 
 const std::vector<Achievement> GpdAchievementBackend::GetTitleAchievements(
     const uint64_t xuid, const uint32_t title_id) const {
-  const auto user = kernel_state()->xam_state()->GetUserProfile(xuid);
+  const auto user = kernel_state()->xam_state()->GetUserProfileAny(xuid);
   if (!user) {
     return {};
   }

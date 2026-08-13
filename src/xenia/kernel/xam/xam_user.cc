@@ -925,20 +925,27 @@ dword_result_t XamUserCreateAchievementEnumerator_entry(
     return result;
   }
 
-  const auto user = kernel_state()->xam_state()->GetUserProfile(user_index);
-  if (!user) {
-    return X_ERROR_INVALID_PARAMETER;
+  // 4D530860 and 534507F0 use online XUIDs.
+  uint64_t requester_xuid = xuid;
+
+  // Local enumertion. e.g. 58410B63
+  if (!xuid) {
+    const auto user = kernel_state()->xam_state()->GetUserProfile(user_index);
+
+    if (user) {
+      requester_xuid = user->xuid();
+    }
   }
 
-  uint64_t requester_xuid = user->xuid();
-
-  // 58410B63 and 4D530860 use online XUID for local signed-in user
-  if (xuid && user->GetOnlineXUID() != xuid) {
-    requester_xuid = xuid;
+  // Requesting achievements for non-local online peer.
+  if (IsOnlineXUID(requester_xuid) &&
+      !kernel_state()->xam_state()->GetUserProfileAny(requester_xuid)) {
+    XELOGI("Online achievement enumerator unimplemented!");
+    assert_always();
   }
 
   const uint32_t title_id_ =
-      title_id ? static_cast<uint32_t>(title_id) : kernel_state()->title_id();
+      title_id ? title_id.value() : kernel_state()->title_id();
 
   const auto user_title_achievements =
       kernel_state()->achievement_manager()->GetTitleAchievements(

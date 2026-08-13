@@ -810,7 +810,7 @@ void UserTracker::UpdateProfileGpd() {
 
 std::vector<Achievement> UserTracker::GetUserTitleAchievements(
     uint64_t xuid, uint32_t title_id) const {
-  auto user = kernel_state()->xam_state()->GetUserProfile(xuid);
+  auto user = kernel_state()->xam_state()->GetUserProfileAny(xuid);
   if (!user) {
     return {};
   }
