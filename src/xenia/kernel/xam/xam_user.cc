@@ -1232,6 +1232,8 @@ dword_result_t XamParseGamerTileKey_entry(pointer_t<X_USER_DATA> key_ptr,
                                           lpdword_t title_id_ptr,
                                           lpdword_t big_tile_id_ptr,
                                           lpdword_t small_tile_id_ptr) {
+  // 584108EC uses invalid unicode size therefore ignore it.
+
   if (!key_ptr) {
     return X_ERROR_INVALID_PARAMETER;
   }
@@ -1239,10 +1241,6 @@ dword_result_t XamParseGamerTileKey_entry(pointer_t<X_USER_DATA> key_ptr,
   // A key that isn't a string, or isn't hex, succeeds without being parsed
   if (key_ptr->type != X_USER_DATA_TYPE::WSTRING) {
     return X_ERROR_SUCCESS;
-  }
-
-  if (key_ptr->data.unicode.size > 0x64) {
-    return X_ERROR_INVALID_PARAMETER;
   }
 
   if (!key_ptr->data.unicode.ptr) {
@@ -1351,7 +1349,7 @@ dword_result_t XamReadTileToTextureEx_entry(
           xtile_type = XTileType::kAvatarGamerTile;
         }
       } else {
-        // 434D0849
+        // 434D0849, 584108EC
         if (fsmall) {
           xtile_type = XTileType::kGamerTileSmall;
         }
