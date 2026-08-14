@@ -71,7 +71,7 @@ class XHttp : public XObject {
   size_t read_offset = 0;
 
   // NetDll_XHttp* implementation surface.
-  static uint32_t Startup();
+  static bool Startup();
   static void Shutdown();
   static uint32_t Open(const std::string& user_agent, uint32_t flags);
   static bool CloseHandle(uint32_t handle);
