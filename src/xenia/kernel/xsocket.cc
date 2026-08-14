@@ -1010,11 +1010,13 @@ bool XSocket::WSAGetOverlappedResult(XWSAOVERLAPPED* overlapped_ptr,
     }
   }
 
-  if (wait && cvars::logging) {
-    if (sending_io) {
-      XELOGI("{}:: WSASendTo blocking until completion!", __func__);
-    } else if (receiving_io) {
-      XELOGI("{}:: WSARecvFrom Blocking until completion!", __func__);
+  if (wait) {
+    if (cvars::logging) {
+      if (sending_io) {
+        XELOGI("{}:: WSASendTo blocking until completion!", __func__);
+      } else if (receiving_io) {
+        XELOGI("{}:: WSARecvFrom Blocking until completion!", __func__);
+      }
     }
 
     auto event = kernel_state()->object_table()->LookupObject<XEvent>(
