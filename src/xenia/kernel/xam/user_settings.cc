@@ -94,26 +94,27 @@ void UserSetting::WriteToGuest(X_USER_PROFILE_SETTING* setting_ptr,
     return;
   }
 
-  memcpy(&setting_ptr->data.data, &data_.data, sizeof(X_USER_DATA_UNION));
-  setting_ptr->data.type = data_.type;
+  setting_ptr->data = data_;
 
-  if (requires_additional_data()) {
-    const auto extended_data = get_extended_data();
+  if (!requires_additional_data()) {
+    return;
+  }
 
-    if (extended_data.empty()) {
-      return;
-    }
+  const auto extended_data = get_extended_data();
 
-    setting_ptr->data.data.binary.size =
-        static_cast<uint32_t>(extended_data_.size());
+  const uint32_t max_size = get_max_size(get_setting_id());
+  const uint32_t size =
+      std::min(static_cast<uint32_t>(extended_data.size()), max_size);
+
+  if (!extended_data.empty()) {
+    setting_ptr->data.data.binary.size = size;
     setting_ptr->data.data.binary.ptr = extended_data_address;
 
     memcpy(kernel_memory()->TranslateVirtual(extended_data_address),
-           extended_data_.data(), extended_data_.size());
-
-    extended_data_address +=
-        static_cast<uint32_t>(get_max_size(get_setting_id()));
+           extended_data_.data(), size);
   }
+
+  extended_data_address += max_size;
 }
 
 std::vector<uint8_t> UserSetting::Serialize() const {
