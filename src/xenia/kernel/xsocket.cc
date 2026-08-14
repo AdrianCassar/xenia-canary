@@ -1010,6 +1010,17 @@ bool XSocket::WSAGetOverlappedResult(XWSAOVERLAPPED* overlapped_ptr,
     }
   }
 
+  X_WSA_ERROR internal_result =
+      X_WSA_ERROR(X_WIN32_FROM_HRESULT(overlapped_ptr->internal.get()));
+
+  bool valid_hresult =
+      X_HRESULT_FACILITY(overlapped_ptr->internal.get()) == X_FACILITY_WIN32;
+
+  // If result is invalid HRESULT then recover it.
+  // if (!valid_hresult) {
+  //   internal_result = X_WSA_ERROR(XThread::GetLastError());
+  // }
+
   if (wait) {
     if (cvars::logging) {
       if (sending_io) {
@@ -1022,37 +1033,40 @@ bool XSocket::WSAGetOverlappedResult(XWSAOVERLAPPED* overlapped_ptr,
     auto event = kernel_state()->object_table()->LookupObject<XEvent>(
         overlapped_ptr->event_handle);
 
+    bool pending = static_cast<uint32_t>(internal_result) == X_STATUS_PENDING;
+
+    if (pending) {
+      // Unlock so overlapped task can update internal result after completion.
+      task_mutex.unlock();
+    }
+
     if (event) {
-      event->Wait(3, 1, 0, nullptr);
+      // https://learn.microsoft.com/en-us/windows/win32/sync/synchronization-and-overlapped-input-and-output
+      // 434D07D8 uses an auto reset event which causes signaled event
+      // notifications to be missed causing an infinite wait deadlock.
+      // As a result we check if task is completed before deciding to wait for
+      // event.
+      if (pending) {
+        event->Wait(3, 1, 0, nullptr);
+      }
     } else {
       // If we don't have an event then we must wait for the future to complete.
       // This should never happen because overlapped_ptr->event_handle should
       // always have a valid event handle.
       assert_always();
-      if (current_task_ptr && current_task_ptr->valid()) {
+      if (pending && current_task_ptr && current_task_ptr->valid()) {
         current_task_ptr->wait();
       }
     }
-  } else {
-    if (current_task_ptr && current_task_ptr->valid()) {
-      if (current_task_ptr->wait_for(0ms) != std::future_status::ready) {
-        XWSASetLastError(X_WSA_ERROR::X_WSA_IO_INCOMPLETE);
-        return false;
-      }
+
+    if (pending) {
+      task_mutex.lock();
+
+      // Update result after task completion.
+      internal_result =
+          X_WSA_ERROR(X_WIN32_FROM_HRESULT(overlapped_ptr->internal.get()));
     }
   }
-
-  // Read result after future is ready.
-  X_WSA_ERROR internal_result =
-      X_WSA_ERROR(X_WIN32_FROM_HRESULT(overlapped_ptr->internal.get()));
-
-  bool valid_hresult =
-      X_HRESULT_FACILITY(overlapped_ptr->internal.get()) == X_FACILITY_WIN32;
-
-  // If result is invalid HRESULT then recover it.
-  // if (!valid_hresult) {
-  //   internal_result = X_WSA_ERROR(XThread::GetLastError());
-  // }
 
   bool result = false;
 
@@ -1104,8 +1118,7 @@ bool XSocket::WSAGetOverlappedResult(XWSAOVERLAPPED* overlapped_ptr,
       XELOGI("{}:: failed with error code {}", __func__,
              overlapped_ptr->internal.get());
       result = false;
-      break;
-    }
+    } break;
   }
 
   return result;
