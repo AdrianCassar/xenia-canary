@@ -56,7 +56,7 @@ DEFINE_bool(
     "Store user data on backend (not recommended), otherwise fallback locally.",
     "Live");
 
-DEFINE_bool(xhttp, false, "Toggles XHTTP.", "Live");
+DEFINE_bool(xhttp, true, "Toggles XHTTP.", "Live");
 
 DEFINE_int32(discord_presence_user_index, 0,
              "User profile index used for Discord rich presence [0, 3].",
