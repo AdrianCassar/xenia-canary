@@ -469,17 +469,19 @@ uint32_t XHttp::ResolveStatusCallback() const {
   return 0;
 }
 
-uint32_t XHttp::Startup() {
+bool XHttp::Startup() {
   // Console returns 1 even without network access
 
   if (CurrentKernelState()->emulator()->title_id() == kDashboardID ||
       CurrentKernelState()->emulator()->title_id() == kAvatarEditorID) {
-    return 1;
+    return true;
   }
 
-  // We're suppose to set error code if we fail function
-  // XThread::SetLastError(XHTTP_ERROR_CONNECTION_ERROR);
-  return cvars::xhttp ? 1u : 0u;
+  if (!cvars::xhttp) {
+    XThread::SetLastError(XHTTP_ERROR_CONNECTION_ERROR);
+  }
+
+  return cvars::xhttp;
 }
 
 void XHttp::Shutdown() {}
