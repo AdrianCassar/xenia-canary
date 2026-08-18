@@ -88,6 +88,9 @@ jobs:
           SUBMODULES=$(grep -oP '(?<=path = )(?!third_party\/DirectX(?:-Headers|ShaderCompiler)).+' .gitmodules)
           git submodule update --init --depth=1 -j$(getconf _NPROCESSORS_ONLN) $SUBMODULES
 
+      - name: Install Python Dependencies
+        run: pip install giturlparse
+
       - name: Build Xenia
         env:
           CC: clang-${{ inputs.llvm_version }}

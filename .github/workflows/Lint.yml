@@ -26,6 +26,9 @@ jobs:
     outputs:
       ubuntu_base: ${{ steps.setup.outputs.ubuntu_base }}
     steps:
+      - name: Install Python Dependencies
+        run: pip install giturlparse
+
       - uses: actions/checkout@v6
       - name: Setup
         id: setup

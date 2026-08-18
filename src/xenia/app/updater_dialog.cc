@@ -139,7 +139,7 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
 
   ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
 
-#ifndef DEBUG
+#if !DEBUG && XE_BUILD_GITHUB_ACTIONS
   if (changelog_.empty() ||
       (checked_for_updates_ && !update_check_result_.update_available)) {
     ImGui::SetNextWindowSizeConstraints(ImVec2(300, -1), ImVec2(300, -1));
@@ -155,8 +155,16 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
           ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove)) {
     ImGui::SetWindowFontScale(1.05f);
 
-#ifdef DEBUG
+#if DEBUG
     ImGui::Text("This is a debug build, therefore updates are unavailable.");
+
+    ImGui::SetWindowFontScale(1.0f);
+
+    ImGui::EndPopup();
+  }
+#elif !XE_BUILD_GITHUB_ACTIONS
+    ImGui::Text(
+        "This is a local release build, therefore updates are unavailable.");
 
     ImGui::SetWindowFontScale(1.0f);
 

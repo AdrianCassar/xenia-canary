@@ -337,6 +337,7 @@ class EmulatorWindow {
   std::string base_title_;
   bool initializing_shader_storage_ = false;
 
+  std::string remote_repo_url_;
   std::shared_ptr<Updater> updater_;
   std::shared_future<CheckForUpdateInfo> update_info_;
   std::atomic<bool> cancel_request;

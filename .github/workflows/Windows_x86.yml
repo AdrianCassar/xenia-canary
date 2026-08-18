@@ -61,6 +61,9 @@ jobs:
       - name: Download submodules
         run: git submodule update --init --depth=1 -j $env:NUMBER_OF_PROCESSORS
 
+      - name: Install Python Dependencies
+        run: pip install giturlparse
+
       - name: Build Xenia
         run: python xenia-build.py build --config=Release --target=xenia-app
 
