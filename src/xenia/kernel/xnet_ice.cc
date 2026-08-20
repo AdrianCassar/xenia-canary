@@ -14,6 +14,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <thread>
 
 #include "juice/juice.h"
 
@@ -256,6 +257,7 @@ void XNetIce::StartOfferLocked(Peer* peer) {
   }
   peer->agent = reinterpret_cast<juice_agent*>(agent);
   peer->we_are_offerer = true;
+  peer->status = XNetIceConnectStatus::kPending;
   XELOGI("XNetIce offer start peer={} type={}", peer->peer_id,
          PeerTypeName(peer->type));
   if (juice_gather_candidates(agent) < 0) {
@@ -512,20 +514,61 @@ void XNetIce::OnJuiceStateChanged(juice_agent* agent, int state, void* user) {
     return;
   }
   const auto juice_state = static_cast<juice_state_t>(state);
-  XNetIceConnectStatus prev = peer->status;
-  if (juice_state == JUICE_STATE_CONNECTED ||
-      juice_state == JUICE_STATE_COMPLETED) {
-    peer->status = XNetIceConnectStatus::kConnected;
-  } else if (juice_state == JUICE_STATE_FAILED) {
-    peer->status = XNetIceConnectStatus::kFailed;
-  } else if (juice_state == JUICE_STATE_CONNECTING ||
-             juice_state == JUICE_STATE_GATHERING) {
-    peer->status = XNetIceConnectStatus::kPending;
+  auto& self = Instance();
+  juice_agent* to_destroy = nullptr;
+  XNetIceConnectStatus prev = XNetIceConnectStatus::kIdle;
+  XNetIceConnectStatus next = XNetIceConnectStatus::kIdle;
+  std::string peer_id;
+  XNetPeerType type = XNetPeerType::kTitle;
+  bool offerer = false;
+
+  {
+    std::lock_guard lock(self.mutex_);
+    if (!peer->in_use) {
+      return;
+    }
+    // Ignore stale callbacks after the agent was replaced or torn down.
+    if (peer->agent != agent) {
+      return;
+    }
+
+    prev = peer->status;
+    peer_id = peer->peer_id;
+    type = peer->type;
+    offerer = peer->we_are_offerer;
+
+    if (juice_state == JUICE_STATE_CONNECTED ||
+        juice_state == JUICE_STATE_COMPLETED) {
+      peer->status = XNetIceConnectStatus::kConnected;
+    } else if (juice_state == JUICE_STATE_FAILED ||
+               juice_state == JUICE_STATE_DISCONNECTED) {
+      // Keep the slot + kFailed for STATUS_LOST, but drop
+      // the agent so Establish/StartOfferLocked can retry.
+      peer->status = XNetIceConnectStatus::kFailed;
+      to_destroy = peer->agent;
+      peer->agent = nullptr;
+      peer->we_are_offerer = false;
+      peer->pending_candidates.clear();
+      peer->remote_gathering_done = false;
+      offerer = false;
+    } else if (juice_state == JUICE_STATE_CONNECTING ||
+               juice_state == JUICE_STATE_GATHERING) {
+      peer->status = XNetIceConnectStatus::kPending;
+    }
+    next = peer->status;
   }
+
   // State transitions are the key join debug signal.
   XELOGI("XNetIce state peer={} type={} juice={} status {} -> {} offerer={}",
-         peer->peer_id, PeerTypeName(peer->type), JuiceStateName(juice_state),
-         IceStatusName(prev), IceStatusName(peer->status), peer->we_are_offerer);
+         peer_id, PeerTypeName(type), JuiceStateName(juice_state),
+         IceStatusName(prev), IceStatusName(next), offerer);
+
+  if (to_destroy) {
+    // juice_destroy joins the agent thread — never call from this callback.
+    std::thread([to_destroy]() {
+      juice_destroy(reinterpret_cast<juice_agent_t*>(to_destroy));
+    }).detach();
+  }
 }
 
 void XNetIce::OnJuiceCandidate(juice_agent* agent, const char* sdp, void* user) {
