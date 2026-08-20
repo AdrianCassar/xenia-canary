@@ -12,6 +12,7 @@
 
 #include <mutex>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "xenia/kernel/xnet.h"
@@ -20,7 +21,7 @@
 namespace xe {
 namespace kernel {
 
-// XHTTP session / connection / request handle. WinHTTP-style hierarchy:
+// XHTTP session / connection / request handle hierarchy:
 // session (XHttpOpen) owns connections (XHttpConnect) owns requests
 // (XHttpOpenRequest).
 class XHttp : public XObject {
@@ -101,7 +102,9 @@ class XHttp : public XObject {
   static bool CrackUrlW(const std::u16string& url, uint32_t url_guest_address,
                         uint32_t url_length, uint32_t flags,
                         XHTTP_URL_COMPONENTS* components);
-  static uint32_t DoWork();
+  // Drain async completions for hSession. wait_ms=0 polls; 0xFFFFFFFF waits
+  // forever. Returns 0 on success (XHTTP / Destiny convention).
+  static uint32_t DoWork(uint32_t h_session, uint32_t wait_ms);
   static bool SetOption(uint32_t handle, uint32_t option, const void* buffer,
                         uint32_t buffer_length);
   static bool QueryOption(uint32_t handle, uint32_t option, void* buffer,
