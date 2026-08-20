@@ -927,28 +927,31 @@ dword_result_t XamUserCreateAchievementEnumerator_entry(
     return result;
   }
 
-  const auto user = kernel_state()->xam_state()->GetUserProfile(user_index);
-  if (!user) {
-    return X_ERROR_INVALID_PARAMETER;
+  // 4D530860 and 534507F0 use online XUIDs.
+  uint64_t requester_xuid = xuid;
+
+  // Local enumertion. e.g. 58410B63
+  if (!xuid) {
+    const auto user = kernel_state()->xam_state()->GetUserProfile(user_index);
+
+    if (user) {
+      requester_xuid = user->xuid();
+    }
   }
 
-  uint64_t requester_xuid = user->xuid();
-
-  // 58410B63 and 4D530860 use online XUID for local signed-in user
-  if (xuid && user->GetOnlineXUID() != xuid) {
-    requester_xuid = xuid;
+  // Requesting achievements for non-local online peer.
+  if (IsOnlineXUID(requester_xuid) &&
+      !kernel_state()->xam_state()->GetUserProfileAny(requester_xuid)) {
+    XELOGI("Online achievement enumerator unimplemented!");
+    assert_always();
   }
 
   const uint32_t title_id_ =
-      title_id ? static_cast<uint32_t>(title_id) : kernel_state()->title_id();
+      title_id ? title_id.value() : kernel_state()->title_id();
 
   const auto user_title_achievements =
       kernel_state()->achievement_manager()->GetTitleAchievements(
           requester_xuid, title_id_);
-
-  if (user_title_achievements.empty()) {
-    return X_ERROR_INVALID_PARAMETER;
-  }
 
   for (const auto& entry : user_title_achievements) {
     auto unlock_time = X_FILETIME();
@@ -1084,6 +1087,8 @@ dword_result_t XamParseGamerTileKey_entry(pointer_t<X_USER_DATA> key_ptr,
                                           lpdword_t title_id_ptr,
                                           lpdword_t big_tile_id_ptr,
                                           lpdword_t small_tile_id_ptr) {
+  // 584108EC uses invalid unicode size therefore ignore it.
+
   if (!key_ptr) {
     return X_ERROR_INVALID_PARAMETER;
   }
@@ -1092,19 +1097,26 @@ dword_result_t XamParseGamerTileKey_entry(pointer_t<X_USER_DATA> key_ptr,
     return X_ERROR_INVALID_PARAMETER;
   }
 
-  if (key_ptr->data.unicode.size > 0x64) {
-    return X_ERROR_INVALID_PARAMETER;
-  }
-
   if (!key_ptr->data.unicode.ptr) {
     return X_ERROR_INVALID_PARAMETER;
   }
 
-  const std::string tile_key = xe::to_utf8(string_util::read_u16string_and_swap(
+  const char16_t* title_key_ptr =
       kernel_memory()->TranslateVirtual<const char16_t*>(
-          key_ptr->data.unicode.ptr)));
+          key_ptr->data.unicode.ptr);
 
-  if (tile_key.empty() || tile_key.size() != sizeof(GamerPictureKey)) {
+  std::vector<char16_t> tile_key_data(sizeof(GamerPictureKey) + 1);
+
+  // 584109DB doesn't include the null terminator.
+  xe::string_util::copy_and_swap_truncating(tile_key_data.data(), title_key_ptr,
+                                            sizeof(GamerPictureKey) + 1);
+
+  // Remove null terminator.
+  tile_key_data.pop_back();
+
+  const std::string tile_key = xe::to_utf8(tile_key_data.data());
+
+  if (tile_key.empty()) {
     return X_ERROR_INVALID_PARAMETER;
   }
 
@@ -1192,7 +1204,7 @@ dword_result_t XamReadTileToTextureEx_entry(
           xtile_type = XTileType::kAvatarGamerTile;
         }
       } else {
-        // 434D0849
+        // 434D0849, 584108EC
         if (fsmall) {
           xtile_type = XTileType::kGamerTileSmall;
         }
@@ -1272,16 +1284,14 @@ dword_result_t XamReadTileToTextureEx_entry(
         &height, &channels, STBI_rgb_alpha);
 
     const size_t icon_dimmension_size = size_t(width) * size_t(height);
-    for (int i = 0; i < icon_dimmension_size; i++) {
-      unsigned char* pixel = &imageData[i * sizeof(uint32_t)];
 
-      // RGBA to ARGB. TODO: Find faster method!
-      // RGBA->AGBR
-      std::swap(pixel[0], pixel[3]);
-      // AGBR->ARBG
-      std::swap(pixel[1], pixel[3]);
-      // ARBG->ARGB
-      std::swap(pixel[2], pixel[3]);
+    // Efficent RGBA -> ARGB conversion:
+    // This moves R,G,B left by 8 bits and places A into the low byte.
+    uint32_t* pixels = reinterpret_cast<uint32_t*>(imageData);
+
+    for (size_t i = 0; i < icon_dimmension_size; i++) {
+      uint32_t pixel = pixels[i];
+      pixels[i] = ((pixel & 0x00FFFFFFu) << 8) | (pixel >> 24);
     }
 
     const size_t row_size_bytes = width * sizeof(uint32_t);
