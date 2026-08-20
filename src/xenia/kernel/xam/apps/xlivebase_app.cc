@@ -968,6 +968,10 @@ X_HRESULT XLiveBaseApp::XInviteGetAcceptedInfo(uint32_t buffer_ptr,
   // Reset self invite
   user_profile->SetSelfInvite({});
 
+  if (!invite_info->xuid_inviter) {
+    return X_ONLINE_E_SESSION_NOT_FOUND;
+  }
+
   const auto presence = kernel_state_->presence_manager()->GetFriendsPresence(
       user_profile->xuid(), {invite_info->xuid_inviter});
 
@@ -978,20 +982,12 @@ X_HRESULT XLiveBaseApp::XInviteGetAcceptedInfo(uint32_t buffer_ptr,
   }
 
   if (!session_id) {
-    new xe::ui::HostNotificationWindow(
-        kernel_state_->emulator()->imgui_drawer(), "Joining Session",
-        "Unable to join session", 0);
-
     return X_ONLINE_E_SESSION_NOT_FOUND;
   }
 
   const auto session = kernel_state_->GetXboxLiveAPI()->XSessionGet(session_id);
 
   if (!session.SessionID_UInt()) {
-    new xe::ui::HostNotificationWindow(
-        kernel_state_->emulator()->imgui_drawer(), "Joining Session",
-        "Unable to join session", 0);
-
     return X_ONLINE_E_SESSION_NOT_FOUND;
   }
 
@@ -2305,21 +2301,15 @@ X_HRESULT XLiveBaseApp::XUserFindUsers(uint32_t buffer_ptr) {
                           resolved.end());
   }
 
-  uint32_t results_size = sizeof(FIND_USERS_RESPONSE) +
-                          (unmarshaller.NumUsers() * sizeof(FIND_USER_INFO));
-
   uint32_t users_address =
       memory_->HostToGuestVirtual(std::to_address(results_ptr + 1));
 
   FIND_USER_INFO* user_results_ptr =
       memory_->TranslateVirtual<FIND_USER_INFO*>(users_address);
 
-  for (uint32_t i = 0; const auto& user : resolved_users) {
-    memcpy(&user_results_ptr[i], &user, sizeof(FIND_USER_INFO));
-    i++;
-  }
+  std::copy(resolved_users.cbegin(), resolved_users.cend(), user_results_ptr);
 
-  results_ptr->results_size = results_size;
+  results_ptr->results_size = static_cast<uint32_t>(resolved_users.size());
   results_ptr->users_address = users_address;
 
   return X_E_SUCCESS;

@@ -12,7 +12,10 @@
 
 #include <cstring>
 #include <future>
+#include <map>
 #include <queue>
+#include <set>
+#include <vector>
 
 #include "xenia/base/byte_order.h"
 #include "xenia/kernel/xobject.h"
@@ -36,22 +39,44 @@
 
 namespace xe {
 namespace kernel {
-enum class X_WSAError : uint32_t {
-  X_WSA_INVALID_PARAMETER = 0x0057,
-  X_WSA_OPERATION_ABORTED = 0x03E3,
-  X_WSA_IO_INCOMPLETE = 0x03E4,
-  X_WSA_IO_PENDING = 0x03E5,
-  X_WSAEACCES = 0x271D,
-  X_WSAEFAULT = 0x271E,
-  X_WSAEINVAL = 0x2726,
-  X_WSAEWOULDBLOCK = 0x2733,
-  X_WSAENOTSOCK = 0x2736,
-  X_WSAEMSGSIZE = 0x2738,
-  X_WSAENETDOWN = 0x2742,
-  X_WSANO_DATA = 0x2AFC,
-  X_WSANOTINITIALISED = 0x276D,
-  X_WSAEADDRINUSE = 0x2740,
-  X_WSAEINPROGRESS = 0x2734,
+// https://learn.microsoft.com/en-us/windows/win32/winsock/windows-sockets-error-codes-2
+enum class X_WSA_ERROR : uint32_t {
+  X_WSA_NO_ERROR = 0,
+  X_WSA_INVALID_PARAMETER = 87,
+  X_WSA_OPERATION_ABORTED = 995,
+  X_WSA_IO_INCOMPLETE = 996,
+  X_WSA_IO_PENDING = 997,
+  X_WSAEACCES = 10013,
+  X_WSAEFAULT = 10014,
+  X_WSAEINVAL = 10022,
+  X_WSAEWOULDBLOCK = 10035,
+  X_WSAEINPROGRESS = 10036,
+  X_WSAEALREADY = 10037,
+  X_WSAENOTSOCK = 10038,
+  X_WSAEMSGSIZE = 10040,
+  X_WSAENOPROTOOPT = 10042,
+  X_WSAEPROTONOSUPPORT = 10043,
+  X_WSAESOCKTNOSUPPORT = 10044,
+  X_WSAEAFNOSUPPORT = 10047,
+  X_WSAEADDRINUSE = 10048,
+  X_WSAEADDRNOTAVAIL = 10049,
+  X_WSAENETDOWN = 10050,
+  X_WSAECONNRESET = 10054,
+  X_WSAENOBUFS = 10055,
+  X_WSAEISCONN = 10056,
+  X_WSAENOTCONN = 10057,
+  X_WSAESHUTDOWN = 10058,
+  X_WSAETIMEDOUT = 10060,
+  X_WSAECONNREFUSED = 10061,
+  X_WSAEHOSTUNREACH = 10065,
+  X_WSASYSNOTREADY = 10091,
+  X_WSAVERNOTSUPPORTED = 10092,
+  X_WSANOTINITIALISED = 10093,
+  X_WSAECANCELLED = 10103,
+  X_WSASYSCALLFAILURE = 10107,
+  X_WSAHOST_NOT_FOUND = 11001,
+  X_WSATRY_AGAIN = 11002,
+  X_WSANO_DATA = 11004,
 };
 
 /*
@@ -95,13 +120,31 @@ struct XWSABUF {
 static_assert_size(XWSABUF, 0x8);
 
 struct XWSAOVERLAPPED {
-  xe::be<uint32_t> internal;
-  xe::be<uint32_t> internal_high;
-  xe::be<uint32_t> offset;
+  xe::be<uint32_t> internal;       // Status/Error Codes HRESULT
+  xe::be<uint32_t> internal_high;  // Transfer
+  xe::be<uint32_t> offset;         // Flags
   xe::be<uint32_t> offset_high;
   xe::be<uint32_t> event_handle;
 };
 static_assert_size(XWSAOVERLAPPED, 0x14);
+
+struct WSASendToData {
+  std::shared_ptr<XWSABUF[]> buffers;
+  uint32_t num_buffers;
+  XSOCKADDR_IN* to;
+  int to_len;
+  XWSAOVERLAPPED* overlapped;
+};
+
+struct WSARecvFromData {
+  std::shared_ptr<XWSABUF> buffers;
+  uint32_t num_buffers;
+  xe::be<uint32_t>* num_bytes_recv;
+  xe::be<uint32_t>* flags;
+  XSOCKADDR_IN* from;
+  xe::be<uint32_t>* from_len;
+  XWSAOVERLAPPED* overlapped;
+};
 
 class XSocket : public XObject {
  public:
@@ -172,16 +215,26 @@ class XSocket : public XObject {
   int WSAEventSelect(uint64_t socket_handle, uint64_t event_handle,
                      uint32_t flags);
 
+  int WSASendTo(XWSABUF* buffers, uint32_t num_buffers,
+                xe::be<uint32_t>* num_bytes_sent_ptr, uint32_t flags,
+                XSOCKADDR_IN* to_ptr, uint32_t to_len,
+                XWSAOVERLAPPED* overlapped_ptr);
+
   int WSARecvFrom(XWSABUF* buffers, uint32_t num_buffers,
                   xe::be<uint32_t>* num_bytes_recv_ptr,
                   xe::be<uint32_t>* flags_ptr, XSOCKADDR_IN* from_ptr,
                   xe::be<uint32_t>* fromlen_ptr,
                   XWSAOVERLAPPED* overlapped_ptr);
+
   bool WSAGetOverlappedResult(XWSAOVERLAPPED* overlapped_ptr,
                               xe::be<uint32_t>* bytes_transferred, bool wait,
                               xe::be<uint32_t>* flags_ptr);
 
-  static uint32_t GetLastWSAError();
+  int WSACancelOverlappedIO();
+
+  static bool XWSAIsKnownError(X_WSA_ERROR error);
+
+  static uint32_t XWSAGetLastError();
 
   struct packet {
     // These values are in network byte order.
@@ -195,6 +248,9 @@ class XSocket : public XObject {
   // Queue a packet into our internal buffer.
   bool QueuePacket(uint32_t src_ip, uint16_t src_port, const uint8_t* buf,
                    size_t len);
+
+  std::mutex send_socket_mutex_;
+  std::mutex receive_socket_mutex_;
 
  private:
   XSocket(KernelState* kernel_state, uint64_t native_handle);
@@ -220,18 +276,26 @@ class XSocket : public XObject {
   std::mutex incoming_packet_mutex_;
   std::queue<uint8_t*> incoming_packets_;
 
-  std::future<int> polling_task_;
-
-  std::mutex receive_mutex_;
-  std::condition_variable receive_cv_;
-  std::mutex receive_socket_mutex_;
-  XWSAOVERLAPPED* active_overlapped_ = nullptr;
+  std::map<XWSAOVERLAPPED*, std::future<int32_t>> send_polling_tasks_;
+  std::map<XWSAOVERLAPPED*, std::future<int32_t>> receive_polling_tasks_;
 
   uint16_t GetImplicitlyBoundPort() const;
 
-  int PollWSARecvFrom(bool wait, struct WSARecvFromData data);
+  std::atomic<bool> cancel_overlapped_ = false;
 
-  void SetLastWSAError(X_WSAError) const;
+  std::set<uint32_t> cancelled_overlapped_io_;
+  std::mutex cancelled_overlapped_io_mutex_;
+
+  int WSASelectWrite(bool wait, X_WSA_ERROR* error);
+
+  int PollWSASendTo(bool wait, WSASendToData send_async_data,
+                    uint32_t* num_bytes_sent);
+
+  int WSASelectRead(bool wait, X_WSA_ERROR* error);
+
+  int PollWSARecvFrom(bool wait, WSARecvFromData receive_async_data);
+
+  void XWSASetLastError(X_WSA_ERROR) const;
 };
 
 }  // namespace kernel

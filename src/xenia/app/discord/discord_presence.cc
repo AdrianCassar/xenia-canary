@@ -87,7 +87,7 @@ void DiscordPresence::UpdateSession(uint32_t title_id,
     invite.xuid_inviter = host_xuid;
     invite.title_id = title_id;
     invite.host_info = *session_info;
-    invite.from_game_invite = 0;
+    invite.from_game_invite = true;
 
     const uint32_t size = sizeof(kernel::X_INVITE_INFO);
     const uint32_t out_size = AV_BASE64_SIZE(size);
