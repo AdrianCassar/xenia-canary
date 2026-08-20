@@ -156,14 +156,19 @@ static std::vector<std::string> GetHeaders(std::string request_headers) {
 }
 
 // Case-insensitive, as header names are.
-bool FindHeaderValue(const std::string& raw_headers, const std::string& name,
+bool FindHeaderValue(const std::string& raw_headers, const char* name,
                      std::string* out_value) {
+  if (!name) {
+    return false;
+  }
+
   for (const auto& line : GetHeaders(raw_headers)) {
     const size_t colon = line.find(':');
     if (colon == std::string::npos) {
       continue;
     }
-    if (xe::utf8::equal_case(line.substr(0, colon).c_str(), name.c_str())) {
+
+    if (xe::utf8::equal_case(line.substr(0, colon).c_str(), name)) {
       size_t value_start = colon + 1;
       while (value_start < line.size() && line[value_start] == ' ') {
         ++value_start;
@@ -464,17 +469,19 @@ uint32_t XHttp::ResolveStatusCallback() const {
   return 0;
 }
 
-uint32_t XHttp::Startup() {
+bool XHttp::Startup() {
   // Console returns 1 even without network access
 
   if (CurrentKernelState()->emulator()->title_id() == kDashboardID ||
       CurrentKernelState()->emulator()->title_id() == kAvatarEditorID) {
-    return 1;
+    return true;
   }
 
-  // We're suppose to set error code if we fail function
-  // XThread::SetLastError(XHTTP_ERROR_CONNECTION_ERROR);
-  return cvars::xhttp ? 1u : 0u;
+  if (!cvars::xhttp) {
+    XThread::SetLastError(XHTTP_ERROR_CONNECTION_ERROR);
+  }
+
+  return cvars::xhttp;
 }
 
 void XHttp::Shutdown() {}
@@ -1147,6 +1154,11 @@ bool XHttp::QueryHeaders(uint32_t hrequest, uint32_t info_level,
                          const char* name, uint8_t* buffer,
                          xe::be<uint32_t>* buffer_length_ptr,
                          xe::be<uint32_t>* index_ptr) {
+  if (!buffer_length_ptr) {
+    XThread::SetLastError(X_ERROR_INVALID_PARAMETER);
+    return false;
+  }
+
   // Index enumeration unimplemented.
   if (index_ptr) {
     assert_always();
@@ -1161,7 +1173,7 @@ bool XHttp::QueryHeaders(uint32_t hrequest, uint32_t info_level,
     return false;
   }
 
-  uint32_t buffer_size = buffer_length_ptr ? buffer_length_ptr->get() : 0;
+  uint32_t buffer_size = *buffer_length_ptr;
 
   // Unimplemented flag.
   if (info_level & XHTTP_QUERY_FLAG_REQUEST_HEADERS) {
@@ -1171,18 +1183,51 @@ bool XHttp::QueryHeaders(uint32_t hrequest, uint32_t info_level,
     request->Perform();
   }
 
-  // Unimplemented flag.
+  const uint32_t attribute = info_level & XHTTP_QUERY_ATTRIBUTE_MASK;
+  const bool query_decimal = (info_level & XHTTP_QUERY_FLAG_NUMBER) != 0;
+
   if (info_level & XHTTP_QUERY_FLAG_FILETIME) {
-    assert_always();
+    if (!buffer || buffer_size < sizeof(X_FILETIME)) {
+      *buffer_length_ptr = sizeof(X_FILETIME);
+      XThread::SetLastError(X_ERROR_INSUFFICIENT_BUFFER);
+      return false;
+    }
+
+    std::string header_value;
+
+    switch (attribute) {
+      case XHTTP_QUERY_EXPIRES: {
+        const std::string header_name = name ? name : "Expires";
+
+        if (!FindHeaderValue(request->response_headers, header_name.c_str(),
+                             &header_value)) {
+          XThread::SetLastError(XHTTP_ERROR_HEADER_NOT_FOUND);
+          return false;
+        }
+
+        X_FILETIME* expires = reinterpret_cast<X_FILETIME*>(buffer);
+        time_t expires_time = curl_getdate(header_value.c_str(), nullptr);
+
+        if (expires_time == static_cast<time_t>(-1)) {
+          XThread::SetLastError(XHTTP_ERROR_HEADER_NOT_FOUND);
+          return false;
+        }
+
+        *expires = X_FILETIME(expires_time);
+        *buffer_length_ptr = sizeof(X_FILETIME);
+
+        return true;
+      }
+      default: {
+        assert_always();
+      } break;
+    }
   }
 
   // Unimplemented flag.
   if (info_level & XHTTP_QUERY_FLAG_SYSTEMTIME) {
     assert_always();
   }
-
-  const uint32_t attribute = info_level & XHTTP_QUERY_ATTRIBUTE_MASK;
-  const bool query_decimal = (info_level & XHTTP_QUERY_FLAG_NUMBER) != 0;
 
   XELOGI(
       "XHttp QueryHeaders: info_level={:08X} attribute={} number={} "
@@ -1209,19 +1254,14 @@ bool XHttp::QueryHeaders(uint32_t hrequest, uint32_t info_level,
       }
     }
 
-    if (buffer_length_ptr && buffer_size < sizeof(uint32_t)) {
+    if (!buffer || buffer_size < sizeof(uint32_t)) {
       *buffer_length_ptr = sizeof(uint32_t);
       XThread::SetLastError(X_ERROR_INSUFFICIENT_BUFFER);
       return false;
     }
 
-    if (buffer) {
-      xe::store_and_swap<uint32_t>(buffer, value);
-    }
-
-    if (buffer_length_ptr) {
-      *buffer_length_ptr = sizeof(uint32_t);
-    }
+    xe::store_and_swap<uint32_t>(buffer, value);
+    *buffer_length_ptr = sizeof(uint32_t);
 
     return true;
   }
@@ -1229,8 +1269,14 @@ bool XHttp::QueryHeaders(uint32_t hrequest, uint32_t info_level,
   std::string response;
 
   switch (attribute) {
+    case XHTTP_QUERY_CONTENT_LENGTH: {
+      response = std::to_string(request->response_body.size());
+    } break;
     case XHTTP_QUERY_RAW_HEADERS_CRLF: {
       response = request->response_headers;
+    } break;
+    case XHTTP_QUERY_STATUS_CODE: {
+      response = std::to_string(request->status_code);
     } break;
     case XHTTP_QUERY_CUSTOM: {
       if (!FindHeaderValue(request->response_headers, name, &response)) {
@@ -1240,24 +1286,23 @@ bool XHttp::QueryHeaders(uint32_t hrequest, uint32_t info_level,
     } break;
     default: {
       XELOGI("{} Unimplemented query header - Name: {} Attribute: {:08X}",
-             __func__, name, attribute);
+             __func__, name ? name : "N/A", attribute);
     } break;
   }
 
   const uint32_t required_size = xe::string_util::size_in_bytes(response);
 
-  if (buffer && buffer_length_ptr) {
-    if (buffer_size < required_size) {
-      *buffer_length_ptr = required_size;
-      XThread::SetLastError(X_ERROR_INSUFFICIENT_BUFFER);
-      return false;
-    }
-
-    xe::string_util::copy_truncating(reinterpret_cast<char*>(buffer),
-                                     response.c_str(), *buffer_length_ptr);
-
-    *buffer_length_ptr = static_cast<uint32_t>(response.size());
+  if (!buffer || buffer_size < required_size) {
+    *buffer_length_ptr = required_size;
+    XThread::SetLastError(X_ERROR_INSUFFICIENT_BUFFER);
+    return false;
   }
+
+  xe::string_util::copy_truncating(reinterpret_cast<char*>(buffer), response,
+                                   buffer_size);
+
+  // Remove null terminator from length.
+  *buffer_length_ptr = required_size - 1;
 
   return true;
 }
