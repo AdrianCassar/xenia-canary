@@ -8,6 +8,8 @@
  */
 
 #include <algorithm>
+#include <chrono>
+#include <condition_variable>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -256,12 +258,13 @@ void RunXHttpWorker(std::function<void()> work) {
 
 // Queued notification, drained on the title's thread by XHttpDoWork.
 struct XHttpCompletion {
-  uint32_t handle = 0;    // hInternet (request handle)
-  uint32_t context = 0;   // dwContext
-  uint32_t callback = 0;  // guest status callback
-  uint32_t status = 0;    // XHTTP_CALLBACK_STATUS_*
-  uint32_t info_ptr = 0;  // lpvStatusInformation (guest ptr) or 0
-  uint32_t info_len = 0;  // dwStatusInformationLength
+  uint32_t handle = 0;          // hInternet (request handle)
+  uint32_t session_handle = 0;  // Which session owns the req.
+  uint32_t context = 0;         // dwContext
+  uint32_t callback = 0;        // guest status callback
+  uint32_t status = 0;          // XHTTP_CALLBACK_STATUS_*
+  uint32_t info_ptr = 0;        // lpvStatusInformation (guest ptr) or 0
+  uint32_t info_len = 0;        // dwStatusInformationLength
 
   // REQUEST_ERROR: pass an XHTTP_ASYNC_RESULT {api, error}.
   bool alloc_error = false;
@@ -274,7 +277,27 @@ struct XHttpCompletion {
 };
 
 std::mutex g_xhttp_pump_mutex;
+std::condition_variable g_xhttp_pump_cv;
 std::vector<XHttpCompletion> g_xhttp_pump_queue;
+
+uint32_t ResolveSessionHandle(const object_ref<XHttp>& obj) {
+  if (!obj) {
+    return 0;
+  }
+  switch (obj->kind()) {
+    case XHttp::Kind::kSession:
+      return obj->handle();
+    case XHttp::Kind::kConnection:
+      return obj->session_handle;
+    case XHttp::Kind::kRequest: {
+      const auto connection =
+          CurrentKernelState()->object_table()->LookupObject<XHttp>(
+              obj->connection_handle);
+      return connection ? connection->session_handle : 0;
+    }
+  }
+  return 0;
+}
 
 // The status-information buffer only has to live for the callback.
 void ExecuteCompletion(const XHttpCompletion& c) {
@@ -316,8 +339,16 @@ void ExecuteCompletion(const XHttpCompletion& c) {
 }
 
 void DeliverCompletion(XHttpCompletion completion) {
-  std::lock_guard<std::mutex> lock(g_xhttp_pump_mutex);
-  g_xhttp_pump_queue.push_back(std::move(completion));
+  if (!completion.session_handle && completion.handle) {
+    const auto obj = CurrentKernelState()->object_table()->LookupObject<XHttp>(
+        completion.handle);
+    completion.session_handle = ResolveSessionHandle(obj);
+  }
+  {
+    std::lock_guard<std::mutex> lock(g_xhttp_pump_mutex);
+    g_xhttp_pump_queue.push_back(std::move(completion));
+  }
+  g_xhttp_pump_cv.notify_all();
 }
 
 void DeliverReceiveResponse(const object_ref<XHttp>& request, uint32_t handle,
@@ -974,22 +1005,57 @@ bool XHttp::CrackUrlW(const std::u16string& url, uint32_t url_guest_address,
   return true;
 }
 
-uint32_t XHttp::DoWork() {
+uint32_t XHttp::DoWork(uint32_t h_session, uint32_t wait_ms) {
+  if (h_session) {
+    const auto session =
+        CurrentKernelState()->object_table()->LookupObject<XHttp>(h_session);
+    if (!session || session->kind() != Kind::kSession) {
+      XThread::SetLastError(XHTTP_ERROR_INCORRECT_HANDLE_TYPE);
+      return 1;
+    }
+  }
+
+  auto matches_session = [h_session](const XHttpCompletion& completion) {
+    return !h_session || completion.session_handle == h_session ||
+           completion.handle == h_session;
+  };
+
   std::vector<XHttpCompletion> pending;
   {
-    std::lock_guard<std::mutex> lock(g_xhttp_pump_mutex);
-    pending.swap(g_xhttp_pump_queue);
+    std::unique_lock<std::mutex> lock(g_xhttp_pump_mutex);
+
+    auto has_matching = [&]() {
+      return std::any_of(g_xhttp_pump_queue.begin(), g_xhttp_pump_queue.end(),
+                         matches_session);
+    };
+
+    if (!has_matching() && wait_ms != 0) {
+      if (wait_ms == 0xFFFFFFFFu) {
+        g_xhttp_pump_cv.wait(lock, has_matching);
+      } else {
+        g_xhttp_pump_cv.wait_for(lock, std::chrono::milliseconds(wait_ms),
+                                 has_matching);
+      }
+    }
+
+    for (auto it = g_xhttp_pump_queue.begin();
+         it != g_xhttp_pump_queue.end();) {
+      if (matches_session(*it)) {
+        pending.push_back(std::move(*it));
+        it = g_xhttp_pump_queue.erase(it);
+      } else {
+        ++it;
+      }
+    }
   }
 
   for (const auto& completion : pending) {
     ExecuteCompletion(completion);
   }
 
-  return true;
+  return static_cast<uint32_t>(ERROR_SUCCESS);
 }
 
-// Timeouts, security flags and the like mean nothing to the local transport,
-// but Destiny checks the result, so claim success.
 bool XHttp::SetOption(uint32_t handle, uint32_t option, const void* buffer,
                       uint32_t buffer_length) {
   return true;
