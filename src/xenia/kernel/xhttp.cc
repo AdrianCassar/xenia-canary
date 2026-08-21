@@ -124,8 +124,6 @@ constexpr uint32_t XHTTP_API_READ_DATA = 3;
 constexpr uint32_t XHTTP_API_WRITE_DATA = 4;
 constexpr uint32_t XHTTP_API_SEND_REQUEST = 5;
 
-KernelState* CurrentKernelState() { return kernel_state(); }
-
 // https://curl.se/libcurl/c/CURLOPT_WRITEFUNCTION.html
 size_t XHttpWriteCallback(void* data, size_t size, size_t nmemb,
                           void* clientp) {
@@ -291,7 +289,7 @@ uint32_t ResolveSessionHandle(const object_ref<XHttp>& obj) {
       return obj->session_handle;
     case XHttp::Kind::kRequest: {
       const auto connection =
-          CurrentKernelState()->object_table()->LookupObject<XHttp>(
+          kernel_state()->object_table()->LookupObject<XHttp>(
               obj->connection_handle);
       return connection ? connection->session_handle : 0;
     }
@@ -340,7 +338,7 @@ void ExecuteCompletion(const XHttpCompletion& c) {
 
 void DeliverCompletion(XHttpCompletion completion) {
   if (!completion.session_handle && completion.handle) {
-    const auto obj = CurrentKernelState()->object_table()->LookupObject<XHttp>(
+    const auto obj = kernel_state()->object_table()->LookupObject<XHttp>(
         completion.handle);
     completion.session_handle = ResolveSessionHandle(obj);
   }
@@ -503,8 +501,8 @@ uint32_t XHttp::ResolveStatusCallback() const {
 bool XHttp::Startup() {
   // Console returns 1 even without network access
 
-  if (CurrentKernelState()->emulator()->title_id() == kDashboardID ||
-      CurrentKernelState()->emulator()->title_id() == kAvatarEditorID) {
+  if (kernel_state()->emulator()->title_id() == kDashboardID ||
+      kernel_state()->emulator()->title_id() == kAvatarEditorID) {
     return true;
   }
 
@@ -519,7 +517,7 @@ void XHttp::Shutdown() {}
 
 uint32_t XHttp::Open(const std::string& user_agent, uint32_t flags) {
   auto session =
-      object_ref<XHttp>(new XHttp(CurrentKernelState(), XHttp::Kind::kSession));
+      object_ref<XHttp>(new XHttp(kernel_state(), XHttp::Kind::kSession));
   session->async = (flags & XHTTP_FLAG_ASYNC) != 0;
   session->user_agent = user_agent;
 
@@ -528,7 +526,7 @@ uint32_t XHttp::Open(const std::string& user_agent, uint32_t flags) {
 
 bool XHttp::CloseHandle(uint32_t handle) {
   const auto handle_obj =
-      CurrentKernelState()->object_table()->LookupObject<XHttp>(handle);
+      kernel_state()->object_table()->LookupObject<XHttp>(handle);
 
   if (!handle_obj) {
     XThread::SetLastError(X_ERROR_INVALID_HANDLE);
@@ -588,7 +586,7 @@ bool XHttp::CrackUrl(const std::string& url, uint32_t url_guest_address,
 
   std::smatch matches;
 
-  auto ProcessComponent = [flags, state = CurrentKernelState()](
+  auto ProcessComponent = [flags, state = kernel_state()](
                               const uint32_t component_result_ptr,
                               uint32_t& component_ptr,
                               uint32_t& component_length_ptr, uint32_t size) {
@@ -661,7 +659,7 @@ bool XHttp::CrackUrl(const std::string& url, uint32_t url_guest_address,
             }
 
             const char* scheme_data_ptr =
-                CurrentKernelState()->memory()->TranslateVirtual<char*>(
+                kernel_state()->memory()->TranslateVirtual<char*>(
                     result_ptr);
 
             std::string schema_data = std::string(scheme_data_ptr, length);
@@ -1008,7 +1006,7 @@ bool XHttp::CrackUrlW(const std::u16string& url, uint32_t url_guest_address,
 uint32_t XHttp::DoWork(uint32_t h_session, uint32_t wait_ms) {
   if (h_session) {
     const auto session =
-        CurrentKernelState()->object_table()->LookupObject<XHttp>(h_session);
+        kernel_state()->object_table()->LookupObject<XHttp>(h_session);
     if (!session || session->kind() != Kind::kSession) {
       XThread::SetLastError(XHTTP_ERROR_INCORRECT_HANDLE_TYPE);
       return 1;
@@ -1069,7 +1067,7 @@ bool XHttp::QueryOption(uint32_t handle, uint32_t option, void* buffer,
 uint32_t XHttp::OpenRequest(uint32_t connect_handle, const std::string& verb,
                             const std::string& path, uint32_t flags) {
   const auto connection =
-      CurrentKernelState()->object_table()->LookupObject<XHttp>(connect_handle);
+      kernel_state()->object_table()->LookupObject<XHttp>(connect_handle);
 
   if (!connection || connection->kind() != XHttp::Kind::kConnection) {
     XThread::SetLastError(XHTTP_ERROR_INCORRECT_HANDLE_TYPE);
@@ -1077,7 +1075,7 @@ uint32_t XHttp::OpenRequest(uint32_t connect_handle, const std::string& verb,
   }
 
   auto request =
-      object_ref<XHttp>(new XHttp(CurrentKernelState(), XHttp::Kind::kRequest));
+      object_ref<XHttp>(new XHttp(kernel_state(), XHttp::Kind::kRequest));
   request->async = connection->async;
   request->connection_handle = connect_handle;
   request->verb = verb.empty() ? "GET" : verb;
@@ -1091,7 +1089,7 @@ uint32_t XHttp::OpenRequest(uint32_t connect_handle, const std::string& verb,
 uint32_t XHttp::SetStatusCallback(uint32_t handle,
                                   uint32_t callback_guest_address) {
   const auto handle_obj =
-      CurrentKernelState()->object_table()->LookupObject<XHttp>(handle);
+      kernel_state()->object_table()->LookupObject<XHttp>(handle);
 
   if (!handle_obj) {
     XThread::SetLastError(XHTTP_ERROR_INCORRECT_HANDLE_TYPE);
@@ -1110,7 +1108,7 @@ bool XHttp::SendRequest(uint32_t hrequest, const char* headers,
                         uint32_t optional_length, uint32_t total_length,
                         uint32_t context) {
   const auto request =
-      CurrentKernelState()->object_table()->LookupObject<XHttp>(hrequest);
+      kernel_state()->object_table()->LookupObject<XHttp>(hrequest);
 
   if (!request || request->kind() != XHttp::Kind::kRequest) {
     XThread::SetLastError(XHTTP_ERROR_INCORRECT_HANDLE_TYPE);
@@ -1155,7 +1153,7 @@ bool XHttp::SendRequest(uint32_t hrequest, const char* headers,
 bool XHttp::WriteData(uint32_t hrequest, const void* buffer,
                       uint32_t bytes_to_write, uint32_t* bytes_written_out) {
   const auto request =
-      CurrentKernelState()->object_table()->LookupObject<XHttp>(hrequest);
+      kernel_state()->object_table()->LookupObject<XHttp>(hrequest);
 
   if (!request || request->kind() != XHttp::Kind::kRequest) {
     XThread::SetLastError(XHTTP_ERROR_INCORRECT_HANDLE_TYPE);
@@ -1190,7 +1188,7 @@ bool XHttp::WriteData(uint32_t hrequest, const void* buffer,
 // Where the transaction actually runs.
 bool XHttp::ReceiveResponse(uint32_t hrequest) {
   const auto request =
-      CurrentKernelState()->object_table()->LookupObject<XHttp>(hrequest);
+      kernel_state()->object_table()->LookupObject<XHttp>(hrequest);
 
   if (!request || request->kind() != XHttp::Kind::kRequest) {
     XThread::SetLastError(XHTTP_ERROR_INCORRECT_HANDLE_TYPE);
@@ -1232,7 +1230,7 @@ bool XHttp::QueryHeaders(uint32_t hrequest, uint32_t info_level,
   }
 
   const auto request =
-      CurrentKernelState()->object_table()->LookupObject<XHttp>(hrequest);
+      kernel_state()->object_table()->LookupObject<XHttp>(hrequest);
 
   if (!request || request->kind() != XHttp::Kind::kRequest) {
     XThread::SetLastError(XHTTP_ERROR_INCORRECT_HANDLE_TYPE);
@@ -1377,7 +1375,7 @@ bool XHttp::ReadData(uint32_t hrequest, void* buffer,
                      uint32_t buffer_guest_address, uint32_t bytes_to_read,
                      uint32_t* bytes_read_out) {
   const auto request =
-      CurrentKernelState()->object_table()->LookupObject<XHttp>(hrequest);
+      kernel_state()->object_table()->LookupObject<XHttp>(hrequest);
 
   if (!request || request->kind() != XHttp::Kind::kRequest) {
     XThread::SetLastError(XHTTP_ERROR_INCORRECT_HANDLE_TYPE);
@@ -1423,7 +1421,7 @@ bool XHttp::ReadData(uint32_t hrequest, void* buffer,
 uint32_t XHttp::Connect(uint32_t session_handle, const std::string& host,
                         uint16_t port, uint32_t flags) {
   const auto session =
-      CurrentKernelState()->object_table()->LookupObject<XHttp>(session_handle);
+      kernel_state()->object_table()->LookupObject<XHttp>(session_handle);
 
   if (!session || session->kind() != XHttp::Kind::kSession) {
     XThread::SetLastError(XHTTP_ERROR_INCORRECT_HANDLE_TYPE);
@@ -1431,7 +1429,7 @@ uint32_t XHttp::Connect(uint32_t session_handle, const std::string& host,
   }
 
   auto connection = object_ref<XHttp>(
-      new XHttp(CurrentKernelState(), XHttp::Kind::kConnection));
+      new XHttp(kernel_state(), XHttp::Kind::kConnection));
   connection->async = session->async;
   connection->session_handle = session_handle;
   connection->host = host;
