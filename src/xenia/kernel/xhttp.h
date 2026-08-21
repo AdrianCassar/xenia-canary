@@ -11,19 +11,51 @@
 #define XENIA_KERNEL_XHTTP_H_
 
 #include <mutex>
+#include <regex>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
-#include "xenia/kernel/xnet.h"
 #include "xenia/kernel/xobject.h"
 
 namespace xe {
 namespace kernel {
 
-// XHTTP session / connection / request handle hierarchy:
-// session (XHttpOpen) owns connections (XHttpConnect) owns requests
-// (XHttpOpenRequest).
+enum XHTTP_QUERY : uint32_t {
+  XHTTP_QUERY_CONTENT_LENGTH = 9,
+  XHTTP_QUERY_EXPIRES = 13,
+  XHTTP_QUERY_RAW_HEADERS_CRLF = 22,
+  XHTTP_QUERY_STATUS_CODE = 0xFFFE,
+  XHTTP_QUERY_CUSTOM = 0xFFFF,
+};
+
+enum XHTTP_QUERY_FLAGS : uint32_t {
+  XHTTP_QUERY_FLAG_REQUEST_HEADERS = 0x80000000,
+  XHTTP_QUERY_FLAG_SYSTEMTIME = 0x40000000,
+  XHTTP_QUERY_FLAG_NUMBER = 0x20000000,
+  XHTTP_QUERY_FLAG_FILETIME = 0x10000000,
+  XHTTP_QUERY_ATTRIBUTE_MASK = 0x0000FFFF,
+};
+
+enum XHTTP_FLAG : uint32_t {
+  XHTTP_FLAG_ASYNC = 0x10000000,
+};
+
+enum XHTTP_CALLBACK_STATUS : uint32_t {
+  XHTTP_CALLBACK_STATUS_HEADERS_AVAILABLE = 0x00020000,
+  XHTTP_CALLBACK_STATUS_DATA_AVAILABLE = 0x00040000,
+  XHTTP_CALLBACK_STATUS_READ_COMPLETE = 0x00080000,
+  XHTTP_CALLBACK_STATUS_WRITE_COMPLETE = 0x00100000,
+  XHTTP_CALLBACK_STATUS_REQUEST_ERROR = 0x00200000,
+  XHTTP_CALLBACK_STATUS_SENDREQUEST_COMPLETE = 0x00400000,
+};
+
+enum XHTTP_ASYNC_API : uint32_t {
+  XHTTP_API_RECEIVE_RESPONSE = 1,
+  XHTTP_API_READ_DATA = 3,
+  XHTTP_API_WRITE_DATA = 4,
+  XHTTP_API_SEND_REQUEST = 5,
+};
+
 class XHttp : public XObject {
  public:
   static const XObject::Type kObjectType = XObject::Type::Http;
@@ -61,8 +93,6 @@ class XHttp : public XObject {
   // Status callback (XHttpSetStatusCallback).
   uint32_t status_callback = 0;
 
-  // Filled by Perform(). perform_mutex serializes the first perform so other
-  // threads don't read a partial response.
   std::mutex perform_mutex;
   bool performed = false;
   bool succeeded = false;
@@ -71,51 +101,44 @@ class XHttp : public XObject {
   std::string response_body;
   size_t read_offset = 0;
 
-  // NetDll_XHttp* implementation surface.
-  static bool Startup();
-  static void Shutdown();
-  static uint32_t Open(const std::string& user_agent, uint32_t flags);
-  static bool CloseHandle(uint32_t handle);
-  static uint32_t Connect(uint32_t session_handle, const std::string& host,
-                          uint16_t port, uint32_t flags);
-  static uint32_t OpenRequest(uint32_t connect_handle, const std::string& verb,
-                              const std::string& path, uint32_t flags);
-  static uint32_t SetStatusCallback(uint32_t handle,
-                                    uint32_t callback_guest_address);
-  static bool SendRequest(uint32_t hrequest, const char* headers,
-                          uint32_t headers_length, const void* optional,
-                          uint32_t optional_length, uint32_t total_length,
-                          uint32_t context);
-  static bool WriteData(uint32_t hrequest, const void* buffer,
-                        uint32_t bytes_to_write, uint32_t* bytes_written_out);
-  static bool ReceiveResponse(uint32_t hrequest);
-  static bool QueryHeaders(uint32_t hrequest, uint32_t info_level,
-                           const char* name, uint8_t* buffer,
-                           xe::be<uint32_t>* buffer_length_ptr,
-                           xe::be<uint32_t>* index_ptr);
-  static bool ReadData(uint32_t hrequest, void* buffer,
-                       uint32_t buffer_guest_address, uint32_t bytes_to_read,
-                       uint32_t* bytes_read_out);
-  static bool CrackUrl(const std::string& url, uint32_t url_guest_address,
-                       uint32_t url_length, uint32_t flags,
-                       XHTTP_URL_COMPONENTS* components);
-  static bool CrackUrlW(const std::u16string& url, uint32_t url_guest_address,
-                        uint32_t url_length, uint32_t flags,
-                        XHTTP_URL_COMPONENTS* components);
-  // Drain async completions for hSession. wait_ms=0 polls; 0xFFFFFFFF waits
-  // forever. Returns 0 on success (XHTTP / Destiny convention).
-  static uint32_t DoWork(uint32_t h_session, uint32_t wait_ms);
-  static bool SetOption(uint32_t handle, uint32_t option, const void* buffer,
-                        uint32_t buffer_length);
-  static bool QueryOption(uint32_t handle, uint32_t option, void* buffer,
-                          uint32_t* buffer_length);
-
   void Perform();
   uint32_t ResolveStatusCallback() const;
 
  private:
   Kind kind_;
 };
+
+// Queued notification, drained on the title's thread by XHttpDoWork.
+struct XHttpCompletion {
+  uint32_t handle = 0;          // hInternet (request handle)
+  uint32_t session_handle = 0;  // Which session owns the req.
+  uint32_t context = 0;         // dwContext
+  uint32_t callback = 0;        // guest status callback
+  uint32_t status = 0;          // XHTTP_CALLBACK_STATUS_*
+  uint32_t info_ptr = 0;        // lpvStatusInformation (guest ptr) or 0
+  uint32_t info_len = 0;        // dwStatusInformationLength
+
+  // REQUEST_ERROR: pass an XHTTP_ASYNC_RESULT {api, error}.
+  bool alloc_error = false;
+  uint32_t error_api = 0;
+  uint32_t error_code = 0;
+
+  // WRITE_COMPLETE: pass a DWORD holding write_count.
+  bool alloc_write_count = false;
+  uint32_t write_count = 0;
+};
+
+std::vector<std::string> XHttpSplitHeaders(std::string request_headers);
+bool XHttpFindHeaderValue(const std::string& raw_headers, const char* name,
+                          std::string* out_value);
+const std::regex& XHttpUrlRegex();
+std::string XHttpUnescapeUrl(const std::string& escaped);
+void XHttpDeliverCompletion(XHttpCompletion completion);
+void XHttpDeliverReceiveResponse(const object_ref<XHttp>& request,
+                                 uint32_t handle, uint32_t context,
+                                 uint32_t callback);
+
+uint32_t XHttpDoWork(uint32_t h_session, uint32_t wait_ms);
 
 }  // namespace kernel
 }  // namespace xe
