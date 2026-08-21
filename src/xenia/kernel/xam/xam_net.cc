@@ -3021,14 +3021,14 @@ dword_result_t NetDll_XHttpWriteData_entry(dword_t caller, dword_t hrequest,
     completion.callback = request->ResolveStatusCallback();
     completion.status = XHTTP_CALLBACK_STATUS_WRITE_COMPLETE;
     completion.alloc_write_count = true;
-    completion.write_count = bytes_to_write;
+    completion.write_count = static_cast<uint32_t>(bytes_to_write);
     XHttpDeliverCompletion(std::move(completion));
 
     return true;
   }
 
   if (bytes_written_ptr) {
-    *bytes_written_ptr = bytes_to_write;
+    *bytes_written_ptr = static_cast<uint32_t>(bytes_to_write);
   }
 
   return true;
@@ -3046,12 +3046,13 @@ dword_result_t NetDll_XHttpReceiveResponse_entry(dword_t caller,
       return false;
     }
 
-    XELOGI("XHttp ReceiveResponse: handle={:08X} async={}", hrequest,
-           request->async);
+    XELOGI("XHttp ReceiveResponse: handle={:08X} async={}",
+           static_cast<uint32_t>(hrequest), request->async);
 
     if (request->async) {
-      XHttpDeliverReceiveResponse(request, hrequest, request->context,
-                             request->ResolveStatusCallback());
+      XHttpDeliverReceiveResponse(request, static_cast<uint32_t>(hrequest),
+                                  request->context,
+                                  request->ResolveStatusCallback());
 
       return true;
     }
