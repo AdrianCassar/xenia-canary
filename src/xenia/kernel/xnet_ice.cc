@@ -282,24 +282,22 @@ void XNetIce::Establish(uint32_t online_ip_nbo, XNetPeerType type) {
   if (!cvars::ice_enabled || !online_ip_nbo) {
     return;
   }
-  {
-    std::lock_guard lock(mutex_);
-    if (!initialized_) {
-      XELOGW("XNetIce Establish before init peer={}",
-             OnlineIpToPeerId(online_ip_nbo));
-      return;
-    }
-    Peer* peer = AllocPeerLocked(online_ip_nbo, type);
-    if (!peer) {
-      XELOGW("XNetIce peer table full");
-      return;
-    }
-    XELOGI("XNetIce Establish peer={} type={} has_agent={} status={}",
-           peer->peer_id, PeerTypeName(type), peer->agent != nullptr,
-           IceStatusName(peer->status));
-    if (!peer->agent) {
-      StartOfferLocked(peer);
-    }
+  std::lock_guard lock(mutex_);
+  if (!initialized_) {
+    XELOGW("XNetIce Establish before init peer={}",
+           OnlineIpToPeerId(online_ip_nbo));
+    return;
+  }
+  Peer* peer = AllocPeerLocked(online_ip_nbo, type);
+  if (!peer) {
+    XELOGW("XNetIce peer table full");
+    return;
+  }
+  XELOGI("XNetIce Establish peer={} type={} has_agent={} status={}",
+         peer->peer_id, PeerTypeName(type), peer->agent != nullptr,
+         IceStatusName(peer->status));
+  if (!peer->agent) {
+    StartOfferLocked(peer);
   }
 }
 

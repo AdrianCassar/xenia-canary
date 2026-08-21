@@ -110,7 +110,7 @@ class XNetIce {
   static void OnJuiceRecv(juice_agent* agent, const char* data, size_t size,
                           void* user);
 
-  std::mutex mutex_;
+  std::recursive_mutex mutex_;
   bool initialized_ = false;
   XNetSignalling* signalling_ = nullptr;
   std::string local_peer_id_;

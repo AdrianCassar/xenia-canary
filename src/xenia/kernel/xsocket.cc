@@ -140,6 +140,7 @@ int XSocket::Close() {
 
   std::unique_lock socket_lock(receive_socket_mutex_);
 
+  int ret;
 #if XE_PLATFORM_WIN32
   ret = closesocket(static_cast<SOCKET>(native_handle_));
 #else
@@ -1322,7 +1323,7 @@ int XSocket::Recv(uint8_t* buf, uint32_t buf_len, uint32_t flags) {
   if (cvars::ice_enabled && proto_ == X_IPPROTO_TCP) {
     int got = XNetStream::Instance().Recv(this, buf, buf_len);
     if (got == -2) {
-      SetLastWSAError(X_WSAError::X_WSAEWOULDBLOCK);
+      XWSASetLastError(X_WSA_ERROR::X_WSAEWOULDBLOCK);
       return -1;
     }
     if (got >= 0) {
