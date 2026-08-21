@@ -3152,7 +3152,8 @@ dword_result_t NetDll_XHttpQueryHeaders_entry(dword_t caller, dword_t hrequest,
     XELOGI(
         "XHttp QueryHeaders: info_level={:08X} attribute={} number={} "
         "status_code={}",
-        info_level, attribute, query_decimal, request->status_code);
+        static_cast<uint32_t>(info_level), attribute, query_decimal,
+        request->status_code);
 
     if (query_decimal) {
       uint32_t value = 0;
