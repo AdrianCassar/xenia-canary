@@ -7,7 +7,10 @@
  ******************************************************************************
  */
 
-#include "xenia/kernel/util/xlast.h"
+extern "C" {
+#include "third_party/FFmpeg/libavutil/base64.h"
+}
+
 #include "third_party/zlib-ng/zlib-ng.h"
 #include "xenia/base/cvar.h"
 #include "xenia/base/filesystem.h"
@@ -15,6 +18,7 @@
 #include "xenia/base/string_util.h"
 #include "xenia/kernel/util/presence_string_builder.h"
 #include "xenia/kernel/util/shim_utils.h"
+#include "xenia/kernel/util/xlast.h"
 #include "xenia/kernel/xconfig.h"
 
 namespace xe {
@@ -339,6 +343,9 @@ XLast::XLast(const uint8_t* compressed_xml_data,
     return;
   }
 
+  xlast_compressed_xml_ = std::vector(
+      compressed_xml_data, compressed_xml_data + compressed_data_size);
+
   parsed_xlast_ = std::make_unique<pugi::xml_document>();
   xlast_decompressed_xml_.resize(decompressed_data_size);
 
@@ -656,6 +663,52 @@ std::vector<uint32_t> XLast::GetAllValuesFromNode(
   return result;
 }
 
+std::string XLast::RawSource() const {
+  std::u16string xlast_src;
+
+  // uint8_t -> char16_t
+  xlast_src.resize(xlast_decompressed_xml_.size() / sizeof(char16_t));
+
+  std::copy(xlast_decompressed_xml_.begin(), xlast_decompressed_xml_.end(),
+            reinterpret_cast<uint8_t*>(xlast_src.data()));
+
+  return xe::to_utf8(xlast_src);
+}
+
+std::optional<std::string> XLast::SerializeSourceToBase64(
+    bool compressed) const {
+  std::vector<uint8_t> xlast_src;
+
+  if (compressed) {
+    xlast_src = xlast_compressed_xml_;
+  } else {
+    const std::string raw_xlast_src = RawSource();
+    xlast_src =
+        std::vector<uint8_t>(raw_xlast_src.begin(), raw_xlast_src.end());
+  }
+
+  const uint32_t size = static_cast<uint32_t>(xlast_src.size());
+
+  if (size == 0) {
+    return std::nullopt;
+  }
+
+  const uint32_t out_size = AV_BASE64_SIZE(size);
+  std::vector<char> serialized_data(out_size);
+
+  const char* out = av_base64_encode(
+      serialized_data.data(), out_size,
+      reinterpret_cast<const uint8_t*>(xlast_src.data()), size);
+
+  if (!out) {
+    return std::nullopt;
+  }
+
+  const std::string base64(serialized_data.data());
+
+  return base64;
+}
+
 void XLast::Dump(std::filesystem::path file_path) const {
   if (!HasXLast()) {
     return;
@@ -668,17 +721,9 @@ void XLast::Dump(std::filesystem::path file_path) const {
   std::ofstream xlast_src_stream(file_path, std::ios::binary);
 
   if (xlast_src_stream.is_open()) {
-    std::u16string xlast_src;
+    const std::string xlast_src = RawSource();
 
-    // uint8_t -> char16_t
-    xlast_src.resize(xlast_decompressed_xml_.size() / 2);
-
-    std::copy(xlast_decompressed_xml_.begin(), xlast_decompressed_xml_.end(),
-              reinterpret_cast<uint8_t*>(xlast_src.data()));
-
-    const std::string xlast_src_clean = xe::to_utf8(xlast_src);
-
-    xlast_src_stream.write(xlast_src_clean.c_str(), xlast_src_clean.size());
+    xlast_src_stream.write(xlast_src.c_str(), xlast_src.size());
     xlast_src_stream.close();
 
     XELOGI("XLast source saved: {}", file_path.filename());

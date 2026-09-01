@@ -1113,6 +1113,47 @@ const std::vector<std::unique_ptr<SessionObjectJSON>> XLiveAPI::SessionSearch(
   doc.AddMember("resultsCount", data->num_results, doc.GetAllocator());
   doc.AddMember("numUsers", num_users, doc.GetAllocator());
 
+  const xam::XUSER_CONTEXT* contexts_ptr =
+      kernel_memory()->TranslateVirtual<xam::XUSER_CONTEXT*>(data->ctx_ptr);
+
+  const xam::XUSER_PROPERTY* properties_ptr =
+      kernel_memory()->TranslateVirtual<xam::XUSER_PROPERTY*>(data->props_ptr);
+
+  std::vector<xam::XUSER_CONTEXT> guest_contexts(contexts_ptr,
+                                                 contexts_ptr + data->num_ctx);
+
+  std::vector<xam::XUSER_PROPERTY> guest_properties(
+      properties_ptr, properties_ptr + data->num_props);
+
+  std::vector<xam::Property> property_filters;
+  std::vector<std::string> serialized_property_filters;
+
+  for (const auto& guest_context : guest_contexts) {
+    const xam::Property context(guest_context.context_id, guest_context.value);
+
+    if (context.IsContext()) {
+      property_filters.push_back(context);
+    }
+  }
+
+  for (auto& guest_property : guest_properties) {
+    const xam::Property property(
+        guest_property.property_id.get(), sizeof(xam::X_USER_DATA),
+        reinterpret_cast<uint8_t*>(&guest_property.data.data));
+
+    if (!property.IsContext()) {
+      property_filters.push_back(property);
+    }
+  }
+
+  for (const auto& property : property_filters) {
+    const auto serialize_prop = property.SerializeToBase64();
+
+    if (serialize_prop.has_value()) {
+      serialized_property_filters.push_back(serialize_prop.value());
+    }
+  }
+
   // Filter own sessions from search.
   if (user_profile) {
     const std::string searcher_xuid_str =
@@ -1120,6 +1161,16 @@ const std::vector<std::unique_ptr<SessionObjectJSON>> XLiveAPI::SessionSearch(
 
     doc.AddMember("searcher_xuid", searcher_xuid_str, doc.GetAllocator());
   }
+
+  Value properties_array(kArrayType);
+
+  for (const auto& serialized_property : serialized_property_filters) {
+    Value serialized_value(serialized_property, doc.GetAllocator());
+
+    properties_array.PushBack(serialized_value.Move(), doc.GetAllocator());
+  }
+
+  doc.AddMember("filters", properties_array, doc.GetAllocator());
 
   rapidjson::StringBuffer buffer;
   PrettyWriter<rapidjson::StringBuffer> writer(buffer);
@@ -1391,7 +1442,18 @@ void XLiveAPI::XSessionCreate(uint64_t sessionId, XGI_SESSION_CREATE* data) {
 
   const std::string xuid_str = fmt::format("{:016X}", xuid.get());
 
-  SessionObjectJSON session = SessionObjectJSON();
+  const auto xlast =
+      kernel_state()->emulator()->game_info_database()->GetXLast();
+
+  // Technically we could just send the matchmaking query instead of complete
+  // XLast source.
+  std::optional<std::string> xlast_source_base64;
+
+  if (xlast) {
+    xlast_source_base64 = xlast->SerializeSourceToBase64();
+  }
+
+  SessionObjectJSON session;
 
   session.SessionID(sessionId_str);
   session.XUID(xuid_str);
@@ -1405,6 +1467,10 @@ void XLiveAPI::XSessionCreate(uint64_t sessionId, XGI_SESSION_CREATE* data) {
   session.HostAddress(OnlineIP_str());
   session.MacAddress(GetConsoleMacAddress().to_string());
   session.Port(GetPlayerPort());
+
+  if (xlast_source_base64.has_value()) {
+    session.XLast(xlast_source_base64.value());
+  }
 
   std::string session_output;
   bool valid = session.Serialize(session_output);

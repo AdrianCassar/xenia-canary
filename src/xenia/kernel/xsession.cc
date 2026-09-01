@@ -1018,14 +1018,6 @@ X_RESULT XSession::GetSessions(KernelState* kernel_state,
       kernel_state->memory()->TranslateVirtual<SEARCH_RESULTS*>(
           search_data->search_results_ptr);
 
-  xam::XUSER_CONTEXT* search_contexts_ptr =
-      kernel_state->memory()->TranslateVirtual<xam::XUSER_CONTEXT*>(
-          search_data->ctx_ptr);
-
-  xam::XUSER_PROPERTY* search_properties_ptr =
-      kernel_state->memory()->TranslateVirtual<xam::XUSER_PROPERTY*>(
-          search_data->props_ptr);
-
   util::XLastMatchmakingQuery* matchmaking_query = nullptr;
 
   if (kernel_state->emulator()->game_info_database()->HasXLast()) {
@@ -1034,39 +1026,7 @@ X_RESULT XSession::GetSessions(KernelState* kernel_state,
                             ->GetXLast()
                             ->GetMatchmakingQuery();
 
-    const auto paramaters =
-        matchmaking_query->GetParameters(search_data->proc_index);
-    const auto filters_left =
-        matchmaking_query->GetFiltersLeft(search_data->proc_index);
-    const auto filters_right =
-        matchmaking_query->GetFiltersRight(search_data->proc_index);
     const auto returns = matchmaking_query->GetReturns(search_data->proc_index);
-
-    XELOGI("Matchmaking Query Name: {}",
-           matchmaking_query->GetName(search_data->proc_index));
-
-    for (uint32_t i = 0; i < search_data->num_ctx; i++) {
-      xam::XUSER_CONTEXT& context = search_contexts_ptr[i];
-
-      auto user =
-          kernel_state->xam_state()->GetUserProfile(search_data->user_index);
-
-      std::u16string context_desc =
-          kernel_state->xam_state()->user_tracker()->GetContextDescription(
-              user->xuid(), context.context_id);
-
-      XELOGD(xe::to_utf8(context_desc));
-    }
-
-    for (uint32_t i = 0; i < search_data->num_props; i++) {
-      xam::XUSER_PROPERTY& property = search_properties_ptr[i];
-
-      std::u16string property_desc =
-          kernel_state->xam_state()->user_tracker()->GetPropertyDescription(
-              property.property_id);
-
-      XELOGD(xe::to_utf8(property_desc));
-    }
   }
 
   for (uint32_t i = 0; i < session_count; i++) {
@@ -1086,12 +1046,10 @@ X_RESULT XSession::GetSessions(KernelState* kernel_state,
     }
 
     FillSessionContext(kernel_state->memory(), search_data->proc_index,
-                       matchmaking_query, contexts, search_data->num_ctx,
-                       search_contexts_ptr,
+                       matchmaking_query, contexts,
                        &search_results_ptr->results_ptr[i]);
     FillSessionProperties(kernel_state->memory(), search_data->proc_index,
-                          matchmaking_query, properties, search_data->num_props,
-                          search_properties_ptr,
+                          matchmaking_query, properties,
                           &search_results_ptr->results_ptr[i]);
   }
 
@@ -1232,14 +1190,8 @@ void XSession::FillSessionSearchResult(const SessionObjectJSON session,
 void XSession::FillSessionContext(
     Memory* memory, uint32_t matchmaking_index,
     util::XLastMatchmakingQuery* matchmaking_query,
-    std::vector<xam::Property> contexts, uint32_t filter_contexts_count,
-    xam::XUSER_CONTEXT* filter_contexts_ptr, XSESSION_SEARCHRESULT* result) {
+    std::vector<xam::Property> contexts, XSESSION_SEARCHRESULT* result) {
   if (matchmaking_query) {
-    const auto paramaters = matchmaking_query->GetParameters(matchmaking_index);
-    const auto filters_left =
-        matchmaking_query->GetFiltersLeft(matchmaking_index);
-    const auto filters_right =
-        matchmaking_query->GetFiltersRight(matchmaking_index);
     const auto returns = matchmaking_query->GetReturns(matchmaking_index);
   }
 
@@ -1250,10 +1202,6 @@ void XSession::FillSessionContext(
 
   xam::XUSER_CONTEXT* contexts_to_get =
       memory->TranslateVirtual<xam::XUSER_CONTEXT*>(context_ptr);
-
-  for (uint32_t i = 0; i < filter_contexts_count; i++) {
-    xam::XUSER_CONTEXT& filter_context = filter_contexts_ptr[i];
-  }
 
   uint32_t i = 0;
   for (const auto& context : contexts) {
@@ -1268,14 +1216,8 @@ void XSession::FillSessionContext(
 void XSession::FillSessionProperties(
     Memory* memory, uint32_t matchmaking_index,
     util::XLastMatchmakingQuery* matchmaking_query,
-    std::vector<xam::Property> properties, uint32_t filter_properties_count,
-    xam::XUSER_PROPERTY* filter_properties_ptr, XSESSION_SEARCHRESULT* result) {
+    std::vector<xam::Property> properties, XSESSION_SEARCHRESULT* result) {
   if (matchmaking_query) {
-    const auto paramaters = matchmaking_query->GetParameters(matchmaking_index);
-    const auto filters_left =
-        matchmaking_query->GetFiltersLeft(matchmaking_index);
-    const auto filters_right =
-        matchmaking_query->GetFiltersRight(matchmaking_index);
     const auto returns = matchmaking_query->GetReturns(matchmaking_index);
   }
 
@@ -1286,10 +1228,6 @@ void XSession::FillSessionProperties(
 
   xam::XUSER_PROPERTY* properties_to_set =
       memory->TranslateVirtual<xam::XUSER_PROPERTY*>(properties_ptr);
-
-  for (uint32_t i = 0; i < filter_properties_count; i++) {
-    xam::XUSER_PROPERTY& filter_property = filter_properties_ptr[i];
-  }
 
   uint32_t i = 0;
   for (const auto& property : properties) {

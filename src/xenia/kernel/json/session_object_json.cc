@@ -157,6 +157,9 @@ bool SessionObjectJSON::Serialize(
   writer->String("port");
   writer->Int(port_);
 
+  writer->String("xlast_src");
+  writer->String(xlast_src_);
+
   writer->EndObject();
 
   return true;
