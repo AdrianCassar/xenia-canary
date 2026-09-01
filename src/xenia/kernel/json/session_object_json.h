@@ -124,6 +124,9 @@ class SessionObjectJSON : public BaseObjectJSON {
     players_ = players;
   }
 
+  const std::string& XLast() const { return xlast_src_; }
+  void XLast(const std::string& xlast_src) { xlast_src_ = xlast_src; }
+
  private:
   std::string sessionid_;
   std::string xuid_;
@@ -137,6 +140,7 @@ class SessionObjectJSON : public BaseObjectJSON {
   std::string hostAddress_;
   std::string macAddress_;
   xe::be<uint16_t> port_;
+  std::string xlast_src_;
 
   // GetDetails
   xe::be<uint32_t> openPublicSlotsCount_;
