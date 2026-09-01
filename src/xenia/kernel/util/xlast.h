@@ -164,6 +164,11 @@ class XLast {
       const pugi::xpath_node node, const std::string child_name,
       const std::string attribute_name);
 
+  std::string RawSource() const;
+
+  std::optional<std::string> SerializeSourceToBase64(
+      bool compressed = true) const;
+
   void Dump(std::filesystem::path file_path) const;
 
   const bool HasXLast() const { return !xlast_decompressed_xml_.empty(); };
@@ -171,6 +176,7 @@ class XLast {
  private:
   std::string GetLocaleStringFromLanguage(XLanguage language) const;
 
+  std::vector<uint8_t> xlast_compressed_xml_;
   std::vector<uint8_t> xlast_decompressed_xml_;
   std::unique_ptr<pugi::xml_document> parsed_xlast_ = nullptr;
   pugi::xml_parse_result parse_result_ = {};
