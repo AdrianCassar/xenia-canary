@@ -1018,39 +1018,67 @@ X_RESULT XSession::GetSessions(KernelState* kernel_state,
       kernel_state->memory()->TranslateVirtual<SEARCH_RESULTS*>(
           search_data->search_results_ptr);
 
-  util::XLastMatchmakingQuery* matchmaking_query = nullptr;
-
-  if (kernel_state->emulator()->game_info_database()->HasXLast()) {
-    matchmaking_query = kernel_state->emulator()
-                            ->game_info_database()
-                            ->GetXLast()
-                            ->GetMatchmakingQuery();
-
-    const auto returns = matchmaking_query->GetReturns(search_data->proc_index);
-  }
-
   for (uint32_t i = 0; i < session_count; i++) {
-    std::vector<xam::Property> contexts = {};
-    std::vector<xam::Property> properties = {};
+    std::vector<xam::Property> returned_contexts;
+    std::vector<xam::Property> returned_properties;
 
-    const auto all_properties =
-        kernel_state->GetXboxLiveAPI()->SessionPropertiesGet(
-            sessions.at(i)->SessionID_UInt());
+    const auto returns = kernel_state->GetXboxLiveAPI()->SessionPropertiesGet(
+        sessions.at(i)->SessionID_UInt(), search_data->proc_index);
 
-    for (const auto& property : all_properties) {
+    for (const auto& property : returns) {
       if (property.IsContext()) {
-        contexts.push_back(property);
+        returned_contexts.push_back(property);
       } else {
-        properties.push_back(property);
+        returned_properties.push_back(property);
       }
     }
 
-    FillSessionContext(kernel_state->memory(), search_data->proc_index,
-                       matchmaking_query, contexts,
-                       &search_results_ptr->results_ptr[i]);
-    FillSessionProperties(kernel_state->memory(), search_data->proc_index,
-                          matchmaking_query, properties,
-                          &search_results_ptr->results_ptr[i]);
+    XSESSION_SEARCHRESULT& search_results = search_results_ptr->results_ptr[i];
+
+    // Contexts
+
+    search_results.contexts_count =
+        static_cast<uint32_t>(returned_contexts.size());
+
+    const uint32_t context_ptr = kernel_state->memory()->SystemHeapAlloc(
+        sizeof(xam::XUSER_CONTEXT) * search_results.contexts_count);
+
+    xam::XUSER_CONTEXT* contexts =
+        kernel_state->memory()->TranslateVirtual<xam::XUSER_CONTEXT*>(
+            context_ptr);
+
+    for (uint32_t i = 0; const auto& context : returned_contexts) {
+      contexts[i].context_id = context.GetPropertyId().value;
+      contexts[i].value = context.get_data()->data.u32;
+      i++;
+    }
+
+    search_results.contexts_ptr = context_ptr;
+
+    // Properties
+
+    search_results.properties_count =
+        static_cast<uint32_t>(returned_properties.size());
+
+    const uint32_t properties_ptr = kernel_state->memory()->SystemHeapAlloc(
+        sizeof(xam::XUSER_PROPERTY) * search_results.properties_count);
+
+    xam::XUSER_PROPERTY* properties =
+        kernel_state->memory()->TranslateVirtual<xam::XUSER_PROPERTY*>(
+            properties_ptr);
+
+    for (uint32_t i = 0; const auto& property : returned_properties) {
+      if (property.requires_additional_data()) {
+        properties[i].data.data.unicode.ptr =
+            kernel_state->memory()->SystemHeapAlloc(
+                static_cast<uint32_t>(property.get_data()->data.unicode.size));
+      }
+
+      property.WriteToGuest(&properties[i]);
+      i++;
+    }
+
+    search_results.properties_ptr = properties_ptr;
   }
 
   return X_ERROR_SUCCESS;
@@ -1185,62 +1213,6 @@ void XSession::FillSessionSearchResult(const SessionObjectJSON session,
   XLiveAPI::GetXnAddrFromSessionObject(session, &result->info.hostAddress);
 
   GenerateIdentityExchangeKey(&result->info.keyExchangeKey);
-}
-
-void XSession::FillSessionContext(
-    Memory* memory, uint32_t matchmaking_index,
-    util::XLastMatchmakingQuery* matchmaking_query,
-    std::vector<xam::Property> contexts, XSESSION_SEARCHRESULT* result) {
-  if (matchmaking_query) {
-    const auto returns = matchmaking_query->GetReturns(matchmaking_index);
-  }
-
-  result->contexts_count = static_cast<uint32_t>(contexts.size());
-
-  const uint32_t context_ptr = memory->SystemHeapAlloc(static_cast<uint32_t>(
-      sizeof(xam::XUSER_CONTEXT) * result->contexts_count));
-
-  xam::XUSER_CONTEXT* contexts_to_get =
-      memory->TranslateVirtual<xam::XUSER_CONTEXT*>(context_ptr);
-
-  uint32_t i = 0;
-  for (const auto& context : contexts) {
-    contexts_to_get[i].context_id = context.GetPropertyId().value;
-    contexts_to_get[i].value = context.get_data()->data.u32;
-    i++;
-  }
-
-  result->contexts_ptr = context_ptr;
-}
-
-void XSession::FillSessionProperties(
-    Memory* memory, uint32_t matchmaking_index,
-    util::XLastMatchmakingQuery* matchmaking_query,
-    std::vector<xam::Property> properties, XSESSION_SEARCHRESULT* result) {
-  if (matchmaking_query) {
-    const auto returns = matchmaking_query->GetReturns(matchmaking_index);
-  }
-
-  result->properties_count = static_cast<uint32_t>(properties.size());
-
-  const uint32_t properties_ptr = memory->SystemHeapAlloc(static_cast<uint32_t>(
-      sizeof(xam::XUSER_PROPERTY) * result->properties_count));
-
-  xam::XUSER_PROPERTY* properties_to_set =
-      memory->TranslateVirtual<xam::XUSER_PROPERTY*>(properties_ptr);
-
-  uint32_t i = 0;
-  for (const auto& property : properties) {
-    if (property.requires_additional_data()) {
-      properties_to_set[i].data.data.unicode.ptr = memory->SystemHeapAlloc(
-          static_cast<uint32_t>(property.get_data()->data.unicode.size));
-    }
-
-    property.WriteToGuest(&properties_to_set[i]);
-    i++;
-  }
-
-  result->properties_ptr = properties_ptr;
 }
 
 bool XSession::IsPresenceEnabled() const {

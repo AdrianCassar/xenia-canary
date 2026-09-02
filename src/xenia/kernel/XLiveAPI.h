@@ -143,7 +143,8 @@ class XLiveAPI {
 
   bool SessionPropertiesSet(uint64_t session_id, const uint64_t xuid);
 
-  const std::vector<xam::Property> SessionPropertiesGet(uint64_t session_id);
+  const std::vector<xam::Property> SessionPropertiesGet(uint64_t session_id,
+                                                        uint32_t query_id);
 
   const std::unique_ptr<SessionObjectJSON> SessionDetails(uint64_t sessionId);
 
