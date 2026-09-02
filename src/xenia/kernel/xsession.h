@@ -415,16 +415,6 @@ class XSession : public XObject {
   static void FillSessionSearchResult(const SessionObjectJSON session_info,
                                       XSESSION_SEARCHRESULT* result);
 
-  static void FillSessionContext(Memory* memory, uint32_t matchmaking_index,
-                                 util::XLastMatchmakingQuery* matchmaking_query,
-                                 std::vector<xam::Property> contexts,
-                                 XSESSION_SEARCHRESULT* result);
-
-  static void FillSessionProperties(
-      Memory* memory, uint32_t matchmaking_index,
-      util::XLastMatchmakingQuery* matchmaking_query,
-      std::vector<xam::Property> properties, XSESSION_SEARCHRESULT* result);
-
   void NotifySessionCreationWarning(uint32_t user_index) const;
 
   uint64_t owner_xuid_;

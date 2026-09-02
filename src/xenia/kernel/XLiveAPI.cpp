@@ -1513,8 +1513,7 @@ bool XLiveAPI::SessionPropertiesSet(uint64_t session_id, uint64_t xuid) {
   std::vector<xam::Property> properties = {};
 
   // XMAT Filtering:
-  // We do not filter returned properties via XSessionSearch procedure index
-  // which is defined in XLAST. In the meantime we can filter by XMAT instead.
+  // Only send properties that are used in matchmaking queries.
   //
   // This prevents 4D5307D5 trying to set property XPROPERTY_GAMER_MU and
   // XPROPERTY_GAMER_SIGMA without data_address in XGIUserSetPropertyEx when
@@ -1548,21 +1547,6 @@ bool XLiveAPI::SessionPropertiesSet(uint64_t session_id, uint64_t xuid) {
         XELOGI("{}: Property {:08X} is unset!", __func__,
                property_attribute.value);
       }
-    } else {
-      std::string description;
-
-      if (property.has_value()) {
-        description =
-            string_util::remove_eol(string_util::trim(property->description));
-      }
-
-      if (description.empty()) {
-        XELOGI("{}: Skipping non-matchmaking property: {:08X}", __func__,
-               property_attribute.value);
-      } else {
-        XELOGI("{}: Skipping non-matchmaking property: {} - {:08X}", __func__,
-               description, property_attribute.value);
-      }
     }
   }
 
@@ -1570,9 +1554,6 @@ bool XLiveAPI::SessionPropertiesSet(uint64_t session_id, uint64_t xuid) {
       kernel_state()->xam_state()->user_tracker()->GetUserContextIds(
           user_profile->xuid());
 
-  // XMAT Filtering:
-  // We do not filter returned contexts via XSessionSearch procedure index which
-  // is defined in XLAST. In the mean time we can filter by XMAT instead.
   for (const auto& context_attribute : contexts_ids) {
     const auto context_property =
         kernel_state()->emulator()->game_info_database()->GetContext(
@@ -1589,17 +1570,6 @@ bool XLiveAPI::SessionPropertiesSet(uint64_t session_id, uint64_t xuid) {
         } else {
           XELOGI("{}: Context {:08X} is unset!", __func__,
                  context_attribute.value);
-        }
-      } else {
-        const std::string description = string_util::remove_eol(
-            string_util::trim(context_property->description));
-
-        if (description.empty()) {
-          XELOGI("{}: Skipping non-matchmaking context: {:08X}", __func__,
-                 context_attribute.value);
-        } else {
-          XELOGI("{}: Skipping non-matchmaking context: {} {:08X}", __func__,
-                 description, context_attribute.value);
         }
       }
     } else {
@@ -1628,11 +1598,12 @@ bool XLiveAPI::SessionPropertiesSet(uint64_t session_id, uint64_t xuid) {
   return true;
 }
 
+// Ordered Properties
 const std::vector<xam::Property> XLiveAPI::SessionPropertiesGet(
-    uint64_t session_id) {
-  std::string endpoint =
-      BuildEndpoint(fmt::format("title/{:08X}/sessions/{:016x}/properties",
-                                kernel_state()->title_id(), session_id));
+    uint64_t session_id, uint32_t query_id) {
+  std::string endpoint = BuildEndpoint(
+      fmt::format("title/{:08X}/sessions/{:016x}/properties/{}",
+                  kernel_state()->title_id(), session_id, query_id));
 
   std::unique_ptr<HTTPResponseObjectJSON> response = Get(endpoint);
 
