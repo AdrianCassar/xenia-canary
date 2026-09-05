@@ -1647,7 +1647,7 @@ dword_result_t NetDll_XHttpCrackUrl_entry(
       url_components_ptr->extra_info_ptr &&
           !url_components_ptr->extra_info_length;
 
-  auto decode_string = [](const std::string encoded_component) -> std::string {
+  auto decode_string = [](const std::string& encoded_component) -> std::string {
     CURL* curl = curl_easy_init();
 
     if (!curl) {
@@ -1657,12 +1657,13 @@ dword_result_t NetDll_XHttpCrackUrl_entry(
     std::string decoded_component;
     int component_length = 0;
 
-    char* decoded_output =
-        curl_easy_unescape(curl, encoded_component.c_str(),
-                           decoded_component.size(), &component_length);
+    char* decoded_output = curl_easy_unescape(
+        curl, encoded_component.c_str(),
+        static_cast<int>(encoded_component.size()), &component_length);
 
     if (decoded_output) {
-      decoded_component = std::string(decoded_output, component_length);
+      decoded_component.assign(decoded_output,
+                               static_cast<size_t>(component_length));
       curl_free(decoded_output);
     }
 
