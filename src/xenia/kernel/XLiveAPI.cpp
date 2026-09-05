@@ -643,9 +643,6 @@ std::vector<HTTPResponseObjectJSON> XLiveAPI::GetMulti(
   CURLM* curl_multi_handle = curl_multi_init();
   CURLMcode result;
 
-  std::vector<std::pair<std::string, HTTPResponseObjectJSON>>
-      random_ordered_responces = {};
-
   if (!curl_multi_handle) {
     XELOGE(fmt::format("XLiveAPI::{}: Cannot initialize CURL", __func__));
     return {};
@@ -664,7 +661,10 @@ std::vector<HTTPResponseObjectJSON> XLiveAPI::GetMulti(
 
   std::unordered_map<CURL*, std::unique_ptr<response_data>> tasks;
 
-  for (const std::string url : urls) {
+  std::unordered_map<CURL*, size_t> handle_to_index;
+
+  for (size_t i = 0; i < urls.size(); ++i) {
+    const std::string& url = urls[i];
     std::unique_ptr<response_data> task = std::make_unique<response_data>();
 
     CURL* curl_handle = curl_easy_init();
@@ -681,7 +681,9 @@ std::vector<HTTPResponseObjectJSON> XLiveAPI::GetMulti(
     curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, task.get());
 
     curl_multi_add_handle(curl_multi_handle, curl_handle);
+
     tasks[curl_handle] = std::move(task);
+    handle_to_index[curl_handle] = i;
   }
 
   int still_running = static_cast<int>(urls.size());
@@ -692,35 +694,38 @@ std::vector<HTTPResponseObjectJSON> XLiveAPI::GetMulti(
     }
   }
 
-  for (const auto& [handle, task] : tasks) {
-    CURLcode result =
+  std::vector<std::unique_ptr<HTTPResponseObjectJSON>> indexed_responses(
+      urls.size());
+
+  for (const auto& kv : tasks) {
+    CURL* handle = kv.first;
+    const std::unique_ptr<response_data>& task = kv.second;
+
+    CURLcode curl_result =
         curl_easy_getinfo(handle, CURLINFO_RESPONSE_CODE, &task->http_code);
 
-    if (result != CURLE_OK) {
-      return {};
-    }
-
-    char* url = NULL;
-    result = curl_easy_getinfo(handle, CURLINFO_EFFECTIVE_URL, &url);
-
-    if (result != CURLE_OK || url == NULL) {
-      return {};
+    if (curl_result != CURLE_OK) {
+      continue;
     }
 
     const HTTP_STATUS_CODE http_code =
         static_cast<HTTP_STATUS_CODE>(task->http_code);
 
-    if (result != CURLE_OK && http_code != HTTP_STATUS_CODE::HTTP_OK &&
+    if (http_code != HTTP_STATUS_CODE::HTTP_OK &&
         http_code != HTTP_STATUS_CODE::HTTP_NO_CONTENT) {
-      assert_always();
-
       XELOGE("XLiveAPI::{}: Failed! HTTP Error Code: {}", __func__,
              task->http_code);
     }
 
-    HTTPResponseObjectJSON responce = *PraseResponse(*task);
+    std::unique_ptr<HTTPResponseObjectJSON> response = PraseResponse(*task);
 
-    random_ordered_responces.push_back({std::string(url), responce});
+    auto it = handle_to_index.find(handle);
+    if (it != handle_to_index.end()) {
+      size_t idx = it->second;
+      if (idx < indexed_responses.size()) {
+        indexed_responses[idx] = std::move(response);
+      }
+    }
 
     curl_multi_remove_handle(curl_multi_handle, handle);
     curl_easy_cleanup(handle);
@@ -731,22 +736,21 @@ std::vector<HTTPResponseObjectJSON> XLiveAPI::GetMulti(
   curl_multi_cleanup(curl_multi_handle);
   curl_slist_free_all(headers);
 
-  std::vector<HTTPResponseObjectJSON> responces = {};
+  std::vector<HTTPResponseObjectJSON> responses;
+  responses.reserve(urls.size());
 
-  // Re-order the responses in the order we requested based on the URL.
-  // If more than or two URLs are equal then technically the wrong response
-  // could be found, there's a chance the data returned could be different
-  // depending on the endpoint.
-  for (const std::string url : urls) {
-    for (const auto& responce : random_ordered_responces) {
-      if (url == responce.first) {
-        responces.push_back(responce.second);
-        break;
-      }
+  for (size_t i = 0; i < indexed_responses.size(); ++i) {
+    if (indexed_responses[i]) {
+      responses.push_back(*indexed_responses[i]);
+    } else {
+      std::unique_ptr<HTTPResponseObjectJSON> empty_response =
+          PraseResponse({});
+
+      responses.push_back(*empty_response);
     }
   }
 
-  return responces;
+  return responses;
 }
 
 void XLiveAPI::StartWhoamiAsync() {
