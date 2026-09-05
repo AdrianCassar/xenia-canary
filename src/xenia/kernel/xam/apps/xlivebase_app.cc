@@ -806,8 +806,7 @@ X_HRESULT XLiveBaseApp::XOnlineGetServiceInfo(uint32_t serviceid,
 
   for (const auto& service_info : services->ServicesResults()) {
     if (service_info.id == serviceid) {
-      std::memcpy(service_info_ptr, &service_info,
-                  sizeof(X_ONLINE_SERVICE_INFO));
+      *service_info_ptr = service_info;
     }
   }
 
@@ -952,9 +951,8 @@ X_HRESULT XLiveBaseApp::XInviteGetAcceptedInfo(uint32_t buffer_ptr,
       xe::load_and_swap<uint32_t>(memory_->TranslateVirtual(
           static_cast<uint32_t>(accepted_info->user_index.argument_value_ptr)));
 
-  X_INVITE_INFO* invite_info = reinterpret_cast<X_INVITE_INFO*>(
-      memory_->TranslateVirtual(static_cast<uint32_t>(
-          accepted_info->invite_info.argument_value_ptr)));
+  X_INVITE_INFO* invite_info = memory_->TranslateVirtual<X_INVITE_INFO*>(
+      static_cast<uint32_t>(accepted_info->invite_info.argument_value_ptr));
 
   if (!kernel_state_->xam_state()->IsUserSignedIn(user_index)) {
     return X_E_FAIL;

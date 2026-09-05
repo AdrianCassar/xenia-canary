@@ -978,12 +978,6 @@ X_RESULT XSession::EndSession(XGI_SESSION_STATE* state) {
 X_RESULT XSession::GetSessions(KernelState* kernel_state,
                                XGI_SESSION_SEARCH* search_data,
                                uint32_t num_users) {
-  if (!search_data->results_buffer_size) {
-    search_data->results_buffer_size =
-        sizeof(XSESSION_SEARCHRESULT) * search_data->num_results;
-    return X_ONLINE_E_SESSION_INSUFFICIENT_BUFFER;
-  }
-
   const auto profile =
       kernel_state->xam_state()->GetUserProfile(search_data->user_index);
 
@@ -1143,7 +1137,7 @@ X_RESULT XSession::GetSessionByIDs(KernelState* kernel_state,
     return X_ERROR_INVALID_PARAMETER;
   }
 
-  if (search_data->num_session_ids <= 0 &&
+  if (search_data->num_session_ids == 0 ||
       search_data->num_session_ids > 0x64) {
     return X_ERROR_INVALID_PARAMETER;
   }
