@@ -281,7 +281,6 @@ X_HRESULT XgiApp::ExecuteDispatchMessage(uint32_t message, uint32_t buffer_ptr,
           kernel_memory()->TranslateVirtual<X_USER_STATS_VIEW*>(
               results->views_ptr);
 
-      // 545107D4 uses same view id twice?
       for (uint32_t spec_index = 0; spec_index < data->specs_count;
            spec_index++) {
         const X_USER_STATS_SPEC stat_spec_ptr = stats_specs[spec_index];
