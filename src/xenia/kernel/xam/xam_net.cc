@@ -1101,27 +1101,33 @@ dword_result_t NetDll_XNetDnsLookup_entry(dword_t caller, lpstring_t host,
 
     const int status = getaddrinfo(host, nullptr, &hints, &addr_info);
 
-    if (status) {
-      XELOGI("DNS Lookup: Failed");
+    if (status != 0 || !addr_info) {
+      XELOGI("DNS Lookup: Failed ({})", status);
       dns->status = XSocket::XWSAGetLastError();
       xboxkrnl::xeNtSetEvent(event_handle, nullptr);
+      if (addr_info) {
+        freeaddrinfo(addr_info);
+      }
       return;
     }
 
     XELOGI("DNS Lookup: Success");
 
     uint32_t address_index = 0;
-    addrinfo* info = addr_info;
-
-    while (info && address_index < std::size(dns->aina) &&
-           !stop_token.stop_requested()) {
-      dns->aina[address_index] = *reinterpret_cast<in_addr*>(info->ai_addr);
-      info = addr_info->ai_next;
-      address_index++;
+    for (addrinfo* info = addr_info;
+         info != nullptr && address_index < std::size(dns->aina) &&
+         !stop_token.stop_requested();
+         info = info->ai_next) {
+      if (info->ai_addr && info->ai_addr->sa_family == AF_INET) {
+        const sockaddr_in* sin = reinterpret_cast<sockaddr_in*>(info->ai_addr);
+        dns->aina[address_index++] = sin->sin_addr;
+      }
     }
 
     dns->cina = address_index;
     dns->status = XSocket::XWSAGetLastError();
+
+    freeaddrinfo(addr_info);
 
     xboxkrnl::xeNtSetEvent(event_handle, nullptr);
   };
