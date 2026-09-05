@@ -445,10 +445,8 @@ dword_result_t NetDll_WSAStartup_entry(dword_t caller, word_t version,
   }
 
   // WSAStartup implicitly calls XNetStartup.
-  if (!ret) {
-    winsock_reference_count_++;
-    initialized_xnet_ = true;
-  }
+  winsock_reference_count_++;
+  initialized_xnet_ = true;
 
   // DEBUG
   /*
