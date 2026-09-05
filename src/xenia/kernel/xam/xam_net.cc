@@ -395,10 +395,9 @@ dword_result_t NetDll_XNetRandom_entry(dword_t caller, lpvoid_t buffer_ptr,
     return X_ERROR_SUCCESS;
   }
 
-  std::random_device rnd;
-  std::mt19937_64 gen(rnd());
-  std::uniform_int_distribution<int> dist(0,
-                                          std::numeric_limits<uint8_t>::max());
+  thread_local std::mt19937_64 gen(std::random_device{}());
+  std::uniform_int_distribution<uint16_t> dist(
+      0, std::numeric_limits<uint8_t>::max());
 
   std::generate(buffer_data_ptr, buffer_data_ptr + length,
                 [&]() { return static_cast<uint8_t>(dist(gen)); });
