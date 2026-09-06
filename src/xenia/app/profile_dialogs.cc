@@ -231,46 +231,6 @@ void ProfileConfigDialog::OnDraw(ImGuiIO& io) {
     const uint8_t user_index =
         profile_manager->GetUserIndexAssignedToProfile(xuid);
 
-    // Detect the change because creating ImmediateTexture every frame will
-    // impact performance.
-    //
-    // If dialog is open while Gamerpic Browser changes gamerpic then we want to
-    // detect the change.
-    const auto user_tracker = emulator_window_->emulator()
-                                  ->kernel_state()
-                                  ->xam_state()
-                                  ->user_tracker();
-
-    // Detect sign out from outside this dialog. e.g. another dialog.
-    const bool signed_out = user_index == XUserIndexAny;
-
-    if (profile_gamerpic_key_.contains(xuid) && signed_out) {
-      profile_gamerpic_key_.erase(xuid);
-    }
-
-    if (profile_icon_.contains(xuid) && signed_out) {
-      if (profile_icon_[xuid]) {
-        profile_icon_[xuid].release();
-      }
-    }
-
-    if (user_tracker && profile_gamerpic_key_.contains(xuid)) {
-      const auto gamerpic_key = user_tracker->GetUserGamerpicSetting(xuid);
-
-      if (gamerpic_key.has_value()) {
-        const kernel::xam::GamerPictureKey cached_gamerpic_key =
-            profile_gamerpic_key_.at(xuid);
-        const kernel::xam::GamerPictureKey current_gamerpic_key =
-            gamerpic_key.value();
-
-        // Reload gamerpic icon if changed.
-        if (memcmp(&cached_gamerpic_key, &current_gamerpic_key,
-                   sizeof(kernel::xam::GamerPictureKey)) != 0) {
-          LoadProfileIcon(xuid);
-        }
-      }
-    }
-
     const auto profile_icon = profile_icon_.find(xuid) != profile_icon_.cend()
                                   ? profile_icon_[xuid].get()
                                   : nullptr;
