@@ -355,8 +355,8 @@ std::string XHttpUnescapeUrl(const std::string& escaped) {
 
 void XHttpDeliverCompletion(XHttpCompletion completion) {
   if (!completion.session_handle && completion.handle) {
-    const auto obj = kernel_state()->object_table()->LookupObject<XHttp>(
-        completion.handle);
+    const auto obj =
+        kernel_state()->object_table()->LookupObject<XHttp>(completion.handle);
     completion.session_handle = ResolveSessionHandle(obj);
   }
   {
