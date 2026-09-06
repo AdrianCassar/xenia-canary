@@ -702,7 +702,7 @@ X_HRESULT XLiveBaseApp::XOnlineQuerySearch(uint32_t buffer_ptr) {
 
           XNKID* XNKID_ptr = memory_->TranslateVirtual<XNKID*>(XNKID_adderess);
 
-          xe::be<uint64_t> session_id = GenerateSessionId(XNKID_SERVER);
+          xe::be<uint64_t> session_id = GenerateSessionId(XNKID_ONLINE_SERVER);
 
           std::memcpy(XNKID_ptr, &session_id, sizeof(XNKID));
 
