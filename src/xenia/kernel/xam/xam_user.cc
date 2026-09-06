@@ -1436,7 +1436,8 @@ DECLARE_XAM_EXPORT1(XamWriteGamerTile, kUserProfiles, kSketchy);
 
 dword_result_t XamSessionCreateHandle_entry(lpdword_t handle_ptr) {
   auto e = object_ref<XSession>(new XSession(kernel_state()));
-  auto result = (uint32_t)e->Initialize();
+  auto result = e->Initialize();
+
   if (XFAILED(result)) {
     return result;
   }
@@ -1449,13 +1450,14 @@ DECLARE_XAM_EXPORT1(XamSessionCreateHandle, kUserProfiles, kImplemented);
 dword_result_t XamSessionRefObjByHandle_entry(dword_t handle,
                                               lpdword_t obj_ptr) {
   auto object = kernel_state()->object_table()->LookupObject<XSession>(handle);
+
   if (!object) {
     return X_STATUS_INVALID_HANDLE;
   }
 
   object->RetainHandle();
 
-  *obj_ptr = (uint32_t)object->guest_object();
+  *obj_ptr = object->guest_object();
   return X_ERROR_SUCCESS;
 }
 DECLARE_XAM_EXPORT1(XamSessionRefObjByHandle, kUserProfiles, kImplemented);
