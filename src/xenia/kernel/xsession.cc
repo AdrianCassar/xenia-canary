@@ -197,7 +197,7 @@ X_RESULT XSession::CreateHostSession(XSESSION_INFO* session_info,
     }
   } else if (IsXboxLiveSession()) {
     XELOGI("Creating xbox live session");
-    session_id_ = GenerateSessionId(XNKID_ONLINE);
+    session_id_ = GenerateSessionId(XNKID_ONLINE_PEER);
 
     NotifySessionCreationWarning(user_index);
 

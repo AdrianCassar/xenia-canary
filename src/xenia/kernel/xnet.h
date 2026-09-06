@@ -1504,20 +1504,41 @@ inline uint32_t XAccountGetUserInfoResponseSize() {
 
 #pragma endregion
 
-constexpr uint8_t XNKID_ONLINE = 0xAE;
+constexpr uint8_t XNKID_MASK = 0xF0;
 constexpr uint8_t XNKID_SYSTEM_LINK = 0x00;
-constexpr uint8_t XNKID_SERVER = 0xC0;
-
-inline bool IsOnlinePeer(uint64_t session_id) {
-  return ((session_id >> 56) & 0xFF) == XNKID_ONLINE;
-}
+constexpr uint8_t XNKID_SYSTEM_LINK_XPLAT = 0x40;
+constexpr uint8_t XNKID_ONLINE_NAT_MASK = 0x70;
+constexpr uint8_t XNKID_ONLINE_PEER = 0x80;
+constexpr uint8_t XNKID_ONLINE_NAT_OPEN = 0x90;
+constexpr uint8_t XNKID_ONLINE_NAT_MODERATE = 0xA0;
+constexpr uint8_t XNKID_ONLINE_NAT_STRICT = 0xB0;
+constexpr uint8_t XNKID_ONLINE_SERVER = 0xC0;
+constexpr uint8_t XNKID_ONLINE_TITLESERVER = 0xE0;
 
 inline bool IsSystemlink(uint64_t session_id) {
-  return ((session_id >> 56) & 0xFF) == XNKID_SYSTEM_LINK;
+  return ((session_id >> 56) & XNKID_MASK) == XNKID_SYSTEM_LINK;
+}
+
+inline bool IsCrossPlatformSystemlink(uint64_t session_id) {
+  return (((session_id >> 56) & XNKID_MASK) & XNKID_SYSTEM_LINK_XPLAT) ==
+         XNKID_SYSTEM_LINK_XPLAT;
+}
+
+inline bool IsOnlinePeer(uint64_t session_id) {
+  return ((session_id >> 56) & XNKID_MASK) == XNKID_ONLINE_PEER;
+}
+
+inline X_NAT_TYPE GetNatTypeFromOnlinePeer(uint64_t session_id) {
+  return static_cast<X_NAT_TYPE>(
+      ((session_id & XNKID_MASK) & XNKID_ONLINE_NAT_MASK) / 16);
 }
 
 inline bool IsServer(uint64_t session_id) {
-  return ((session_id >> 56) & 0xFF) == XNKID_SERVER;
+  return ((session_id >> 56) & XNKID_MASK) == XNKID_ONLINE_SERVER;
+}
+
+inline bool IsTitleServer(uint64_t session_id) {
+  return ((session_id >> 56) & XNKID_MASK) == XNKID_ONLINE_TITLESERVER;
 }
 
 inline bool IsValidXNKID(uint64_t session_id) {
@@ -1536,7 +1557,7 @@ inline uint64_t GenerateSessionId(uint8_t mask) {
   std::random_device rnd;
   std::uniform_int_distribution<uint64_t> dist(0, -1);
 
-  return (static_cast<uint64_t>(mask) << 56) | (dist(rnd) & 0x0000FFFFFFFFFFFF);
+  return (static_cast<uint64_t>(mask) << 56) | (dist(rnd) & 0x00FFFFFFFFFFFFFF);
 }
 
 inline void Uint64toXNKID(uint64_t sessionID, XNKID* xnkid) {
