@@ -1105,11 +1105,6 @@ X_RESULT XSession::GetWeightedSessions(
 
 X_RESULT XSession::GetSessionByID(KernelState* kernel_state,
                                   XGI_SESSION_SEARCH_BYID* search_data) {
-  if (!search_data->results_buffer_size) {
-    search_data->results_buffer_size = sizeof(XSESSION_SEARCHRESULT);
-    return X_ONLINE_E_SESSION_INSUFFICIENT_BUFFER;
-  }
-
   if (search_data->user_index < 0 ||
       search_data->user_index >= XUserMaxUserCount) {
     return X_ERROR_INVALID_PARAMETER;
@@ -1126,12 +1121,6 @@ X_RESULT XSession::GetSessionByID(KernelState* kernel_state,
 
 X_RESULT XSession::GetSessionByIDs(KernelState* kernel_state,
                                    XGI_SESSION_SEARCH_BYIDS* search_data) {
-  if (!search_data->results_buffer_size) {
-    search_data->results_buffer_size =
-        search_data->num_session_ids * sizeof(XSESSION_SEARCHRESULT);
-    return X_ONLINE_E_SESSION_INSUFFICIENT_BUFFER;
-  }
-
   if (search_data->user_index < 0 ||
       search_data->user_index >= XUserMaxUserCount) {
     return X_ERROR_INVALID_PARAMETER;
