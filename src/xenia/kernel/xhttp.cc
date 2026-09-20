@@ -193,14 +193,17 @@ const std::regex& UrlRegex() {
 
 std::string UnescapeUrl(const std::string& escaped) {
   CURL* curl = curl_easy_init();
+
   if (!curl) {
     return "";
   }
 
   std::string unescaped;
   int length = 0;
+
   char* output = curl_easy_unescape(curl, escaped.c_str(),
                                     static_cast<int>(escaped.size()), &length);
+
   if (output) {
     unescaped = std::string(output, length);
     curl_free(output);
@@ -543,12 +546,6 @@ bool XHttp::CloseHandle(uint32_t handle) {
 bool XHttp::CrackUrl(const std::string& url, uint32_t url_guest_address,
                      uint32_t url_length, uint32_t flags,
                      XHTTP_URL_COMPONENTS* url_components_ptr) {
-  if (!url_guest_address || !url_components_ptr ||
-      url_components_ptr->struct_size != sizeof(XHTTP_URL_COMPONENTS)) {
-    XThread::SetLastError(X_ERROR_INVALID_PARAMETER);
-    return false;
-  }
-
   // X_ICU_ESCAPE is unsupported ignore it.
 
   bool insufficient_buffer =
@@ -613,7 +610,7 @@ bool XHttp::CrackUrl(const std::string& url, uint32_t url_guest_address,
 
       xe::string_util::copy_truncating(result_dst_ptr, processed_data.c_str(),
                                        component_length_ptr);
-      component_length_ptr = static_cast<uint32_t>(processed_data.size());
+      component_length_ptr = processed_data.size();
     } else if (component_length_ptr) {
       component_ptr = component_result_ptr;
       component_length_ptr = size;
@@ -632,15 +629,14 @@ bool XHttp::CrackUrl(const std::string& url, uint32_t url_guest_address,
         const uint32_t result_ptr =
             url_guest_address + static_cast<uint32_t>(matches.position(i));
 
-        uint32_t length = static_cast<uint32_t>(sub_match.length());
+        const uint32_t length = static_cast<uint32_t>(sub_match.length());
 
         const X_URL_COMPONENTS current_component =
             static_cast<X_URL_COMPONENTS>(i);
 
         switch (current_component) {
-          case X_URL_COMPONENTS::Full:
-          case X_URL_COMPONENTS::Resource: {
-            // Skip, these wrap components handled on their own below.
+          case X_URL_COMPONENTS::Full: {
+            // Skip
             continue;
           } break;
           case X_URL_COMPONENTS::Protocol: {
@@ -758,22 +754,7 @@ bool XHttp::CrackUrl(const std::string& url, uint32_t url_guest_address,
               insufficient_buffer = true;
             }
           } break;
-          case X_URL_COMPONENTS::Query:
-          case X_URL_COMPONENTS::Fragment: {
-            // Extra info is the query and the fragment together, so let the
-            // query cover both and only start at the fragment without one.
-            const size_t query = static_cast<size_t>(X_URL_COMPONENTS::Query);
-            if (current_component == X_URL_COMPONENTS::Fragment &&
-                matches[query].matched) {
-              continue;
-            }
-
-            const size_t resource =
-                static_cast<size_t>(X_URL_COMPONENTS::Resource);
-            length = static_cast<uint32_t>(matches.position(resource) +
-                                           matches.length(resource) -
-                                           matches.position(i));
-
+          case X_URL_COMPONENTS::Query: {
             uint32_t extra_ptr_out = url_components_ptr->extra_info_ptr;
             uint32_t extra_length_out = url_components_ptr->extra_info_length;
 
@@ -804,39 +785,12 @@ bool XHttp::CrackUrl(const std::string& url, uint32_t url_guest_address,
     result = false;
   }
 
-  if (result && !insufficient_buffer) {
-    if (!url_components_ptr->scheme_ptr) {
-      url_components_ptr->scheme_length = 0;
-    }
-    if (!url_components_ptr->host_name_ptr) {
-      url_components_ptr->host_name_length = 0;
-    }
-    if (!url_components_ptr->user_name_ptr) {
-      url_components_ptr->user_name_length = 0;
-    }
-    if (!url_components_ptr->password_ptr) {
-      url_components_ptr->password_length = 0;
-    }
-    if (!url_components_ptr->url_path_ptr) {
-      url_components_ptr->url_path_length = 0;
-    }
-    if (!url_components_ptr->extra_info_ptr) {
-      url_components_ptr->extra_info_length = 0;
-    }
-  }
-
   return result;
 }
 
 bool XHttp::CrackUrlW(const std::u16string& url, uint32_t url_guest_address,
                       uint32_t url_length, uint32_t flags,
                       XHTTP_URL_COMPONENTS* url_components_ptr) {
-  if (!url_guest_address || !url_components_ptr ||
-      url_components_ptr->struct_size != sizeof(XHTTP_URL_COMPONENTS)) {
-    XThread::SetLastError(X_ERROR_INVALID_PARAMETER);
-    return false;
-  }
-
   // X_ICU_ESCAPE is unsupported ignore it.
 
   bool insufficient_buffer =
@@ -852,157 +806,244 @@ bool XHttp::CrackUrlW(const std::u16string& url, uint32_t url_guest_address,
       url_components_ptr->extra_info_ptr &&
           !url_components_ptr->extra_info_length;
 
-  std::u16string url_to_process = url;
+  // Prepare the UTF-16 input to process (respect url_length which is in
+  // wide chars for the W variant).
+  std::u16string url_to_process_u16 = url;
 
   if (url_length) {
-    url_to_process = url_to_process.substr(0, url_length);
+    url_to_process_u16 = url.substr(0, url_length);
   }
 
-  // URL syntax is ASCII, so match against a byte-per-code-unit copy: offsets
-  // into it are also offsets into the UTF-16 original. Anything non-ASCII
-  // becomes a filler byte so a truncated code unit can't pose as a delimiter.
-  std::string narrow_url(url_to_process.size(), '\0');
-  for (size_t i = 0; i < url_to_process.size(); ++i) {
-    narrow_url[i] = url_to_process[i] < 0x80
-                        ? static_cast<char>(url_to_process[i])
-                        : '\x7F';
-  }
+  // Convert the UTF-16 URL to UTF-8 for regex matching.
+  const std::string url_to_process_utf8 = xe::to_utf8(url_to_process_u16);
 
   std::smatch matches;
-  if (!std::regex_match(narrow_url, matches, UrlRegex())) {
-    XThread::SetLastError(X_ERROR_INVALID_PARAMETER);
-    return false;
-  }
 
-  auto ProcessComponent = [&](const uint32_t offset, const uint32_t length,
-                              xe::be<uint32_t>& component_ptr,
-                              xe::be<uint32_t>& component_length_ptr) {
-    if (!component_ptr) {
-      // No buffer, so hand back a pointer into the caller's own string. That
-      // rules out decoding, which needs somewhere to put the shorter result.
-      if (component_length_ptr) {
-        component_ptr = url_guest_address + offset * sizeof(char16_t);
-        component_length_ptr = length;
+  auto ProcessComponentW = [kernel_state = CurrentKernelState(), flags](
+                               const uint32_t component_result_ptr,
+                               uint32_t& component_ptr,
+                               uint32_t& component_length_ptr,
+                               uint32_t size_utf16) {
+    if (component_ptr) {
+      // Include null terminator.
+      const uint32_t min_buffer_size = size_utf16 + 1;
+
+      if (!component_length_ptr || component_length_ptr < min_buffer_size) {
+        component_length_ptr = min_buffer_size;
+        return false;
       }
-      return;
+
+      char16_t* result_src_ptr =
+          kernel_state->memory()->TranslateVirtual<char16_t*>(
+              component_result_ptr);
+
+      char16_t* result_dst_ptr =
+          kernel_state->memory()->TranslateVirtual<char16_t*>(component_ptr);
+
+      const std::u16string component_data =
+          xe::string_util::read_u16string_and_swap(result_src_ptr);
+      const std::string component_data_utf8 = xe::to_utf8(component_data);
+
+      const std::u16string processed_data =
+          flags & X_ICU_DECODE ? xe::to_utf16(UnescapeUrl(component_data_utf8))
+                               : component_data;
+
+      xe::string_util::copy_and_swap_truncating(result_dst_ptr, processed_data,
+                                                component_length_ptr);
+      component_length_ptr = static_cast<uint32_t>(processed_data.size());
+    } else if (component_length_ptr) {
+      component_ptr = component_result_ptr;
+      component_length_ptr = size_utf16;
     }
 
-    std::u16string component_data = url_to_process.substr(offset, length);
-    if (flags & X_ICU_DECODE) {
-      component_data = xe::to_utf16(UnescapeUrl(xe::to_utf8(component_data)));
-    }
-
-    // Include null terminator
-    const uint32_t min_buffer_size =
-        static_cast<uint32_t>(component_data.size()) + 1;
-
-    if (component_length_ptr < min_buffer_size) {
-      component_length_ptr = min_buffer_size;
-      insufficient_buffer = true;
-      return;
-    }
-
-    xe::string_util::copy_and_swap_truncating(
-        kernel_memory()->TranslateVirtual<char16_t*>(component_ptr),
-        component_data, component_length_ptr);
-    component_length_ptr = static_cast<uint32_t>(component_data.size());
+    return true;
   };
 
-  auto ProcessMatch = [&](const X_URL_COMPONENTS component,
-                          xe::be<uint32_t>& component_ptr,
-                          xe::be<uint32_t>& component_length_ptr) {
-    const size_t index = static_cast<size_t>(component);
-    if (!matches[index].matched) {
-      return;
+  bool result = true;
+
+  if (std::regex_match(url_to_process_utf8, matches, UrlRegex())) {
+    for (size_t i = 0; i < matches.size(); ++i) {
+      std::ssub_match sub_match = matches[i];
+
+      if (sub_match.matched) {
+        const size_t utf8_pos = static_cast<size_t>(matches.position(i));
+        const size_t utf8_len = static_cast<size_t>(sub_match.length());
+
+        // Map the UTF-8 match ranges back to UTF-16 code unit indices.
+        const std::u16string prefix_u16 =
+            xe::to_utf16(url_to_process_utf8.substr(0, utf8_pos));
+        const uint32_t utf16_start = static_cast<uint32_t>(prefix_u16.size());
+
+        const std::u16string match_u16 =
+            xe::to_utf16(url_to_process_utf8.substr(utf8_pos, utf8_len));
+        const uint32_t utf16_len = static_cast<uint32_t>(match_u16.size());
+
+        const uint32_t result_ptr =
+            url_guest_address +
+            utf16_start * static_cast<uint32_t>(sizeof(char16_t));
+
+        const X_URL_COMPONENTS current_component =
+            static_cast<X_URL_COMPONENTS>(i);
+
+        switch (current_component) {
+          case X_URL_COMPONENTS::Full: {
+            // Skip
+            continue;
+          } break;
+          case X_URL_COMPONENTS::Protocol: {
+            uint32_t scheme_ptr_out = url_components_ptr->scheme_ptr;
+            uint32_t scheme_length_out = url_components_ptr->scheme_length;
+
+            const bool component_result = ProcessComponentW(
+                result_ptr, scheme_ptr_out, scheme_length_out, utf16_len);
+
+            url_components_ptr->scheme_length = scheme_length_out;
+
+            if (component_result) {
+              if (!url_components_ptr->scheme_ptr) {
+                url_components_ptr->scheme_ptr = scheme_ptr_out;
+              }
+            } else {
+              insufficient_buffer = true;
+            }
+
+            const char16_t* schema_data_ptr =
+                CurrentKernelState()->memory()->TranslateVirtual<char16_t*>(
+                    result_ptr);
+
+            const std::u16string schema_data =
+                xe::string_util::read_u16string_and_swap(schema_data_ptr)
+                    .substr(0, utf16_len);
+
+            const std::string schema_data_utf8 = xe::to_utf8(schema_data);
+            X_INTERNET_SCHEME scheme_type = {};
+
+            if (utf8::equal_case(schema_data_utf8.c_str(), "http")) {
+              scheme_type = X_INTERNET_SCHEME::HTTP;
+              url_components_ptr->port = 80;
+            } else if (utf8::equal_case(schema_data_utf8.c_str(), "https")) {
+              scheme_type = X_INTERNET_SCHEME::HTTPS;
+              url_components_ptr->port = 443;
+            }
+
+            url_components_ptr->scheme = static_cast<uint32_t>(scheme_type);
+          } break;
+          case X_URL_COMPONENTS::Username: {
+            uint32_t username_ptr_out = url_components_ptr->user_name_ptr;
+            uint32_t username_length_out = url_components_ptr->user_name_length;
+
+            const bool component_result = ProcessComponentW(
+                result_ptr, username_ptr_out, username_length_out, utf16_len);
+
+            url_components_ptr->user_name_length = username_length_out;
+
+            if (component_result) {
+              if (!url_components_ptr->user_name_ptr) {
+                url_components_ptr->user_name_ptr = username_ptr_out;
+              }
+            } else {
+              insufficient_buffer = true;
+            }
+          } break;
+          case X_URL_COMPONENTS::Password: {
+            uint32_t password_ptr_out = url_components_ptr->password_ptr;
+            uint32_t password_length_out = url_components_ptr->password_length;
+
+            const bool component_result = ProcessComponentW(
+                result_ptr, password_ptr_out, password_length_out, utf16_len);
+
+            url_components_ptr->password_length = password_length_out;
+
+            if (component_result) {
+              if (!url_components_ptr->password_ptr) {
+                url_components_ptr->password_ptr = password_ptr_out;
+              }
+            } else {
+              insufficient_buffer = true;
+            }
+          } break;
+          case X_URL_COMPONENTS::Host: {
+            uint32_t host_ptr_out = url_components_ptr->host_name_ptr;
+            uint32_t host_length_out = url_components_ptr->host_name_length;
+
+            const bool component_result = ProcessComponentW(
+                result_ptr, host_ptr_out, host_length_out, utf16_len);
+
+            url_components_ptr->host_name_length = host_length_out;
+
+            if (component_result) {
+              if (!url_components_ptr->host_name_ptr) {
+                url_components_ptr->host_name_ptr = host_ptr_out;
+              }
+            } else {
+              insufficient_buffer = true;
+            }
+          } break;
+          case X_URL_COMPONENTS::Port: {
+            const char16_t* port_str_ptr =
+                CurrentKernelState()->memory()->TranslateVirtual<char16_t*>(
+                    result_ptr);
+
+            const std::u16string port_str =
+                xe::string_util::read_u16string_and_swap(port_str_ptr)
+                    .substr(0, utf16_len);
+
+            const std::string port_str_utf8 = xe::to_utf8(port_str);
+
+            const uint16_t port =
+                xe::string_util::from_string<uint16_t>(port_str_utf8);
+
+            url_components_ptr->port = port;
+          } break;
+          case X_URL_COMPONENTS::Path: {
+            uint32_t path_ptr_out = url_components_ptr->url_path_ptr;
+            uint32_t path_length_out = url_components_ptr->url_path_length;
+
+            const bool component_result = ProcessComponentW(
+                result_ptr, path_ptr_out, path_length_out, utf16_len);
+
+            url_components_ptr->url_path_length = path_length_out;
+
+            if (component_result) {
+              if (!url_components_ptr->url_path_ptr) {
+                url_components_ptr->url_path_ptr = path_ptr_out;
+              }
+            } else {
+              insufficient_buffer = true;
+            }
+          } break;
+          case X_URL_COMPONENTS::Query: {
+            uint32_t extra_ptr_out = url_components_ptr->extra_info_ptr;
+            uint32_t extra_length_out = url_components_ptr->extra_info_length;
+
+            const bool component_result = ProcessComponentW(
+                result_ptr, extra_ptr_out, extra_length_out, utf16_len);
+
+            url_components_ptr->extra_info_length = extra_length_out;
+
+            if (component_result) {
+              if (!url_components_ptr->extra_info_ptr) {
+                url_components_ptr->extra_info_ptr = extra_ptr_out;
+              }
+            } else {
+              insufficient_buffer = true;
+            }
+          } break;
+        }
+      }
     }
-
-    ProcessComponent(static_cast<uint32_t>(matches.position(index)),
-                     static_cast<uint32_t>(matches.length(index)),
-                     component_ptr, component_length_ptr);
-  };
-
-  ProcessMatch(X_URL_COMPONENTS::Protocol, url_components_ptr->scheme_ptr,
-               url_components_ptr->scheme_length);
-
-  if (matches[static_cast<size_t>(X_URL_COMPONENTS::Protocol)].matched) {
-    const std::string scheme_data =
-        matches[static_cast<size_t>(X_URL_COMPONENTS::Protocol)].str();
-
-    X_INTERNET_SCHEME scheme_type = {};
-
-    // Set default scheme and port
-    if (utf8::equal_case(scheme_data.c_str(), "http")) {
-      scheme_type = X_INTERNET_SCHEME::HTTP;
-      url_components_ptr->port = 80;
-    } else if (utf8::equal_case(scheme_data.c_str(), "https")) {
-      scheme_type = X_INTERNET_SCHEME::HTTPS;
-      url_components_ptr->port = 443;
-    }
-
-    url_components_ptr->scheme = static_cast<uint32_t>(scheme_type);
-  }
-
-  ProcessMatch(X_URL_COMPONENTS::Username, url_components_ptr->user_name_ptr,
-               url_components_ptr->user_name_length);
-  ProcessMatch(X_URL_COMPONENTS::Password, url_components_ptr->password_ptr,
-               url_components_ptr->password_length);
-  ProcessMatch(X_URL_COMPONENTS::Host, url_components_ptr->host_name_ptr,
-               url_components_ptr->host_name_length);
-  ProcessMatch(X_URL_COMPONENTS::Path, url_components_ptr->url_path_ptr,
-               url_components_ptr->url_path_length);
-
-  // Extra info is the query and the fragment together, so start at the query
-  // when present and otherwise at the fragment.
-  const size_t query = static_cast<size_t>(X_URL_COMPONENTS::Query);
-  const size_t fragment = static_cast<size_t>(X_URL_COMPONENTS::Fragment);
-  const size_t resource = static_cast<size_t>(X_URL_COMPONENTS::Resource);
-  const size_t extra_start = matches[query].matched ? query : fragment;
-  if (matches[extra_start].matched) {
-    const uint32_t extra_offset =
-        static_cast<uint32_t>(matches.position(extra_start));
-    const uint32_t extra_length = static_cast<uint32_t>(
-        matches.position(resource) + matches.length(resource) -
-        matches.position(extra_start));
-    ProcessComponent(extra_offset, extra_length,
-                     url_components_ptr->extra_info_ptr,
-                     url_components_ptr->extra_info_length);
-  }
-
-  // After the scheme, so an explicit port wins over its default.
-  const auto& port_match = matches[static_cast<size_t>(X_URL_COMPONENTS::Port)];
-  if (port_match.matched) {
-    url_components_ptr->port =
-        xe::string_util::from_string<uint16_t>(port_match.str());
+  } else {
+    XThread::SetLastError(X_ERROR_INVALID_PARAMETER);
+    result = false;
   }
 
   // Return after processing so the component length is set
   if (insufficient_buffer) {
     XThread::SetLastError(X_ERROR_INSUFFICIENT_BUFFER);
-    return false;
+    result = false;
   }
 
-  // Same as the ANSI path: don't leave pointer-return sentinels on absent
-  // components.
-  if (!url_components_ptr->scheme_ptr) {
-    url_components_ptr->scheme_length = 0;
-  }
-  if (!url_components_ptr->host_name_ptr) {
-    url_components_ptr->host_name_length = 0;
-  }
-  if (!url_components_ptr->user_name_ptr) {
-    url_components_ptr->user_name_length = 0;
-  }
-  if (!url_components_ptr->password_ptr) {
-    url_components_ptr->password_length = 0;
-  }
-  if (!url_components_ptr->url_path_ptr) {
-    url_components_ptr->url_path_length = 0;
-  }
-  if (!url_components_ptr->extra_info_ptr) {
-    url_components_ptr->extra_info_length = 0;
-  }
-
-  return true;
+  return result;
 }
 
 uint32_t XHttp::DoWork(uint32_t h_session, uint32_t wait_ms) {
