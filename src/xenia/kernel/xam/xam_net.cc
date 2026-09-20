@@ -2377,28 +2377,28 @@ DECLARE_XAM_EXPORT1(NetDll_XHttpCloseHandle, kNetworking, kImplemented);
 dword_result_t NetDll_XHttpCrackUrl_entry(
     dword_t caller, lpstring_t url_ptr, dword_t url_length, dword_t flags,
     pointer_t<XHTTP_URL_COMPONENTS> url_components_ptr) {
-  if (!url_ptr || !url_components_ptr) {
+  if (!url_ptr || !url_components_ptr ||
+      url_components_ptr->struct_size != sizeof(XHTTP_URL_COMPONENTS)) {
     XThread::SetLastError(X_ERROR_INVALID_PARAMETER);
-    return 0;
+    return false;
   }
+
   return XHttp::CrackUrl(url_ptr.value(), url_ptr.guest_address(), url_length,
-                         flags, url_components_ptr)
-             ? 1
-             : 0;
+                         flags, url_components_ptr);
 }
 DECLARE_XAM_EXPORT1(NetDll_XHttpCrackUrl, kNetworking, kImplemented);
 
 dword_result_t NetDll_XHttpCrackUrlW_entry(
     dword_t caller, lpu16string_t url_ptr, dword_t url_length, dword_t flags,
     pointer_t<XHTTP_URL_COMPONENTS> url_components_ptr) {
-  if (!url_ptr || !url_components_ptr) {
+  if (!url_ptr || !url_components_ptr ||
+      url_components_ptr->struct_size != sizeof(XHTTP_URL_COMPONENTS)) {
     XThread::SetLastError(X_ERROR_INVALID_PARAMETER);
-    return 0;
+    return false;
   }
+
   return XHttp::CrackUrlW(url_ptr.value(), url_ptr.guest_address(), url_length,
-                          flags, url_components_ptr)
-             ? 1
-             : 0;
+                          flags, url_components_ptr);
 }
 DECLARE_XAM_EXPORT1(NetDll_XHttpCrackUrlW, kNetworking, kImplemented);
 
