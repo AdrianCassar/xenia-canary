@@ -389,6 +389,7 @@ void XHttp::Perform() {
       this->connection_handle);
   const std::string host = connection ? connection->host : std::string();
   const uint16_t host_port = connection ? connection->port : 0;
+  const std::string protocol = connection->port == 443 ? "https" : "http";
 
   std::string path = this->path;
   if (path.empty() || path.front() != '/') {
@@ -398,8 +399,8 @@ void XHttp::Perform() {
   // Only the hostname is rewritten; the port the title asked for is kept.
   const std::string target = ResolveRedirectHost(host);
   const std::string url =
-      host_port ? fmt::format("http://{}:{}{}", target, host_port, path)
-                : fmt::format("http://{}{}", target, path);
+      host_port ? fmt::format("{}://{}:{}{}", protocol, target, host_port, path)
+                : fmt::format("{}://{}{}", protocol, target, path);
 
   CURL* curl_handle = curl_easy_init();
   if (!curl_handle) {
