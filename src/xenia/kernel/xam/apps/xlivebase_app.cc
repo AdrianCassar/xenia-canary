@@ -1196,12 +1196,18 @@ X_HRESULT XLiveBaseApp::XStorageEnumerate(uint32_t buffer_ptr) {
   const std::string host_enumeration_path_base =
       ConvertGuestServerPathToHostServerPath(guest_enumeration_path);
 
-  const uint32_t available_to_return_items =
-      static_cast<uint32_t>(std::floor<uint32_t>(static_cast<uint32_t>(
-          (unmarshaller.GetAsyncTask().GetXLiveAsyncTask()->results_size -
-           sizeof(X_STORAGE_ENUMERATE_RESULTS)) /
-          (sizeof(X_STORAGE_FILE_INFO) +
-           (X_ONLINE_MAX_PATHNAME_LENGTH * sizeof(char16_t))))));
+  const uint32_t results_size =
+      unmarshaller.GetAsyncTask().GetXLiveAsyncTask()->results_size;
+
+  if (results_size < sizeof(X_STORAGE_ENUMERATE_RESULTS)) {
+    return X_E_INVALIDARG;
+  }
+
+  const size_t bytes_per_item = sizeof(X_STORAGE_FILE_INFO) +
+                                X_ONLINE_MAX_PATHNAME_LENGTH * sizeof(char16_t);
+
+  const uint32_t available_to_return_items = static_cast<uint32_t>(
+      (results_size - sizeof(X_STORAGE_ENUMERATE_RESULTS)) / bytes_per_item);
 
   X_STORAGE_FILE_INFO* items_array_ptr =
       reinterpret_cast<X_STORAGE_FILE_INFO*>(results_ptr + 1);
