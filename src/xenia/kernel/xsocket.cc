@@ -773,7 +773,8 @@ int XSocket::PollWSARecvFrom(bool wait, WSARecvFromData receive_async_data) {
 
   DWORD bytes_received = 0;
   DWORD flags = 0;
-  int from_len = *receive_async_data.from_len;
+  int from_len =
+      receive_async_data.from_len ? receive_async_data.from_len->get() : 0;
 
   // num_bytes_recv and flags are only updated on immediate completion.
   if (!wait && receive_async_data.flags) {
@@ -818,7 +819,7 @@ int XSocket::PollWSARecvFrom(bool wait, WSARecvFromData receive_async_data) {
       receive_async_data.from->to_guest(&saddr);
     }
 
-    if (receive_async_data.from_len) {
+    if (receive_async_data.from_len && receive_async_data.from) {
       *receive_async_data.from_len = from_len;
     }
 
@@ -857,7 +858,7 @@ int XSocket::WSARecvFrom(XWSABUF* buffers, uint32_t num_buffers,
                          xe::be<uint32_t>* flags_ptr, XSOCKADDR_IN* from_ptr,
                          xe::be<uint32_t>* fromlen_ptr,
                          XWSAOVERLAPPED* overlapped_ptr) {
-  if (!buffers || !flags_ptr || (from_ptr && !fromlen_ptr)) {
+  if (!buffers || !num_buffers || !flags_ptr || (from_ptr && !fromlen_ptr)) {
     XWSASetLastError(X_WSA_ERROR::X_WSA_INVALID_PARAMETER);
     return X_SOCKET_ERROR;
   }
