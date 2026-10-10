@@ -668,62 +668,58 @@ X_HRESULT XLiveBaseApp::XOnlineQuerySearch(uint32_t buffer_ptr) {
 
   results_ptr->attributes_ptr = attributes_address;
 
+  // Store attribute payloads immediately after the attribute array in the
+  // title-allocated results buffer.
+  uint8_t* binary_alloc_ptr = reinterpret_cast<uint8_t*>(
+      attributes_ptr + results_ptr->num_result_attributes);
+
   for (uint32_t gateway_index = 0;
        const auto& gateway : services->QuerySearchResults()) {
     uint32_t attribute_index = static_cast<uint32_t>(
-        (gateway_index * unmarshaller.SpecAttributes().size()));
-
-    uint8_t* binary_alloc_ptr = reinterpret_cast<uint8_t*>(
-        attributes_ptr + results_ptr->num_result_attributes);
+        gateway_index * unmarshaller.SpecAttributes().size());
 
     for (auto const& attribute : unmarshaller.SpecAttributes()) {
       switch (attribute.type) {
         case X_ONLINE_LSP_ATTRIBUTE_TSADDR: {
           assert_false(attribute.length != sizeof(TSADDR));
 
-          // TODO(Adrian): Instead of allocating use title allocated buffer
-          // results_ptr.
-          uint32_t TSADDR_adderess = memory_->SystemHeapAlloc(sizeof(TSADDR));
-
-          TSADDR* TSADDR_ptr =
-              memory_->TranslateVirtual<TSADDR*>(TSADDR_adderess);
-
-          *TSADDR_ptr = gateway;
+          uint32_t TSADDR_address =
+              memory_->HostToGuestVirtual(binary_alloc_ptr);
+          std::memcpy(binary_alloc_ptr, &gateway, sizeof(TSADDR));
+          binary_alloc_ptr += sizeof(TSADDR);
 
           attributes_ptr[attribute_index].attribute_id =
               X_ONLINE_LSP_ATTRIBUTE_TSADDR;
           attributes_ptr[attribute_index].info.blob.length = sizeof(TSADDR);
-          attributes_ptr[attribute_index].info.blob.value_ptr = TSADDR_adderess;
+          attributes_ptr[attribute_index].info.blob.value_ptr = TSADDR_address;
         } break;
         case X_ONLINE_LSP_ATTRIBUTE_XNKID: {
           assert_false(attribute.length != sizeof(XNKID));
 
-          uint32_t XNKID_adderess = memory_->SystemHeapAlloc(sizeof(XNKID));
-
-          XNKID* XNKID_ptr = memory_->TranslateVirtual<XNKID*>(XNKID_adderess);
-
+          uint32_t XNKID_address =
+              memory_->HostToGuestVirtual(binary_alloc_ptr);
           xe::be<uint64_t> session_id = GenerateSessionId(XNKID_ONLINE_SERVER);
-
-          std::memcpy(XNKID_ptr, &session_id, sizeof(XNKID));
+          std::memcpy(binary_alloc_ptr, &session_id, sizeof(XNKID));
+          binary_alloc_ptr += sizeof(XNKID);
 
           attributes_ptr[attribute_index].attribute_id =
               X_ONLINE_LSP_ATTRIBUTE_XNKID;
           attributes_ptr[attribute_index].info.blob.length = sizeof(XNKID);
-          attributes_ptr[attribute_index].info.blob.value_ptr = XNKID_adderess;
+          attributes_ptr[attribute_index].info.blob.value_ptr = XNKID_address;
         } break;
         case X_ONLINE_LSP_ATTRIBUTE_KEY: {
           assert_false(attribute.length != sizeof(XNKEY));
 
-          uint32_t XNKEY_adderess = memory_->SystemHeapAlloc(sizeof(XNKEY));
-
-          XNKEY* XNKEY_ptr = memory_->TranslateVirtual<XNKEY*>(XNKEY_adderess);
-
-          GenerateIdentityExchangeKey(XNKEY_ptr);
+          uint32_t XNKEY_address =
+              memory_->HostToGuestVirtual(binary_alloc_ptr);
+          GenerateIdentityExchangeKey(
+              reinterpret_cast<XNKEY*>(binary_alloc_ptr));
+          binary_alloc_ptr += sizeof(XNKEY);
 
           attributes_ptr[attribute_index].attribute_id =
               X_ONLINE_LSP_ATTRIBUTE_KEY;
           attributes_ptr[attribute_index].info.blob.length = sizeof(XNKEY);
-          attributes_ptr[attribute_index].info.blob.value_ptr = XNKEY_adderess;
+          attributes_ptr[attribute_index].info.blob.value_ptr = XNKEY_address;
         } break;
         case X_ONLINE_LSP_ATTRIBUTE_USER:
           attributes_ptr[attribute_index].attribute_id =
@@ -749,20 +745,19 @@ X_HRESULT XLiveBaseApp::XOnlineQuerySearch(uint32_t buffer_ptr) {
               xe::string_util::size_in_bytes(filter, true));
 
           // LSP Filter?
-          uint32_t string_adderess = memory_->SystemHeapAlloc(size);
-
-          char16_t* string_ptr =
-              memory_->TranslateVirtual<char16_t*>(string_adderess);
-
+          uint32_t string_address =
+              memory_->HostToGuestVirtual(binary_alloc_ptr);
+          char16_t* string_ptr = reinterpret_cast<char16_t*>(binary_alloc_ptr);
           xe::string_util::copy_and_swap_truncating(string_ptr, filter.c_str(),
                                                     filter.size() + 1);
+          binary_alloc_ptr += size;
 
           attributes_ptr[attribute_index].attribute_id =
               X_ATTRIBUTE_DATATYPE_STRING;
           attributes_ptr[attribute_index].info.string.length =
               static_cast<uint32_t>(filter.size() + 1);
           attributes_ptr[attribute_index].info.string.value_ptr =
-              string_adderess;
+              string_address;
         } break;
         case X_ATTRIBUTE_DATATYPE_BLOB:
           attributes_ptr[attribute_index].attribute_id =
