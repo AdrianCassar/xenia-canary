@@ -1370,7 +1370,7 @@ X_HRESULT XLiveBaseApp::XStorageEnumerate(uint32_t buffer_ptr) {
       } while (entry && entries.size() < available_to_return_items);
     }
 
-    if (has_wildcard && !item_filename_literal.empty()) {
+    if (folder && has_wildcard && !item_filename_literal.empty()) {
       entry = folder->GetChild(item_filename_literal);
 
       if (entry) {
