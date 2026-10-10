@@ -1448,15 +1448,19 @@ dword_result_t NetDll_XNetQosLookup_entry(
 
       if (chunk.http_code == HTTP_STATUS_CODE::HTTP_OK) {
         if (chunk.response && chunk.size) {
-          uint32_t data_ptr = kernel_memory()->SystemHeapAlloc(
-              static_cast<uint16_t>(chunk.size));
-          uint8_t* data = kernel_memory()->TranslateVirtual<uint8_t*>(data_ptr);
+          const uint16_t size = static_cast<uint16_t>(chunk.size);
+          const uint32_t data_ptr = kernel_memory()->SystemHeapAlloc(size);
 
-          std::memcpy(data, chunk.response, chunk.size);
+          if (data_ptr) {
+            uint8_t* data =
+                kernel_memory()->TranslateVirtual<uint8_t*>(data_ptr);
 
-          qos_info.data_ptr = data_ptr;
-          qos_info.data_len = static_cast<uint16_t>(chunk.size);
-          qos_info.flags |= XNET_XNQOSINFO::DATA_RECEIVED;
+            std::memcpy(data, chunk.response, size);
+
+            qos_info.data_ptr = data_ptr;
+            qos_info.data_len = size;
+            qos_info.flags |= XNET_XNQOSINFO::DATA_RECEIVED;
+          }
         }
       }
 
