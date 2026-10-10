@@ -2321,6 +2321,10 @@ struct host_set {
 };
 
 bool verify_x_fd_set(const x_fd_set* guest_set) {
+  if (!guest_set || guest_set->fd_count > X_FD_SETSIZE) {
+    return false;
+  }
+
   for (uint32_t i = 0; i < guest_set->fd_count; ++i) {
     auto socket_handle = static_cast<X_HANDLE>(guest_set->fd_array[i]);
     if (socket_handle == -1) {
