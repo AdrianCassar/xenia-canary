@@ -1914,6 +1914,10 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
     return X_E_INVALIDARG;
   }
 
+  if (!kernel_state_->xam_state()->user_tracker()->LoggedInToLive()) {
+    return X_ONLINE_E_LOGON_NOT_LOGGED_ON;
+  }
+
   uint64_t xuid = 0;
 
   if (args->user_index == XUserIndexNone) {
@@ -1923,13 +1927,14 @@ X_HRESULT XLiveBaseApp::XStorageBuildServerPath(uint32_t buffer_ptr) {
       return X_E_INVALIDARG;
     }
   } else {
-    xuid = kernel_state_->xam_state()
-               ->GetUserProfile(args->user_index.get())
-               ->GetOnlineXUID();
-  }
+    const auto user_profile =
+        kernel_state_->xam_state()->GetUserProfile(args->user_index);
 
-  if (!kernel_state_->xam_state()->user_tracker()->LoggedInToLive()) {
-    return X_ONLINE_E_LOGON_NOT_LOGGED_ON;
+    if (!user_profile) {
+      return X_ONLINE_E_LOGON_NOT_LOGGED_ON;
+    }
+
+    xuid = user_profile->GetOnlineXUID();
   }
 
   if (!args->server_path_length_ptr) {
