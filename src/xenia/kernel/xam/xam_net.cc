@@ -2159,15 +2159,14 @@ dword_result_t NetDll_bind_entry(dword_t caller, dword_t socket_handle,
 
   const auto upnp = kernel_state()->emulator()->GetUPnP();
 
-  uint16_t upnp_internal_port = upnp->GetMappedBindPort(name->address_port);
+  // Support wildcard port
+  uint16_t upnp_internal_port = socket->bound_port();
 
   if (upnp) {
     const uint16_t mapped_internal_port =
         upnp->GetMappedBindPort(name->address_port);
-
-    // Support wildcard port
-    if (!upnp_internal_port || !mapped_internal_port) {
-      upnp_internal_port = socket->bound_port();
+    if (mapped_internal_port) {
+      upnp_internal_port = mapped_internal_port;
     }
 
     const std::string protocol = socket->GetProtocolUPnPString();
