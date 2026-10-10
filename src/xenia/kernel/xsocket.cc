@@ -1202,28 +1202,37 @@ int XSocket::Send(const uint8_t* buf, uint32_t buf_len, uint32_t flags) {
 
 int XSocket::SendTo(uint8_t* buf, uint32_t buf_len, uint32_t flags,
                     XSOCKADDR_IN* to, uint32_t to_len) {
-  const auto upnp = kernel_state()->emulator()->GetUPnP();
+  sockaddr addr = {};
+  sockaddr* addr_ptr = nullptr;
 
-  if (upnp) {
-    to->address_port = upnp->GetMappedBindPort(to->address_port);
-  }
+  if (to) {
+    XSOCKADDR_IN target = *to;
+    const auto upnp = kernel_state()->emulator()->GetUPnP();
 
-  sockaddr addr = to->to_host();
-
-  // Ensure the bound interface can route to the loopback interface/itself
-  if (cvars::bind_interface) {
-    sockaddr_in* addr_in = reinterpret_cast<sockaddr_in*>(&addr);
-
-    if (addr_in->sin_addr.s_addr == xe::byte_swap(LOOPBACK)) {
-      const auto network_adapter =
-          kernel_state()->emulator()->GetNetworkAdapterManager();
-
-      addr_in->sin_addr = network_adapter->GetSelectedAdapterLocalIP().sin_addr;
+    if (upnp) {
+      target.address_port = upnp->GetMappedBindPort(target.address_port);
     }
+
+    addr = target.to_host();
+
+    // Ensure the bound interface can route to the loopback interface/itself
+    if (cvars::bind_interface) {
+      sockaddr_in* addr_in = reinterpret_cast<sockaddr_in*>(&addr);
+
+      if (addr_in->sin_addr.s_addr == xe::byte_swap(LOOPBACK)) {
+        const auto network_adapter =
+            kernel_state()->emulator()->GetNetworkAdapterManager();
+
+        addr_in->sin_addr =
+            network_adapter->GetSelectedAdapterLocalIP().sin_addr;
+      }
+    }
+
+    addr_ptr = &addr;
   }
 
   int ret = sendto(native_handle_, reinterpret_cast<char*>(buf), buf_len, flags,
-                   to ? &addr : nullptr, to_len);
+                   addr_ptr, to ? to_len : 0);
 
   // Implicit Bind
   if (!bound_port_) {
