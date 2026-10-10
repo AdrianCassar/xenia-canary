@@ -504,31 +504,41 @@ int XSocket::PollWSASendTo(bool wait, WSASendToData send_async_data,
         send_async_data.buffers[i].buf_ptr);
   }
 
-  sockaddr saddr = send_async_data.to->to_host();
-  sockaddr_in* addr_in = reinterpret_cast<sockaddr_in*>(&saddr);
+  sockaddr saddr = {};
+  sockaddr* saddr_ptr = nullptr;
+
+  int saddr_len = 0;
+
+  if (send_async_data.to) {
+    saddr = send_async_data.to->to_host();
+    sockaddr_in* addr_in = reinterpret_cast<sockaddr_in*>(&saddr);
+
+    const auto upnp = kernel_state()->emulator()->GetUPnP();
+
+    if (upnp) {
+      addr_in->sin_port = upnp->GetMappedBindPort(addr_in->sin_port);
+    }
+
+    // Ensure the bound interface can route to the loopback interface/itself
+    if (cvars::bind_interface) {
+      if (addr_in->sin_addr.s_addr == xe::byte_swap(LOOPBACK)) {
+        const auto network_adapter =
+            kernel_state()->emulator()->GetNetworkAdapterManager();
+
+        addr_in->sin_addr =
+            network_adapter->GetSelectedAdapterLocalIP().sin_addr;
+      }
+    }
+
+    saddr_ptr = &saddr;
+    saddr_len = send_async_data.to_len;
+  }
 
   DWORD bytes_sent = 0;
-  DWORD flags = 0;
 
-  const auto upnp = kernel_state()->emulator()->GetUPnP();
-
-  if (upnp) {
-    addr_in->sin_port = upnp->GetMappedBindPort(addr_in->sin_port);
-  }
-
-  // Ensure the bound interface can route to the loopback interface/itself
-  if (cvars::bind_interface) {
-    if (addr_in->sin_addr.s_addr == xe::byte_swap(LOOPBACK)) {
-      const auto network_adapter =
-          kernel_state()->emulator()->GetNetworkAdapterManager();
-
-      addr_in->sin_addr = network_adapter->GetSelectedAdapterLocalIP().sin_addr;
-    }
-  }
-
-  const int result = ::WSASendTo(
-      native_handle_, buffers.data(), send_async_data.num_buffers, &bytes_sent,
-      0, &saddr, send_async_data.to_len, nullptr, nullptr);
+  const int result =
+      ::WSASendTo(native_handle_, buffers.data(), send_async_data.num_buffers,
+                  &bytes_sent, 0, &saddr, saddr_len, nullptr, nullptr);
 
   // Implicit Bind
   if (!bound_port_) {
