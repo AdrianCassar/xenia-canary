@@ -422,10 +422,6 @@ X_HRESULT XLiveBaseApp::XPresenceSubscribe(uint32_t buffer_ptr,
   const xe::be<uint64_t>* peer_xuids =
       memory_->TranslateVirtual<xe::be<uint64_t>*>(xuid_address);
 
-  if (!kernel_state_->xam_state()->IsUserSignedIn(user_index)) {
-    return X_E_NO_SUCH_USER;
-  }
-
   const auto user_xuid =
       kernel_state_->xam_state()->GetUserProfile(user_index)->xuid();
 
@@ -483,10 +479,6 @@ X_HRESULT XLiveBaseApp::XPresenceUnsubscribe(uint32_t buffer_ptr,
 
   const xe::be<uint64_t>* peer_xuids =
       memory_->TranslateVirtual<xe::be<uint64_t>*>(xuid_address);
-
-  if (!kernel_state_->xam_state()->IsUserSignedIn(user_index)) {
-    return X_E_NO_SUCH_USER;
-  }
 
   const auto user_xuid =
       kernel_state_->xam_state()->GetUserProfile(user_index)->xuid();
