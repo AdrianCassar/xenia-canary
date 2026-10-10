@@ -868,10 +868,15 @@ DECLARE_XAM_EXPORT1(NetDll_XNetTsAddrToInAddr, kNetworking, kSketchy);
 dword_result_t NetDll_XNetInAddrToString_entry(dword_t caller, dword_t ina,
                                                lpstring_t string_out,
                                                dword_t string_size) {
-  in_addr addr = in_addr{};
+  if (!string_out || !string_size) {
+    return X_ERROR_INVALID_PARAMETER;
+  }
+
+  in_addr addr = {};
   addr.s_addr = ntohl(ina);
 
-  strncpy(string_out, ip_to_string(addr).c_str(), string_size);
+  const std::string address = ip_to_string(addr);
+  xe::string_util::copy_truncating(string_out, address.c_str(), string_size);
 
   return X_ERROR_SUCCESS;
 }
