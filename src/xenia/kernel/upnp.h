@@ -111,7 +111,7 @@ class UPnP {
   void OpenTrackedPorts();
 
   void OpenPorts(
-      std::map<std::string, std::map<uint16_t, uint16_t>> open_ports);
+      const std::map<std::string, std::map<uint16_t, uint16_t>>& open_ports);
 
   void CloseOpenPorts();
 
@@ -121,12 +121,12 @@ class UPnP {
 
   uint16_t GetMappedBindPort(uint16_t external_port);
 
-  const std::map<std::string, std::map<uint16_t, uint16_t>> GetOpenedPorts();
+  std::map<std::string, std::map<uint16_t, uint16_t>> GetOpenedPorts() const;
 
-  const std::map<std::string, std::map<uint16_t, int32_t>>
-  GetPortBindingResults();
+  std::map<std::string, std::map<uint16_t, int32_t>> GetPortBindingResults()
+      const;
 
-  const std::map<std::string, std::set<uint16_t>> GetTrackedPorts();
+  std::map<std::string, std::set<uint16_t>> GetTrackedPorts() const;
 
   static std::string_view GetMiniUPnPcErrorCodeToDesc(int32_t error) noexcept;
 
@@ -160,10 +160,10 @@ class UPnP {
   const std::chrono::minutes refresh_ports_interval_ = 45min;
   std::unique_ptr<xe::threading::PeriodicCallback> refresh_ports_timer_;
 
-  std::mutex mutex_tracked_ports_;
+  mutable std::mutex mutex_tracked_ports_;
   std::map<std::string, std::set<uint16_t>> tracked_ports_;
 
-  std::mutex mutex_bindings_;
+  mutable std::mutex mutex_bindings_;
   std::map<std::string, std::map<uint16_t, uint16_t>> port_bindings_;
   std::map<std::string, std::map<uint16_t, int32_t>> port_binding_results_;
 
