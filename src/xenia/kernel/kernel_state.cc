@@ -925,6 +925,7 @@ void KernelState::InitXmpVolumePatch() {
 
 void KernelState::TerminateTitle() {
   XELOGD("KernelState::TerminateTitle");
+  xam_state_->StopPeriodicMaintenance();
   xmp_volume_patch_.reset();
   auto global_lock = global_critical_region_.Acquire();
 
