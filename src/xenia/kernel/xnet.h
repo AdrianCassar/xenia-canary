@@ -2,7 +2,7 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2024 Xenia Emulator. All rights reserved.                        *
+ * Copyright 2026 Xenia Canary. All rights reserved.                          *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
@@ -10,7 +10,12 @@
 #ifndef XENIA_KERNEL_XNET_H_
 #define XENIA_KERNEL_XNET_H_
 
+#include <algorithm>
+#include <cstring>
+#include <iterator>
 #include <random>
+#include <tuple>
+#include <unordered_map>
 
 #include "xenia/base/byte_order.h"
 #include "xenia/base/literals.h"
@@ -466,7 +471,13 @@ static_assert_size(XLIVEBASE_WEBSERVICETASK_GETBUFFERSIZE, 0x14);
 
 struct XNKID {
   uint8_t ab[8];
-  uint64_t as_uint64() const { return *reinterpret_cast<const uint64_t*>(&ab); }
+
+  uint64_t as_uint64() const {
+    uint64_t value;
+    std::memcpy(&value, ab, sizeof(uint64_t));
+    return value;
+  }
+
   uint64_t as_uintBE64() const { return xe::byte_swap(as_uint64()); }
 
   bool operator==(const XNKID&) const = default;
@@ -624,14 +635,12 @@ struct XSESSION_MEMBER {
 
   void SetZombie() { Flags |= static_cast<uint32_t>(MEMBER_FLAGS::ZOMBIE); }
 
-  const bool IsPrivate() const {
-    return (Flags & static_cast<uint32_t>(MEMBER_FLAGS::PRIVATE_SLOT)) ==
-           static_cast<uint32_t>(MEMBER_FLAGS::PRIVATE_SLOT);
+  bool IsPrivate() const {
+    return (Flags & static_cast<uint32_t>(MEMBER_FLAGS::PRIVATE_SLOT)) != 0;
   }
 
-  const bool IsZombie() const {
-    return (Flags & static_cast<uint32_t>(MEMBER_FLAGS::ZOMBIE)) ==
-           static_cast<uint32_t>(MEMBER_FLAGS::ZOMBIE);
+  bool IsZombie() const {
+    return (Flags & static_cast<uint32_t>(MEMBER_FLAGS::ZOMBIE)) != 0;
   }
 };
 static_assert_size(XSESSION_MEMBER, 0x10);
@@ -1529,8 +1538,9 @@ inline bool IsOnlinePeer(uint64_t session_id) {
 }
 
 inline X_NAT_TYPE GetNatTypeFromOnlinePeer(uint64_t session_id) {
-  return static_cast<X_NAT_TYPE>(
-      ((session_id & XNKID_MASK) & XNKID_ONLINE_NAT_MASK) / 16);
+  const uint8_t nat_type =
+      static_cast<uint8_t>((session_id >> 56) & XNKID_ONLINE_NAT_MASK) >> 4;
+  return static_cast<X_NAT_TYPE>(nat_type);
 }
 
 inline bool IsServer(uint64_t session_id) {
@@ -1542,11 +1552,11 @@ inline bool IsTitleServer(uint64_t session_id) {
 }
 
 inline bool IsValidXNKID(uint64_t session_id) {
-  if (!IsOnlinePeer(session_id) && !IsSystemlink(session_id) &&
-          !IsServer(session_id) ||
-      session_id == 0) {
-    assert_always();
+  const bool is_valid_type = IsOnlinePeer(session_id) ||
+                             IsSystemlink(session_id) || IsServer(session_id);
 
+  if (session_id == 0 || !is_valid_type) {
+    assert_always();
     return false;
   }
 
