@@ -7,6 +7,8 @@
  ******************************************************************************
  */
 
+#include <memory>
+
 #include <third_party/miniupnp/miniupnpc/include/miniwget.h>
 #include <third_party/miniupnp/miniupnpc/include/upnpcommands.h>
 
@@ -31,7 +33,7 @@ UPnP::~UPnP() {
   CloseOpenPorts();
 
   std::lock_guard igd_lock(igd_mutex_);
-  FreeUPNPUrls(&igd_urls_);
+  CleanupIGD();
 }
 
 void UPnP::SetUPnPState(bool upnp_state) { OVERRIDE_bool(upnp, upnp_state); }
@@ -88,6 +90,10 @@ UPNPDev* UPnP::DiscoverUPnPDevices() {
   UPNPDev* device_list = upnpDiscover(2000, nullptr, nullptr, 0, 0, 2, &error);
 
   if (error) {
+    if (device_list) {
+      freeUPNPDevlist(device_list);
+    }
+
     XELOGE("{}: error code: {}", __func__, error);
     return nullptr;
   }
@@ -100,14 +106,15 @@ std::optional<std::string> UPnP::DiscoverValidIGD() {
 
   CleanupIGD();
 
-  UPNPDev* device_list = DiscoverUPnPDevices();
+  std::unique_ptr<UPNPDev, decltype(&freeUPNPDevlist)> device_list(
+      DiscoverUPnPDevices(), &freeUPNPDevlist);
 
   if (!device_list) {
     XELOGE("{}: No UPnP devices were found", __func__);
     return std::nullopt;
   }
 
-  const int status = UPNP_GetValidIGD(device_list, &igd_urls_, &igd_data_,
+  const int status = UPNP_GetValidIGD(device_list.get(), &igd_urls_, &igd_data_,
                                       lan_addr_, sizeof(lan_addr_), nullptr, 0);
 
   std::optional<std::string> igd_desc_url;
@@ -139,8 +146,6 @@ std::optional<std::string> UPnP::DiscoverValidIGD() {
       XELOGW("No valid IGD found (status: {}).", status);
     } break;
   }
-
-  freeUPNPDevlist(device_list);
 
   return igd_desc_url;
 };
@@ -177,10 +182,11 @@ int32_t UPnP::AddPort(std::string addr, uint16_t internal_port,
   internal_port = GetMappedBindPort(internal_port);
 
   // If port is already open then skip opening again.
-  if (port_bindings_.contains(protocol)) {
-    if (port_bindings_.at(protocol).contains(internal_port)) {
-      return UPNPCOMMAND_SUCCESS;
-    }
+  const auto protocol_bindings = port_bindings_.find(protocol);
+  if (protocol_bindings != port_bindings_.end() &&
+      protocol_bindings->second.find(internal_port) !=
+          protocol_bindings->second.end()) {
+    return UPNPCOMMAND_SUCCESS;
   }
 
   TrackPort(internal_port, protocol);
@@ -238,7 +244,7 @@ std::future<int32_t> UPnP::RemovePortAsync(uint16_t port,
   return remove_port;
 }
 
-int32_t UPnP::RemovePort(uint16_t port, std::string protocol) {
+int32_t UPnP::RemovePort(uint16_t internal_port, std::string protocol) {
   if (!active_) {
     return UPNPCOMMAND_UNKNOWN_ERROR;
   }
@@ -246,53 +252,59 @@ int32_t UPnP::RemovePort(uint16_t port, std::string protocol) {
   std::lock_guard igd_lock(igd_mutex_);
   std::lock_guard bindings_lock(mutex_bindings_);
 
-  if (!port_bindings_.contains(protocol)) {
+  auto protocol_it = port_bindings_.find(protocol);
+  if (protocol_it == port_bindings_.end()) {
     return UPNPCOMMAND_UNKNOWN_ERROR;
   }
 
-  const auto& port_mapping = port_bindings_.at(protocol);
-
-  if (!port_mapping.contains(port)) {
-    XELOGE("Tried to unbind port mapping {} to IGD({}) but it isn't bound",
-           port, protocol);
+  auto binding_it = protocol_it->second.find(internal_port);
+  if (binding_it == protocol_it->second.end()) {
+    XELOGE("Tried to unbind port mapping {}({}) but it isn't bound",
+           internal_port, protocol);
     return UPNPCOMMAND_UNKNOWN_ERROR;
   }
 
-  const std::string external_port_str = fmt::format("{}", port);
+  const uint16_t external_port = binding_it->second;
+  const std::string external_port_str = fmt::format("{}", external_port);
 
   const int result = UPNP_DeletePortMapping(
       igd_urls_.controlURL, igd_data_.first.servicetype,
       external_port_str.c_str(), protocol.c_str(), nullptr);
 
-  if (result != UPNPCOMMAND_SUCCESS) {
-    XELOGE("Failed to delete port mapping IGD:{}({}): {}", external_port_str,
+  const bool mapping_removed =
+      result == UPNPCOMMAND_SUCCESS ||
+      result == static_cast<int>(UPnPErrorCodes::PortMappingNotFound);
+
+  if (!mapping_removed) {
+    XELOGE("Failed to delete port mapping IGD:{}({}): {}", external_port,
            protocol, result);
+    port_binding_results_[protocol][external_port] = result;
+    return result;
   }
 
-  port_binding_results_.at(protocol).erase(port);
-  port_bindings_.at(protocol).erase(port);
-
-  if (port_binding_results_.at(protocol).empty()) {
-    port_binding_results_.erase(protocol);
+  protocol_it->second.erase(binding_it);
+  if (protocol_it->second.empty()) {
+    port_bindings_.erase(protocol_it);
   }
 
-  if (port_bindings_.at(protocol).empty()) {
-    port_bindings_.erase(protocol);
+  auto results_it = port_binding_results_.find(protocol);
+  if (results_it != port_binding_results_.end()) {
+    results_it->second.erase(external_port);
+    if (results_it->second.empty()) {
+      port_binding_results_.erase(results_it);
+    }
   }
 
-  XELOGE("Successfully deleted port mapping {} to IGD:{}({})", port, port,
+  XELOGI("Deleted port mapping {} to IGD:{}({})", internal_port, external_port,
          protocol);
 
   return result;
 }
 
 void UPnP::CleanupIGD() {
-  if (active_) {
-    std::fill_n(lan_addr_, sizeof(lan_addr_), 0);
-
-    igd_data_ = {};
-    FreeUPNPUrls(&igd_urls_);
-  }
+  std::fill_n(lan_addr_, sizeof(lan_addr_), '\0');
+  igd_data_ = {};
+  FreeUPNPUrls(&igd_urls_);
 }
 
 std::string UPnP::GetLocalIP() {
@@ -333,7 +345,7 @@ void UPnP::OpenTrackedPorts() {
 }
 
 void UPnP::OpenPorts(
-    std::map<std::string, std::map<uint16_t, uint16_t>> open_ports) {
+    const std::map<std::string, std::map<uint16_t, uint16_t>>& open_ports) {
   if (!active_) {
     return;
   }
@@ -354,7 +366,7 @@ void UPnP::CloseOpenPorts() {
 
   for (const auto& [protocol, prot_bindings] : opened_ports) {
     for (const auto& [internal_port, external_port] : prot_bindings) {
-      RemovePort(external_port, protocol);
+      RemovePort(internal_port, protocol);
     }
   }
 }
@@ -391,16 +403,18 @@ void UPnP::StartPeriodicPortsRefresher() {
 uint16_t UPnP::GetMappedConnectPort(uint16_t external_port) {
   std::lock_guard mapped_lock(mapped_mutex_);
 
-  if (mapped_connect_ports_.contains(external_port)) {
-    return mapped_connect_ports_[external_port];
+  const auto mapped_port = mapped_connect_ports_.find(external_port);
+  if (mapped_port != mapped_connect_ports_.end()) {
+    return mapped_port->second;
   }
 
-  if (mapped_connect_ports_.contains(0)) {
+  const auto wildcard_port = mapped_connect_ports_.find(0);
+  if (wildcard_port != mapped_connect_ports_.end()) {
     if (cvars::logging) {
       XELOGI("Using wildcard connect port for guest port {}!", external_port);
     }
 
-    return mapped_connect_ports_.at(0);
+    return wildcard_port->second;
   }
 
   if (cvars::logging) {
@@ -413,34 +427,36 @@ uint16_t UPnP::GetMappedConnectPort(uint16_t external_port) {
 uint16_t UPnP::GetMappedBindPort(uint16_t external_port) {
   std::lock_guard mapped_lock(mapped_mutex_);
 
-  if (mapped_bind_ports_.contains(external_port)) {
-    return mapped_bind_ports_[external_port];
+  const auto mapped_port = mapped_bind_ports_.find(external_port);
+  if (mapped_port != mapped_bind_ports_.end()) {
+    return mapped_port->second;
   }
 
-  if (mapped_bind_ports_.contains(0)) {
+  const auto wildcard_port = mapped_bind_ports_.find(0);
+  if (wildcard_port != mapped_bind_ports_.end()) {
     if (cvars::logging) {
       XELOGI("Using wildcard bind port for guest port {}!", external_port);
     }
 
-    return mapped_bind_ports_.at(0);
+    return wildcard_port->second;
   }
 
   return external_port;
 }
 
-const std::map<std::string, std::map<uint16_t, uint16_t>>
-UPnP::GetOpenedPorts() {
+std::map<std::string, std::map<uint16_t, uint16_t>> UPnP::GetOpenedPorts()
+    const {
   std::lock_guard bindings_lock(mutex_bindings_);
   return port_bindings_;
 }
 
-const std::map<std::string, std::map<uint16_t, int32_t>>
-UPnP::GetPortBindingResults() {
+std::map<std::string, std::map<uint16_t, int32_t>> UPnP::GetPortBindingResults()
+    const {
   std::lock_guard bindings_lock(mutex_bindings_);
   return port_binding_results_;
 }
 
-const std::map<std::string, std::set<uint16_t>> UPnP::GetTrackedPorts() {
+std::map<std::string, std::set<uint16_t>> UPnP::GetTrackedPorts() const {
   std::lock_guard tracked_lock(mutex_tracked_ports_);
   return tracked_ports_;
 }

@@ -1992,7 +1992,7 @@ void xeDrawUPnPAndPorts(xe::ui::ImGuiDrawer* imgui_drawer,
           ImGui::Text("Tracked Ports:");
           ImGui::Spacing();
 
-          auto& tracked_ports = upnp->GetTrackedPorts();
+          const auto tracked_ports = upnp->GetTrackedPorts();
 
           if (ImGui::BeginTable("##PortsTable", 2,
                                 ImGuiTableFlags_SizingStretchProp |
@@ -2020,7 +2020,7 @@ void xeDrawUPnPAndPorts(xe::ui::ImGuiDrawer* imgui_drawer,
         }
       } else if (upnp->IsActive()) {
         if (!upnp->GetTrackedPorts().empty()) {
-          auto& tracked_ports = upnp->GetTrackedPorts();
+          const auto tracked_ports = upnp->GetTrackedPorts();
 
           ImGui::Spacing();
 
@@ -2054,7 +2054,7 @@ void xeDrawUPnPAndPorts(xe::ui::ImGuiDrawer* imgui_drawer,
 
             ImGui::TableHeadersRow();
 
-            auto& port_results = upnp->GetPortBindingResults();
+            const auto port_results = upnp->GetPortBindingResults();
             const auto opened_ports = upnp->GetOpenedPorts();
 
             for (const auto& [protocol, internal_ports] : tracked_ports) {
