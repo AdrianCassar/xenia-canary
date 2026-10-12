@@ -43,12 +43,6 @@ bool UpdaterDialog::ToggleButton(const char* str_id, bool* v) {
     clicked = true;
   }
 
-  ImGuiContext& gg = *GImGui;
-  float ANIM_SPEED = 0.085f;
-  if (gg.LastActiveId == gg.CurrentWindow->GetID(
-                             str_id)) {  // && g.LastActiveIdTimer < ANIM_SPEED)
-    float t_anim = ImSaturate(gg.LastActiveIdTimer / ANIM_SPEED);
-  }
   if (ImGui::IsItemHovered()) {
     draw_list->AddRectFilled(
         p, ImVec2(p.x + width, p.y + height),
@@ -106,7 +100,9 @@ UpdaterDialog::~UpdaterDialog() {
 
   if (cancel_request) {
     // Wait for the partially downloaded file to no longer be in use.
-    download_future_.wait();
+    if (download_future_.valid()) {
+      download_future_.wait();
+    }
 
     // Delete the partially downloaded file if download was cancelled
     std::error_code ec;
@@ -254,6 +250,11 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
 
     auto btn_toggle_start_cursor = ImGui::GetCursorPos();
 
+    const bool channel_toggle_disabled =
+        update_available_future_.valid() || changelog_info_future_.valid() ||
+        download_future_.valid() || download_startup_pending ||
+        show_replace_dialog_ || downloaded_;
+    ImGui::BeginDisabled(channel_toggle_disabled);
     ImGui::BeginGroup();
     if (ToggleButton("ToggleStable", &stable_toggle_)) {
       ToggleStableState();
@@ -275,6 +276,7 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
     ImGui::PopStyleColor(2);
 
     ImGui::SetCursorPos(btn_toggle_end_cursor);
+    ImGui::EndDisabled();
 
     ImGui::Spacing();
     ImGui::Separator();
@@ -305,7 +307,7 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
 
         ImGui::BeginChild("##ChangelogChild", ImVec2(-1, height),
                           ImGuiChildFlags_Borders);
-        ImGui::TextWrapped(changelog_.c_str());
+        ImGui::TextWrapped("%s", changelog_.c_str());
         ImGui::EndChild();
         const ImVec2 item_size = ImGui::GetItemRectSize();
         const ImVec2 end_pos = ImVec2(muli_input_text_pos.x + item_size.x,
@@ -331,9 +333,9 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
       }
 
       if (!update_check_result_.metadata.commit_date.empty()) {
-        ImGui::Text(fmt::format("Build Date: {}",
-                                update_check_result_.metadata.commit_date)
-                        .c_str());
+        const std::string build_date = fmt::format(
+            "Build Date: {}", update_check_result_.metadata.commit_date);
+        ImGui::TextUnformatted(build_date.c_str());
       }
 
       ImGui::Spacing();
@@ -364,8 +366,8 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
         std::string error_code = fmt::format(
             "Error Code: {}", static_cast<int32_t>(download_response_code_));
 
-        ImGui::Text(dl_failed_desc.c_str());
-        ImGui::Text(error_code.c_str());
+        ImGui::TextUnformatted(dl_failed_desc.c_str());
+        ImGui::TextUnformatted(error_code.c_str());
       }
 
       if (!hide_download_button_) {
@@ -386,22 +388,40 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
           downloaded_file_path_ =
               xe::filesystem::GetExecutableFolder() / artifact_name_;
 
-          if (std::filesystem::exists(downloaded_file_path_) &&
-              !replace_file_) {
+          std::error_code file_error;
+          const bool file_exists =
+              std::filesystem::exists(downloaded_file_path_, file_error);
+
+          if (file_error) {
+            XELOGE("Failed to check for existing update file {}: {}",
+                   downloaded_file_path_.string(), file_error.message());
+            downloaded_file_path_.clear();
+            download_startup_pending = false;
+          } else if (file_exists && !replace_file_) {
             show_replace_dialog_ = true;
             ImGui::OpenPopup("Replace");
           }
 
-          download_startup_pending = true;
+          if (!file_error) {
+            download_startup_pending = true;
+          }
         }
       }
 
       if (download_startup_pending && !downloaded_ &&
           !download_future_.valid() && !show_replace_dialog_ &&
           !downloaded_file_path_.empty()) {
-        const bool exists = std::filesystem::exists(downloaded_file_path_);
+        std::error_code file_error;
+        const bool exists =
+            std::filesystem::exists(downloaded_file_path_, file_error);
 
-        if (!exists || replace_file_) {
+        if (file_error) {
+          XELOGE("Failed to check for existing update file {}: {}",
+                 downloaded_file_path_.string(), file_error.message());
+          downloaded_failed_ = true;
+          hide_download_button_ = false;
+          downloaded_file_path_.clear();
+        } else if (!exists || replace_file_) {
           auto callback = [this](double now, double total) {
             if (total > 0.0) {
               download_progress_ = static_cast<float>(now / total);
@@ -461,7 +481,7 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
         ImVec2 desc_size = ImGui::CalcTextSize(desc.c_str());
 
         ImGui::SetCursorPosX((ImGui::GetWindowWidth() - desc_size.x) * 0.5f);
-        ImGui::Text(desc.c_str());
+        ImGui::TextUnformatted(desc.c_str());
         ImGui::Separator();
 
         std::string yes_lbl = "Yes";
@@ -567,7 +587,7 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
           ImGui::Spacing();
 
           ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(240, 50, 50, 255));
-          ImGui::Text("Failed to apply update. Please try again.");
+          ImGui::TextUnformatted("Failed to apply update. Please try again.");
           ImGui::PopStyleColor();
 
           ImGui::Spacing();
@@ -582,10 +602,13 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
 
           ImGui::Spacing();
           ImGui::Text("Build Details:");
-          ImGui::TextWrapped(
-              fmt::format("Branch: {}", XE_BUILD_BRANCH).c_str());
-          ImGui::Text(fmt::format("Date: {}", XE_BUILD_DATE).c_str());
-          ImGui::Text(fmt::format("Commit: {}", XE_BUILD_COMMIT_SHORT).c_str());
+          const std::string branch = fmt::format("Branch: {}", XE_BUILD_BRANCH);
+          const std::string date = fmt::format("Date: {}", XE_BUILD_DATE);
+          const std::string commit =
+              fmt::format("Commit: {}", XE_BUILD_COMMIT_SHORT);
+          ImGui::TextWrapped("%s", branch.c_str());
+          ImGui::TextUnformatted(date.c_str());
+          ImGui::TextUnformatted(commit.c_str());
 
           ImGui::Spacing();
         } break;
@@ -599,8 +622,9 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
         case HTTP_STATUS_CODE::HTTP_NOT_FOUND: {
           ImGui::Spacing();
           ImGui::Text("Failed to check for updates!");
-          ImGui::Text(fmt::format("Branch '{}' doesn't exist.", XE_BUILD_BRANCH)
-                          .c_str());
+          const std::string error =
+              fmt::format("Branch '{}' doesn't exist.", XE_BUILD_BRANCH);
+          ImGui::TextWrapped("%s", error.c_str());
           ImGui::Spacing();
         } break;
         case static_cast<uint32_t>(-1): {
@@ -617,7 +641,7 @@ void UpdaterDialog::OnDraw(ImGuiIO& io) {
 
           ImGui::Spacing();
           ImGui::Text("Failed to check for updates!");
-          ImGui::Text(error_code.c_str());
+          ImGui::TextUnformatted(error_code.c_str());
           ImGui::Spacing();
         } break;
       }
@@ -643,7 +667,7 @@ bool UpdaterCompletionDialog::CopyFilePathToClipboard(
 #ifdef XE_PLATFORM_WIN32
   size_t path_size =
       string_util::size_in_bytes(file_to_copy_path.c_str(), true);
-  size_t buffer_size = path_size + sizeof(DROPFILES);
+  size_t buffer_size = path_size + sizeof(DROPFILES) + sizeof(char16_t);
 
   HGLOBAL dropped_files_data_ptr = GlobalAlloc(GHND, buffer_size);
 
@@ -664,17 +688,21 @@ bool UpdaterCompletionDialog::CopyFilePathToClipboard(
 
   char16_t* files_ptr = reinterpret_cast<char16_t*>(drop_files_ptr + 1);
   memcpy(files_ptr, file_to_copy_path.c_str(), path_size);
+  GlobalUnlock(dropped_files_data_ptr);
 
   bool copied = false;
 
   if (OpenClipboard(nullptr)) {
-    EmptyClipboard();
-    copied = SetClipboardData(CF_HDROP, dropped_files_data_ptr);
+    if (EmptyClipboard()) {
+      copied = SetClipboardData(CF_HDROP, dropped_files_data_ptr) != nullptr;
+    }
+
+    CloseClipboard();
   }
 
-  CloseClipboard();
-  GlobalUnlock(dropped_files_data_ptr);
-  GlobalFree(dropped_files_data_ptr);
+  if (!copied) {
+    GlobalFree(dropped_files_data_ptr);
+  }
 
   return copied;
 #else
@@ -709,7 +737,7 @@ void UpdaterCompletionDialog::OnDraw(ImGuiIO& io) {
       ImGui::SetCursorPosX((ImGui::GetWindowWidth() - desc_size.x) * 0.5f);
 
       ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(240, 50, 50, 255));
-      ImGui::Text(desc.c_str());
+      ImGui::TextUnformatted(desc.c_str());
       ImGui::PopStyleColor();
 
       ImGui::Separator();
@@ -762,19 +790,17 @@ void UpdaterCompletionDialog::OnDraw(ImGuiIO& io) {
             xe::filesystem::GetExecutableFolder() / update_log_filename_;
 
         std::stringstream buffer;
-        std::stringstream::pos_type size;
-
         std::error_code ec;
 
         if (std::filesystem::exists(update_log_path, ec) && !ec) {
           std::ifstream log(update_log_path);
 
           buffer << log.rdbuf();
-          size = log.tellg();
           log.close();
         } else {
-          ImGui::Text(
-              fmt::format("{} not found.", update_log_filename_).c_str());
+          const std::string missing_log =
+              fmt::format("{} not found.", update_log_filename_);
+          ImGui::TextUnformatted(missing_log.c_str());
           ImGui::Separator();
           ImGui::Spacing();
         }
@@ -783,7 +809,8 @@ void UpdaterCompletionDialog::OnDraw(ImGuiIO& io) {
 
         ImGui::BeginChild("##UpdatelogChild", ImVec2(-1, height),
                           ImGuiChildFlags_Borders);
-        ImGui::TextWrapped(buffer.str().c_str());
+        const std::string log_text = buffer.str();
+        ImGui::TextWrapped("%s", log_text.c_str());
         ImGui::EndChild();
         const ImVec2 item_size = ImGui::GetItemRectSize();
         const ImVec2 end_pos = ImVec2(muli_input_text_pos.x + item_size.x,
@@ -830,8 +857,9 @@ void UpdaterCompletionDialog::OnDraw(ImGuiIO& io) {
       ImGui::Separator();
 
       ImGui::Text("To update Xenia Canary manually:");
-      ImGui::Text(
-          fmt::format("1. Extract the zip file: {}", artifact_name_).c_str());
+      const std::string extract_instruction =
+          fmt::format("1. Extract the zip file: {}", artifact_name_);
+      ImGui::TextUnformatted(extract_instruction.c_str());
       ImGui::Text("2. Replace the current Xenia executable with the new one.");
       ImGui::Text("3. Delete the zip file.");
     }

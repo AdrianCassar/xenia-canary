@@ -12,6 +12,7 @@
 #include <fstream>
 #include <functional>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <string>
 
@@ -33,6 +34,38 @@
 
 namespace xe {
 namespace app {
+namespace {
+
+constexpr uint32_t kRequestError = std::numeric_limits<uint32_t>::max();
+
+inline bool SetCurlOptions(CURL*) { return true; }
+
+template <typename Value, typename... Options>
+bool SetCurlOptions(CURL* curl, CURLoption option, Value value,
+                    Options... options) {
+  return curl_easy_setopt(curl, option, value) == CURLE_OK &&
+         SetCurlOptions(curl, options...);
+}
+
+size_t WriteResponseToFileCallback(void* contents, size_t size, size_t nmemb,
+                                   void* userp) {
+  if (size != 0 && nmemb > std::numeric_limits<size_t>::max() / size) {
+    return 0;
+  }
+
+  const size_t total_size = size * nmemb;
+  if (total_size >
+      static_cast<size_t>(std::numeric_limits<std::streamsize>::max())) {
+    return 0;
+  }
+
+  auto* file = static_cast<std::ofstream*>(userp);
+  file->write(static_cast<const char*>(contents),
+              static_cast<std::streamsize>(total_size));
+  return *file ? total_size : 0;
+}
+
+}  // namespace
 
 // TODO:
 // - SSL backend for libcurl on Linux using wolfssl
@@ -42,44 +75,40 @@ Updater::Updater(const std::string& owner, const std::string& repo)
 uint32_t Updater::GetRequest(const std::string& endpoint,
                              std::vector<uint8_t>& response_buffer,
                              std::atomic<bool>& cancel_flag) const {
-  CURL* curl;
-  CURLcode result;
-
-  curl = curl_easy_init();
+  std::unique_ptr<CURL, decltype(&curl_easy_cleanup)> curl(curl_easy_init(),
+                                                           curl_easy_cleanup);
 
   if (!curl) {
-    return false;
+    return kRequestError;
   }
-
-  curl_easy_setopt(curl, CURLOPT_URL, endpoint.c_str());
-  curl_easy_setopt(curl, CURLOPT_USERAGENT, "xenia-canary");
-  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteResponceToMemoryCallback);
-  curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response_buffer);
-  curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
 
   ProgressCallbackData callback_data = {.cancelled = &cancel_flag};
 
-  // Enable progress callback getting called
-  curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
-  curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &callback_data);
-  curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, CurlProgressCallback);
+  const bool options_set = SetCurlOptions(
+      curl.get(), CURLOPT_URL, endpoint.c_str(), CURLOPT_USERAGENT,
+      "xenia-canary", CURLOPT_WRITEFUNCTION, WriteResponceToMemoryCallback,
+      CURLOPT_WRITEDATA, &response_buffer, CURLOPT_FOLLOWLOCATION, 1L,
+      CURLOPT_NOPROGRESS, 0L, CURLOPT_XFERINFODATA, &callback_data,
+      CURLOPT_XFERINFOFUNCTION, CurlProgressCallback);
 
-  result = curl_easy_perform(curl);
+  if (!options_set) {
+    return kRequestError;
+  }
+
+  const CURLcode result = curl_easy_perform(curl.get());
 
   if (result == CURLE_ABORTED_BY_CALLBACK) {
     XELOGI("Cancelled Request!");
   }
 
   long response_code = 0;
-  curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
-
-  curl_easy_cleanup(curl);
-
-  if (result != CURLE_OK && response_code == 0) {
-    response_code = -1;
+  if (curl_easy_getinfo(curl.get(), CURLINFO_RESPONSE_CODE, &response_code) !=
+          CURLE_OK ||
+      result != CURLE_OK) {
+    return kRequestError;
   }
 
-  return response_code;
+  return static_cast<uint32_t>(response_code);
 }
 
 // Using this function will reduce the chances of API rate limits from GitHub.
@@ -122,17 +151,13 @@ CheckForUpdateInfo Updater::CheckForUpdatesViaXeniaManagerDatabase(
                                                                : nullptr;
   };
 
-  std::string build_type = "nightly";
-
-  if (stable) {
-    build_type = "stable";
-  }
+  const char* build_type = stable ? "stable" : "nightly";
 
   const rapidjson::Value* xenia = get_object(document, "xenia");
   const rapidjson::Value* netplay =
       xenia ? get_object(*xenia, "netplay") : nullptr;
   const rapidjson::Value* build =
-      netplay ? get_object(*netplay, build_type.c_str()) : nullptr;
+      netplay ? get_object(*netplay, build_type) : nullptr;
 
   if (!build) {
     XELOGI("missing 'xenia.netplay.build' object");
@@ -140,19 +165,14 @@ CheckForUpdateInfo Updater::CheckForUpdatesViaXeniaManagerDatabase(
     return update_info;
   }
 
-  std::string latest_commit;
-
-  if (!stable) {
-    if (!build->HasMember("commit_sha") || !(*build)["commit_sha"].IsString()) {
-      XELOGI("missing 'commit_sha'");
-      update_info.metadata.response_code = -1;
-      return update_info;
-    }
-
-    latest_commit = (*build)["commit_sha"].GetString();
+  if (!build->HasMember("commit_sha") || !(*build)["commit_sha"].IsString() ||
+      !build->HasMember("tag_name") || !(*build)["tag_name"].IsString()) {
+    XELOGI("missing or invalid build commit/tag metadata");
+    update_info.metadata.response_code = kRequestError;
+    return update_info;
   }
 
-  // Extract values
+  const std::string latest_commit = (*build)["commit_sha"].GetString();
   const std::string tag_name = (*build)["tag_name"].GetString();
   const std::string latest_date =
       (build->HasMember("date") && (*build)["date"].IsString())
@@ -198,7 +218,9 @@ CheckForUpdateInfo Updater::StartupUpdateCheck(
     update_info = CheckForUpdates(false, XE_BUILD_BRANCH, cancel_flag);
   }
 
-  callback(update_info);
+  if (callback) {
+    callback(update_info);
+  }
 
   return update_info;
 }
@@ -237,7 +259,8 @@ CheckForUpdateInfo Updater::CheckForUpdates(
     changelog_info = GetChangelogBetweenCommits(
         XE_BUILD_COMMIT, update_info.metadata.tag, cancel_flag);
 
-    if (update_info.metadata.response_code != HTTP_STATUS_CODE::HTTP_OK) {
+    if (changelog_info.response_code != HTTP_STATUS_CODE::HTTP_OK) {
+      update_info.metadata.response_code = changelog_info.response_code;
       update_info.update_available = false;
       return update_info;
     }
@@ -333,26 +356,20 @@ UpdateMetadata Updater::GetLatestCommitHash(
   document.Parse(response_data.c_str());
 
   if (document.HasParseError()) {
-    update_metadata.response_code = -1;
+    update_metadata.response_code = kRequestError;
     return update_metadata;
   }
 
   if (!document.IsArray() || document.Empty()) {
-    update_metadata.response_code = -1;
+    update_metadata.response_code = kRequestError;
     return update_metadata;
   }
 
-  const auto& commits = document.GetArray();
+  const auto& commit = document[0];
 
-  if (commits.Empty()) {
-    update_metadata.response_code = -1;
-    return update_metadata;
-  }
-
-  const auto& commit = commits[0];
-
-  if (!commit.HasMember("sha") || !commit["sha"].IsString()) {
-    update_metadata.response_code = -1;
+  if (!commit.IsObject() || !commit.HasMember("sha") ||
+      !commit["sha"].IsString()) {
+    update_metadata.response_code = kRequestError;
     return update_metadata;
   }
 
@@ -399,14 +416,17 @@ UpdateMetadata Updater::GetLatestReleaseCommitHash(
   rapidjson::Document document;
   document.Parse(response_data.c_str());
 
-  if (document.HasParseError()) {
-    update_metadata.response_code = -1;
+  if (document.HasParseError() || !document.IsObject()) {
+    update_metadata.response_code = kRequestError;
     return update_metadata;
   }
 
-  if (document.HasMember("tag_name") && document["tag_name"].IsString()) {
-    update_metadata.tag = document["tag_name"].GetString();
+  if (!document.HasMember("tag_name") || !document["tag_name"].IsString()) {
+    update_metadata.response_code = kRequestError;
+    return update_metadata;
   }
+
+  update_metadata.tag = document["tag_name"].GetString();
 
   if (document.HasMember("published_at") &&
       document["published_at"].IsString()) {
@@ -492,21 +512,26 @@ uint32_t Updater::DownloadLatestRelease(
   rapidjson::Document document;
   document.Parse(response_data.c_str());
 
-  if (document.HasParseError()) {
-    return -1;
+  if (document.HasParseError() || !document.IsObject()) {
+    return kRequestError;
   }
 
-  if (!document.IsObject() || !document.HasMember("assets")) {
+  if (!document.HasMember("assets") || !document["assets"].IsArray()) {
     XELOGE("Invalid JSON or no assets.", output_path);
-    return -1;
+    return kRequestError;
   }
 
   std::string asset_url;
 
   for (const auto& asset : document["assets"].GetArray()) {
+    if (!asset.IsObject()) {
+      continue;
+    }
+
     if (asset.HasMember("name") && asset["name"].IsString() &&
         asset["name"].GetString() == asset_name &&
-        asset.HasMember("browser_download_url")) {
+        asset.HasMember("browser_download_url") &&
+        asset["browser_download_url"].IsString()) {
       asset_url = asset["browser_download_url"].GetString();
       break;
     }
@@ -514,7 +539,7 @@ uint32_t Updater::DownloadLatestRelease(
 
   if (asset_url.empty()) {
     XELOGE("Asset '{}' not found in latest release.", asset_name);
-    return -1;
+    return kRequestError;
   }
 
   return DownloadFile(asset_url, output_path, cancel_flag, progress_callback);
@@ -524,62 +549,84 @@ uint32_t Updater::DownloadFile(
     const std::string& file_endpoint, const std::string& output_path,
     std::atomic<bool>& cancel_flag,
     std::function<void(double, double)> progress_callback) const {
-  std::vector<uint8_t> response_buffer = {};
+  std::filesystem::path temporary_path(output_path);
+  temporary_path += ".part";
+  std::ofstream file(temporary_path, std::ios::binary | std::ios::trunc);
 
-  CURL* curl = curl_easy_init();
+  if (!file) {
+    return kRequestError;
+  }
+
+  std::unique_ptr<CURL, decltype(&curl_easy_cleanup)> curl(curl_easy_init(),
+                                                           curl_easy_cleanup);
 
   if (!curl) {
-    return -1;
+    file.close();
+    std::error_code ec;
+    std::filesystem::remove(temporary_path, ec);
+    return kRequestError;
   }
 
   ProgressCallbackData callback_data = {.progress_callback = progress_callback,
                                         .cancelled = &cancel_flag};
 
-  curl_easy_setopt(curl, CURLOPT_URL, file_endpoint.c_str());
-  curl_easy_setopt(curl, CURLOPT_USERAGENT, "xenia-canary");
-  curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteResponceToMemoryCallback);
-  curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response_buffer);
+  const bool options_set = SetCurlOptions(
+      curl.get(), CURLOPT_URL, file_endpoint.c_str(), CURLOPT_USERAGENT,
+      "xenia-canary", CURLOPT_FOLLOWLOCATION, 1L, CURLOPT_WRITEFUNCTION,
+      WriteResponseToFileCallback, CURLOPT_WRITEDATA, &file, CURLOPT_NOPROGRESS,
+      0L, CURLOPT_XFERINFODATA, &callback_data, CURLOPT_XFERINFOFUNCTION,
+      CurlProgressCallback, CURLOPT_LOW_SPEED_LIMIT, 1024L,
+      CURLOPT_LOW_SPEED_TIME, 30L);
 
-  // Enable progress callback getting called
-  curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
-  curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &callback_data);
-  curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, CurlProgressCallback);
+  if (!options_set) {
+    file.close();
+    std::error_code ec;
+    std::filesystem::remove(temporary_path, ec);
+    return kRequestError;
+  }
 
-  // Timeout options to prevent hanging on slow/stalled connections
-  curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, 1024L);  // 1 KB/s
-  curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, 30L);     // 30 seconds
-
-  CURLcode result = curl_easy_perform(curl);
+  const CURLcode result = curl_easy_perform(curl.get());
 
   long response_code = 0;
-  curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
-
-  curl_easy_cleanup(curl);
+  const CURLcode info_result =
+      curl_easy_getinfo(curl.get(), CURLINFO_RESPONSE_CODE, &response_code);
 
   if (result == CURLE_ABORTED_BY_CALLBACK) {
     XELOGI("Download cancelled!");
-    return -1;
   }
 
-  if (result != CURLE_OK && response_code == 0) {
-    response_code = -1;
-  }
+  file.flush();
+  const bool file_ok = file.good();
+  file.close();
 
-  if (!response_buffer.empty() && response_code == HTTP_STATUS_CODE::HTTP_OK) {
-    auto file = std::ofstream(output_path.c_str(), std::ios::binary);
+  if (result != CURLE_OK || info_result != CURLE_OK || !file_ok ||
+      response_code != HTTP_STATUS_CODE::HTTP_OK) {
+    std::error_code ec;
+    std::filesystem::remove(temporary_path, ec);
 
-    if (file) {
-      if (file.is_open()) {
-        file.write(reinterpret_cast<const char*>(response_buffer.data()),
-                   response_buffer.size());
-      }
-
-      file.close();
+    if (result != CURLE_OK || info_result != CURLE_OK || !file_ok) {
+      return kRequestError;
     }
+
+    return static_cast<uint32_t>(response_code);
   }
 
-  return response_code;
+  std::error_code ec;
+  std::filesystem::remove(output_path, ec);
+
+  if (ec) {
+    std::filesystem::remove(temporary_path, ec);
+    return kRequestError;
+  }
+
+  std::filesystem::rename(temporary_path, output_path, ec);
+
+  if (ec) {
+    std::filesystem::remove(temporary_path, ec);
+    return kRequestError;
+  }
+
+  return static_cast<uint32_t>(response_code);
 }
 
 ChangelogInfo Updater::GetRecentCommitMessages(const std::string& branch,
@@ -613,7 +660,7 @@ ChangelogInfo Updater::GetRecentCommitMessages(const std::string& branch,
   CommitMessages commit_messages = ParseCommitMessages(response_buffer);
 
   if (!commit_messages.success) {
-    changelog_info.response_code = -1;
+    changelog_info.response_code = kRequestError;
     return changelog_info;
   }
 
@@ -657,7 +704,7 @@ ChangelogInfo Updater::GetChangelogBetweenCommits(
   CommitMessages commit_messages = ParseCommitMessages(response_buffer);
 
   if (!commit_messages.success) {
-    changelog_info.response_code = -1;
+    changelog_info.response_code = kRequestError;
     return changelog_info;
   }
 
@@ -680,7 +727,7 @@ CommitMessages Updater::ParseCommitMessages(
   rapidjson::Document document;
   document.Parse(response_data.c_str());
 
-  if (document.HasParseError()) {
+  if (document.HasParseError() || !document.IsObject()) {
     data.success = false;
     return data;
   }
@@ -693,7 +740,7 @@ CommitMessages Updater::ParseCommitMessages(
 
   const auto& commits = document["commits"];
 
-  if (document.HasMember("status")) {
+  if (document.HasMember("status") && document["status"].IsString()) {
     data.status = document["status"].GetString();
   }
 
@@ -703,7 +750,9 @@ CommitMessages Updater::ParseCommitMessages(
   }
 
   for (const auto& commit : commits.GetArray()) {
-    if (commit.HasMember("commit") && commit["commit"].HasMember("message")) {
+    if (commit.IsObject() && commit.HasMember("commit") &&
+        commit["commit"].IsObject() && commit["commit"].HasMember("message") &&
+        commit["commit"]["message"].IsString()) {
       std::string msg = commit["commit"]["message"].GetString();
       data.messages.push_back(msg);
     }
