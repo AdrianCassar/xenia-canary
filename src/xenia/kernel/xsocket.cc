@@ -597,6 +597,9 @@ int XSocket::WSASendTo(XWSABUF* buffers, uint32_t num_buffers,
                        xe::be<uint32_t>* num_bytes_sent_ptr, uint32_t flags,
                        XSOCKADDR_IN* to_ptr, uint32_t to_len,
                        XWSAOVERLAPPED* overlapped_ptr) {
+  // Wait for WSASendTo to finish writing to overlapped_ptr
+  std::lock_guard socket_lock(send_socket_mutex_);
+
   if (!buffers || !num_buffers || !num_bytes_sent_ptr || flags ||
       to_ptr && (to_len < sizeof(XSOCKADDR_IN) ||
                  to_ptr->address_family != X_AF_INET)) {
@@ -868,6 +871,9 @@ int XSocket::WSARecvFrom(XWSABUF* buffers, uint32_t num_buffers,
                          xe::be<uint32_t>* flags_ptr, XSOCKADDR_IN* from_ptr,
                          xe::be<uint32_t>* fromlen_ptr,
                          XWSAOVERLAPPED* overlapped_ptr) {
+  // Wait for WSARecvFrom to finish writing to overlapped_ptr
+  std::lock_guard socket_lock(receive_socket_mutex_);
+
   if (!buffers || !num_buffers || !flags_ptr || (from_ptr && !fromlen_ptr)) {
     XWSASetLastError(X_WSA_ERROR::X_WSA_INVALID_PARAMETER);
     return X_SOCKET_ERROR;
