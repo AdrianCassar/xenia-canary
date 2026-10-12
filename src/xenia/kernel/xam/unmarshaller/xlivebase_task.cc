@@ -27,13 +27,23 @@ XLivebaseAsyncTask::XLivebaseAsyncTask(KernelState* kernel_state,
   xlive_async_task_ptr_ =
       memory_->TranslateVirtual<XLIVE_ASYNC_TASK*>(async_task_address);
 
-  schema.BindToSchema(xlive_async_task_ptr_->schema_data_ptr);
+  if (!xlive_async_task_ptr_) {
+    return;
+  }
 
-  uint8_t* data_request_ptr = memory_->TranslateVirtual<uint8_t*>(
-      xlive_async_task_ptr_->marshalled_request_ptr);
+  if (xlive_async_task_ptr_->schema_data_ptr) {
+    schema.BindToSchema(xlive_async_task_ptr_->schema_data_ptr);
+  }
 
-  data_ptr_ = std::span<uint8_t>(
-      data_request_ptr, xlive_async_task_ptr_->marshalled_request_size);
+  if (xlive_async_task_ptr_->marshalled_request_ptr) {
+    uint8_t* data_request_ptr = memory_->TranslateVirtual<uint8_t*>(
+        xlive_async_task_ptr_->marshalled_request_ptr);
+
+    if (data_request_ptr) {
+      data_ptr_ = std::span<uint8_t>(
+          data_request_ptr, xlive_async_task_ptr_->marshalled_request_size);
+    }
+  }
 
   url_ = schema.GetTaskUrl(xlive_async_task_ptr_->schema_index);
 
