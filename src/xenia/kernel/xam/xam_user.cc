@@ -7,6 +7,7 @@
  ******************************************************************************
  */
 
+#include <limits>
 #include <ranges>
 
 #include "xenia/base/logging.h"
@@ -230,6 +231,12 @@ uint32_t XamUserReadProfileSettingsEx(
     return X_ERROR_INVALID_PARAMETER;
   }
 
+  if (!setting_ids || (xuid_count && !xuids)) {
+    return X_ERROR_INVALID_PARAMETER;
+  }
+
+  const bool use_xuids = xuids && xuid_count;
+
   // buffer size pointer must be valid
   if (!buffer_size_ptr) {
     return X_ERROR_INVALID_PARAMETER;
@@ -247,36 +254,47 @@ uint32_t XamUserReadProfileSettingsEx(
                                               setting_ids + setting_count};
 
   // 454D07D2 reads settings from multiple XUIDs.
-  const std::vector<uint64_t> profile_xuids = {xuids, xuids + xuid_count};
+  std::vector<uint64_t> profile_xuids;
 
-  uint32_t needed_header_size = 0;
-  uint32_t needed_data_size = 0;
+  if (use_xuids) {
+    profile_xuids.assign(xuids, xuids + xuid_count);
+  }
+
+  std::vector<uint32_t> valid_setting_ids;
+  valid_setting_ids.reserve(settings_ids.size());
+
   for (const uint32_t setting_id : settings_ids) {
-    if (!UserSetting::is_setting_valid(setting_id)) {
-      if (!setting_id) {
-        XELOGE("{} requested unknown setting {:08X}", __func__, setting_id);
-        continue;
-      }
+    if (UserSetting::is_setting_valid(setting_id)) {
+      valid_setting_ids.push_back(setting_id);
+    } else if (!setting_id) {
+      XELOGE("{} requested unknown setting {:08X}", __func__, setting_id);
     }
+  }
 
-    needed_header_size += sizeof(X_USER_PROFILE_SETTING);
+  uint64_t needed_data_size_per_user = 0;
+  for (const uint32_t setting_id : valid_setting_ids) {
     AttributeKey setting_key = {.value = setting_id};
     switch (static_cast<X_USER_DATA_TYPE>(setting_key.type)) {
       case X_USER_DATA_TYPE::WSTRING:
       case X_USER_DATA_TYPE::BINARY:
-        needed_data_size += setting_key.size;
+        needed_data_size_per_user += UserSetting::get_max_size(setting_id);
         break;
       default:
         break;
     }
   }
-  if (xuids) {
-    needed_header_size *= xuid_count;
-    needed_data_size *= xuid_count;
-  }
-  needed_header_size += sizeof(X_USER_READ_PROFILE_SETTINGS);
 
-  uint32_t needed_size = needed_header_size + needed_data_size;
+  const uint64_t output_user_count = use_xuids ? xuid_count : 1;
+  const uint64_t needed_size64 = sizeof(X_USER_READ_PROFILE_SETTINGS) +
+                                 output_user_count * valid_setting_ids.size() *
+                                     sizeof(X_USER_PROFILE_SETTING) +
+                                 output_user_count * needed_data_size_per_user;
+
+  if (needed_size64 > std::numeric_limits<uint32_t>::max()) {
+    return X_ERROR_INVALID_PARAMETER;
+  }
+
+  const uint32_t needed_size = static_cast<uint32_t>(needed_size64);
   if (!buffer || buffer_size < needed_size) {
     if (!buffer_size) {
       *buffer_size_ptr = needed_size;
@@ -297,12 +315,12 @@ uint32_t XamUserReadProfileSettingsEx(
 
     auto user_profile = kernel_state()->xam_state()->GetUserProfile(user_index);
 
-    if (!user_profile && !xuids) {
+    if (!user_profile && !use_xuids) {
       extended_error = X_E_NO_SUCH_USER;
       return X_ERROR_FUNCTION_FAILED;
     }
 
-    if (xuids) {
+    if (use_xuids) {
       for (const auto xuid : profile_xuids) {
         if (IsOnlineXUID(xuid) &&
             !kernel_state()->xam_state()->user_tracker()->LoggedInToLive()) {
@@ -313,16 +331,13 @@ uint32_t XamUserReadProfileSettingsEx(
     }
 
     // 455607DB uses invalid setting IDs
-    auto valid_requested_settings_view =
-        settings_ids | std::views::filter([](uint32_t setting_id) {
-          return UserSetting::is_setting_valid(setting_id);
-        }) |
-        std::views::transform(
-            [](uint32_t id) { return static_cast<xam::UserSettingId>(id); });
+    std::vector<xam::UserSettingId> valid_requested_settings_ids;
+    valid_requested_settings_ids.reserve(valid_setting_ids.size());
 
-    const std::vector<xam::UserSettingId> valid_requested_settings_ids(
-        valid_requested_settings_view.begin(),
-        valid_requested_settings_view.end());
+    for (const uint32_t setting_id : valid_setting_ids) {
+      valid_requested_settings_ids.push_back(
+          static_cast<xam::UserSettingId>(setting_id));
+    }
 
     user_settings_map remote_user_settings = {};
     user_settings_map local_user_settings = {};
@@ -389,10 +404,10 @@ uint32_t XamUserReadProfileSettingsEx(
           const auto user_profile =
               kernel_state()->xam_state()->GetUserProfileAny(xuid);
 
-          const auto settings = GetLocalUserSettings(user_profile);
+          auto settings = GetLocalUserSettings(user_profile);
 
           if (user_profile) {
-            local_user_settings[xuid] = settings;
+            local_user_settings[xuid] = std::move(settings);
           }
         }
       }
@@ -406,11 +421,11 @@ uint32_t XamUserReadProfileSettingsEx(
       const auto user_profile =
           kernel_state()->xam_state()->GetUserProfile(user_index);
 
-      const auto settings = GetLocalUserSettings(user_profile);
+      auto settings = GetLocalUserSettings(user_profile);
 
       if (user_profile) {
         total_profile_xuids.push_back(user_profile->xuid());
-        local_user_settings[user_profile->xuid()] = settings;
+        local_user_settings[user_profile->xuid()] = std::move(settings);
       }
     }
 
@@ -422,10 +437,10 @@ uint32_t XamUserReadProfileSettingsEx(
     // X_USER_PROFILE_SETTING::data[]
 
     // The order of xuids isn't preserved.
-    user_settings_map users_settings = local_user_settings;
+    user_settings_map users_settings = std::move(local_user_settings);
     users_settings.merge(remote_user_settings);
 
-    std::memset(buffer, 0, buffer_size);
+    std::memset(buffer, 0, needed_size);
 
     X_USER_READ_PROFILE_SETTINGS* profile_settings_results_ptr =
         reinterpret_cast<X_USER_READ_PROFILE_SETTINGS*>(buffer);
@@ -457,7 +472,7 @@ uint32_t XamUserReadProfileSettingsEx(
       // Maintain requested settings id order.
       for (const xam::UserSettingId setting_id : valid_requested_settings_ids) {
         X_USER_PROFILE_SETTING& profile_setting =
-            profile_settings_ptr[setting_index];
+            profile_settings_ptr[setting_index++];
 
         const uint32_t setting_id_val = static_cast<uint32_t>(setting_id);
         uint32_t setting_title_id = titleId;
@@ -469,58 +484,49 @@ uint32_t XamUserReadProfileSettingsEx(
           setting_title_id = kDashboardID;
         }
 
-        std::vector<xam::UserSetting> settings = {};
-
-        if (users_settings.contains(xuid)) {
-          if (users_settings.at(xuid).contains(setting_title_id)) {
-            settings = users_settings.at(xuid).at(setting_title_id);
-          }
-        }
-
-        if (settings.empty()) {
-          assert_always();
-
+        const auto user_settings_it = users_settings.find(xuid);
+        if (user_settings_it == users_settings.end()) {
           XELOGI(fmt::format(
               "XamUserReadProfileSettingsEx: {:08X}: {:08X} not found!",
               setting_title_id, setting_id_val));
           continue;
         }
 
-        auto it =
-            std::find_if(settings.cbegin(), settings.cend(),
-                         [&setting_id_val](xam::UserSetting setting) {
+        const auto title_settings_it =
+            user_settings_it->second.find(setting_title_id);
+        if (title_settings_it == user_settings_it->second.end()) {
+          XELOGI(fmt::format(
+              "XamUserReadProfileSettingsEx: {:08X}: {:08X} not found!",
+              setting_title_id, setting_id_val));
+          continue;
+        }
+
+        auto& settings = title_settings_it->second;
+        const auto setting_it =
+            std::find_if(settings.begin(), settings.end(),
+                         [&setting_id_val](const xam::UserSetting& setting) {
                            return setting_id_val == setting.get_setting_id();
                          });
 
-        if (it == settings.cend()) {
-          assert_always();
-
+        if (setting_it == settings.end()) {
           XELOGI(fmt::format(
               "XamUserReadProfileSettingsEx: {:08X}: {:08X} not found!",
               setting_title_id, setting_id_val));
           continue;
         }
 
-        xam::UserSetting setting = *it;
+        const xam::UserSetting& setting = *setting_it;
 
         profile_setting.setting_id = setting.get_setting_id();
         profile_setting.source = setting.get_setting_source();
 
-        if (setting.requires_additional_data()) {
-          profile_setting.data.data.binary.ptr =
-              kernel_state()->memory()->HostToGuestVirtual(
-                  std::addressof(additional_data_ptr));
-        }
-
         setting.WriteToGuest(&profile_setting, additional_data_buffer_ptr);
 
-        if (xuids) {
+        if (use_xuids) {
           profile_setting.xuid = xuid;
         } else {
           profile_setting.user_index = user_index;
         }
-
-        setting_index++;
       }
     }
 

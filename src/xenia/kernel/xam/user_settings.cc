@@ -89,7 +89,7 @@ std::optional<UserSetting> UserSetting::GetDefaultSetting(uint32_t setting_id) {
 }
 
 void UserSetting::WriteToGuest(X_USER_PROFILE_SETTING* setting_ptr,
-                               uint32_t& extended_data_address) {
+                               uint32_t& extended_data_address) const {
   if (!setting_ptr) {
     return;
   }
