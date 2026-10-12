@@ -553,7 +553,7 @@ class UserSetting : public UserData {
 
   static std::optional<UserSetting> GetDefaultSetting(uint32_t setting_id);
   void WriteToGuest(X_USER_PROFILE_SETTING* setting_ptr,
-                    uint32_t& extended_data_address);
+                    uint32_t& extended_data_address) const;
   std::vector<uint8_t> Serialize() const;
 
   std::optional<std::string> SerializeToBase64() const;
