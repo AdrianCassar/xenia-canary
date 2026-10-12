@@ -249,9 +249,6 @@ class XSocket : public XObject {
   bool QueuePacket(uint32_t src_ip, uint16_t src_port, const uint8_t* buf,
                    size_t len);
 
-  std::mutex send_socket_mutex_;
-  std::mutex receive_socket_mutex_;
-
  private:
   XSocket(KernelState* kernel_state, uint64_t native_handle);
   uint64_t native_handle_ = X_INVALID_SOCKET;
@@ -275,6 +272,9 @@ class XSocket : public XObject {
   std::unique_ptr<xe::threading::Event> event_;
   std::mutex incoming_packet_mutex_;
   std::queue<uint8_t*> incoming_packets_;
+
+  std::mutex send_socket_mutex_;
+  std::mutex receive_socket_mutex_;
 
   std::map<XWSAOVERLAPPED*, std::future<int32_t>> send_polling_tasks_;
   std::map<XWSAOVERLAPPED*, std::future<int32_t>> receive_polling_tasks_;
