@@ -75,6 +75,8 @@ class Unmarshaller {
   Unmarshaller(KernelState* kernel_state, uint32_t marshaller_buffer);
   ~Unmarshaller() = default;
 
+  bool IsValid() const;
+
   KernelState* kernel_state_ = nullptr;
   Memory* memory_ = nullptr;
 

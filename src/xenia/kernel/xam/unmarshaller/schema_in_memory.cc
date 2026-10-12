@@ -21,13 +21,41 @@ SchemaInMemory::SchemaInMemory(KernelState* kernel_state)
       memory_(kernel_state->memory()) {};
 
 void SchemaInMemory::Bind(uint32_t schema_address) {
+  if (!schema_address) {
+    return;
+  }
+
   XONLINE_SCHEMA_DATA* schema_data_ptr =
       memory_->TranslateVirtual<XONLINE_SCHEMA_DATA*>(schema_address);
+
+  if (!schema_data_ptr || !schema_data_ptr->schema_ptr) {
+    return;
+  }
 
   const SCHEMA_HEADER* SchemaHeader =
       memory_->TranslateVirtual<SCHEMA_HEADER*>(schema_data_ptr->schema_ptr);
 
+  if (!SchemaHeader) {
+    return;
+  }
+
   Header = *SchemaHeader;
+
+  const uint64_t ordinal_table_size =
+      static_cast<uint64_t>(Header.SchemaTableEntries) *
+      sizeof(ORDINAL_TO_INDEX);
+
+  const uint64_t schema_table_size =
+      static_cast<uint64_t>(Header.SchemaTableEntries) *
+      Header.SchemaTableEntrySize;
+
+  const uint64_t schema_data_offset = sizeof(SCHEMA_HEADER) +
+                                      ordinal_table_size + schema_table_size +
+                                      Header.ExtensionDataSize;
+
+  if (Header.ConstantsTableOffset < schema_data_offset) {
+    return;
+  }
 
   const uint8_t* cursor = reinterpret_cast<const uint8_t*>(SchemaHeader + 1);
 
@@ -42,16 +70,14 @@ void SchemaInMemory::Bind(uint32_t schema_address) {
 
   SchemaDataPtr = memory_->HostToGuestVirtual(std::to_address(cursor));
 
-  SchemaDataSize =
-      SchemaHeader->ConstantsTableOffset -
-      (SchemaHeader->SchemaTableEntries * sizeof(ORDINAL_TO_INDEX)) -
-      SchemaHeader->ExtensionDataSize -
-      (SchemaHeader->SchemaTableEntries * SchemaHeader->SchemaTableEntrySize) -
-      sizeof(SCHEMA_HEADER);
-
-  ExtensionDataPtr = 0;
+  SchemaDataSize = static_cast<uint32_t>(
+      static_cast<uint64_t>(Header.ConstantsTableOffset) - schema_data_offset);
 
   cursor += SchemaDataSize;
+
+  ExtensionDataPtr = memory_->HostToGuestVirtual(std::to_address(cursor));
+
+  cursor += Header.ExtensionDataSize;
 
   ConstantListPtr = memory_->HostToGuestVirtual(std::to_address(cursor));
 
@@ -67,8 +93,16 @@ void SchemaInMemory::Bind(uint32_t schema_address) {
 }
 
 void SchemaInMemory::BindToSchema(uint32_t schema_address) {
+  if (!schema_address) {
+    return;
+  }
+
   const SCHEMA_DATA* title_schema =
       memory_->TranslateVirtual<const SCHEMA_DATA*>(schema_address);
+
+  if (!title_schema) {
+    return;
+  }
 
   Header = title_schema->Header;
   OrdinalToIndexPtr = title_schema->OrdinalToIndexPtr;
@@ -85,30 +119,46 @@ void SchemaInMemory::BindToSchema(uint32_t schema_address) {
 
 void SchemaInMemory::ResolveBind() {
   ordinal_to_index_ptr_ =
-      memory_->TranslateVirtual<ORDINAL_TO_INDEX*>(OrdinalToIndexPtr);
+      OrdinalToIndexPtr
+          ? memory_->TranslateVirtual<ORDINAL_TO_INDEX*>(OrdinalToIndexPtr)
+          : nullptr;
 
   schema_table_entry_ptr_ =
-      memory_->TranslateVirtual<SCHEMA_TABLE_ENTRY*>(TableEntriesPtr);
+      TableEntriesPtr
+          ? memory_->TranslateVirtual<SCHEMA_TABLE_ENTRY*>(TableEntriesPtr)
+          : nullptr;
 
-  schema_data_ptr_ = memory_->TranslateVirtual<uint8_t*>(SchemaDataPtr);
+  schema_data_ptr_ = SchemaDataPtr
+                         ? memory_->TranslateVirtual<uint8_t*>(SchemaDataPtr)
+                         : nullptr;
 
   constant_list_ptr_ =
-      memory_->TranslateVirtual<xe::be<uint32_t>*>(ConstantListPtr);
+      ConstantListPtr
+          ? memory_->TranslateVirtual<xe::be<uint32_t>*>(ConstantListPtr)
+          : nullptr;
 
   url_offsets_ptr_ =
-      memory_->TranslateVirtual<xe::be<uint16_t>*>(UrlOffsetsPtr);
+      UrlOffsetsPtr
+          ? memory_->TranslateVirtual<xe::be<uint16_t>*>(UrlOffsetsPtr)
+          : nullptr;
 
-  url_data_ptr_ = memory_->TranslateVirtual<char*>(UrlDataPtr);
+  url_data_ptr_ =
+      UrlDataPtr ? memory_->TranslateVirtual<char*>(UrlDataPtr) : nullptr;
 }
 
 bool SchemaInMemory::GetSchemaEntry(uint16_t schema_index,
                                     SCHEMA_TABLE_ENTRY* schema_entry_ptr) {
-  if (schema_index >= Header.SchemaTableEntries) {
+  if (!schema_entry_ptr || !schema_table_entry_ptr_ ||
+      schema_index >= Header.SchemaTableEntries ||
+      Header.SchemaTableEntrySize < sizeof(SCHEMA_TABLE_ENTRY)) {
     return false;
   }
 
-  std::memcpy(schema_entry_ptr, schema_table_entry_ptr_ + schema_index,
-              sizeof(SCHEMA_TABLE_ENTRY));
+  const uint8_t* entry_data =
+      reinterpret_cast<const uint8_t*>(schema_table_entry_ptr_) +
+      schema_index * Header.SchemaTableEntrySize;
+
+  std::memcpy(schema_entry_ptr, entry_data, sizeof(SCHEMA_TABLE_ENTRY));
 
   return true;
 }
@@ -116,6 +166,10 @@ bool SchemaInMemory::GetSchemaEntry(uint16_t schema_index,
 bool SchemaInMemory::GetSchemaDataFromEntry(
     SCHEMA_TABLE_ENTRY* schema_entry_ptr, bool request,
     std::span<uint8_t>* schema_data) {
+  if (!schema_entry_ptr || !schema_data || !schema_data_ptr_) {
+    return false;
+  }
+
   uint32_t request_schema_offset = 0;
   uint32_t schema_data_size = 0;
 
@@ -127,7 +181,12 @@ bool SchemaInMemory::GetSchemaDataFromEntry(
     request_schema_offset = schema_entry_ptr->ResponseSchemaOffset;
   }
 
-  uint8_t* buffer_ptr = &schema_data_ptr_[request_schema_offset];
+  if (request_schema_offset > SchemaDataSize ||
+      schema_data_size > SchemaDataSize - request_schema_offset) {
+    return false;
+  }
+
+  uint8_t* buffer_ptr = schema_data_ptr_ + request_schema_offset;
 
   *schema_data = std::span<uint8_t>(buffer_ptr, schema_data_size);
 
@@ -136,6 +195,10 @@ bool SchemaInMemory::GetSchemaDataFromEntry(
 
 bool SchemaInMemory::EndianBufferBind(BASE_ENDIAN_BUFFER* base,
                                       std::span<uint8_t>& buffer) {
+  if (!base) {
+    return false;
+  }
+
   base->BufferPtr = memory_->HostToGuestVirtual(std::to_address(buffer.data()));
   base->BufferSize = static_cast<uint32_t>(buffer.size());
   base->AvailableSize = static_cast<uint32_t>(buffer.size());
@@ -147,6 +210,10 @@ bool SchemaInMemory::EndianBufferBind(BASE_ENDIAN_BUFFER* base,
 
 bool SchemaInMemory::XLookupSchemaIndexFromOrdinal(
     uint16_t ordinal, uint16_t* schema_index) const {
+  if (!schema_index || !ordinal_to_index_ptr_) {
+    return false;
+  }
+
   auto CompareOrdinal = [](const void* e1, const void* e2) -> int {
     const auto* element1 = reinterpret_cast<const xe::be<uint16_t>*>(e1);
     const auto* element2 = reinterpret_cast<const xe::be<uint16_t>*>(e2);
@@ -171,13 +238,15 @@ bool SchemaInMemory::XLookupSchemaIndexFromOrdinal(
 
 bool SchemaInMemory::LookupUrlFromTable(uint16_t url_index,
                                         std::string_view* url_ptr) {
-  if (url_index > Header.UrlTableSize) {
+  if (!url_ptr || !url_offsets_ptr_ || !url_data_ptr_ ||
+      url_index >= Header.UrlTableSize) {
     return false;
   }
 
-  uint16_t url_offset = url_offsets_ptr_[url_index];
+  const uint16_t url_offset = url_offsets_ptr_[url_index];
+  const uint16_t url_data_size = Header.UrlTableDataSize;
 
-  if (url_offset > Header.UrlTableDataSize) {
+  if (url_offset >= url_data_size) {
     return false;
   }
 
@@ -188,7 +257,8 @@ bool SchemaInMemory::LookupUrlFromTable(uint16_t url_index,
 
 bool SchemaInMemory::LookupConstantFromTable(uint16_t constant_index,
                                              uint32_t* value_ptr) {
-  if (constant_index > Header.ConstantsTableSize) {
+  if (!value_ptr || !constant_list_ptr_ ||
+      constant_index >= Header.ConstantsTableSize) {
     return false;
   }
 
@@ -203,8 +273,10 @@ std::string_view SchemaInMemory::GetTaskUrl(uint16_t schema_index) {
   SCHEMA_TABLE_ENTRY schema_entry = {};
   std::string_view url = "";
 
-  GetSchemaEntry(schema_index, &schema_entry);
-  LookupUrlFromTable(schema_entry.RequestUrlIndex, &url);
+  if (!GetSchemaEntry(schema_index, &schema_entry) ||
+      !LookupUrlFromTable(schema_entry.RequestUrlIndex, &url)) {
+    return {};
+  }
 
   return url;
 }

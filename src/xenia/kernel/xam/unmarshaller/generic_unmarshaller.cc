@@ -19,11 +19,7 @@ GenericUnmarshaller::GenericUnmarshaller(KernelState* kernel_state,
     : Unmarshaller(kernel_state, marshaller_address) {}
 
 X_HRESULT GenericUnmarshaller::Deserialize() {
-  if (!GetXLiveBaseAsyncMessage()->xlive_async_task_ptr) {
-    return X_E_INVALIDARG;
-  }
-
-  if (!GetAsyncTask().GetXLiveAsyncTask()->marshalled_request_ptr) {
+  if (!IsValid()) {
     return X_E_INVALIDARG;
   }
 

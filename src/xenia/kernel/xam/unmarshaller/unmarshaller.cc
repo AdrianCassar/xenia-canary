@@ -28,18 +28,25 @@ Unmarshaller::Unmarshaller(KernelState* kernel_state,
 }
 
 uint32_t Unmarshaller::GetAsyncTaskAddress(uint32_t marshaller_address) const {
-  return memory_->TranslateVirtual<XLIVEBASE_ASYNC_MESSAGE*>(marshaller_address)
-      ->xlive_async_task_ptr;
+  if (!marshaller_address) {
+    return 0;
+  }
+
+  XLIVEBASE_ASYNC_MESSAGE* message =
+      memory_->TranslateVirtual<XLIVEBASE_ASYNC_MESSAGE*>(marshaller_address);
+
+  return message ? message->xlive_async_task_ptr.get() : 0;
 }
 
 std::span<uint8_t> Unmarshaller::Advance(size_t count) {
-  const size_t offset = position_ + count;
-
-  if (offset > async_task_.data_ptr_.size()) {
+  if (position_ > async_task_.data_ptr_.size() ||
+      count > async_task_.data_ptr_.size() - position_) {
     assert_always(std::format("{}: Out of Bounds Span!", __func__));
 
     return std::span<uint8_t>();
   }
+
+  const size_t offset = position_ + count;
 
   std::span<uint8_t> data = async_task_.data_ptr_.subspan(position_, count);
 
@@ -49,20 +56,21 @@ std::span<uint8_t> Unmarshaller::Advance(size_t count) {
 }
 
 std::u16string Unmarshaller::ReadSwapUTF16String(uint32_t length) {
-  // Excludes null terminator
-  std::u16string server_path = xe::load_and_swap<std::u16string>(
-      reinterpret_cast<char16_t*>(async_task_.data_ptr_.data() + position_));
+  if (length > async_task_.data_ptr_.size() / sizeof(char16_t) ||
+      position_ > async_task_.data_ptr_.size() ||
+      length > (async_task_.data_ptr_.size() - position_) / sizeof(char16_t)) {
+    assert_always(std::format("{}: Out of Bounds UTF-16 String!", __func__));
+    return u"";
+  }
 
-  std::span<uint8_t> string_data =
-      Advance(xe::string_util::size_in_bytes(server_path, true));
-
-  assert_false(length != server_path.length() + 1);
+  std::span<const uint8_t> string_data = Advance(length * sizeof(char16_t));
 
   if (string_data.empty()) {
     return u"";
   }
 
-  return server_path;
+  return xe::string_util::read_u16string_and_swap(
+      reinterpret_cast<const char16_t*>(string_data.data()));
 }
 
 std::string Unmarshaller::ReadString(uint32_t length) {
@@ -84,6 +92,13 @@ XLIVEBASE_ASYNC_MESSAGE* Unmarshaller::GetXLiveBaseAsyncMessage() {
 XLivebaseAsyncTask Unmarshaller::GetAsyncTask() const { return async_task_; }
 
 size_t Unmarshaller::GetPosition() const { return position_; }
+
+bool Unmarshaller::IsValid() const {
+  XLIVE_ASYNC_TASK* task = async_task_.GetXLiveAsyncTask();
+
+  return xlivebase_async_message_ptr_ && task && task->marshalled_request_ptr &&
+         async_task_.data_ptr_.size() == task->marshalled_request_size;
+}
 
 }  // namespace xam
 }  // namespace kernel
