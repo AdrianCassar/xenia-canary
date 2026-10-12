@@ -2,7 +2,7 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2025 Xenia Canary. All rights reserved.                          *
+ * Copyright 2026 Xenia Canary. All rights reserved.                          *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
@@ -57,8 +57,6 @@ X_RESULT XSession::CreateSession(uint32_t user_index, uint8_t public_slots,
   owner_xuid_ = user_profile->xuid();
 
   const auto user_tracker = kernel_state()->xam_state()->user_tracker();
-
-  user_tracker->AddOwnedSession(user_profile->xuid(), handle());
 
   // Mutually exclusive
   if (flags & JOIN_VIA_PRESENCE_DISABLED &&
@@ -150,6 +148,8 @@ X_RESULT XSession::CreateSession(uint32_t user_index, uint8_t public_slots,
   local_details_.SessionMembers_ptr = 0;
 
   state_ |= STATE_FLAGS_CREATED;
+
+  user_tracker->AddOwnedSession(user_profile->xuid(), handle());
 
   return X_ERROR_SUCCESS;
 }
@@ -315,7 +315,7 @@ X_RESULT XSession::JoinSession(XGI_SESSION_MANAGE* data) {
           data->private_slots_array_ptr);
 
   for (uint32_t i = 0; i < data->array_count; i++) {
-    XSESSION_MEMBER* member = new XSESSION_MEMBER();
+    XSESSION_MEMBER member = {};
 
     if (join_local) {
       const uint32_t user_index = static_cast<uint32_t>(indices_array[i]);
@@ -335,8 +335,8 @@ X_RESULT XSession::JoinSession(XGI_SESSION_MANAGE* data) {
         return X_ERROR_SUCCESS;
       }
 
-      member->OnlineXUID = xuid_online;
-      member->UserIndex = user_index;
+      member.OnlineXUID = xuid_online;
+      member.UserIndex = user_index;
 
       local_details_.ActualMemberCount = std::min<int32_t>(
           XUserMaxUserCount, local_details_.ActualMemberCount + 1);
@@ -357,8 +357,8 @@ X_RESULT XSession::JoinSession(XGI_SESSION_MANAGE* data) {
         return X_ERROR_SUCCESS;
       }
 
-      member->OnlineXUID = xuid_online;
-      member->UserIndex = user_index;
+      member.OnlineXUID = xuid_online;
+      member.UserIndex = user_index;
 
       const bool is_local_member =
           kernel_state()->xam_state()->IsUserSignedIn(xuid_online);
@@ -372,7 +372,7 @@ X_RESULT XSession::JoinSession(XGI_SESSION_MANAGE* data) {
     const bool is_private = private_slots_array[i];
 
     if (is_private && local_details_.AvailablePrivateSlots > 0) {
-      member->SetPrivate();
+      member.SetPrivate();
 
       local_details_.AvailablePrivateSlots =
           std::max<int32_t>(0, local_details_.AvailablePrivateSlots - 1);
@@ -381,15 +381,15 @@ X_RESULT XSession::JoinSession(XGI_SESSION_MANAGE* data) {
           std::max<int32_t>(0, local_details_.AvailablePublicSlots - 1);
     }
 
-    XELOGI("XUID: {:016X} - Occupying {} slot", member->OnlineXUID.get(),
-           member->IsPrivate() ? "private" : "public");
+    XELOGI("XUID: {:016X} - Occupying {} slot", member.OnlineXUID.get(),
+           member.IsPrivate() ? "private" : "public");
 
-    members[member->OnlineXUID] = member->IsPrivate();
+    members[member.OnlineXUID] = member.IsPrivate();
 
     if (join_local) {
-      local_members_.emplace(member->OnlineXUID, *member);
+      local_members_.emplace(member.OnlineXUID, member);
     } else {
-      remote_members_.emplace(member->OnlineXUID, *member);
+      remote_members_.emplace(member.OnlineXUID, member);
     }
   }
 
@@ -442,7 +442,7 @@ X_RESULT XSession::LeaveSession(XGI_SESSION_MANAGE* data) {
   const auto profile_manager = kernel_state()->xam_state()->profile_manager();
 
   for (uint32_t i = 0; i < data->array_count; i++) {
-    XSESSION_MEMBER* member = new XSESSION_MEMBER();
+    XSESSION_MEMBER* member = nullptr;
 
     if (leave_local) {
       const uint32_t user_index = static_cast<uint32_t>(indices_array[i]);
@@ -603,12 +603,15 @@ X_RESULT XSession::GetSessionDetails(XGI_SESSION_DETAILS* data) {
       kernel_state_->memory()->TranslateVirtual<XSESSION_LOCAL_DETAILS*>(
           data->session_details_ptr);
 
-  std::memcpy(local_details_ptr, &local_details_,
-              sizeof(XSESSION_LOCAL_DETAILS));
-
   const uint32_t buffer_size =
       *kernel_state_->memory()->TranslateVirtual<xe::be<uint32_t>*>(
           data->details_buffer_size);
+
+  if (buffer_size < sizeof(XSESSION_LOCAL_DETAILS)) {
+    return X_ERROR_INVALID_PARAMETER;
+  }
+
+  *local_details_ptr = local_details_;
 
   const uint32_t members_count =
       (buffer_size - sizeof(XSESSION_LOCAL_DETAILS)) / sizeof(XSESSION_MEMBER);
@@ -628,14 +631,13 @@ X_RESULT XSession::GetSessionDetails(XGI_SESSION_DETAILS* data) {
   std::ranges::transform(remote_members_, std::back_inserter(all_members),
                          &std::pair<const uint64_t, XSESSION_MEMBER>::second);
 
-  const auto members = all_members | std::views::take(members_count);
+  const auto members = all_members | std::views::take(std::min<size_t>(
+                                         members_count, all_members.size()));
 
   for (uint32_t i = 0; const auto& member : members) {
     members_ptr[i] = member;
     i++;
   }
-
-  assert_false(all_members.size() > members_count);
 
   PrintSessionDetails();
 
@@ -709,7 +711,7 @@ X_RESULT XSession::RegisterArbitration(XGI_SESSION_ARBITRATION* data) {
       kernel_state_->memory()->TranslateVirtual<XSESSION_REGISTRANT*>(
           registrants_ptr);
 
-  for (uint8_t i = 0; i < result->Machines().size(); i++) {
+  for (uint32_t i = 0; i < result->Machines().size(); i++) {
     registrants[i].trustworthiness = 1;
 
     registrants[i].machine_id = result->Machines()[i].machine_id;
@@ -721,7 +723,7 @@ X_RESULT XSession::RegisterArbitration(XGI_SESSION_ARBITRATION* data) {
     uint64_t* users_xuid_ptr =
         kernel_state_->memory()->TranslateVirtual<uint64_t*>(users_ptr);
 
-    for (uint8_t j = 0; j < registrants[i].num_users; j++) {
+    for (uint32_t j = 0; j < registrants[i].num_users; j++) {
       users_xuid_ptr[j] = result->Machines()[i].xuids[j];
     }
 
@@ -945,7 +947,7 @@ X_RESULT XSession::FlushStats() {
 X_RESULT XSession::StartSession(XGI_SESSION_STATE* state) {
   const auto profile = kernel_state()->xam_state()->GetUserProfile(owner_xuid_);
 
-  if (IsXboxLiveSession() && !profile->IsSignedInToLive()) {
+  if (!profile || (IsXboxLiveSession() && !profile->IsSignedInToLive())) {
     return X_ONLINE_E_SESSION_NOT_LOGGED_ON;
   }
 
@@ -981,7 +983,7 @@ X_RESULT XSession::GetSessions(KernelState* kernel_state,
   const auto profile =
       kernel_state->xam_state()->GetUserProfile(search_data->user_index);
 
-  if (!profile->IsSignedInToLive()) {
+  if (!profile || !profile->IsSignedInToLive()) {
     return X_ONLINE_E_SESSION_NOT_LOGGED_ON;
   }
 
