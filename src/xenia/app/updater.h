@@ -10,10 +10,12 @@
 #ifndef XENIA_APP_UPDATER_H_
 #define XENIA_APP_UPDATER_H_
 
+#include <atomic>
 #include <cstdint>
 #include <filesystem>
 #include <functional>
 #include <future>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -139,11 +141,20 @@ class Updater {
 
   static size_t WriteResponceToMemoryCallback(void* contents, size_t size,
                                               size_t nmemb, void* userp) {
+    if (size != 0 && nmemb > std::numeric_limits<size_t>::max() / size) {
+      return 0;
+    }
+
     size_t total_size = size * nmemb;
     std::vector<uint8_t>* buffer = static_cast<std::vector<uint8_t>*>(userp);
     uint8_t* dataPtr = static_cast<uint8_t*>(contents);
 
-    buffer->insert(buffer->end(), dataPtr, dataPtr + total_size);
+    try {
+      buffer->insert(buffer->end(), dataPtr, dataPtr + total_size);
+    } catch (...) {
+      return 0;
+    }
+
     return total_size;
   }
 
@@ -159,13 +170,19 @@ class Updater {
         static_cast<ProgressCallbackData*>(clientp);
 
     // Check atomic cancellation flag first
-    if (callback_data->cancelled && callback_data->cancelled->load()) {
+    if (callback_data->cancelled &&
+        callback_data->cancelled->load(std::memory_order_relaxed)) {
       // Abort Transfer
       return 1;
     }
 
     if (callback_data->progress_callback) {
-      callback_data->progress_callback((double)dlnow, (double)dltotal);
+      try {
+        callback_data->progress_callback(static_cast<double>(dlnow),
+                                         static_cast<double>(dltotal));
+      } catch (...) {
+        return 1;
+      }
     }
 
     // Continue downloading
