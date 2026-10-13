@@ -337,9 +337,6 @@ X_RESULT XSession::JoinSession(XGI_SESSION_MANAGE* data) {
 
       member.OnlineXUID = xuid_online;
       member.UserIndex = user_index;
-
-      local_details_.ActualMemberCount = std::min<int32_t>(
-          XUserMaxUserCount, local_details_.ActualMemberCount + 1);
     } else {
       const xe::be<uint64_t> xuid_online = xuid_array[i];
       uint8_t user_index =
@@ -359,14 +356,6 @@ X_RESULT XSession::JoinSession(XGI_SESSION_MANAGE* data) {
 
       member.OnlineXUID = xuid_online;
       member.UserIndex = user_index;
-
-      const bool is_local_member =
-          kernel_state()->xam_state()->IsUserSignedIn(xuid_online);
-
-      if (is_local_member) {
-        local_details_.ActualMemberCount = std::min<int32_t>(
-            XUserMaxUserCount, local_details_.ActualMemberCount + 1);
-      }
     }
 
     const bool is_private = private_slots_array[i];
@@ -393,6 +382,7 @@ X_RESULT XSession::JoinSession(XGI_SESSION_MANAGE* data) {
     }
   }
 
+  local_details_.ActualMemberCount = GetMembersCount();
   local_details_.ReturnedMemberCount = GetMembersCount();
 
   if (!members.empty() && IsHost() && IsXboxLiveSession()) {
@@ -515,18 +505,11 @@ X_RESULT XSession::LeaveSession(XGI_SESSION_MANAGE* data) {
 
       if (removed) {
         xuids.push_back(xuid_online);
-
-        const bool is_local_member =
-            kernel_state()->xam_state()->IsUserSignedIn(xuid_online);
-
-        if (is_local_member) {
-          local_details_.ActualMemberCount =
-              std::max<int32_t>(0, local_details_.ActualMemberCount - 1);
-        }
       }
     }
   }
 
+  local_details_.ActualMemberCount = GetMembersCount();
   local_details_.ReturnedMemberCount = GetMembersCount();
 
   if (!xuids.empty() && IsHost() && IsXboxLiveSession()) {
@@ -634,10 +617,16 @@ X_RESULT XSession::GetSessionDetails(XGI_SESSION_DETAILS* data) {
   const auto members = all_members | std::views::take(std::min<size_t>(
                                          members_count, all_members.size()));
 
-  for (uint32_t i = 0; const auto& member : members) {
-    members_ptr[i] = member;
-    i++;
+  uint32_t returned_members = 0;
+
+  for (const auto& member : members) {
+    members_ptr[returned_members] = member;
+    returned_members++;
   }
+
+  local_details_ptr->ActualMemberCount =
+      static_cast<uint32_t>(all_members.size());
+  local_details_ptr->ReturnedMemberCount = returned_members;
 
   PrintSessionDetails();
 
