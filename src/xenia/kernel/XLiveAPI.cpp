@@ -1435,12 +1435,11 @@ void XLiveAPI::XSessionCreate(uint64_t sessionId, XGI_SESSION_CREATE* data) {
   const auto xlast =
       kernel_state()->emulator()->game_info_database()->GetXLast();
 
-  // Technically we could just send the matchmaking query instead of complete
-  // XLast source.
-  std::optional<std::string> xlast_source_base64;
+  // Only send the matchmaking section, the complete XLast source is too large.
+  std::optional<std::string> matchmaking_queries_base64;
 
   if (xlast) {
-    xlast_source_base64 = xlast->SerializeSourceToBase64();
+    matchmaking_queries_base64 = xlast->SerializeMatchmakingToBase64();
   }
 
   SessionObjectJSON session;
@@ -1458,8 +1457,8 @@ void XLiveAPI::XSessionCreate(uint64_t sessionId, XGI_SESSION_CREATE* data) {
   session.MacAddress(GetConsoleMacAddress().to_string());
   session.Port(GetPlayerPort());
 
-  if (xlast_source_base64.has_value()) {
-    session.XLast(xlast_source_base64.value());
+  if (matchmaking_queries_base64.has_value()) {
+    session.XLast(matchmaking_queries_base64.value());
   }
 
   std::string session_output;
