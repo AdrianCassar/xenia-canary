@@ -19,8 +19,6 @@
 
 DECLARE_bool(bind_interface);
 
-DECLARE_bool(logging);
-
 using namespace std::chrono_literals;
 
 namespace xe {
@@ -443,8 +441,8 @@ int XSocket::WSASelectWrite(bool wait, X_WSA_ERROR* error) {
       activity = X_SOCKET_ERROR;
     }
 
-    if (cvars::logging && wait) {
-      XELOGI("{} Blocking...", __func__);
+    if (wait) {
+      XELOGNETD("{} Blocking...", __func__);
     }
   } while (activity == 0 && wait);
 
@@ -620,16 +618,16 @@ int XSocket::WSASendTo(XWSABUF* buffers, uint32_t num_buffers,
 
   send_async_data.overlapped = overlapped_ptr;
 
-  if (overlapped_ptr && cvars::logging) {
+  if (overlapped_ptr) {
     const uint32_t overlapped_address =
         kernel_state()->memory()->HostToGuestVirtual(
             std::to_address(overlapped_ptr));
 
     if (!send_polling_tasks_.contains(overlapped_ptr)) {
-      XELOGI("{} new overlapped task {:08X}", __func__, overlapped_address);
+      XELOGNETD("{} new overlapped task {:08X}", __func__, overlapped_address);
     } else {
-      XELOGI("{} overlapped task {:08X} is pending!", __func__,
-             overlapped_address);
+      XELOGNETD("{} overlapped task {:08X} is pending!", __func__,
+                overlapped_address);
     }
   }
 
@@ -647,9 +645,7 @@ int XSocket::WSASendTo(XWSABUF* buffers, uint32_t num_buffers,
   }
 
   if (result == X_ERROR_SUCCESS) {
-    if (cvars::logging) {
-      XELOGI("{} completed immediately", __func__);
-    }
+    XELOGNETD("{} completed immediately", __func__);
 
     if (num_bytes_sent_ptr) {
       *num_bytes_sent_ptr = num_bytes_sent;
@@ -720,8 +716,8 @@ int XSocket::WSASelectRead(bool wait, X_WSA_ERROR* error) {
       activity = X_SOCKET_ERROR;
     }
 
-    if (cvars::logging && wait) {
-      XELOGI("{} Blocking...", __func__);
+    if (wait) {
+      XELOGNETD("{} Blocking...", __func__);
     }
   } while (activity == 0 && wait);
 
@@ -898,16 +894,16 @@ int XSocket::WSARecvFrom(XWSABUF* buffers, uint32_t num_buffers,
   receive_async_data.from_len = fromlen_ptr;
   receive_async_data.overlapped = overlapped_ptr;
 
-  if (overlapped_ptr && cvars::logging) {
+  if (overlapped_ptr) {
     const uint32_t overlapped_address =
         kernel_state()->memory()->HostToGuestVirtual(
             std::to_address(overlapped_ptr));
 
     if (!receive_polling_tasks_.contains(overlapped_ptr)) {
-      XELOGI("{} new overlapped task {:08X}", __func__, overlapped_address);
+      XELOGNETD("{} new overlapped task {:08X}", __func__, overlapped_address);
     } else {
-      XELOGI("{} overlapped task {:08X} is pending!", __func__,
-             overlapped_address);
+      XELOGNETD("{} overlapped task {:08X} is pending!", __func__,
+                overlapped_address);
     }
   }
 
@@ -919,9 +915,7 @@ int XSocket::WSARecvFrom(XWSABUF* buffers, uint32_t num_buffers,
   }
 
   if (result == X_ERROR_SUCCESS) {
-    if (cvars::logging) {
-      XELOGI("{} completed immediately", __func__);
-    }
+    XELOGNETD("{} completed immediately", __func__);
 
     return result;
   }
@@ -1003,9 +997,7 @@ bool XSocket::WSAGetOverlappedResult(XWSAOVERLAPPED* overlapped_ptr,
 
   // 4D530808 does this.
   if (!pending_io) {
-    if (cvars::logging) {
-      XELOGI("Overlap not in operation!");
-    }
+    XELOGNETD("Overlap not in operation!");
 
     *bytes_transferred = overlapped_ptr->internal_high;
     *flags_ptr = overlapped_ptr->offset;
@@ -1039,12 +1031,10 @@ bool XSocket::WSAGetOverlappedResult(XWSAOVERLAPPED* overlapped_ptr,
   // }
 
   if (wait) {
-    if (cvars::logging) {
-      if (sending_io) {
-        XELOGI("{}:: WSASendTo blocking until completion!", __func__);
-      } else if (receiving_io) {
-        XELOGI("{}:: WSARecvFrom Blocking until completion!", __func__);
-      }
+    if (sending_io) {
+      XELOGNETD("{}:: WSASendTo blocking until completion!", __func__);
+    } else if (receiving_io) {
+      XELOGNETD("{}:: WSARecvFrom Blocking until completion!", __func__);
     }
 
     auto event = kernel_state()->object_table()->LookupObject<XEvent>(
@@ -1089,7 +1079,7 @@ bool XSocket::WSAGetOverlappedResult(XWSAOVERLAPPED* overlapped_ptr,
 
   switch (internal_result) {
     case X_WSA_ERROR::X_WSA_NO_ERROR: {
-      if (cvars::logging) {
+      if (xe::logging::ShouldLog(xe::LogLevel::Debug, xe::LogSrc::Network)) {
         const uint32_t overlapped_address =
             kernel_state()->memory()->HostToGuestVirtual(
                 std::to_address(overlapped_ptr));
@@ -1097,7 +1087,7 @@ bool XSocket::WSAGetOverlappedResult(XWSAOVERLAPPED* overlapped_ptr,
         std::string operation = sending_io ? "WSASendTo" : "WSARecvFrom";
         std::string action = sending_io ? "sent" : "received";
 
-        XELOGI(
+        XELOGNETD(
             "{}:: {} overlapped task {:08X} {} {} bytes with "
             "status {}!",
             __func__, operation, overlapped_address, action,

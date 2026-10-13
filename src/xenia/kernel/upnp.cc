@@ -22,8 +22,6 @@ DEFINE_string(upnp_root, "", "UPnP Root Device", "Live");
 
 DEFINE_bool(upnp, false, "Automatically port forward using UPnP", "Live");
 
-DECLARE_bool(logging);
-
 namespace xe {
 namespace kernel {
 
@@ -410,16 +408,12 @@ uint16_t UPnP::GetMappedConnectPort(uint16_t external_port) {
 
   const auto wildcard_port = mapped_connect_ports_.find(0);
   if (wildcard_port != mapped_connect_ports_.end()) {
-    if (cvars::logging) {
-      XELOGI("Using wildcard connect port for guest port {}!", external_port);
-    }
+    XELOGNETD("Using wildcard connect port for guest port {}!", external_port);
 
     return wildcard_port->second;
   }
 
-  if (cvars::logging) {
-    XELOGI("Using connect port {}", external_port);
-  }
+  XELOGNETD("Using connect port {}", external_port);
 
   return external_port;
 }
@@ -434,9 +428,7 @@ uint16_t UPnP::GetMappedBindPort(uint16_t external_port) {
 
   const auto wildcard_port = mapped_bind_ports_.find(0);
   if (wildcard_port != mapped_bind_ports_.end()) {
-    if (cvars::logging) {
-      XELOGI("Using wildcard bind port for guest port {}!", external_port);
-    }
+    XELOGNETD("Using wildcard bind port for guest port {}!", external_port);
 
     return wildcard_port->second;
   }

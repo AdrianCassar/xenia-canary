@@ -38,7 +38,14 @@ enum class LogLevel {
 
 // bitmasks!
 namespace LogSrc {
-enum : uint32_t { Uncategorized = 0, Kernel = 1, Apu = 2, Cpu = 4, Gpu = 8 };
+enum : uint32_t {
+  Uncategorized = 0,
+  Kernel = 1,
+  Apu = 2,
+  Cpu = 4,
+  Gpu = 8,
+  Network = 16
+};
 }
 
 class LogSink {
@@ -228,6 +235,18 @@ void XELOGFS(std::string_view format, const Args&... args) {
                                    xe::LogLevel::Info, 'F', format, args...);
 }
 
+template <typename... Args>
+void XELOGNET(std::string_view format, const Args&... args) {
+  xe::logging::AppendLogLineFormat(xe::LogSrc::Network, xe::LogLevel::Info, 'N',
+                                   format, args...);
+}
+
+template <typename... Args>
+void XELOGNETD(std::string_view format, const Args&... args) {
+  xe::logging::AppendLogLineFormat(xe::LogSrc::Network, xe::LogLevel::Debug,
+                                   'N', format, args...);
+}
+
 #else
 
 #define __XELOGDUMMY \
@@ -243,6 +262,8 @@ void XELOGFS(std::string_view format, const Args&... args) {
 #define XELOGGPU(...) __XELOGDUMMY
 #define XELOGKERNEL(...) __XELOGDUMMY
 #define XELOGFS(...) __XELOGDUMMY
+#define XELOGNET(...) __XELOGDUMMY
+#define XELOGNETD(...) __XELOGDUMMY
 
 #endif  // ENABLE_LOGGING
 

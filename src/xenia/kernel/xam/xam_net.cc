@@ -45,8 +45,6 @@
 
 DECLARE_bool(xhttp);
 
-DECLARE_bool(logging);
-
 DECLARE_bool(log_mask_ips);
 
 DECLARE_int32(network_mode);
@@ -408,8 +406,7 @@ DECLARE_XAM_EXPORT1(NetDll_XNetRandom, kNetworking, kImplemented);
 
 dword_result_t NetDll_WSAStartup_entry(dword_t caller, word_t version,
                                        pointer_t<X_WSADATA> data_ptr) {
-  // NetDll_WSAStartup is called multiple times?
-  XELOGI("NetDll_WSAStartup");
+  XELOGNET("NetDll_WSAStartup");
 
   // TODO(benvanik): abstraction layer needed.
   int ret = 0;
@@ -524,10 +521,10 @@ dword_result_t NetDll_WSARecvFrom_entry(
   if (ret < 0) {
     XThread::SetLastError(socket->XWSAGetLastError());
   } else if (ret >= 0 && !cvars::log_mask_ips && from_ptr) {
-    XELOGI("NetDll_WSARecvFrom: Received {} bytes from: {}:{}({})",
-           static_cast<uint32_t>(*num_bytes_recv_ptr),
-           ip_to_string(from_ptr->address_ip), from_ptr->address_port.get(),
-           socket->GetProtocolUPnPString());
+    XELOGNET("NetDll_WSARecvFrom: Received {} bytes from: {}:{}({})",
+             static_cast<uint32_t>(*num_bytes_recv_ptr),
+             ip_to_string(from_ptr->address_ip), from_ptr->address_port.get(),
+             socket->GetProtocolUPnPString());
   }
 
   return ret;
@@ -578,15 +575,15 @@ dword_result_t NetDll_WSASendTo_entry(
     uint32_t error = socket->XWSAGetLastError();
 
     if (error != (uint32_t)X_WSA_ERROR::X_WSAEWOULDBLOCK) {
-      XELOGI("WSASendTo failed with error code {}", error);
+      XELOGNET("WSASendTo failed with error code {}", error);
     }
 
     XThread::SetLastError(error);
   } else if (to_ptr && num_bytes_sent && !cvars::log_mask_ips) {
-    XELOGI("NetDll_WSASendTo: Send {} bytes to: {}:{}({})",
-           static_cast<uint32_t>(*num_bytes_sent),
-           ip_to_string(to_ptr->address_ip), to_ptr->address_port.get(),
-           socket->GetProtocolUPnPString());
+    XELOGNET("NetDll_WSASendTo: Send {} bytes to: {}:{}({})",
+             static_cast<uint32_t>(*num_bytes_sent),
+             ip_to_string(to_ptr->address_ip), to_ptr->address_port.get(),
+             socket->GetProtocolUPnPString());
   }
 
   return result;
@@ -2157,7 +2154,8 @@ dword_result_t NetDll_bind_entry(dword_t caller, dword_t socket_handle,
   X_STATUS status = socket->Bind(name, namelen);
   if (XFAILED(status)) {
     XThread::SetLastError(socket->XWSAGetLastError());
-    XELOGE("NetDll_bind: failed with error {:08X}", socket->XWSAGetLastError());
+    XELOGNET("NetDll_bind: failed with error {:08X}",
+             socket->XWSAGetLastError());
     return -1;
   }
 
@@ -2186,9 +2184,7 @@ dword_result_t NetDll_bind_entry(dword_t caller, dword_t socket_handle,
     }
   }
 
-  if (cvars::logging) {
-    XELOGI("Bind port {}", upnp_internal_port);
-  }
+  XELOGNET("Bind port {}", upnp_internal_port);
 
   return 0;
 }
@@ -2437,8 +2433,8 @@ dword_result_t NetDll_recv_entry(dword_t caller, dword_t socket_handle,
   if (ret < 0) {
     XThread::SetLastError(socket->XWSAGetLastError());
   } else if (ret >= 0 && !cvars::log_mask_ips) {
-    XELOGI("NetDll_recv: Received {} bytes from: Any:{}({})", ret,
-           socket->bound_port(), socket->GetProtocolUPnPString());
+    XELOGNET("NetDll_recv: Received {} bytes from: Any:{}({})", ret,
+             socket->bound_port(), socket->GetProtocolUPnPString());
   }
 
   return ret;
@@ -2493,8 +2489,8 @@ dword_result_t NetDll_send_entry(dword_t caller, dword_t socket_handle,
   if (ret < 0) {
     XThread::SetLastError(socket->XWSAGetLastError());
   } else if (ret >= 0 && !cvars::log_mask_ips) {
-    XELOGI("NetDll_send: Send {} bytes to: Any:{}({})", ret,
-           socket->bound_port(), socket->GetProtocolUPnPString());
+    XELOGNET("NetDll_send: Send {} bytes to: Any:{}({})", ret,
+             socket->bound_port(), socket->GetProtocolUPnPString());
   }
 
   return ret;
@@ -2517,9 +2513,9 @@ dword_result_t NetDll_sendto_entry(dword_t caller, dword_t socket_handle,
   if (ret < 0) {
     XThread::SetLastError(socket->XWSAGetLastError());
   } else if (ret >= 0 && to_ptr && !cvars::log_mask_ips) {
-    XELOGI("NetDll_sendto: Send {} bytes to: {}:{}({})", ret,
-           ip_to_string(to_ptr->address_ip), to_ptr->address_port.get(),
-           socket->GetProtocolUPnPString());
+    XELOGNET("NetDll_sendto: Send {} bytes to: {}:{}({})", ret,
+             ip_to_string(to_ptr->address_ip), to_ptr->address_port.get(),
+             socket->GetProtocolUPnPString());
   }
 
   return ret;

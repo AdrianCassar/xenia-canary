@@ -88,8 +88,6 @@ class XLiveAPI {
 
   bool SelectNetworkMode(uint32_t mode);
 
-  void SetLogging(bool state) const;
-
   void SetXHttp(bool state) const;
 
   void SetBindInterface(bool state) const;
