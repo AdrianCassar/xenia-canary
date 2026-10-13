@@ -18,8 +18,6 @@
 using namespace rapidjson;
 using namespace xe::string_util;
 
-DECLARE_bool(logging);
-
 namespace xe {
 namespace kernel {
 namespace xam {

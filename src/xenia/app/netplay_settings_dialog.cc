@@ -23,8 +23,6 @@ DECLARE_bool(xhttp);
 
 DECLARE_bool(upnp);
 
-DECLARE_bool(logging);
-
 DECLARE_bool(discord);
 
 DECLARE_int32(discord_presence_user_index);
@@ -240,18 +238,12 @@ void NetplaySettingsDialog::OnDraw(ImGuiIO& io) {
 
     ImGui::SameLine();
 
-    if (ImGui::Checkbox("NET Logging", &logging_)) {
-      xlive_api->SetLogging(logging_);
+    if (ImGui::Checkbox("Discord Presence", &discord_)) {
+      ActivateDiscordState(discord_);
     }
-
-    ImGui::SameLine();
 
     if (ImGui::Checkbox("XHTTP", &xhttp_)) {
       xlive_api->SetXHttp(xhttp_);
-    }
-
-    if (ImGui::Checkbox("Discord Presence", &discord_)) {
-      ActivateDiscordState(discord_);
     }
 
     ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
@@ -442,7 +434,6 @@ void xe::app::NetplaySettingsDialog::UpdateSelectedNetworkModeIndex() {
 void xe::app::NetplaySettingsDialog::InitializeCheckboxSettings() {
   xhttp_ = cvars::xhttp;
   auto_check_for_updates_ = cvars::auto_check_updates;
-  logging_ = cvars::logging;
   discord_ = cvars::discord;
   bind_interface_ = cvars::bind_interface;
 }

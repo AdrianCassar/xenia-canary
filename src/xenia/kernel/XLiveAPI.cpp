@@ -33,8 +33,6 @@ DEFINE_string(
     "Comma delimited list URL1, URL2 (Max 10). Set api_address during runtime.",
     "Live");
 
-DEFINE_bool(logging, false, "Log Network Activity & Stats", "Live");
-
 DEFINE_bool(log_mask_ips, true, "Do not include P2P IPs inside the log",
             "Live");
 
@@ -78,9 +76,7 @@ XLiveAPI::XLiveAPI() {
     initialized_ = InitState::Failed;
   }
 
-  if (cvars::logging) {
-    PrintLibcurlDetails();
-  }
+  PrintLibcurlDetails();
 }
 
 XLiveAPI::~XLiveAPI() {
@@ -94,19 +90,19 @@ void XLiveAPI::PrintLibcurlDetails() {
   uint32_t minor = (curl_info->version_num >> 8) & 0xFF;
   uint32_t patch = curl_info->version_num & 0xFF;
 
-  XELOGI("libcurl version {}.{}.{}", major, minor, patch);
+  XELOGNET("libcurl version {}.{}.{}", major, minor, patch);
 
   if (curl_info->features & CURL_VERSION_SSL) {
-    XELOGI("SSL support: Yes");
+    XELOGNET("SSL support: Yes");
   } else {
     assert_always();
-    XELOGI("SSL support: No");
+    XELOGNET("SSL support: No");
   }
 
   if (curl_info->features & CURL_VERSION_HTTP2) {
-    XELOGI("HTTP/2 support: Yes");
+    XELOGNET("HTTP/2 support: Yes");
   } else {
-    XELOGI("HTTP/2 support: No");
+    XELOGNET("HTTP/2 support: No");
   }
 }
 
@@ -302,8 +298,6 @@ bool XLiveAPI::SelectNetworkMode(uint32_t mode) {
   return switched_mode;
 }
 
-void XLiveAPI::SetLogging(bool state) const { OVERRIDE_bool(logging, state); }
-
 void XLiveAPI::SetXHttp(bool state) const { OVERRIDE_bool(xhttp, state); }
 
 void XLiveAPI::SetBindInterface(bool state) const {
@@ -468,9 +462,7 @@ std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::Get(std::string endpoint,
     return PraseResponse(chunk);
   }
 
-  if (cvars::logging) {
-    XELOGI("{} Endpoint: {}", __func__, endpoint);
-  }
+  XELOGNET("{} Endpoint: {}", __func__, endpoint);
 
   curl_slist* headers = NULL;
   headers = curl_slist_append(headers, "Content-Type: application/json");
@@ -533,9 +525,7 @@ std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::Post(std::string endpoint,
     return PraseResponse(chunk);
   }
 
-  if (cvars::logging) {
-    XELOGI("{} Endpoint: {}", __func__, endpoint);
-  }
+  XELOGNET("{} Endpoint: {}", __func__, endpoint);
 
   curl_slist* headers = NULL;
 
@@ -601,9 +591,7 @@ std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::Delete(std::string endpoint) {
     return PraseResponse(chunk);
   }
 
-  if (cvars::logging) {
-    XELOGI("{} Endpoint: {}", __func__, endpoint);
-  }
+  XELOGNET("{} Endpoint: {}", __func__, endpoint);
 
   struct curl_slist* headers = NULL;
   headers = curl_slist_append(headers, "Content-Type: application/json");
@@ -1332,9 +1320,7 @@ bool XLiveAPI::SessionFlushStats(uint64_t sessionId,
   bool valid = leaderboard.Serialize(output);
   assert_true(valid);
 
-  if (cvars::logging) {
-    XELOGI("{}:\n\n{}", __func__, output);
-  }
+  XELOGNETD("{}:\n\n{}", __func__, output);
 
   std::unique_ptr<HTTPResponseObjectJSON> response =
       Post(endpoint, (uint8_t*)output.c_str());

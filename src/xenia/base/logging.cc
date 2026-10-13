@@ -55,7 +55,7 @@ DEFINE_bool(flush_log, true, "Flush log file after each log line batch.",
 
 DEFINE_uint32(log_mask, 0,
               "Disables specific categorizes for more granular debug logging. "
-              "Kernel = 1, Apu = 2, Cpu = 4, Gpu = 8.",
+              "Kernel = 1, Apu = 2, Cpu = 4, Gpu = 8, Network = 16.",
               "Logging");
 
 DEFINE_int32(

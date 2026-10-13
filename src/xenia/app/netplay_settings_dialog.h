@@ -76,7 +76,6 @@ class NetplaySettingsDialog final : public ui::ImGuiDialog {
 
   bool auto_check_for_updates_ = false;
   bool bind_interface_ = false;
-  bool logging_ = false;
   bool xhttp_ = false;
   bool discord_ = false;
 
