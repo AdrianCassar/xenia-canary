@@ -671,6 +671,16 @@ dword_result_t NetDll_WSAResetEvent_entry(dword_t event_handle) {
     XThread::SetLastError(error);
     return 0;
   }
+
+  auto sockets = kernel_state()->object_table()->GetObjectsByType<XSocket>();
+
+  for (const auto& socket : sockets) {
+    if (socket->IsEventSelectPending(event_handle)) {
+      xboxkrnl::xeNtSetEvent(event_handle, nullptr);
+      break;
+    }
+  }
+
   return 1;
 }
 DECLARE_XAM_EXPORT1(NetDll_WSAResetEvent, kNetworking, kImplemented);
@@ -2533,8 +2543,7 @@ dword_result_t NetDll_WSAEventSelect_entry(dword_t caller,
     return -1;
   }
 
-  int ret = socket->WSAEventSelect(socket->native_handle(), ev->native_handle(),
-                                   flags);
+  int ret = socket->WSAEventSelect(event_handle, ev->native_handle(), flags);
 
   if (ret < 0) {
     XThread::SetLastError(socket->XWSAGetLastError());
