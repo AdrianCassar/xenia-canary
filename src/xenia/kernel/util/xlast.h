@@ -169,12 +169,20 @@ class XLast {
   std::optional<std::string> SerializeSourceToBase64(
       bool compressed = true) const;
 
+  std::optional<std::string> SerializeMatchmakingToBase64(
+      bool compressed = true) const;
+
   void Dump(std::filesystem::path file_path) const;
 
   const bool HasXLast() const { return !xlast_decompressed_xml_.empty(); };
 
  private:
   std::string GetLocaleStringFromLanguage(XLanguage language) const;
+
+  static std::optional<std::vector<uint8_t>> GzipCompress(
+      const std::vector<uint8_t>& data);
+  static std::optional<std::string> Base64Encode(
+      const std::vector<uint8_t>& data);
 
   std::vector<uint8_t> xlast_compressed_xml_;
   std::vector<uint8_t> xlast_decompressed_xml_;

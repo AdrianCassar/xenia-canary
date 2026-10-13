@@ -11,6 +11,8 @@ extern "C" {
 #include "third_party/FFmpeg/libavutil/base64.h"
 }
 
+#include <sstream>
+
 #include "third_party/zlib-ng/zlib-ng.h"
 #include "xenia/base/cvar.h"
 #include "xenia/base/filesystem.h"
@@ -687,7 +689,112 @@ std::optional<std::string> XLast::SerializeSourceToBase64(
         std::vector<uint8_t>(raw_xlast_src.begin(), raw_xlast_src.end());
   }
 
-  const uint32_t size = static_cast<uint32_t>(xlast_src.size());
+  return Base64Encode(xlast_src);
+}
+
+std::optional<std::string> XLast::SerializeMatchmakingToBase64(
+    bool compressed) const {
+  std::string xpath =
+      fmt::format("/XboxLiveSubmissionProject/GameConfigProject/Matchmaking");
+
+  if (!HasXLast()) {
+    return std::nullopt;
+  }
+
+  const pugi::xpath_node node = parsed_xlast_->select_node(xpath.c_str());
+  if (!node) {
+    return std::nullopt;
+  }
+
+  const pugi::xml_node src_root = parsed_xlast_->document_element();
+  const pugi::xml_node src_game_config = node.node().parent();
+
+  // Keep the original hierarchy so the same XPath resolves on the server.
+  pugi::xml_document matchmaking_doc;
+
+  const pugi::xml_encoding encoding =
+      compressed ? pugi::encoding_utf16_le : pugi::encoding_utf8;
+
+  pugi::xml_node declaration =
+      matchmaking_doc.append_child(pugi::node_declaration);
+  declaration.append_attribute("version") = "1.0";
+  declaration.append_attribute("encoding") = compressed ? "UTF-16" : "UTF-8";
+  declaration.append_attribute("standalone") = "no";
+
+  pugi::xml_node root = matchmaking_doc.append_child(src_root.name());
+  for (const pugi::xml_attribute& attribute : src_root.attributes()) {
+    root.append_copy(attribute);
+  }
+
+  pugi::xml_node game_config = root.append_child(src_game_config.name());
+  for (const pugi::xml_attribute& attribute : src_game_config.attributes()) {
+    game_config.append_copy(attribute);
+  }
+
+  game_config.append_copy(node.node());
+
+  std::ostringstream xml_stream;
+  matchmaking_doc.save(xml_stream, "\t", pugi::format_default, encoding);
+
+  const std::string xml = xml_stream.str();
+  std::vector<uint8_t> matchmaking_src(xml.begin(), xml.end());
+
+  if (compressed) {
+    const auto compressed_src = GzipCompress(matchmaking_src);
+    if (!compressed_src) {
+      return std::nullopt;
+    }
+
+    matchmaking_src = compressed_src.value();
+  }
+
+  return Base64Encode(matchmaking_src);
+}
+
+std::optional<std::vector<uint8_t>> XLast::GzipCompress(
+    const std::vector<uint8_t>& data) {
+  if (data.empty()) {
+    return std::nullopt;
+  }
+
+  zng_stream stream = {};
+  stream.zalloc = Z_NULL;
+  stream.zfree = Z_NULL;
+  stream.opaque = Z_NULL;
+
+  int ret = zng_deflateInit2(&stream, Z_BEST_COMPRESSION, Z_DEFLATED,
+                             16 + MAX_WBITS,  // 16 + MAX_WBITS writes gzip
+                             8, Z_DEFAULT_STRATEGY);
+  if (ret != Z_OK) {
+    XELOGE("XLast: Error during Zlib deflate stream init");
+    return std::nullopt;
+  }
+
+  std::vector<uint8_t> compressed_data(
+      zng_deflateBound(&stream, static_cast<unsigned long>(data.size())));
+
+  stream.avail_in = static_cast<uint32_t>(data.size());
+  stream.next_in = data.data();
+  stream.avail_out = static_cast<uint32_t>(compressed_data.size());
+  stream.next_out = compressed_data.data();
+
+  ret = zng_deflate(&stream, Z_FINISH);
+  const size_t compressed_size = stream.total_out;
+  zng_deflateEnd(&stream);
+
+  if (ret != Z_STREAM_END) {
+    XELOGE("XLast: Error during XLast compression");
+    return std::nullopt;
+  }
+
+  compressed_data.resize(compressed_size);
+
+  return compressed_data;
+}
+
+std::optional<std::string> XLast::Base64Encode(
+    const std::vector<uint8_t>& data) {
+  const uint32_t size = static_cast<uint32_t>(data.size());
 
   if (size == 0) {
     return std::nullopt;
@@ -696,9 +803,8 @@ std::optional<std::string> XLast::SerializeSourceToBase64(
   const uint32_t out_size = AV_BASE64_SIZE(size);
   std::vector<char> serialized_data(out_size);
 
-  const char* out = av_base64_encode(
-      serialized_data.data(), out_size,
-      reinterpret_cast<const uint8_t*>(xlast_src.data()), size);
+  const char* out =
+      av_base64_encode(serialized_data.data(), out_size, data.data(), size);
 
   if (!out) {
     return std::nullopt;
