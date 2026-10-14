@@ -357,10 +357,10 @@ inline xam::X_USER_DATA_TYPE GetTrueSkillColumnType(const uint32_t column_id) {
   }
 }
 
-// XUIDs -> Views -> Property IDs -> Property
+// Views -> XUIDs -> Property IDs -> Property
 using view_properties_unordered_map = std::unordered_map<
-    uint64_t,
-    std::unordered_map<uint32_t, std::unordered_map<uint32_t, xam::Property>>>;
+    uint32_t,
+    std::unordered_map<uint64_t, std::unordered_map<uint32_t, xam::Property>>>;
 
 constexpr size_t kTMSUserMaxSize = 8_KiB;   // 8 KB
 constexpr size_t kTMSTitleMaxSize = 5_MiB;  // 5 MB
@@ -985,8 +985,8 @@ struct X_INVITE_INFO {
 static_assert_size(X_INVITE_INFO, 0x54);
 
 struct X_USER_RANK_REQUEST {
-  uint32_t view_id;
-  uint64_t i64Rating;
+  xe::be<uint32_t> view_id;
+  xe::be<uint64_t> i64Rating;
 };
 static_assert_size(X_USER_RANK_REQUEST, 0xC);
 

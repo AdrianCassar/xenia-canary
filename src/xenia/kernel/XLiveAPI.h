@@ -155,8 +155,14 @@ class XLiveAPI {
   bool SessionFlushStats(uint64_t sessionId,
                          view_properties_unordered_map stats);
 
-  std::unique_ptr<LeaderboardObjectJSON> LeaderboardsFind(
-      const XGI_XUSER_READ_STATS stats);
+  std::unique_ptr<LeaderboardObjectJSON> ReadLeaderboards(
+      const ReadUserStatsObjectJSON& read_stats);
+
+  std::unique_ptr<LeaderboardObjectJSON> EnumerateLeaderboards(
+      const ReadUserStatsObjectJSON& enumerate_stats);
+
+  std::vector<uint32_t> EstimateRanks(
+      uint32_t title_id, std::span<const X_USER_RANK_REQUEST> requests);
 
   void DeleteSession(uint64_t sessionId);
 
@@ -318,6 +324,9 @@ class XLiveAPI {
                                                size_t data_size = 0);
 
   std::unique_ptr<HTTPResponseObjectJSON> Delete(const std::string endpoint);
+
+  std::unique_ptr<LeaderboardObjectJSON> PostLeaderboardsRequest(
+      const std::string& endpoint, const ReadUserStatsObjectJSON& request);
 
   std::vector<HTTPResponseObjectJSON> GetMulti(
       std::vector<std::string> urls, const uint32_t per_request_timeout = 0);

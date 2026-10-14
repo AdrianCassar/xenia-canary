@@ -10,6 +10,9 @@
 #ifndef XENIA_KERNEL_READ_USER_STATS_OBJECT_JSON_H_
 #define XENIA_KERNEL_READ_USER_STATS_OBJECT_JSON_H_
 
+#include <optional>
+#include <vector>
+
 #include "xenia/kernel/json/base_object_json.h"
 #include "xenia/kernel/xnet.h"
 
@@ -20,7 +23,21 @@ class ReadUserStatsObjectJSON : public BaseObjectJSON {
   using BaseObjectJSON::Deserialize;
   using BaseObjectJSON::Serialize;
 
-  ReadUserStatsObjectJSON(XGI_XUSER_READ_STATS read_stats);
+  struct EnumerateParams {
+    X_STATS_ENUMERATOR_TYPE type;
+    uint64_t xuid;
+    uint32_t rank;
+    int64_t rating;
+    uint32_t num_rows;
+  };
+
+  // XUserReadStats
+  ReadUserStatsObjectJSON(const XGI_XUSER_READ_STATS& read_stats);
+
+  // XUserCreateStatsEnumeratorByXuid/ByRank/ByRating
+  ReadUserStatsObjectJSON(uint32_t title_id,
+                          std::vector<X_USER_STATS_SPEC> specs,
+                          EnumerateParams params);
 
   virtual ~ReadUserStatsObjectJSON();
 
@@ -28,11 +45,14 @@ class ReadUserStatsObjectJSON : public BaseObjectJSON {
   virtual bool Serialize(
       rapidjson::PrettyWriter<rapidjson::StringBuffer>* writer) const;
 
-  const XGI_XUSER_READ_STATS& ReadStats() const { return read_stats_; }
-  void ReadStats(const XGI_XUSER_READ_STATS& stats) { read_stats_ = stats; }
+  const std::vector<uint64_t>& XUIDs() const { return xuids_; }
+  const std::vector<X_USER_STATS_SPEC>& Specs() const { return specs_; }
 
  private:
-  XGI_XUSER_READ_STATS read_stats_;
+  uint32_t title_id_ = 0;
+  std::vector<uint64_t> xuids_;
+  std::vector<X_USER_STATS_SPEC> specs_;
+  std::optional<EnumerateParams> enumerate_params_;
 };
 }  // namespace kernel
 }  // namespace xe

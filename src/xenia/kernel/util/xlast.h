@@ -130,6 +130,7 @@ class XLastStatsViewQuery {
   pugi::xml_node GetStatsViewNode(uint32_t view_id) const;
   std::optional<uint32_t> GetStatsViewStringID() const;
   std::optional<std::string> GetStatsViewFriendlyName() const;
+  std::optional<std::string> GetStatsViewResetType(uint32_t view_id) const;
 
  private:
   pugi::xpath_node node_;

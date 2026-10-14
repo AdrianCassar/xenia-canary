@@ -244,55 +244,13 @@ X_HRESULT XgiApp::ExecuteDispatchMessage(uint32_t message, uint32_t buffer_ptr,
       }
 
       // 584107D7 caches results
-      X_USER_STATS_READ_RESULTS* results =
-          kernel_memory()->TranslateVirtual<X_USER_STATS_READ_RESULTS*>(
-              data->results_ptr);
-
-      // TODO(Adrian):
-      // Use provided buffer from XGI call.
-      std::memset(results, 0, sizeof(X_USER_STATS_READ_RESULTS));
+      ReadUserStatsObjectJSON read_stats(*data);
 
       std::unique_ptr<LeaderboardObjectJSON> leaderboards =
-          kernel_state()->GetXboxLiveAPI()->LeaderboardsFind(*data);
+          kernel_state()->GetXboxLiveAPI()->ReadLeaderboards(read_stats);
 
-      const X_USER_STATS_READ_RESULTS& read_results =
-          leaderboards->GetReadStatsResults();
-
-      results->views_ptr = read_results.views_ptr;
-      results->num_views = read_results.num_views;
-
-      // Validation
-
-      assert_not_zero(read_results.views_ptr);
-
-      if (!read_results.views_ptr) {
-        return X_ONLINE_E_LOGON_NOT_LOGGED_ON;
-      }
-
-      assert_false(results->num_views != data->specs_count);
-
-      const X_USER_STATS_SPEC* stats_specs =
-          kernel_memory()->TranslateVirtual<X_USER_STATS_SPEC*>(
-              data->specs_ptr);
-
-      const X_USER_STATS_VIEW* views_ptr =
-          kernel_memory()->TranslateVirtual<X_USER_STATS_VIEW*>(
-              results->views_ptr);
-
-      for (uint32_t spec_index = 0; spec_index < data->specs_count;
-           spec_index++) {
-        const X_USER_STATS_SPEC stat_spec_ptr = stats_specs[spec_index];
-        const X_USER_STATS_VIEW view_ptr = views_ptr[spec_index];
-        const uint32_t view_id = stat_spec_ptr.view_id;
-
-        const auto spa_stats_view =
-            kernel_state()->emulator()->game_info_database()->GetStatsView(
-                view_id);
-
-        // TrueSkill leaderboards are not defined in SPA?
-        if (IsTrueSkillViewID(view_id)) {
-          XELOGI("TrueSkill View ID: {:08X}", view_id);
-        }
+      if (!leaderboards->WriteResults(data->results_ptr, data->results_size)) {
+        return X_E_INVALIDARG;
       }
 
       return X_E_SUCCESS;

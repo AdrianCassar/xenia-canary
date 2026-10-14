@@ -1522,15 +1522,6 @@ X_HRESULT XLiveBaseApp::XUserEstimateRankForRating(uint32_t buffer_ptr) {
   X_USER_ESTIMATE_RANK_RESULTS* estimate_rank_results_ptr =
       unmarshaller.Results<X_USER_ESTIMATE_RANK_RESULTS>();
 
-  for (const auto& rank_estimate : unmarshaller.StatsEstimateRanks()) {
-    const auto stats_view =
-        kernel_state_->emulator()->game_info_database()->GetStatsView(
-            rank_estimate.view_id);
-
-    // Read the leaderboard to determine if clip should be uploaded?
-    // XUserReadStats()
-  }
-
   xe::be<uint32_t>* ranks =
       reinterpret_cast<xe::be<uint32_t>*>(estimate_rank_results_ptr + 1);
 
@@ -1538,7 +1529,34 @@ X_HRESULT XLiveBaseApp::XUserEstimateRankForRating(uint32_t buffer_ptr) {
   estimate_rank_results_ptr->ranks_ptr =
       memory_->HostToGuestVirtual(std::to_address(ranks));
 
-  // XPROPERTY_ATTACHMENT_SIZE?
+  const std::vector<X_USER_RANK_REQUEST>& rank_requests =
+      unmarshaller.StatsEstimateRanks();
+
+  for (const auto& rank_request : rank_requests) {
+    XELOGI("{}: View ID: {:08X} i64Rating: {:016X}", __func__,
+           rank_request.view_id.get(), rank_request.i64Rating.get());
+  }
+
+  if (!kernel_state_->xam_state()->user_tracker()->LoggedInToLive()) {
+    return X_E_SUCCESS;
+  }
+
+  // Games use the estimated rank to determine if attachments such as clips
+  // should be uploaded.
+  const std::vector<uint32_t> estimated_ranks =
+      kernel_state_->GetXboxLiveAPI()->EstimateRanks(kernel_state_->title_id(),
+                                                     rank_requests);
+
+  const uint32_t num_ranks = std::min<uint32_t>(
+      std::min<uint32_t>(static_cast<uint32_t>(estimated_ranks.size()),
+                         static_cast<uint32_t>(rank_requests.size())),
+      max_num_ranks_results);
+
+  for (uint32_t i = 0; i < num_ranks; i++) {
+    ranks[i] = estimated_ranks[i];
+  }
+
+  estimate_rank_results_ptr->num_ranks = num_ranks;
 
   return X_E_SUCCESS;
 }

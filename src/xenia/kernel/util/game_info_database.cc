@@ -237,6 +237,28 @@ std::optional<GameInfoDatabase::StatsView> GameInfoDatabase::GetStatsView(
   return stats_view;
 }
 
+std::optional<GameInfoDatabase::Field> GameInfoDatabase::GetStatsViewColumn(
+    uint32_t view_id, uint32_t column_id) const {
+  const auto& stats_view = GetStatsView(view_id);
+
+  if (!stats_view.has_value()) {
+    return std::nullopt;
+  }
+
+  const auto found_column =
+      std::find_if(stats_view->shared_view.column_entries.cbegin(),
+                   stats_view->shared_view.column_entries.cend(),
+                   [column_id](util::GameInfoDatabase::Field column) {
+                     return column.property_id == column_id;
+                   });
+
+  if (found_column != stats_view->shared_view.column_entries.cend()) {
+    return *found_column;
+  }
+
+  return std::nullopt;
+}
+
 GameInfoDatabase::Presence GameInfoDatabase::GetPresence() const {
   Presence presence;
 
@@ -281,6 +303,27 @@ std::vector<uint32_t> GameInfoDatabase::GetMatchmakingAttributes(
 }
 
 // XLAST
+// Leaderboard reset period (Never, Weekly, Monthly) is only defined in XLast,
+// titles without XLast never reset.
+std::string GameInfoDatabase::GetStatsViewResetType(
+    const uint32_t view_id) const {
+  const std::string default_reset_type = "Never";
+
+  if (!xlast_gamedata_) {
+    return default_reset_type;
+  }
+
+  const std::unique_ptr<XLastStatsViewQuery> stats_view_query(
+      xlast_gamedata_->GetStatsViewQuery());
+
+  if (!stats_view_query) {
+    return default_reset_type;
+  }
+
+  return stats_view_query->GetStatsViewResetType(view_id).value_or(
+      default_reset_type);
+}
+
 GameInfoDatabase::Query GameInfoDatabase::GetQueryData(
     const uint32_t id) const {
   Query query = {};

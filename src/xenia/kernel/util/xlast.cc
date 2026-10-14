@@ -335,6 +335,18 @@ std::optional<std::string> XLastStatsViewQuery::GetStatsViewFriendlyName()
   return value;
 }
 
+std::optional<std::string> XLastStatsViewQuery::GetStatsViewResetType(
+    uint32_t view_id) const {
+  const pugi::xml_attribute reset_type =
+      GetStatsViewNode(view_id).attribute("resetType");
+
+  if (!reset_type) {
+    return std::nullopt;
+  }
+
+  return reset_type.as_string();
+}
+
 #pragma endregion
 
 XLast::XLast(const uint8_t* compressed_xml_data,

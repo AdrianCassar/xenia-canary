@@ -1314,7 +1314,7 @@ bool XLiveAPI::SessionFlushStats(uint64_t sessionId,
     return true;
   }
 
-  LeaderboardObjectJSON leaderboard = LeaderboardObjectJSON(stats);
+  LeaderboardObjectJSON leaderboard(stats);
 
   std::string output;
   bool valid = leaderboard.Serialize(output);
@@ -1335,32 +1335,110 @@ bool XLiveAPI::SessionFlushStats(uint64_t sessionId,
   return true;
 }
 
-std::unique_ptr<LeaderboardObjectJSON> XLiveAPI::LeaderboardsFind(
-    const XGI_XUSER_READ_STATS stats) {
-  std::string endpoint = BuildEndpoint(fmt::format("leaderboards/find"));
-
-  auto read_stats = ReadUserStatsObjectJSON(stats);
-
-  std::string read_user_stats_json = "";
-  bool valid = read_stats.Serialize(read_user_stats_json);
-  assert_true(valid);
-
+std::unique_ptr<LeaderboardObjectJSON> XLiveAPI::PostLeaderboardsRequest(
+    const std::string& endpoint, const ReadUserStatsObjectJSON& request) {
   std::unique_ptr<LeaderboardObjectJSON> leaderboards =
       std::make_unique<LeaderboardObjectJSON>();
 
+  const auto [valid, request_json] = request.Serialize();
+  assert_true(valid);
+
+  XELOGNETD("{}:\n\n{}", __func__, request_json);
+
   std::unique_ptr<HTTPResponseObjectJSON> response =
-      Post(endpoint, reinterpret_cast<uint8_t*>(read_user_stats_json.data()));
+      Post(endpoint, reinterpret_cast<const uint8_t*>(request_json.c_str()));
 
   if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_CREATED) {
-    XELOGE("LeaderboardsFind error message: {}", response->Message());
-    assert_always();
+    XELOGE("{} error message: {}", __func__, response->Message());
 
     return leaderboards;
   }
 
-  leaderboards = response->Deserialize<LeaderboardObjectJSON>();
+  if (response->RawResponse().response) {
+    leaderboards->Deserialize(response->RawResponse().response);
+  }
 
   return leaderboards;
+}
+
+std::unique_ptr<LeaderboardObjectJSON> XLiveAPI::ReadLeaderboards(
+    const ReadUserStatsObjectJSON& read_stats) {
+  return PostLeaderboardsRequest(BuildEndpoint("leaderboards/find"),
+                                 read_stats);
+}
+
+std::unique_ptr<LeaderboardObjectJSON> XLiveAPI::EnumerateLeaderboards(
+    const ReadUserStatsObjectJSON& enumerate_stats) {
+  return PostLeaderboardsRequest(BuildEndpoint("leaderboards/enumerate"),
+                                 enumerate_stats);
+}
+
+std::vector<uint32_t> XLiveAPI::EstimateRanks(
+    uint32_t title_id, std::span<const X_USER_RANK_REQUEST> requests) {
+  const std::string endpoint = BuildEndpoint("leaderboards/estimate-rank");
+
+  std::vector<uint32_t> ranks = {};
+
+  if (requests.empty()) {
+    return ranks;
+  }
+
+  Document doc;
+  doc.SetObject();
+
+  const std::string title_id_str = fmt::format("{:08X}", title_id);
+  doc.AddMember("title_id", Value(title_id_str.c_str(), doc.GetAllocator()),
+                doc.GetAllocator());
+
+  Value requests_array(kArrayType);
+
+  for (const auto& request : requests) {
+    Value request_obj(kObjectType);
+
+    // Signed 64-bit integers are sent as strings to avoid precision loss.
+    const std::string rating_str =
+        std::to_string(static_cast<int64_t>(request.i64Rating.get()));
+
+    request_obj.AddMember("view_id", request.view_id.get(), doc.GetAllocator());
+    request_obj.AddMember("rating",
+                          Value(rating_str.c_str(), doc.GetAllocator()),
+                          doc.GetAllocator());
+
+    requests_array.PushBack(request_obj.Move(), doc.GetAllocator());
+  }
+
+  doc.AddMember("requests", requests_array, doc.GetAllocator());
+
+  rapidjson::StringBuffer buffer;
+  Writer<rapidjson::StringBuffer> writer(buffer);
+  doc.Accept(writer);
+
+  std::unique_ptr<HTTPResponseObjectJSON> response =
+      Post(endpoint, reinterpret_cast<const uint8_t*>(buffer.GetString()));
+
+  if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_CREATED) {
+    XELOGE("{} error message: {}", __func__, response->Message());
+
+    return ranks;
+  }
+
+  if (!response->RawResponse().response) {
+    return ranks;
+  }
+
+  Document response_doc;
+  response_doc.Parse(response->RawResponse().response);
+
+  if (response_doc.HasParseError() || !response_doc.IsObject() ||
+      !response_doc.HasMember("ranks") || !response_doc["ranks"].IsArray()) {
+    return ranks;
+  }
+
+  for (const auto& rank : response_doc["ranks"].GetArray()) {
+    ranks.push_back(rank.IsUint() ? rank.GetUint() : 0);
+  }
+
+  return ranks;
 }
 
 void XLiveAPI::DeleteSession(uint64_t sessionId) {
