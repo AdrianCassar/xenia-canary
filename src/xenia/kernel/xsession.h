@@ -282,6 +282,7 @@ class XSession : public XObject {
   X_RESULT ModifySkill(XGI_SESSION_MODIFYSKILL* data);
   X_RESULT WriteStats(XGI_STATS_WRITE* data);
   X_RESULT FlushStats();
+  bool ShouldReportStats() const;
 
   X_RESULT StartSession(XGI_SESSION_STATE* state);
   X_RESULT EndSession(XGI_SESSION_STATE* state);

@@ -767,6 +767,15 @@ X_RESULT XSession::ModifySkill(XGI_SESSION_MODIFYSKILL* data) {
   return X_ERROR_SUCCESS;
 }
 
+bool XSession::ShouldReportStats() const {
+  const bool is_arbitrated = HasSessionFlag(
+      static_cast<SessionFlags>((uint32_t)local_details_.Flags), ARBITRATION);
+
+  // For now skip arbitration and only allow host to report ranked stats,
+  // otherwise aggregated columns would be reported by every peer.
+  return IsHost() || !is_arbitrated;
+}
+
 X_RESULT XSession::WriteStats(XGI_STATS_WRITE* data) {
   if (!HasSessionFlag(static_cast<SessionFlags>((uint32_t)local_details_.Flags),
                       STATS)) {
@@ -816,8 +825,9 @@ X_RESULT XSession::WriteStats(XGI_STATS_WRITE* data) {
   for (const auto& view : views_properties) {
     const uint32_t view_id = view.view_id;
 
-    const auto spa_stats_view =
-        emulator()->game_info_database()->GetStatsView(view_id);
+    const auto game_info_db = emulator()->game_info_database();
+
+    const auto spa_stats_view = game_info_db->GetStatsView(view_id);
 
     // TrueSkill leaderboards are not defined in SPA?
     // 41560834 includes invalid leaderboards?
@@ -839,7 +849,7 @@ X_RESULT XSession::WriteStats(XGI_STATS_WRITE* data) {
 
     // Only assume a leaderboard is arbitrated if it's skilled and not found
     // in SPA.
-    if (IsTrueSkillViewID(view_id) && !is_arbitrated_session &&
+    if (IsRankedTrueSkillViewID(view_id) && !is_arbitrated_session &&
         !spa_stats_view.has_value()) {
       XELOGI("{} requires session arbitration", __func__);
       return X_ONLINE_E_SESSION_REQUIRES_ARBITRATION;
@@ -857,18 +867,41 @@ X_RESULT XSession::WriteStats(XGI_STATS_WRITE* data) {
     const std::vector<xam::XUSER_PROPERTY> properties(
         properties_ptr, properties_ptr + properties_count);
 
+    auto& cached_properties = cached_stats_properties_[view_id][xuid];
+
     for (const auto& property_info : properties) {
       const uint32_t property_id = property_info.property_id;
+
+      const auto& stats_view_column =
+          game_info_db->GetStatsViewColumn(view_id, property_id);
+
+      // Trying to write column to leaderboard that doesn't contain this column.
+      if (!stats_view_column.has_value()) {
+        XELOGW("{}: View {:08X} does not contain property {:08X}", __func__,
+               view_id, property_id);
+        continue;
+      }
+
+      // XSessionWriteStats does not support WSTRING or BINARY.
+      if (xam::UserData::requires_additional_data(property_id)) {
+        XELOGW("{}: Unsupported property type for {:08X}", __func__,
+               property_id);
+        continue;
+      }
+
+      // 41560901 doesn't set property type therefore, derive it from the id.
       const uint8_t* data_ptr =
           reinterpret_cast<const uint8_t*>(&property_info.data.data);
 
       const uint32_t property_data_size =
           xam::UserData::get_valid_data_size(property_id, 0);
 
-      const xam::Property property = xam::Property(
-          property_id, property_data_size, const_cast<uint8_t*>(data_ptr));
+      const xam::Property property(property_id, property_data_size,
+                                   const_cast<uint8_t*>(data_ptr));
 
-      cached_stats_properties_[xuid][view_id][property_id] = property;
+      // Only the last write to a property is kept, aggregation is performed
+      // by the backend once stats are flushed or the session ends.
+      cached_properties[property_id] = property;
     }
   }
 
@@ -888,45 +921,41 @@ X_RESULT XSession::FlushStats() {
     return X_ONLINE_E_SESSION_WRONG_STATE;
   }
 
+  if (!ShouldReportStats()) {
+    return X_ERROR_SUCCESS;
+  }
+
   const bool is_arbitrated = HasSessionFlag(
       static_cast<SessionFlags>((uint32_t)local_details_.Flags), ARBITRATION);
 
   view_properties_unordered_map stats_to_flush = {};
 
-  for (const auto& [xuid, views] : cached_stats_properties_) {
-    for (const auto& [view_id, view] : views) {
+  for (const auto& [view_id, xuids] : cached_stats_properties_) {
+    // Skilled leaderboards are only reported once the session ends.
+    if (IsTrueSkillViewID(view_id)) {
+      continue;
+    }
+
+    // Arbitrated leaderboards are only reported once the session ends.
+    if (is_arbitrated) {
       const auto spa_stats_view =
           emulator()->game_info_database()->GetStatsView(view_id);
 
-      if (is_arbitrated) {
-        const bool is_view_arbitrated = spa_stats_view.has_value() &&
-                                        spa_stats_view.value().view.arbitrated;
-
-        // Flush only non-arbitrated and non-skilled leaderboards
-        if (!IsTrueSkillViewID(view_id) && !is_view_arbitrated) {
-          stats_to_flush[xuid][view_id] = view;
-        }
-      } else {
-        // Flush only non-skilled leaderboards
-        if (!IsTrueSkillViewID(view_id)) {
-          stats_to_flush[xuid][view_id] = view;
-        }
+      if (spa_stats_view.has_value() && spa_stats_view->view.arbitrated) {
+        continue;
       }
     }
+
+    stats_to_flush[view_id] = xuids;
   }
 
-  // TODO: Check who flushes stats each peer or just host?
-  if (IsHost()) {
-    const bool flushed = kernel_state()->GetXboxLiveAPI()->SessionFlushStats(
-        session_id_, stats_to_flush);
+  const bool flushed = kernel_state()->GetXboxLiveAPI()->SessionFlushStats(
+      session_id_, stats_to_flush);
 
-    // If flush is successful then remove cached stats
-    if (flushed) {
-      for (const auto& [xuid, views] : stats_to_flush) {
-        for (const auto& [view_id, view] : views) {
-          cached_stats_properties_.erase(xuid);
-        }
-      }
+  // If flush is successful then remove flushed stats
+  if (flushed) {
+    for (const auto& [view_id, xuids] : stats_to_flush) {
+      cached_stats_properties_.erase(view_id);
     }
   }
 
@@ -951,7 +980,10 @@ X_RESULT XSession::EndSession(XGI_SESSION_STATE* state) {
   const bool stats_enabled = HasSessionFlag(
       static_cast<SessionFlags>((uint32_t)local_details_.Flags), STATS);
 
-  // The host will report TrueSkill statistics for all players in a session?
+  if (!ShouldReportStats()) {
+    cached_stats_properties_.clear();
+    return X_ERROR_SUCCESS;
+  }
 
   // Post the remaining cached stats
   if (stats_enabled) {

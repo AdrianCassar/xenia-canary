@@ -10,6 +10,8 @@
 #ifndef XENIA_KERNEL_LEADERBOARD_OBJECT_JSON_H_
 #define XENIA_KERNEL_LEADERBOARD_OBJECT_JSON_H_
 
+#include <vector>
+
 #include "xenia/kernel/json/base_object_json.h"
 #include "xenia/kernel/xnet.h"
 
@@ -20,8 +22,27 @@ class LeaderboardObjectJSON : public BaseObjectJSON {
   using BaseObjectJSON::Deserialize;
   using BaseObjectJSON::Serialize;
 
+  struct Column {
+    uint16_t attribute_id;
+    xam::Property property;
+  };
+
+  struct Row {
+    uint64_t xuid;
+    std::vector<Column> columns;
+
+    const Column* FindColumn(uint16_t attribute_id) const;
+  };
+
+  struct View {
+    uint32_t view_id;
+    uint32_t total_rows;
+    std::vector<Row> rows;
+  };
+
   LeaderboardObjectJSON();
 
+  // Stats to write
   LeaderboardObjectJSON(view_properties_unordered_map stats);
 
   virtual ~LeaderboardObjectJSON();
@@ -34,13 +55,15 @@ class LeaderboardObjectJSON : public BaseObjectJSON {
     return stats_;
   }
 
-  const X_USER_STATS_READ_RESULTS& GetReadStatsResults() const {
-    return read_results_;
-  }
+  const std::vector<View>& GetViews() const { return views_; }
+
+  // Lays out the views, rows and columns read from the backend into guest
+  // memory.
+  bool WriteResults(uint32_t results_address, uint32_t results_size) const;
 
  private:
   view_properties_unordered_map stats_;
-  X_USER_STATS_READ_RESULTS read_results_;
+  std::vector<View> views_;
 };
 }  // namespace kernel
 }  // namespace xe

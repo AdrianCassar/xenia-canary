@@ -1799,31 +1799,27 @@ dword_result_t XamUserCreateStatsEnumerator_entry(
   switch (type) {
     case X_STATS_ENUMERATOR_TYPE::XUID: {
       xuid = pivot_user;
-      XELOGI("StatsEnumeratorByXUID: {:016X}", xuid);
     } break;
     case X_STATS_ENUMERATOR_TYPE::RANK: {
       // 58410826 expects row ranks to start at rank_start.
       start_rank = pivot_user & 0xFFFF;
-      XELOGI("StatsEnumeratorByRank at rank start {}", start_rank);
     } break;
     case X_STATS_ENUMERATOR_TYPE::RANK_PER_SPEC: {
       start_rank = pivot_user & 0xFFFF;
-      XELOGI("StatsEnumeratorByRankPreSpec");
     } break;
     case X_STATS_ENUMERATOR_TYPE::BY_RATING: {
       start_i64rating = pivot_user;
-      XELOGI("StatsEnumeratorByRating at i64Rating of {:016X}",
-             start_i64rating);
     } break;
   }
 
-  const uint32_t rows = num_rows;
+  const uint32_t rows_count = num_rows;
   const uint32_t extra_column_data = 4;  // Why extra 4 bytes per column?
   const uint32_t column_size = sizeof(X_USER_STATS_COLUMN) + extra_column_data;
 
-  uint32_t buffer_size = num_stats_specs * (sizeof(X_USER_STATS_ROW) * rows +
-                                            sizeof(X_USER_STATS_VIEW)) +
-                         sizeof(X_USER_STATS_READ_RESULTS);
+  uint32_t buffer_size =
+      num_stats_specs *
+          (sizeof(X_USER_STATS_ROW) * rows_count + sizeof(X_USER_STATS_VIEW)) +
+      sizeof(X_USER_STATS_READ_RESULTS);
 
   const X_USER_STATS_SPEC* stat_specs_ptr = stats_ptr;
 
@@ -1831,7 +1827,7 @@ dword_result_t XamUserCreateStatsEnumerator_entry(
     const X_USER_STATS_SPEC& stat_spec_ptr = stat_specs_ptr[view_index];
     const uint32_t columns_count = stat_spec_ptr.num_column_ids;
 
-    buffer_size += column_size * rows * columns_count;
+    buffer_size += column_size * rows_count * columns_count;
   }
 
   auto e = object_ref<XStaticUntypedEnumerator>(
@@ -1852,6 +1848,23 @@ dword_result_t XamUserCreateStatsEnumerator_entry(
     return X_ERROR_SUCCESS;
   }
 
+  const std::vector<X_USER_STATS_SPEC> stats_specs(
+      stat_specs_ptr, stat_specs_ptr + num_stats_specs.value());
+
+  const ReadUserStatsObjectJSON::EnumerateParams enumerate_params = {
+      .type = type,
+      .xuid = xuid,
+      .rank = start_rank,
+      .rating = static_cast<int64_t>(start_i64rating),
+      .num_rows = rows_count,
+  };
+
+  const ReadUserStatsObjectJSON enumerate_stats(title_id_, stats_specs,
+                                                enumerate_params);
+
+  std::unique_ptr<LeaderboardObjectJSON> leaderboards =
+      kernel_state()->GetXboxLiveAPI()->EnumerateLeaderboards(enumerate_stats);
+
   // Memory Layout:
   // X_USER_STATS_READ_RESULTS
   // X_USER_STATS_VIEW[]
@@ -1860,115 +1873,17 @@ dword_result_t XamUserCreateStatsEnumerator_entry(
 
   // 4E4D07D1 expects result to create session.
 
+  // Results are copied into the guest buffer during enumeration therefore,
+  // pointers within the results must remain valid.
   const uint32_t results_address =
       kernel_state()->memory()->SystemHeapAlloc(buffer_size);
 
-  X_USER_STATS_READ_RESULTS* results =
-      kernel_state()->memory()->TranslateVirtual<X_USER_STATS_READ_RESULTS*>(
-          results_address);
-
-  X_USER_STATS_VIEW* views_ptr =
-      reinterpret_cast<X_USER_STATS_VIEW*>(results + 1);
-
-  const uint32_t views_address =
-      kernel_memory()->HostToGuestVirtual(std::to_address(views_ptr));
-
-  X_USER_STATS_ROW* rows_ptr =
-      reinterpret_cast<X_USER_STATS_ROW*>(views_ptr + num_stats_specs);
-
-  results->num_views = num_stats_specs.value();
-  results->views_ptr = views_address;
-
-  for (size_t view_index = 0; view_index < num_stats_specs; view_index++) {
-    const X_USER_STATS_SPEC& stat_spec_ptr = stat_specs_ptr[view_index];
-
-    X_USER_STATS_VIEW& view_ptr = views_ptr[view_index];
-    const uint32_t view_id = stat_spec_ptr.view_id;
-    const uint32_t columns_count = stat_spec_ptr.num_column_ids;
-
-    const auto spa_stats_view =
-        kernel_state()->emulator()->game_info_database()->GetStatsView(view_id);
-
-    if (IsTrueSkillViewID(view_id)) {
-      XELOGI("TrueSkill View ID: {:08X}", view_id);
-    }
-
-    // 4B5607E8 expects view id otherwise crashes.
-    view_ptr.view_id = view_id;
-    view_ptr.total_view_rows = rows;
-
-    view_ptr.num_rows = rows;
-
-    const uint32_t rows_address =
-        kernel_memory()->HostToGuestVirtual(std::to_address(rows_ptr));
-
-    view_ptr.rows_ptr = rows_address;
-
-    X_USER_STATS_COLUMN* columns_ptr =
-        reinterpret_cast<X_USER_STATS_COLUMN*>(rows_ptr + rows);
-
-    for (uint32_t row_index = 0; row_index < rows; row_index++) {
-      X_USER_STATS_ROW& row_ptr = rows_ptr[row_index];
-
-      const uint32_t entry_count = row_index + 1;
-
-      // Dummy players
-      const std::string gamertag = fmt::format("Xenia User {}", entry_count);
-      xe::string_util::copy_truncating(row_ptr.gamertag, gamertag.c_str(),
-                                       sizeof(row_ptr.gamertag));
-
-      row_ptr.rank = entry_count;
-      row_ptr.i64Rating = entry_count;
-
-      row_ptr.xuid =
-          kernel_state()->xam_state()->profile_manager()->GenerateXuidOnline();
-
-      if (!stat_spec_ptr.num_column_ids) {
-        continue;
-      }
-
-      const uint32_t columns_address =
-          kernel_memory()->HostToGuestVirtual(std::to_address(columns_ptr));
-
-      row_ptr.num_columns = columns_count;
-      row_ptr.columns_ptr = columns_address;
-
-      for (size_t column_index = 0; column_index < columns_count;
-           column_index++) {
-        X_USER_STATS_COLUMN& column_ptr = columns_ptr[column_index];
-        const uint32_t column_id = stat_spec_ptr.column_ids[column_index];
-
-        column_ptr.column_id = column_id;
-        column_ptr.value.data = {};
-
-        // Determine the property type
-        if (IsTrueSkillViewID(view_id)) {
-          column_ptr.value.type = GetTrueSkillColumnType(column_ptr.column_id);
-        } else {
-          if (spa_stats_view.has_value()) {
-            for (const auto& column :
-                 spa_stats_view.value().shared_view.column_entries) {
-              if (column.attribute_id == column_id) {
-                column_ptr.value.type =
-                    xam::UserData::get_type(column.property_id);
-              }
-            }
-          } else {
-            column_ptr.value.type = xam::X_USER_DATA_TYPE::INT32;
-            assert_always();
-          }
-        }
-      }
-
-      columns_ptr += columns_count;
-    }
-
-    rows_ptr = reinterpret_cast<X_USER_STATS_ROW*>(columns_ptr + 1);
-  }
+  leaderboards->WriteResults(results_address, buffer_size);
 
   uint8_t* results_out_ptr = reinterpret_cast<uint8_t*>(e->AppendItem());
 
-  std::memcpy(results_out_ptr, results, buffer_size);
+  std::memcpy(results_out_ptr,
+              kernel_memory()->TranslateVirtual(results_address), buffer_size);
 
   *buffer_size_ptr = buffer_size;
 
