@@ -45,8 +45,6 @@ DECLARE_int32(network_mode);
 namespace xe {
 namespace kernel {
 
-constexpr std::chrono::milliseconds kDeferredOverlappedDelayMillis(25);
-
 // This is a global object initialized with the XboxkrnlModule.
 // It references the current kernel state object that all kernel methods should
 // be using to stash their variables.
@@ -1183,6 +1181,13 @@ void KernelState::CompleteOverlappedEx(uint32_t overlapped_ptr, X_RESULT result,
     }
   }
 
+  SetOverlappedCompletion(overlapped_ptr, result, extended_error, length);
+}
+
+void KernelState::SetOverlappedCompletion(uint32_t overlapped_ptr,
+                                          X_RESULT result,
+                                          uint32_t extended_error,
+                                          uint32_t length) {
   auto ptr = memory()->TranslateVirtual(overlapped_ptr);
   XOverlappedSetResult(ptr, result);
   XOverlappedSetExtendedError(ptr, extended_error);
@@ -1267,6 +1272,18 @@ void KernelState::CompleteOverlappedDeferredEx(
     uint32_t overlapped_ptr, std::function<void()> pre_callback,
     std::function<void()> post_callback) {
   auto ptr = memory()->TranslateVirtual(overlapped_ptr);
+
+  // Track the request before marking it pending so a stale completion cannot
+  // overwrite the pending state.
+  auto global_lock = global_critical_region_.Acquire();
+
+  // Supersedes any request still pending on this overlapped.
+  // 58410840 cancels XamEnumerate then reuses the overlapped for
+  // XUserReadStats, a stale XamEnumerate completion then signalled it before
+  // the results were written.
+  const uint64_t request_id = ++next_deferred_overlapped_request_id_;
+  deferred_overlapped_requests_[overlapped_ptr] = {request_id, false, false};
+
   XOverlappedSetResult(ptr, X_ERROR_IO_PENDING);
   XOverlappedSetContext(ptr, XThread::GetCurrentThreadHandle());
   X_HANDLE event_handle = XOverlappedGetEvent(ptr);
@@ -1278,43 +1295,96 @@ void KernelState::CompleteOverlappedDeferredEx(
       ev.get<XEvent>()->Reset();
     }
   }
-  auto global_lock = global_critical_region_.Acquire();
+
   dispatch_queue_.push_back([this, completion_callback, overlapped_ptr,
-                             pre_callback, post_callback]() {
+                             request_id, pre_callback, post_callback]() {
     if (pre_callback) {
       pre_callback();
     }
-    /*
-     5454082B infinitely loads free roam in netplay without sleep.
-     Small delay fixes it e.g. 25ms.
 
-     53450814 black screens in netplay before main menu with high delay e.g.
-     100ms.
-     Small delay fixes it e.g. 25ms.
+    {
+      auto global_lock = global_critical_region_.Acquire();
 
-     55530848 and 55530816 fail to create Xbox Live session with high delay e.g.
-     100ms.
-     Small delay fixes it e.g. 25ms.
+      const auto it = deferred_overlapped_requests_.find(overlapped_ptr);
 
-     555307EE quickly disconnects from session with high delay e.g.
-     100ms.
-     Small delay fixes it e.g. 25ms.
+      // Cancelled or superseded by a newer request on the same overlapped.
+      if (it == deferred_overlapped_requests_.end() ||
+          it->second.id != request_id) {
+        global_lock.unlock();
 
-     4C4107ED internal log says "timed out connecting" and crashes attempting to
-     join session via custom search with a delay of 25ms.
-     Smaller delay fixes it e.g. 5ms.
-    */
-    xe::threading::Sleep(kDeferredOverlappedDelayMillis);
+        if (post_callback) {
+          post_callback();
+        }
+        return;
+      }
+
+      it->second.running = true;
+    }
+
     uint32_t extended_error = 0;
     uint32_t length = 0;
     uint32_t result = completion_callback(extended_error, length);
 
-    CompleteOverlappedEx(overlapped_ptr, result, extended_error, length);
+    {
+      auto global_lock = global_critical_region_.Acquire();
+
+      const auto it = deferred_overlapped_requests_.find(overlapped_ptr);
+
+      if (it != deferred_overlapped_requests_.end() &&
+          it->second.id == request_id) {
+        if (it->second.cancelled) {
+          SetOverlappedCompletion(overlapped_ptr, X_ERROR_CANCELLED,
+                                  X_HRESULT_FROM_WIN32(X_ERROR_CANCELLED), 0);
+        } else {
+          CompleteOverlappedEx(overlapped_ptr, result, extended_error, length);
+        }
+
+        deferred_overlapped_requests_.erase(it);
+      }
+
+      deferred_overlapped_cond_.notify_all();
+    }
+
     if (post_callback) {
       post_callback();
     }
   });
   dispatch_cond_.notify_all();
+}
+
+bool KernelState::CancelOverlapped(uint32_t overlapped_ptr, bool wait) {
+  auto global_lock = global_critical_region_.Acquire();
+
+  const auto it = deferred_overlapped_requests_.find(overlapped_ptr);
+
+  if (it == deferred_overlapped_requests_.end()) {
+    return false;
+  }
+
+  // Not started yet, drop it from the dispatch queue by completing it now.
+  if (!it->second.running) {
+    deferred_overlapped_requests_.erase(it);
+
+    SetOverlappedCompletion(overlapped_ptr, X_ERROR_CANCELLED,
+                            X_HRESULT_FROM_WIN32(X_ERROR_CANCELLED), 0);
+    return true;
+  }
+
+  // Already running, it completes as cancelled once finished.
+  it->second.cancelled = true;
+
+  if (wait) {
+    const uint64_t request_id = it->second.id;
+
+    deferred_overlapped_cond_.wait(global_lock, [&]() {
+      const auto current = deferred_overlapped_requests_.find(overlapped_ptr);
+
+      return current == deferred_overlapped_requests_.end() ||
+             current->second.id != request_id;
+    });
+  }
+
+  return true;
 }
 
 bool KernelState::Save(ByteStream* stream) {

@@ -322,6 +322,8 @@ class KernelState {
       uint32_t overlapped_ptr, std::function<void()> pre_callback = nullptr,
       std::function<void()> post_callback = nullptr);
 
+  bool CancelOverlapped(uint32_t overlapped_ptr, bool wait);
+
   bool Save(ByteStream* stream);
   bool Restore(ByteStream* stream);
 
@@ -406,6 +408,20 @@ class KernelState {
   util::NativeList dpc_list_;
   std::condition_variable_any dispatch_cond_;
   std::list<std::function<void()>> dispatch_queue_;
+
+  struct DeferredOverlappedRequest {
+    uint64_t id;
+    bool running;
+    bool cancelled;
+  };
+
+  void SetOverlappedCompletion(uint32_t overlapped_ptr, X_RESULT result,
+                               uint32_t extended_error, uint32_t length);
+
+  std::unordered_map<uint32_t, DeferredOverlappedRequest>
+      deferred_overlapped_requests_;
+  uint64_t next_deferred_overlapped_request_id_ = 0;
+  std::condition_variable_any deferred_overlapped_cond_;
 
   uint32_t ke_timestamp_bundle_ptr_ = 0;
   std::unique_ptr<xe::threading::HighResolutionTimer> timestamp_timer_;

@@ -84,6 +84,12 @@ DECLARE_XAM_EXPORT1(XMsgStartIORequest, kNone, kImplemented);
 
 dword_result_t XMsgCancelIORequest_entry(
     pointer_t<XAM_OVERLAPPED> overlapped_ptr, dword_t wait) {
+  // Prevent a cancelled request from completing later, games reuse the
+  // overlapped for their next request e.g. 58410840.
+  if (kernel_state()->CancelOverlapped(overlapped_ptr.guest_address(), wait)) {
+    return 0;
+  }
+
   X_HANDLE event_handle = XOverlappedGetEvent(overlapped_ptr);
   if (event_handle && wait) {
     auto ev =
