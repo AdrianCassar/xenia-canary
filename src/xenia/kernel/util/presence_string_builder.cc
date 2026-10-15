@@ -176,7 +176,7 @@ std::u16string AttributeStringFormatter::GetStringFromSpecifier(
   }
 
   if (attribute_type == AttributeStringFormatter::AttributeType::Property) {
-    const xam::Property* property =
+    const auto property =
         kernel_state()->xam_state()->user_tracker()->GetProperty(
             offline_xuid, attribute_id.value().value);
 

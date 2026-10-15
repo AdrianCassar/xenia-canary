@@ -1604,7 +1604,7 @@ bool XLiveAPI::SessionPropertiesSet(uint64_t session_id, uint64_t xuid) {
     if ((property.has_value() && property->is_matchmaking) ||
         default_system_matchmaking_properties.contains(
             property_attribute.value)) {
-      const xam::Property* property =
+      const auto property =
           kernel_state()->xam_state()->user_tracker()->GetProperty(
               user_profile->xuid(), property_attribute.value);
 
@@ -1628,7 +1628,7 @@ bool XLiveAPI::SessionPropertiesSet(uint64_t session_id, uint64_t xuid) {
 
     if (context_property.has_value()) {
       if (context_property->is_matchmaking) {
-        const xam::Property* property =
+        const auto property =
             kernel_state()->xam_state()->user_tracker()->GetProperty(
                 user_profile->xuid(), context_attribute.value);
 

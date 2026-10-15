@@ -365,7 +365,7 @@ void UserTracker::AddDefaultContexts(uint64_t xuid) {
 
 std::u16string UserTracker::GetContextLocalizedString(uint64_t xuid,
                                                       uint32_t id) const {
-  const Property* context = GetProperty(xuid, id);
+  const auto context = GetProperty(xuid, id);
 
   if (!context) {
     return u"";
@@ -411,7 +411,7 @@ std::u16string UserTracker::GetContextLocalizedString(uint64_t xuid,
 
 std::u16string UserTracker::GetContextGameModeLocalizedString(
     uint64_t xuid) const {
-  const Property* context = GetProperty(xuid, XCONTEXT_GAME_MODE);
+  const auto context = GetProperty(xuid, XCONTEXT_GAME_MODE);
 
   if (!context) {
     return u"";
@@ -447,8 +447,6 @@ std::u16string UserTracker::GetContextDescription(uint64_t xuid,
   if (!context_data) {
     return u"";
   }
-
-  const Property* context = GetProperty(xuid, id);
 
   std::set<std::u16string, CaseInsensitive> context_strings = {};
 
@@ -941,11 +939,11 @@ X_STATUS UserTracker::GetProperty(const uint64_t xuid, uint32_t* property_size,
   return X_E_SUCCESS;
 }
 
-const Property* UserTracker::GetProperty(const uint64_t xuid,
-                                         const uint32_t id) const {
+std::optional<Property> UserTracker::GetProperty(const uint64_t xuid,
+                                                 const uint32_t id) const {
   auto user = kernel_state()->xam_state()->GetUserProfile(xuid);
   if (!user) {
-    return nullptr;
+    return std::nullopt;
   }
 
   std::lock_guard prop_lock(user->prop_mutex);
@@ -956,10 +954,11 @@ const Property* UserTracker::GetProperty(const uint64_t xuid,
       });
 
   if (entry == user->properties_.cend()) {
-    return nullptr;
+    return std::nullopt;
   }
 
-  return &(*entry);
+  // Return a copy, properties_ may be modified once prop_mutex is released.
+  return *entry;
 }
 
 std::optional<UserSetting> UserTracker::GetGpdSetting(
@@ -1196,7 +1195,7 @@ std::optional<uint32_t> UserTracker::GetUserContext(uint64_t xuid,
 }
 
 uint32_t UserTracker::GetContextValue(uint64_t xuid, uint32_t id) const {
-  const xam::Property* context = GetProperty(xuid, id);
+  const auto context = GetProperty(xuid, id);
 
   if (context) {
     return context->get_data()->data.u32.get();
@@ -1763,13 +1762,20 @@ void UserTracker::PeriodicMaintenance(uint64_t xuid, size_t iteration_count) {
       // for offline session.
       if (session->IsHost() && session->IsCreated() &&
           session->IsXboxLiveSession()) {
-        if (session->GetCachedLiveProperties() == user->properties_) {
+        std::vector<Property> properties;
+
+        {
+          std::lock_guard prop_lock(user->prop_mutex);
+          properties = user->properties_;
+        }
+
+        if (session->GetCachedLiveProperties() == properties) {
           continue;
         }
 
         if (xbox_live_api->SessionPropertiesSet(session->GetSessionID(),
                                                 user->xuid())) {
-          session->CacheLiveProperties(user->properties_);
+          session->CacheLiveProperties(properties);
         }
       }
     }
