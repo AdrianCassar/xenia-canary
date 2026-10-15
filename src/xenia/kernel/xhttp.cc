@@ -42,8 +42,6 @@
 
 DECLARE_bool(xhttp);
 
-DECLARE_bool(logging);
-
 namespace xe {
 namespace kernel {
 
@@ -444,9 +442,7 @@ void XHttp::Perform() {
   curl_easy_setopt(curl_handle, CURLOPT_HEADERFUNCTION, XHttpWriteCallback);
   curl_easy_setopt(curl_handle, CURLOPT_HEADERDATA, &header_chunk);
 
-  if (cvars::logging) {
-    XELOGI("XHttp: {} {} (host: {})", verb, url, host);
-  }
+  XELOGNETD("XHttp: {} {} (host: {})", verb, url, host);
 
   const CURLcode result = curl_easy_perform(curl_handle);
   if (result == CURLE_OK) {
@@ -1479,9 +1475,7 @@ uint32_t XHttp::Connect(uint32_t session_handle, const std::string& host,
   connection->host = host;
   connection->port = port;
 
-  if (cvars::logging) {
-    XELOGI("XHttp Connect: {}:{}", connection->host, connection->port);
-  }
+  XELOGNETD("XHttp Connect: {}:{}", connection->host, connection->port);
 
   return connection->handle();
 }
