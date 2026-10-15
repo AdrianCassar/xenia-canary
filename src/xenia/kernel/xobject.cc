@@ -55,7 +55,9 @@ XObject::~XObject() {
     uint32_t ptr = guest_object_ptr_ - sizeof(X_OBJECT_HEADER);
     auto header = memory()->TranslateVirtual<X_OBJECT_HEADER*>(ptr);
 
-    kernel_state()->object_table()->UnmapGuestObjectHostHandle(ptr);
+    // Mapped by SetNativePointer using the object pointer, not the header.
+    kernel_state()->object_table()->UnmapGuestObjectHostHandle(
+        guest_object_ptr_);
 
     // Free the object creation info
     if (header->object_type_ptr) {
@@ -408,105 +410,116 @@ object_ref<XObject> XObject::GetNativeObject(KernelState* kernel_state,
                                              bool already_locked) {
   assert_not_null(native_ptr);
 
-  // Unfortunately the XDK seems to inline some KeInitialize calls, meaning
-  // we never see it and just randomly start getting passed events/timers/etc.
-  // Luckily it seems like all other calls (Set/Reset/Wait/etc) are used and
-  // we don't have to worry about PPC code poking the struct. Because of that,
-  // we init on first use, store our handle in the struct, and dereference it
-  // each time.
-  // We identify this by setting wait_list.flink_ptr to a magic value. When set,
-  // wait_list.blink_ptr will hold a handle to our object.
+  // Two kinds of objects reach here:
+  //  - Host-created objects (CreateNative). These are registered in the object
+  //    table's guest-to-host map before the guest ever sees the pointer, and
+  //    may not have a dispatch header (enumerators, etc).
+  //  - Guest-initialized dispatcher objects. The XDK inlines some KeInitialize
+  //    calls, meaning we never see them and just randomly start getting passed
+  //    events/timers/etc. These always start with an X_DISPATCH_HEADER, so we
+  //    init on first use and stash our handle in it: wait_list.flink_ptr holds
+  //    a magic value and wait_list.blink_ptr holds the handle. They are not
+  //    added to the map, so when the guest re-initializes the struct (which
+  //    rewrites wait_list) we notice and create a fresh object.
   auto guest_ptr = kernel_state->memory()->HostToGuestVirtual(native_ptr);
   if (!already_locked) {
     global_critical_region::mutex().lock();
   }
 
+  auto object_table = kernel_state->object_table();
   XObject* result = nullptr;
 
-  // ????
-  auto header = reinterpret_cast<X_DISPATCH_HEADER*>(native_ptr);
-  X_OBJECT_TYPES type = as_type;
+  // Host-created object.
+  X_HANDLE host_handle = 0;
+  if (object_table->HostHandleForGuestObject(guest_ptr, host_handle)) {
+    result = object_table->LookupObject<XObject>(host_handle, true).release();
 
-  if (as_type == X_OBJECT_TYPES::UndefinedObject) {
-    type = header->type;
+    if (!result) {
+      // Stale mapping, the host object is gone.
+      object_table->UnmapGuestObjectHostHandle(guest_ptr);
+    } else {
+      // The only place the guest hands us a raw dispatch header, so the only
+      // place a direct write to it can be picked up.
+      result->SyncFromGuest();
+    }
   }
 
-  // auto true_object_header =
-  //     kernel_state->memory()->TranslateVirtual<X_OBJECT_HEADER*>(
-  //         guest_ptr - sizeof(X_OBJECT_HEADER));
+  if (!result) {
+    // Not host-created, so this must be a guest-initialized dispatcher object.
+    X_DISPATCH_HEADER* header =
+        reinterpret_cast<X_DISPATCH_HEADER*>(native_ptr);
 
-  X_HANDLE host_handle = X_INVALID_HANDLE_VALUE;
+    if (header->wait_list.flink_ptr == kXObjSignature) {
+      // Already initialized.
+      result =
+          object_table->LookupObject<XObject>(header->wait_list.blink_ptr, true)
+              .release();
 
-  bool successfully_mapped_to_host =
-      kernel_state->object_table()->HostHandleForGuestObject(guest_ptr,
-                                                             host_handle);
-
-  bool create_new = true;
-
-  if (successfully_mapped_to_host) {
-    // Already initialized.
-    // TODO: assert if the type of the object != as_type
-
-    create_new = false;
-
-    result = kernel_state->object_table()
-                 ->LookupObject<XObject>(host_handle, true)
-                 .release();
-    if (result) {
-      if (HasDispatcherHeader(result->type()) &&
-          MapGuestTypeToHost(header->type) != result->type()) {
-        create_new = true;
-      } else {
+      // Handle may have been closed (and possibly reused by another object).
+      if (result && result->type() != MapGuestTypeToHost(header->type)) {
+        result->Release();
+        result = nullptr;
+      } else if (result) {
         // The only place the guest hands us a raw dispatch header, so the only
         // place a direct write to it can be picked up.
         result->SyncFromGuest();
       }
     }
-  }
 
-  if (create_new) {
-    // First use, create new.
-    // https://www.nirsoft.net/kernel_struct/vista/KOBJECTS.html
-    switch (type) {
-      case X_OBJECT_TYPES::EventNotificationObject:
-      case X_OBJECT_TYPES::EventSynchronizationObject: {
-        auto ev = new XEvent(kernel_state);
-        ev->InitializeNative(native_ptr, header);
-        result = ev;
-      } break;
-      case X_OBJECT_TYPES::MutantObject: {
-        auto mutant = new XMutant(kernel_state);
-        mutant->InitializeNative(native_ptr, header);
-        result = mutant;
-      } break;
-      case X_OBJECT_TYPES::SemaphoreObject: {
-        auto sem = new XSemaphore(kernel_state);
-        auto success = sem->InitializeNative(native_ptr, header);
-        // Can't report failure to the guest at late initialization:
-        assert_true(success);
-        result = sem;
-      } break;
-      case X_OBJECT_TYPES::ProcessObject:
-      case X_OBJECT_TYPES::QueueObject:
-      case X_OBJECT_TYPES::ThreadObject:
-      case X_OBJECT_TYPES::Spare1Object:
-      case X_OBJECT_TYPES::TimerNotificationObject:
-      case X_OBJECT_TYPES::TimerSynchronizationObject:
-      case X_OBJECT_TYPES::ApcObject:
-      case X_OBJECT_TYPES::DpcObject:
-      case X_OBJECT_TYPES::DeviceQueueObject:
-      case X_OBJECT_TYPES::EventPairObject:
-      case X_OBJECT_TYPES::InterruptObject:
-      case X_OBJECT_TYPES::ProfileObject:
-      default:
-        assert_always();
-        result = nullptr;
+    if (!result) {
+      // First use (or re-initialized by the guest), create new.
+      const X_OBJECT_TYPES type =
+          as_type == X_OBJECT_TYPES::UndefinedObject ? header->type : as_type;
+
+      // https://www.nirsoft.net/kernel_struct/vista/KOBJECTS.html
+      switch (type) {
+        case X_OBJECT_TYPES::EventNotificationObject:
+        case X_OBJECT_TYPES::EventSynchronizationObject: {
+          auto ev = new XEvent(kernel_state);
+          ev->InitializeNative(native_ptr, header);
+          result = ev;
+        } break;
+        case X_OBJECT_TYPES::MutantObject: {
+          auto mutant = new XMutant(kernel_state);
+          mutant->InitializeNative(native_ptr, header);
+          result = mutant;
+        } break;
+        case X_OBJECT_TYPES::SemaphoreObject: {
+          auto sem = new XSemaphore(kernel_state);
+          auto success = sem->InitializeNative(native_ptr, header);
+          // Can't report failure to the guest at late initialization:
+          assert_true(success);
+          result = sem;
+        } break;
+        case X_OBJECT_TYPES::ProcessObject:
+        case X_OBJECT_TYPES::QueueObject:
+        case X_OBJECT_TYPES::ThreadObject:
+        case X_OBJECT_TYPES::Spare1Object:
+        case X_OBJECT_TYPES::TimerNotificationObject:
+        case X_OBJECT_TYPES::TimerSynchronizationObject:
+        case X_OBJECT_TYPES::ApcObject:
+        case X_OBJECT_TYPES::DpcObject:
+        case X_OBJECT_TYPES::DeviceQueueObject:
+        case X_OBJECT_TYPES::EventPairObject:
+        case X_OBJECT_TYPES::InterruptObject:
+        case X_OBJECT_TYPES::ProfileObject:
+          XELOGW(
+              "{}: Unsupported guest dispatcher object type {:02X} at {:08X}",
+              __func__, static_cast<uint8_t>(type), guest_ptr);
+          result = nullptr;
+          break;
+        default:
+          // Not a dispatcher object, most likely a bad pointer.
+          XELOGW("{}: Unregistered guest object at {:08X} (type {:02X})",
+                 __func__, guest_ptr, static_cast<uint8_t>(type));
+          result = nullptr;
+          break;
+      }
+
+      if (result) {
+        StashHandle(header, result->handle());
+      }
     }
-  }
-
-  if (result) {
-    kernel_state->object_table()->MapGuestObjectToHostHandle(guest_ptr,
-                                                             result->handle());
   }
 
   if (!already_locked) {

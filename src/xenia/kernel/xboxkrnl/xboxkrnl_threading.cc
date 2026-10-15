@@ -727,6 +727,9 @@ void KeInitializeSemaphore_entry(pointer_t<X_KSEMAPHORE> semaphore_ptr,
                                  dword_t count, dword_t limit) {
   semaphore_ptr->header.type = SemaphoreObject;
   semaphore_ptr->header.signal_state = (uint32_t)count;
+  // Clear any stashed handle so re-initialization creates a fresh object.
+  semaphore_ptr->header.wait_list.flink_ptr = 0;
+  semaphore_ptr->header.wait_list.blink_ptr = 0;
   semaphore_ptr->limit = (uint32_t)limit;
 
   auto sem = XObject::GetNativeObject<XSemaphore>(kernel_state(), semaphore_ptr,

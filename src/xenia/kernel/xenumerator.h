@@ -61,6 +61,7 @@ struct X_ENUMERATOR_ALLOC {
   xe::be<uint32_t> enum_size;
   xe::be<uint32_t> enum_ptr;
 };
+static_assert_size(X_ENUMERATOR_ALLOC, 0x8);
 
 class XEnumerator : public XObject {
  public:
