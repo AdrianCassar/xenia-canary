@@ -49,7 +49,7 @@ void NetworkAdapterManager::SetSelectedAdapterIdentifier(std::string guid) {
     UpdateNetworkInterface(adapter.value());
   }
 
-  XELOGI(GetSelectedAdapterDescription());
+  XELOGI("{}", GetSelectedAdapterDescription());
 }
 
 std::string NetworkAdapterManager::GetSelectedAdapterIdentifier() const {
@@ -81,9 +81,11 @@ std::optional<IP_ADAPTER_ADDRESSES> NetworkAdapterManager::GetAdapterFromGUID(
 
 std::optional<IP_ADAPTER_ADDRESSES>
 NetworkAdapterManager::GetAdapterFromIfIndex(const int32_t IfIndex) const {
-  const auto found_adapter = std::find_if(
-      adapter_addresses_.cbegin(), adapter_addresses_.cend(),
-      [IfIndex](auto adapter) { return adapter.IfIndex == IfIndex; });
+  const auto found_adapter =
+      std::find_if(adapter_addresses_.cbegin(), adapter_addresses_.cend(),
+                   [IfIndex](const IP_ADAPTER_ADDRESSES& adapter) {
+                     return adapter.IfIndex == static_cast<DWORD>(IfIndex);
+                   });
 
   std::optional<IP_ADAPTER_ADDRESSES> adapter = std::nullopt;
 
@@ -167,34 +169,40 @@ std::vector<IP_ADAPTER_ADDRESSES>
 NetworkAdapterManager::DiscoverNetworkAdapters() {
   XELOGI("Discovering network interfaces...");
 
-  uint32_t ret = 0;
-  ULONG buffer_length = 0;
+  // Recommended initial size, adapters can be added between calls so retry if
+  // the buffer is too small.
+  ULONG buffer_length = 15 * 1024;
+  uint32_t ret = ERROR_BUFFER_OVERFLOW;
 
-  adapter_addresses_data_.clear();
+  // Fill a new buffer so adapter_addresses_ remains valid until replaced.
+  std::vector<uint8_t> adapter_addresses_data = {};
 
   std::vector<IP_ADAPTER_ADDRESSES> adapter_addresses = {};
-
-  IP_ADAPTER_ADDRESSES* adapters_ptr = nullptr;
 
   const uint32_t flags = GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST |
                          GAA_FLAG_SKIP_DNS_SERVER;
 
-  ret = GetAdaptersAddresses(AF_INET, flags, 0, 0, &buffer_length);
+  for (uint32_t attempt = 0; attempt < 3 && ret == ERROR_BUFFER_OVERFLOW;
+       attempt++) {
+    adapter_addresses_data.resize(buffer_length);
 
-  if (ret != ERROR_BUFFER_OVERFLOW) {
-    return adapter_addresses;
+    ret = GetAdaptersAddresses(
+        AF_INET, flags, nullptr,
+        reinterpret_cast<IP_ADAPTER_ADDRESSES*>(adapter_addresses_data.data()),
+        &buffer_length);
   }
-
-  adapter_addresses_data_.resize(buffer_length);
-
-  adapters_ptr =
-      reinterpret_cast<IP_ADAPTER_ADDRESSES*>(adapter_addresses_data_.data());
-
-  ret = GetAdaptersAddresses(AF_INET, flags, 0, adapters_ptr, &buffer_length);
 
   if (ret != NO_ERROR) {
+    if (ret != ERROR_NO_DATA) {
+      XELOGE("Failed to get adapter addresses: {}", ret);
+    }
+
+    XELOGI("No network interfaces detected!\n");
     return adapter_addresses;
   }
+
+  IP_ADAPTER_ADDRESSES* adapters_ptr =
+      reinterpret_cast<IP_ADAPTER_ADDRESSES*>(adapter_addresses_data.data());
 
   std::string networks = "Network Interfaces:\n";
 
@@ -223,11 +231,17 @@ NetworkAdapterManager::DiscoverNetworkAdapters() {
 
             networks += fmt::format("{} {}: {}\n", friendlyName, guid,
                                     ip_to_string(addr_ptr));
+
+            // Only add adapters with multiple IPv4 addresses once.
+            break;
           }
         }
       }
     }
   }
+
+  // adapter_addresses point into this buffer, moving it keeps them valid.
+  adapter_addresses_data_ = std::move(adapter_addresses_data);
 
   if (adapter_addresses.empty()) {
     XELOGI("No network interfaces detected!\n");
@@ -259,14 +273,15 @@ bool NetworkAdapterManager::UpdateNetworkInterface(
 int32_t NetworkAdapterManager::GetBestInterfaceIfIndex() {
   const in_addr destAddr = ip_to_in_addr("8.8.8.8");
 
-  DWORD bestIfIndex = -1;
+  DWORD bestIfIndex = 0;
   DWORD result = GetBestInterface(destAddr.S_un.S_addr, &bestIfIndex);
 
   if (result != NO_ERROR) {
     XELOGI("Error finding best interface: {}", result);
+    return -1;
   }
 
-  return bestIfIndex;
+  return static_cast<int32_t>(bestIfIndex);
 }
 
 bool NetworkAdapterManager::IsInterfaceWANRouting(sockaddr_in interface_addr) {
@@ -309,7 +324,8 @@ std::optional<sockaddr_in> NetworkAdapterManager::GetInterfaceIPFromIfIndex(
   std::optional<sockaddr_in> adapter_sockaddr = std::nullopt;
 
   for (const auto& adapter : adapter_addresses_) {
-    if (adapter.IfIndex == IfIndex && !adapter_sockaddr.has_value()) {
+    if (adapter.IfIndex == static_cast<DWORD>(IfIndex) &&
+        !adapter_sockaddr.has_value()) {
       if (adapter.PhysicalAddress != nullptr) {
         for (PIP_ADAPTER_UNICAST_ADDRESS_LH adapter_address =
                  adapter.FirstUnicastAddress;
@@ -358,8 +374,18 @@ void NetworkAdapterManager::AutoSelectNetworkAdapter(
     }
   }
 
+  // Best interface may not be one we discovered e.g. filtered adapter type.
+  if (!selected) {
+    for (const auto& adapter : adapter_addresses_) {
+      if (UpdateNetworkInterface(adapter)) {
+        selected = true;
+        break;
+      }
+    }
+  }
+
   if (selected) {
-    XELOGI(GetSelectedAdapterDescription());
+    XELOGI("{}", GetSelectedAdapterDescription());
   } else {
     XELOGI("Unspecified Network Interface!");
   }

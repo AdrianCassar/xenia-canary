@@ -60,6 +60,9 @@ class NetworkAdapterManager : public NetworkAdapterManagerInterface {
 
   bool IsInterfaceWANRouting(const sockaddr_in interface_addr) override;
 
+  std::optional<uint32_t> GetInterfaceIndexFromIP(
+      const sockaddr_in interface_addr) const;
+
   std::optional<sockaddr_in> GetInterfaceIPFromName(
       const std::string name) const;
 
