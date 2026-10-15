@@ -25,16 +25,14 @@ XEnumerator::~XEnumerator() {
     return;
   }
 
+  const uint32_t enum_object_address = guest_object();
+
   const auto enum_object =
       kernel_state_->memory()->TranslateVirtual<X_KENUMERATOR*>(
-          guest_object() + sizeof(X_DISPATCH_HEADER));
-
-  const uint32_t enum_object_address =
-      kernel_state_->memory()->HostToGuestVirtual(std::to_address(enum_object));
+          enum_object_address);
 
   const uint32_t private_struct_address =
-      kernel_state_->memory()->HostToGuestVirtual(
-          std::to_address(enum_object + 1));
+      enum_object_address + static_cast<uint32_t>(sizeof(X_KENUMERATOR));
 
   // Close Enumerator
   if (enum_object->close_message) {
@@ -43,10 +41,15 @@ XEnumerator::~XEnumerator() {
         static_cast<uint32_t>(extra_size_));
   }
 
+  if (extra_size_ < sizeof(X_ENUMERATOR_ALLOC)) {
+    return;
+  }
+
   // Free Enumerator
   const X_ENUMERATOR_ALLOC* enum_results_alloc =
       kernel_state()->memory()->TranslateVirtual<X_ENUMERATOR_ALLOC*>(
-          enum_object_address + static_cast<uint32_t>(extra_size_));
+          private_struct_address + static_cast<uint32_t>(extra_size_) -
+          static_cast<uint32_t>(sizeof(X_ENUMERATOR_ALLOC)));
 
   if (enum_results_alloc->enum_ptr) {
     kernel_state()->memory()->SystemHeapFree(enum_results_alloc->enum_ptr);

@@ -256,6 +256,13 @@ class XObject {
     return reinterpret_cast<T*>(CreateNative(sizeof(T)));
   }
 
+  // Stash handle into X_DISPATCH_HEADER of a guest-initialized object.
+  // Only valid for dispatcher objects, others are tracked by the object table.
+  static void StashHandle(X_DISPATCH_HEADER* header, uint32_t handle) {
+    header->wait_list.flink_ptr = kXObjSignature;
+    header->wait_list.blink_ptr = handle;
+  }
+
   static uint32_t TimeoutTicksToMs(int64_t timeout_ticks);
 
   KernelState* kernel_state_;

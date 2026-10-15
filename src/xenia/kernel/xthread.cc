@@ -301,11 +301,7 @@ bool XThread::AllocateStack(uint32_t size) {
 void XThread::FreeStack() {
   if (stack_alloc_base_) {
     auto heap = memory()->LookupHeap(kStackAddressRangeBegin);
-    uint32_t region_size = 0;
-    heap->Release(stack_alloc_base_, &region_size);
-    xenia_assert(region_size);
-    kernel_state()->object_table()->FlushGuestToHostMapping(stack_alloc_base_,
-                                                            region_size);
+    heap->Release(stack_alloc_base_);
 
     stack_alloc_base_ = 0;
     stack_alloc_size_ = 0;

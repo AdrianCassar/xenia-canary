@@ -801,24 +801,14 @@ dword_result_t MmCreateKernelStack_entry(dword_t stack_size, dword_t r4) {
 }
 DECLARE_XBOXKRNL_EXPORT1(MmCreateKernelStack, kMemory, kImplemented);
 
-uint32_t xeMmDeleteKernelStack(uint32_t stack_base, uint32_t stack_end) {
-  uint32_t released_region_size = 0;
+dword_result_t MmDeleteKernelStack_entry(lpvoid_t stack_base,
+                                         lpvoid_t stack_end) {
   // Release the stack (where stack_end is the low address)
-  if (kernel_memory()
-          ->LookupHeap(0x70000000)
-          ->Release(stack_end, &released_region_size)) {
-    xenia_assert(released_region_size);
-    kernel_state()->object_table()->FlushGuestToHostMapping(
-        stack_end, released_region_size);
+  if (kernel_memory()->LookupHeap(0x70000000)->Release(stack_end)) {
     return X_STATUS_SUCCESS;
   }
 
   return X_STATUS_UNSUCCESSFUL;
-}
-
-dword_result_t MmDeleteKernelStack_entry(lpvoid_t stack_base,
-                                         lpvoid_t stack_end) {
-  return xeMmDeleteKernelStack(stack_base, stack_end);
 }
 DECLARE_XBOXKRNL_EXPORT1(MmDeleteKernelStack, kMemory, kImplemented);
 
