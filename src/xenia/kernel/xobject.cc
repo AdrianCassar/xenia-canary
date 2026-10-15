@@ -407,20 +407,33 @@ void XObject::SetNativePointer(uint32_t native_ptr, bool uninitialized) {
 object_ref<XObject> XObject::GetNativeObject(KernelState* kernel_state,
                                              void* native_ptr,
                                              X_OBJECT_TYPES as_type,
-                                             bool already_locked) {
+                                             bool already_locked,
+                                             bool is_dispatcher_object) {
   assert_not_null(native_ptr);
 
-  // Two kinds of objects reach here:
-  //  - Host-created objects (CreateNative). These are registered in the object
-  //    table's guest-to-host map before the guest ever sees the pointer, and
-  //    may not have a dispatch header (enumerators, etc).
-  //  - Guest-initialized dispatcher objects. The XDK inlines some KeInitialize
-  //    calls, meaning we never see them and just randomly start getting passed
-  //    events/timers/etc. These always start with an X_DISPATCH_HEADER, so we
-  //    init on first use and stash our handle in it: wait_list.flink_ptr holds
-  //    a magic value and wait_list.blink_ptr holds the handle. They are not
-  //    added to the map, so when the guest re-initializes the struct (which
-  //    rewrites wait_list) we notice and create a fresh object.
+  // Unfortunately the XDK seems to inline some KeInitialize calls, meaning
+  // we never see it and just randomly start getting passed events/timers/etc.
+  // Luckily it seems like all other calls (Set/Reset/Wait/etc) are used and
+  // we don't have to worry about PPC code poking the struct. Because of that,
+  // we init on first use, store our handle in the struct, and dereference it
+  // each time.
+  // We identify this by setting wait_list.flink_ptr to a magic value. When set,
+  // wait_list.blink_ptr will hold a handle to our object.
+  //
+  // This only applies to guest-initialized dispatcher objects, which start
+  // with an X_DISPATCH_HEADER. They are not added to the object table's
+  // guest-to-host map, so when the guest re-initializes the struct (which
+  // rewrites wait_list) we notice and create a fresh object.
+  // Host-created objects (CreateNative) may not have a dispatch header
+  // (enumerators, etc), so they are registered in the guest-to-host map
+  // instead, before the guest ever sees the pointer, and are looked up there
+  // first.
+  //
+  // An unknown pointer is only guaranteed to be a dispatcher object when the
+  // caller requires one (Ke* wait/set/release). Ob* callers may be passed any
+  // object, including ones the guest created via ObCreateObject, so they pass
+  // is_dispatcher_object = false and we never create an object for, or stash
+  // a handle into, a struct that may not have a dispatch header.
   auto guest_ptr = kernel_state->memory()->HostToGuestVirtual(native_ptr);
   if (!already_locked) {
     global_critical_region::mutex().lock();
@@ -445,7 +458,7 @@ object_ref<XObject> XObject::GetNativeObject(KernelState* kernel_state,
   }
 
   if (!result) {
-    // Not host-created, so this must be a guest-initialized dispatcher object.
+    // Not host-created, try as a guest-initialized dispatcher object.
     X_DISPATCH_HEADER* header =
         reinterpret_cast<X_DISPATCH_HEADER*>(native_ptr);
 
@@ -466,7 +479,7 @@ object_ref<XObject> XObject::GetNativeObject(KernelState* kernel_state,
       }
     }
 
-    if (!result) {
+    if (!result && is_dispatcher_object) {
       // First use (or re-initialized by the guest), create new.
       const X_OBJECT_TYPES type =
           as_type == X_OBJECT_TYPES::UndefinedObject ? header->type : as_type;

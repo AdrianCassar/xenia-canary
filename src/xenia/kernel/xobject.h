@@ -225,12 +225,14 @@ class XObject {
 
   static object_ref<XObject> GetNativeObject(
       KernelState* kernel_state, void* native_ptr,
-      X_OBJECT_TYPES as_type = UndefinedObject, bool already_locked = false);
+      X_OBJECT_TYPES as_type = UndefinedObject, bool already_locked = false,
+      bool is_dispatcher_object = true);
   template <typename T>
   static object_ref<T> GetNativeObject(KernelState* kernel_state,
                                        void* native_ptr,
                                        X_OBJECT_TYPES as_type = UndefinedObject,
-                                       bool already_locked = false);
+                                       bool already_locked = false,
+                                       bool is_dispatcher_object = true);
 
   // Priority increment stored by the most recent signal operation
   // (KeSetEvent, KeReleaseSemaphore, etc.).  Read by the waiter on wake
@@ -418,10 +420,12 @@ object_ref<T> retain_object(T* ptr) {
 template <typename T>
 object_ref<T> XObject::GetNativeObject(KernelState* kernel_state,
                                        void* native_ptr, X_OBJECT_TYPES as_type,
-                                       bool already_locked) {
-  return object_ref<T>(reinterpret_cast<T*>(
-      GetNativeObject(kernel_state, native_ptr, as_type, already_locked)
-          .release()));
+                                       bool already_locked,
+                                       bool is_dispatcher_object) {
+  return object_ref<T>(
+      reinterpret_cast<T*>(GetNativeObject(kernel_state, native_ptr, as_type,
+                                           already_locked, is_dispatcher_object)
+                               .release()));
 }
 
 }  // namespace kernel

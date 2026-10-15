@@ -209,7 +209,8 @@ DECLARE_XBOXKRNL_EXPORT1(ObOpenObjectByName, kNone, kImplemented);
 dword_result_t ObOpenObjectByPointer_entry(lpvoid_t object_ptr,
                                            lpdword_t out_handle_ptr) {
   *out_handle_ptr = 0;
-  auto object = XObject::GetNativeObject<XObject>(kernel_state(), object_ptr);
+  auto object = XObject::GetNativeObject<XObject>(
+      kernel_state(), object_ptr, UndefinedObject, false, false);
   if (!object) {
     return X_STATUS_UNSUCCESSFUL;
   }
@@ -323,7 +324,8 @@ void xeObDereferenceObject(PPCContext* context, uint32_t native_ptr) {
   }
 
   auto object = XObject::GetNativeObject<XObject>(
-      kernel_state(), kernel_memory()->TranslateVirtual(native_ptr));
+      kernel_state(), kernel_memory()->TranslateVirtual(native_ptr),
+      UndefinedObject, false, false);
   if (object) {
     object->ReleaseHandle();
 
@@ -344,7 +346,8 @@ DECLARE_XBOXKRNL_EXPORT1(ObDereferenceObject, kNone, kImplemented);
 void ObReferenceObject_entry(dword_t native_ptr) {
   // Check if a dummy value from ObReferenceObjectByHandle.
   auto object = XObject::GetNativeObject<XObject>(
-      kernel_state(), kernel_memory()->TranslateVirtual(native_ptr));
+      kernel_state(), kernel_memory()->TranslateVirtual(native_ptr),
+      UndefinedObject, false, false);
   if (object) {
     object->RetainHandle();
   } else {
