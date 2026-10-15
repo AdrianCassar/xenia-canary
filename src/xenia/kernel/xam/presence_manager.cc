@@ -115,14 +115,22 @@ bool PresenceManager::BuildPresenceString(
 
   bool completed = false;
 
-  const auto presence_context = std::find_if(
-      user->properties_.cbegin(), user->properties_.cend(),
-      [](const Property& property_data) {
-        return property_data.GetPropertyId().value == XCONTEXT_PRESENCE;
-      });
+  std::optional<Property> presence_context = std::nullopt;
 
-  if (presence_context == user->properties_.cend()) {
-    return completed;
+  {
+    std::lock_guard prop_lock(user->prop_mutex);
+
+    const auto entry = std::find_if(
+        user->properties_.cbegin(), user->properties_.cend(),
+        [](const Property& property_data) {
+          return property_data.GetPropertyId().value == XCONTEXT_PRESENCE;
+        });
+
+    if (entry == user->properties_.cend()) {
+      return completed;
+    }
+
+    presence_context = *entry;
   }
 
   const auto gdb = kernel_state_->emulator()->game_info_database();

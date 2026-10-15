@@ -95,7 +95,8 @@ class UserTracker {
   void AddProperty(const uint64_t xuid, const Property* property);
   X_STATUS GetProperty(const uint64_t xuid, uint32_t* property_size,
                        XUSER_PROPERTY* property);
-  const Property* GetProperty(const uint64_t xuid, const uint32_t id) const;
+  std::optional<Property> GetProperty(const uint64_t xuid,
+                                      const uint32_t id) const;
   std::vector<AttributeKey> GetUserPropertyIds(uint64_t xuid) const;
   std::u16string GetPropertyDescription(uint32_t id) const;
   void AddDefaultProperties();
