@@ -2348,6 +2348,16 @@ int_result_t NetDll_select_entry(dword_t caller, dword_t nfds,
                                  pointer_t<x_fd_set> writefds,
                                  pointer_t<x_fd_set> exceptfds,
                                  pointer_t<X_TIMEVAL> timeout_ptr) {
+  // 4B4D07E7 passes one set as read, write and except to poll for data treating
+  // it as writable spins forever.
+  const bool write_aliased =
+      writefds && writefds.guest_address() == readfds.guest_address();
+  const bool except_aliased =
+      exceptfds && (exceptfds.guest_address() == readfds.guest_address() ||
+                    exceptfds.guest_address() == writefds.guest_address());
+  const bool use_writefds = writefds && !write_aliased;
+  const bool use_exceptfds = exceptfds && !except_aliased;
+
   host_set host_readfds = {0};
   fd_set native_readfds = {0};
   if (readfds) {
@@ -2361,7 +2371,7 @@ int_result_t NetDll_select_entry(dword_t caller, dword_t nfds,
   }
   host_set host_writefds = {0};
   fd_set native_writefds = {0};
-  if (writefds) {
+  if (use_writefds) {
     if (!verify_x_fd_set(writefds)) {
       XThread::SetLastError(uint32_t(X_WSA_ERROR::X_WSAENOTSOCK));
       return -1;
@@ -2372,7 +2382,7 @@ int_result_t NetDll_select_entry(dword_t caller, dword_t nfds,
   }
   host_set host_exceptfds = {0};
   fd_set native_exceptfds = {0};
-  if (exceptfds) {
+  if (use_exceptfds) {
     if (!verify_x_fd_set(exceptfds)) {
       XThread::SetLastError(uint32_t(X_WSA_ERROR::X_WSAENOTSOCK));
       return -1;
@@ -2393,8 +2403,8 @@ int_result_t NetDll_select_entry(dword_t caller, dword_t nfds,
 
   const int handles_count =
       select(nfds, readfds ? &native_readfds : nullptr,
-             writefds ? &native_writefds : nullptr,
-             exceptfds ? &native_exceptfds : nullptr, timeout_in);
+             use_writefds ? &native_writefds : nullptr,
+             use_exceptfds ? &native_exceptfds : nullptr, timeout_in);
 
   if (handles_count == X_SOCKET_ERROR) {
     XThread::SetLastError(XSocket::XWSAGetLastError());
@@ -2404,11 +2414,11 @@ int_result_t NetDll_select_entry(dword_t caller, dword_t nfds,
     host_readfds.UpdateFrom(&native_readfds);
     host_readfds.Store(readfds);
   }
-  if (writefds) {
+  if (use_writefds) {
     host_writefds.UpdateFrom(&native_writefds);
     host_writefds.Store(writefds);
   }
-  if (exceptfds) {
+  if (use_exceptfds) {
     host_exceptfds.UpdateFrom(&native_exceptfds);
     host_exceptfds.Store(exceptfds);
   }
