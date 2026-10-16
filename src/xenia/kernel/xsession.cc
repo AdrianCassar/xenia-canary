@@ -543,7 +543,7 @@ X_RESULT XSession::ModifySession(XGI_SESSION_MODIFY* data) {
   // If RegisterArbitration is already completed then arbitration flag cannot be
   // removed.
   bool is_arbitration_registered =
-      static_cast<uint32_t>(local_details_.eState) &
+      static_cast<uint32_t>(local_details_.eState.get()) &
       static_cast<uint32_t>(XSESSION_STATE::REGISTRATION);
 
   // If session is ranked then modify cannot remove arbitration flag, otherwise
@@ -790,7 +790,7 @@ X_RESULT XSession::WriteStats(XGI_STATS_WRITE* data) {
     return X_ERROR_FUNCTION_FAILED;
   }
 
-  if (local_details_.eState != XSESSION_STATE::INGAME) {
+  if (local_details_.eState.get() != XSESSION_STATE::INGAME) {
     XELOGW("Writing stats outside of gameplay.");
     return X_ERROR_FUNCTION_FAILED;
   }
@@ -923,7 +923,7 @@ X_RESULT XSession::FlushStats() {
     return X_ONLINE_E_SESSION_WRONG_STATE;
   }
 
-  if (local_details_.eState != XSESSION_STATE::INGAME) {
+  if (local_details_.eState.get() != XSESSION_STATE::INGAME) {
     XELOGW("Flushing stats outside of gameplay.");
     return X_ONLINE_E_SESSION_WRONG_STATE;
   }
@@ -1249,12 +1249,12 @@ bool XSession::IsInvitesEnabled() const {
 }
 
 bool XSession::IsSessionStarted() const {
-  return static_cast<uint32_t>(local_details_.eState) &
+  return static_cast<uint32_t>(local_details_.eState.get()) &
          static_cast<uint32_t>(XSESSION_STATE::INGAME);
 }
 
 bool XSession::IsSessionEnded() const {
-  return static_cast<uint32_t>(local_details_.eState) &
+  return static_cast<uint32_t>(local_details_.eState.get()) &
          static_cast<uint32_t>(XSESSION_STATE::REPORTING);
 }
 
@@ -1310,9 +1310,9 @@ void XSession::PrintSessionDetails() {
       local_details_.UserIndexHost.get(),
       local_details_.GameType ? "Standard" : "Ranked",
       local_details_.GameMode.get(),
-      static_cast<uint32_t>(local_details_.eState), local_details_.Nonce.get(),
-      local_details_.Flags.get(), local_details_.MaxPrivateSlots.get(),
-      local_details_.MaxPublicSlots.get(),
+      static_cast<uint32_t>(local_details_.eState.get()),
+      local_details_.Nonce.get(), local_details_.Flags.get(),
+      local_details_.MaxPrivateSlots.get(), local_details_.MaxPublicSlots.get(),
       local_details_.AvailablePrivateSlots.get(),
       local_details_.AvailablePublicSlots.get(),
       local_details_.ActualMemberCount.get(),
