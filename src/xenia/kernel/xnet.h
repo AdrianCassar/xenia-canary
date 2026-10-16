@@ -605,7 +605,7 @@ struct XSESSION_LOCAL_DETAILS {
   xe::be<uint32_t> AvailablePrivateSlots;
   xe::be<uint32_t> ActualMemberCount;
   xe::be<uint32_t> ReturnedMemberCount;
-  XSESSION_STATE eState;
+  xe::be<XSESSION_STATE> eState;
   xe::be<uint64_t> Nonce;
   XSESSION_INFO sessionInfo;
   XNKID xnkidArbitration;
