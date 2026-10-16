@@ -671,13 +671,28 @@ X_HRESULT XLiveBaseApp::XOnlineQuerySearch(uint32_t buffer_ptr) {
         gateway_index * unmarshaller.SpecAttributes().size());
 
     for (auto const& attribute : unmarshaller.SpecAttributes()) {
-      switch (attribute.type) {
+      uint32_t attribute_type = attribute.type;
+
+      // Non LSP attributes are handled by their datatype.
+      switch (attribute_type) {
+        case X_ONLINE_LSP_ATTRIBUTE_TSADDR:
+        case X_ONLINE_LSP_ATTRIBUTE_XNKID:
+        case X_ONLINE_LSP_ATTRIBUTE_KEY:
+        case X_ONLINE_LSP_ATTRIBUTE_USER:
+        case X_ONLINE_LSP_ATTRIBUTE_PARAM_USER:
+          break;
+        default:
+          attribute_type &= X_ATTRIBUTE_DATATYPE_MASK;
+          break;
+      }
+
+      switch (attribute_type) {
         case X_ONLINE_LSP_ATTRIBUTE_TSADDR: {
           assert_false(attribute.length != sizeof(TSADDR));
 
           uint32_t TSADDR_address =
               memory_->HostToGuestVirtual(binary_alloc_ptr);
-          std::memcpy(binary_alloc_ptr, &gateway, sizeof(TSADDR));
+          std::memcpy(binary_alloc_ptr, &gateway.address, sizeof(TSADDR));
           binary_alloc_ptr += sizeof(TSADDR);
 
           attributes_ptr[attribute_index].attribute_id =
@@ -722,38 +737,43 @@ X_HRESULT XLiveBaseApp::XOnlineQuerySearch(uint32_t buffer_ptr) {
               X_ONLINE_LSP_ATTRIBUTE_PARAM_USER;
           break;
         case X_ATTRIBUTE_DATATYPE_INTEGER:
-          attributes_ptr[attribute_index].attribute_id =
-              X_ATTRIBUTE_DATATYPE_INTEGER;
+          attributes_ptr[attribute_index].attribute_id = attribute.type;
           attributes_ptr[attribute_index].info.integer.length = 0;
           attributes_ptr[attribute_index].info.integer.value = 0;
           break;
         case X_ATTRIBUTE_DATATYPE_STRING: {
-          // PGR3 & PDZ use X_ATTRIBUTE_DATATYPE_STRING
+          // 4D5307D1 & 4D5307D3 use X_ATTRIBUTE_DATATYPE_STRING as a gateway
+          // filter.
+          const std::u16string& value = gateway.filter;
 
-          // PGR3
-          std::u16string filter = u"VINCE";
+          const size_t max_chars = std::min<size_t>(
+              attribute.length / sizeof(char16_t),
+              X_MAX_STRING_ATTRIBUTE_LENGTH / sizeof(char16_t));
 
-          uint32_t size = static_cast<uint32_t>(
-              xe::string_util::size_in_bytes(filter, true));
+          // Including terminator.
+          const size_t length = std::min(value.size() + 1, max_chars);
 
-          // LSP Filter?
-          uint32_t string_address =
-              memory_->HostToGuestVirtual(binary_alloc_ptr);
-          char16_t* string_ptr = reinterpret_cast<char16_t*>(binary_alloc_ptr);
-          xe::string_util::copy_and_swap_truncating(string_ptr, filter.c_str(),
-                                                    filter.size() + 1);
-          binary_alloc_ptr += size;
+          uint32_t string_address = 0;
 
-          attributes_ptr[attribute_index].attribute_id =
-              X_ATTRIBUTE_DATATYPE_STRING;
+          if (length) {
+            string_address = memory_->HostToGuestVirtual(binary_alloc_ptr);
+            char16_t* string_ptr =
+                reinterpret_cast<char16_t*>(binary_alloc_ptr);
+            xe::string_util::copy_and_swap_truncating(string_ptr, value,
+                                                      length);
+            binary_alloc_ptr += length * sizeof(char16_t);
+          }
+
+          attributes_ptr[attribute_index].attribute_id = attribute.type;
           attributes_ptr[attribute_index].info.string.length =
-              static_cast<uint32_t>(filter.size() + 1);
+              static_cast<uint32_t>(length);
           attributes_ptr[attribute_index].info.string.value_ptr =
               string_address;
         } break;
         case X_ATTRIBUTE_DATATYPE_BLOB:
-          attributes_ptr[attribute_index].attribute_id =
-              X_ATTRIBUTE_DATATYPE_BLOB;
+          attributes_ptr[attribute_index].attribute_id = attribute.type;
+          attributes_ptr[attribute_index].info.blob.length = 0;
+          attributes_ptr[attribute_index].info.blob.value_ptr = 0;
           break;
         default:
           assert_always();
