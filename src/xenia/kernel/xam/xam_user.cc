@@ -938,12 +938,10 @@ dword_result_t XamUserAreUsersFriends_entry(
     }
   }
 
-  if (overlapped_ptr) {
+  if (overlapped_ptr && result == X_ERROR_SUCCESS) {
     assert_true(!are_friends_ptr);
-    kernel_state()->CompleteOverlappedImmediateEx(
-        overlapped_ptr,
-        result == X_ERROR_SUCCESS ? X_ERROR_SUCCESS : X_ERROR_FUNCTION_FAILED,
-        X_HRESULT_FROM_WIN32(result), are_friends);
+    kernel_state()->CompleteOverlappedImmediateEx(overlapped_ptr, result, 0,
+                                                  are_friends);
 
     return X_ERROR_IO_PENDING;
   }
