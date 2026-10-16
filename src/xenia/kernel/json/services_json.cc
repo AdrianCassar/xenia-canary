@@ -8,6 +8,7 @@
  */
 
 #include "xenia/kernel/json/services_json.h"
+#include "xenia/base/string.h"
 #include "xenia/kernel/util/net_utils.h"
 
 namespace xe {
@@ -54,17 +55,22 @@ bool ServicesObjectJSON::Deserialize(const rapidjson::Value& obj) {
 
   if (obj.HasMember("querysearch") && obj["querysearch"].IsArray()) {
     for (const auto& service : obj["querysearch"].GetArray()) {
-      TSADDR server_addr = {};
+      QuerySearchResult result = {};
 
       if (service.HasMember("address")) {
-        server_addr.inaOnline = ip_to_in_addr(service["address"].GetString());
+        result.address.inaOnline =
+            ip_to_in_addr(service["address"].GetString());
       }
 
       if (service.HasMember("port")) {
-        server_addr.wPortOnline = service["port"].GetInt();
+        result.address.wPortOnline = service["port"].GetInt();
       }
 
-      query_search_results_.push_back(server_addr);
+      if (service.HasMember("filter") && service["filter"].IsString()) {
+        result.filter = xe::to_utf16(service["filter"].GetString());
+      }
+
+      query_search_results_.push_back(result);
     }
   }
 

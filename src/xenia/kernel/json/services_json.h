@@ -10,6 +10,7 @@
 #ifndef XENIA_KERNEL_SERVICES_OBJECT_JSON_H_
 #define XENIA_KERNEL_SERVICES_OBJECT_JSON_H_
 
+#include <string>
 #include <vector>
 
 #include "xenia/kernel/json/base_object_json.h"
@@ -17,6 +18,11 @@
 
 namespace xe {
 namespace kernel {
+struct QuerySearchResult {
+  TSADDR address;
+  std::u16string filter;
+};
+
 class ServicesObjectJSON : public BaseObjectJSON {
  public:
   using BaseObjectJSON::Deserialize;
@@ -36,16 +42,17 @@ class ServicesObjectJSON : public BaseObjectJSON {
     services_results_ = services;
   }
 
-  const std::vector<TSADDR>& QuerySearchResults() const {
+  const std::vector<QuerySearchResult>& QuerySearchResults() const {
     return query_search_results_;
   }
-  void QuerySearchResults(const std::vector<TSADDR>& query_search_results) {
+  void QuerySearchResults(
+      const std::vector<QuerySearchResult>& query_search_results) {
     query_search_results_ = query_search_results;
   }
 
  private:
   std::vector<X_ONLINE_SERVICE_INFO> services_results_;
-  std::vector<TSADDR> query_search_results_;
+  std::vector<QuerySearchResult> query_search_results_;
 };
 
 }  // namespace kernel
