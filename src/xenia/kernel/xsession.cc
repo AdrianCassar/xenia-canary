@@ -316,6 +316,7 @@ X_RESULT XSession::JoinSession(XGI_SESSION_MANAGE* data) {
 
   for (uint32_t i = 0; i < data->array_count; i++) {
     XSESSION_MEMBER member = {};
+    bool is_local_member = join_local;
 
     if (join_local) {
       const uint32_t user_index = static_cast<uint32_t>(indices_array[i]);
@@ -347,6 +348,8 @@ X_RESULT XSession::JoinSession(XGI_SESSION_MANAGE* data) {
         user_index = XUserIndexNone;
       }
 
+      is_local_member = user_index != XUserIndexNone;
+
       assert_true(IsValidXUID(xuid_online));
 
       if (remote_members_.count(xuid_online) ||
@@ -375,7 +378,7 @@ X_RESULT XSession::JoinSession(XGI_SESSION_MANAGE* data) {
 
     members[member.OnlineXUID] = member.IsPrivate();
 
-    if (join_local) {
+    if (is_local_member) {
       local_members_.emplace(member.OnlineXUID, member);
     } else {
       remote_members_.emplace(member.OnlineXUID, member);
@@ -433,6 +436,7 @@ X_RESULT XSession::LeaveSession(XGI_SESSION_MANAGE* data) {
 
   for (uint32_t i = 0; i < data->array_count; i++) {
     XSESSION_MEMBER* member = nullptr;
+    bool is_local_member = leave_local;
 
     if (leave_local) {
       const uint32_t user_index = static_cast<uint32_t>(indices_array[i]);
@@ -457,11 +461,14 @@ X_RESULT XSession::LeaveSession(XGI_SESSION_MANAGE* data) {
 
       assert_true(IsValidXUID(xuid_online));
 
-      if (!remote_members_.count(xuid_online)) {
+      if (local_members_.count(xuid_online)) {
+        is_local_member = true;
+        member = &local_members_[xuid_online];
+      } else if (remote_members_.count(xuid_online)) {
+        member = &remote_members_[xuid_online];
+      } else {
         return X_ERROR_SUCCESS;
       }
-
-      member = &remote_members_[xuid_online];
     }
 
     if (member->IsPrivate()) {
@@ -495,7 +502,7 @@ X_RESULT XSession::LeaveSession(XGI_SESSION_MANAGE* data) {
 
       const xe::be<uint64_t> xuid_online = member->OnlineXUID;
 
-      if (leave_local) {
+      if (is_local_member) {
         removed = local_members_.erase(xuid_online);
       } else {
         removed = remote_members_.erase(xuid_online);
