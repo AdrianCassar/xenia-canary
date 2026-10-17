@@ -7,6 +7,8 @@
  ******************************************************************************
  */
 
+#include <algorithm>
+#include <cfloat>
 #include <ranges>
 #include <span>
 #include <string>
@@ -685,48 +687,102 @@ void TitleGamerpicBrowser::DrawPageSelection(
   ImGuiViewport* viewport = ImGui::GetMainViewport();
   ImVec2 center = viewport->GetCenter();
 
-  ImGui::SetNextWindowSizeConstraints(ImVec2(-1, 90), ImVec2(-1, 90));
+  const float popup_width = 340.0f;
+
+  ImGui::SetNextWindowSizeConstraints(ImVec2(popup_width, 0),
+                                      ImVec2(popup_width, FLT_MAX));
   ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-  if (ImGui::BeginPopupModal(
-          title.c_str(), &page_selection_open_,
-          ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize)) {
-    if (ImGui::BeginTable("##Select Page Table", 2)) {
-      ImGui::TableSetupColumn("LabelCol", ImGuiTableColumnFlags_WidthFixed);
-      ImGui::TableSetupColumn("InputCol", ImGuiTableColumnFlags_WidthFixed);
+  if (ImGui::BeginPopupModal(title.c_str(), &page_selection_open_,
+                             ImGuiWindowFlags_NoMove |
+                                 ImGuiWindowFlags_NoResize |
+                                 ImGuiWindowFlags_AlwaysAutoResize)) {
+    const ImGuiStyle& style = ImGui::GetStyle();
 
-      ImGui::TableNextColumn();
-      ImGui::Text("Page:");
+    const uint32_t total_pages = page.GetTotalPages();
+    const uint32_t current_page = page.GetCurrentPage();
+    const bool has_pages = total_pages > 0;
 
-      ImGui::TableNextColumn();
-      ImGui::SetNextItemWidth(200);
-      ImGui::InputScalar("##PageInput", ImGuiDataType_U32, &selected_page_pos_,
-                         &selected_page_step_);
+    const uint32_t min_page = 1;
+    const uint32_t max_page = std::max<uint32_t>(total_pages, 1);
 
-      if (ImGui::IsItemDeactivatedAfterEdit()) {
-        if (selected_page_pos_ > page.GetTotalPages()) {
-          selected_page_pos_ = page.GetTotalPages();
-        }
+    // Keep the selection within range at all times so the label, slider and
+    // buttons always agree.
+    selected_page_pos_ = std::clamp(selected_page_pos_, min_page, max_page);
 
-        if (selected_page_pos_ <= 0) {
-          selected_page_pos_ = 1;
-        }
-      }
+    bool go_to_page = false;
 
-      if (ImGui::IsItemFocused() &&
-          ImGui::IsKeyPressed(ImGuiKey_Enter, false)) {
-        gamerpic_page_ = LoadPageAsync(selected_page_pos_);
-        ImGui::CloseCurrentPopup();
-      }
+    // Width of buttons when splitting the row evenly.
+    const auto row_button_width = [&style](uint32_t count) {
+      return (ImGui::GetContentRegionAvail().x -
+              style.ItemSpacing.x * (count - 1)) /
+             count;
+    };
 
-      ImGui::EndTable();
+    if (!has_pages) {
+      ImGui::TextDisabled("Page information is unavailable.");
     }
 
-    if (ImGui::Button("Go", ImVec2(-1, -1))) {
-      gamerpic_page_ = LoadPageAsync(selected_page_pos_);
+    ImGui::BeginDisabled(!has_pages);
+
+    // Page X of N
+    ImGui::Text("Page %u of %u", selected_page_pos_, total_pages);
+
+    // Draggable slider for scrubbing through pages.
+    ImGui::BeginDisabled(min_page == max_page);
+    ImGui::SetNextItemWidth(-1);
+    ImGui::SliderScalar("##PageSlider", ImGuiDataType_U32, &selected_page_pos_,
+                        &min_page, &max_page, "", ImGuiSliderFlags_AlwaysClamp);
+    // Navigation focus (rather than keyboard focus, which would turn the slider
+    // into a text input) so it can be stepped with a gamepad straight away.
+    ImGui::SetItemDefaultFocus();
+    ImGui::EndDisabled();
+
+    if (ImGui::IsKeyPressed(ImGuiKey_Enter, false) ||
+        ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false)) {
+      go_to_page = true;
+    }
+
+    ImGui::EndDisabled();
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // Actions
+    const float action_width = row_button_width(2);
+    const ImVec2 action_size = ImVec2(action_width, 0);
+
+    ImGui::BeginDisabled(!has_pages || selected_page_pos_ == current_page);
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.16f, 0.29f, 0.48f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                          ImVec4(0.26f, 0.59f, 0.98f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                          ImVec4(0.06f, 0.53f, 0.98f, 1.0f));
+    if (ImGui::Button(
+            fmt::format("Go to Page {}###GoToPage", selected_page_pos_).c_str(),
+            action_size)) {
+      go_to_page = true;
+    }
+    ImGui::PopStyleColor(3);
+    ImGui::EndDisabled();
+
+    ImGui::SameLine();
+
+    if (ImGui::Button("Cancel", action_size) ||
+        ImGui::IsKeyPressed(ImGuiKey_Escape, false) ||
+        ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false)) {
       ImGui::CloseCurrentPopup();
     }
 
-    ImGui::SetItemTooltip("Navigate to Page");
+    if (go_to_page && has_pages) {
+      selected_page_pos_ = std::clamp(selected_page_pos_, min_page, max_page);
+
+      if (selected_page_pos_ != current_page) {
+        gamerpic_page_ = LoadPageAsync(selected_page_pos_);
+      }
+
+      ImGui::CloseCurrentPopup();
+    }
 
     ImGui::EndPopup();
   }
