@@ -9,6 +9,7 @@
 
 #include "xenia/memory.h"
 
+#include <algorithm>
 #include <cstring>
 #include <random>
 
@@ -733,6 +734,54 @@ void Memory::SystemHeapFree(uint32_t address, uint32_t* out_region_size) {
   heap->Release(address, out_region_size);
 }
 
+std::array<BaseHeap*, 6> Memory::GetTitleHeaps() {
+  return {&heaps_.v00000000, &heaps_.v40000000, &heaps_.v7F000000,
+          &heaps_.vA0000000, &heaps_.vC0000000, &heaps_.vE0000000};
+}
+
+void Memory::CaptureSystemAllocations() {
+  system_allocations_.clear();
+  for (BaseHeap* heap : GetTitleHeaps()) {
+    for (const auto& [base_address, size] : heap->GetAllocations()) {
+      system_allocations_.insert(base_address);
+    }
+  }
+  has_system_allocations_ = true;
+}
+
+void Memory::ReleaseTitleAllocations(
+    const std::vector<uint32_t>& preserved_addresses) {
+  if (!has_system_allocations_) {
+    return;
+  }
+
+  uint32_t released_count = 0;
+  uint64_t released_size = 0;
+  for (BaseHeap* heap : GetTitleHeaps()) {
+    for (const auto& [base_address, size] : heap->GetAllocations()) {
+      if (system_allocations_.contains(base_address)) {
+        continue;
+      }
+
+      const bool is_preserved = std::ranges::any_of(
+          preserved_addresses, [base_address, size](uint32_t address) {
+            return address >= base_address && address - base_address < size;
+          });
+      if (is_preserved) {
+        continue;
+      }
+
+      if (heap->Release(base_address)) {
+        released_count++;
+        released_size += size;
+      }
+    }
+  }
+
+  XELOGI("Memory: Released {} title allocations ({} bytes)", released_count,
+         released_size);
+}
+
 void Memory::DumpMap() {
   XELOGE("==================================================================");
   XELOGE("Memory Dump");
@@ -846,6 +895,23 @@ void BaseHeap::Dispose() {
     }
   }
   free_blocks_.clear();
+}
+
+std::vector<std::pair<uint32_t, uint32_t>> BaseHeap::GetAllocations() {
+  auto global_lock = global_critical_region_.Acquire();
+  std::vector<std::pair<uint32_t, uint32_t>> allocations;
+  for (uint32_t i = 0; i < uint32_t(page_table_.size()); ++i) {
+    const PageEntry& page = page_table_[i];
+    if (!page.state || page.base_address != i) {
+      continue;
+    }
+    allocations.emplace_back(heap_base_ + i * page_size_,
+                             page.region_page_count * page_size_);
+    if (page.region_page_count) {
+      i += page.region_page_count - 1;
+    }
+  }
+  return allocations;
 }
 
 void BaseHeap::DumpMap() {

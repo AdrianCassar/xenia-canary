@@ -179,13 +179,15 @@ bool Processor::AddModule(std::unique_ptr<Module> module) {
   return true;
 }
 
-void Processor::RemoveModule(const std::string_view name) {
+void Processor::RemoveModule(const Module* module) {
   auto global_lock = global_critical_region_.Acquire();
 
+  // Matched by identity, a title update module shares the name of the module
+  // it patches.
   auto itr = std::ranges::find_if(
       std::as_const(modules_),
-      [name](std::unique_ptr<xe::cpu::Module> const& module) {
-        return module->name() == name;
+      [module](std::unique_ptr<xe::cpu::Module> const& entry) {
+        return entry.get() == module;
       });
 
   if (itr != modules_.cend()) {

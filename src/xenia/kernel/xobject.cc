@@ -71,10 +71,17 @@ Memory* XObject::memory() const { return kernel_state_->memory(); }
 XObject::Type XObject::type() const { return type_; }
 
 void XObject::RetainHandle() {
+  // Handles are removed from objects purged on title termination.
+  if (handles_.empty()) {
+    return;
+  }
   kernel_state_->object_table()->RetainHandle(handles_[0]);
 }
 
 bool XObject::ReleaseHandle() {
+  if (handles_.empty()) {
+    return false;
+  }
   // FIXME: Return true when handle is actually released.
   return kernel_state_->object_table()->ReleaseHandle(handles_[0]) ==
          X_STATUS_SUCCESS;

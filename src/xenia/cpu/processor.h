@@ -101,7 +101,7 @@ class Processor {
   }
 
   bool AddModule(std::unique_ptr<Module> module);
-  void RemoveModule(const std::string_view name);
+  void RemoveModule(const Module* module);
   Module* GetModule(const std::string_view name);
   std::vector<Module*> GetModules();
 

@@ -10,11 +10,13 @@
 #ifndef XENIA_MEMORY_H_
 #define XENIA_MEMORY_H_
 
+#include <array>
 #include <cstdint>
 #include <map>
 #include <memory>
 #include <mutex>
 #include <string>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -162,6 +164,9 @@ class BaseHeap {
 
   // Dumps information about all allocations within the heap to the log.
   void DumpMap();
+
+  // Returns the base address and size of every allocation within the heap.
+  std::vector<std::pair<uint32_t, uint32_t>> GetAllocations();
 
   // Allocates pages with the given properties and allocation strategy.
   // This can reserve and commit the pages as well as set protection modes.
@@ -617,6 +622,16 @@ class Memory {
   // Dumps a map of all allocated memory to the log.
   void DumpMap();
 
+  // Records the allocations that exist before a title is launched, so the
+  // allocations made by titles can be told apart from system ones.
+  void CaptureSystemAllocations();
+  bool has_system_allocations() const { return has_system_allocations_; }
+  // Releases every allocation a title could have made since
+  // CaptureSystemAllocations, except those containing one of the
+  // preserved_addresses.
+  void ReleaseTitleAllocations(
+      const std::vector<uint32_t>& preserved_addresses);
+
   bool Save(ByteStream* stream);
   bool Restore(ByteStream* stream);
 
@@ -626,6 +641,9 @@ class Memory {
  private:
   int MapViews(uint8_t* mapping_base);
   void UnmapViews();
+
+  // Heaps titles allocate from. Executable images are released on unload.
+  std::array<BaseHeap*, 6> GetTitleHeaps();
 
   static uint32_t HostToGuestVirtualThunk(const void* context,
                                           const void* host_address);
@@ -674,6 +692,9 @@ class Memory {
     PhysicalHeap vC0000000;
     PhysicalHeap vE0000000;
   } heaps_;
+
+  bool has_system_allocations_ = false;
+  std::unordered_set<uint32_t> system_allocations_;
 
   friend class BaseHeap;
 

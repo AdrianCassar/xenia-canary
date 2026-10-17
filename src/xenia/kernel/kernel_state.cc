@@ -11,9 +11,12 @@
 
 #include "xenia/kernel/kernel_state.h"
 
+#include "xenia/apu/audio_system.h"
+#include "xenia/apu/xma_decoder.h"
 #include "xenia/base/byte_stream.h"
 #include "xenia/base/logging.h"
 #include "xenia/emulator.h"
+#include "xenia/gpu/graphics_system.h"
 #include "xenia/hid/input_system.h"
 #include "xenia/kernel/user_module.h"
 #include "xenia/kernel/util/shim_utils.h"
@@ -23,6 +26,7 @@
 #include "xenia/kernel/xboxkrnl/xboxkrnl_threading.h"
 #include "xenia/kernel/xevent.h"
 #include "xenia/kernel/xmodule.h"
+#include "xenia/kernel/xmutant.h"
 #include "xenia/kernel/xnotifylistener.h"
 #include "xenia/kernel/xobject.h"
 #include "xenia/kernel/xthread.h"
@@ -881,8 +885,45 @@ void KernelState::InitXmpVolumePatch() {
 
 void KernelState::TerminateTitle() {
   XELOGD("KernelState::TerminateTitle");
+
+  if (XThread::IsInThread()) {
+    // Guest requested termination (e.g. XamLoaderLaunchTitle). Only the
+    // calling thread exits here: it may own objects (mutants) that other title
+    // threads or host callbacks such as audio wait for, which would deadlock
+    // the teardown. Exiting abandons them, and the host terminates the rest of
+    // the title once it has exited.
+    auto thread = XThread::GetCurrentThread();
+    {
+      auto global_lock = global_critical_region_.Acquire();
+      terminating_thread_ = retain_object(thread);
+    }
+
+    // Release the mutants this thread owns, so threads and host callbacks
+    // waiting for them can finish. Windows abandons them when the thread
+    // exits, but other platforms don't. Releasing fails once the thread no
+    // longer owns the mutant.
+    for (const auto& mutant : object_table_.GetObjectsByType<XMutant>()) {
+      while (XSUCCEEDED(mutant->ReleaseMutant(0, false, false))) {
+      }
+    }
+
+    thread->Terminate(0);
+    return;
+  }
+
+  WaitForTerminatingThread();
+
   xmp_volume_patch_.reset();
-  auto global_lock = global_critical_region_.Acquire();
+
+  // Stop host systems from calling into title code before it is unloaded.
+  if (auto graphics_system = emulator_->graphics_system()) {
+    graphics_system->DetachTitle();
+  }
+  if (auto audio_system = emulator_->audio_system()) {
+    audio_system->UnregisterAllClients();
+  }
+
+  auto global_lock = SuspendGuestThreadsAndLock();
 
   // Call terminate routines.
   // TODO(benvanik): these might take arguments.
@@ -904,17 +945,15 @@ void KernelState::TerminateTitle() {
       auto thread = it->second;
 
       if (thread->is_running()) {
-        // Need to step the thread to a safe point (returns it to guest code
-        // so it's guaranteed to not be holding any locks / in host kernel
-        // code / etc). Can't do that properly if we have the lock.
+        // The title state is discarded, so the thread isn't stepped to a guest
+        // safe point (that resumes it and waits for a breakpoint, which never
+        // happens for threads suspended by the guest or blocked in a host
+        // wait). SuspendGuestThreadsAndLock guarantees it neither owns nor
+        // waits for the global lock.
         if (!emulator_->is_paused()) {
           thread->thread()->Suspend();
         }
-
-        global_lock.unlock();
-        processor_->StepToGuestSafePoint(thread->thread_id());
         thread->Terminate(0);
-        global_lock.lock();
       }
 
       // Erase it from the thread list.
@@ -924,8 +963,26 @@ void KernelState::TerminateTitle() {
     }
   }
 
+  // XMA contexts reference title buffers, release them once nothing can use
+  // them anymore.
+  if (auto audio_system = emulator_->audio_system()) {
+    global_lock.unlock();
+    audio_system->xma_decoder()->ReleaseAllContexts();
+    global_lock.lock();
+  }
+
+  // Drop deferred work and DPCs queued by the title.
+  dispatch_queue_.clear();
+  dpc_list_.Reset();
+
   // Third: Unload all user modules (including the executable).
   for (size_t i = 0; i < user_modules_.size(); i++) {
+    // Drop the reference of modules the title loaded and never unloaded,
+    // otherwise they (and their code) outlive the title.
+    if (user_modules_[i]->has_guest_load_reference_) {
+      user_modules_[i]->has_guest_load_reference_ = false;
+      user_modules_[i]->Release();
+    }
     user_modules_[i]->ReleaseHandle();
   }
   user_modules_.clear();
@@ -935,18 +992,87 @@ void KernelState::TerminateTitle() {
 
   // Unregister all notify listeners.
   notify_listeners_.clear();
+  has_notified_startup_ = false;
+  has_notified_live_startup_ = false;
+  has_notified_xmp_startup_ = false;
+
+  terminate_notifications_.clear();
+
+  // Content opened by the title (saves, DLC, title update) is closed on exit.
+  content_manager()->CloseTitleContent();
 
   // Unset the executable module.
   executable_module_ = nullptr;
+}
 
-  if (XThread::IsInThread()) {
-    threads_by_id_.erase(XThread::GetCurrentThread()->thread_id());
+global_unique_lock_type KernelState::SuspendGuestThreadsAndLock() {
+  // Killing a thread that owns or waits for the global lock corrupts it, so
+  // suspend all guest threads and only take the lock once it is uncontended.
+  // Host threads may briefly hold it, so retry a few times.
+  constexpr uint32_t kMaxAttempts = 1000;
+  for (uint32_t attempt = 0; attempt < kMaxAttempts; ++attempt) {
+    std::vector<object_ref<XThread>> guest_threads;
+    {
+      auto global_lock = global_critical_region_.Acquire();
+      for (const auto& [thread_id, thread] : threads_by_id_) {
+        if (thread->is_guest_thread() && thread->is_running() &&
+            !XThread::IsInThread(thread)) {
+          guest_threads.push_back(retain_object(thread));
+        }
+      }
+    }
 
-    // Now commit suicide (using Terminate, because we can't call into guest
-    // code anymore).
-    global_lock.unlock();
-    XThread::GetCurrentThread()->Terminate(0);
+    for (const auto& thread : guest_threads) {
+      thread->thread()->Suspend();
+    }
+
+    auto global_lock = global_critical_region::TryAcquireUncontended();
+    if (global_lock.owns_lock()) {
+      // The threads stay suspended until the kill loop terminates them.
+      return global_lock;
+    }
+
+    for (const auto& thread : guest_threads) {
+      thread->thread()->Resume();
+    }
+    xe::threading::Sleep(std::chrono::milliseconds(1));
   }
+
+  XELOGW(
+      "KernelState::TerminateTitle: Global lock stays contended, terminating "
+      "guest threads anyway");
+  return global_critical_region_.Acquire();
+}
+
+void KernelState::WaitForTerminatingThread() {
+  object_ref<XThread> thread;
+  {
+    auto global_lock = global_critical_region_.Acquire();
+    thread = std::move(terminating_thread_);
+  }
+
+  if (thread) {
+    xe::threading::Wait(thread->thread(), false);
+  }
+}
+
+std::vector<uint32_t> KernelState::GetHostThreadGuestAddresses() {
+  auto global_lock = global_critical_region_.Acquire();
+
+  std::vector<uint32_t> addresses;
+  for (const auto& [thread_id, thread] : threads_by_id_) {
+    if (thread->is_guest_thread()) {
+      continue;
+    }
+
+    for (const uint32_t address : {thread->guest_object(), thread->pcr_ptr(),
+                                   thread->tls_ptr(), thread->stack_limit()}) {
+      if (address) {
+        addresses.push_back(address);
+      }
+    }
+  }
+  return addresses;
 }
 
 void KernelState::RegisterThread(XThread* thread) {

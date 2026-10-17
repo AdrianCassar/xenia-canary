@@ -114,7 +114,8 @@ ContentPackage* ContentManager::OpenAndMountPackage(
     const std::string_view root_path) {
   auto global_lock = global_critical_region_.Acquire();
 
-  return MountPackage(root_name, OpenPackage(host_path), root_path);
+  return MarkSystemPackage(
+      MountPackage(root_name, OpenPackage(host_path), root_path));
 }
 
 ContentPackage* ContentManager::CreateAndMountPackage(
@@ -122,7 +123,15 @@ ContentPackage* ContentManager::CreateAndMountPackage(
     const XCONTENT_DATA_INTERNAL& data) {
   auto global_lock = global_critical_region_.Acquire();
 
-  return MountPackage(root_name, CreatePackage(host_path, data));
+  return MarkSystemPackage(
+      MountPackage(root_name, CreatePackage(host_path, data)));
+}
+
+ContentPackage* ContentManager::MarkSystemPackage(ContentPackage* package) {
+  if (package) {
+    system_packages_.insert(std::string(package->GetDevicePath()));
+  }
+  return package;
 }
 
 ContentPackage* ContentManager::FindPackage(
@@ -530,6 +539,13 @@ X_RESULT ContentManager::CloseContentByDeviceName(
 
   mounted_packages_.erase(it);
   return X_ERROR_SUCCESS;
+}
+
+void ContentManager::CloseTitleContent() {
+  auto global_lock = global_critical_region_.Acquire();
+  std::erase_if(mounted_packages_, [this](const auto& entry) {
+    return !system_packages_.contains(entry.first);
+  });
 }
 
 X_RESULT ContentManager::GetContentThumbnail(const uint64_t xuid,

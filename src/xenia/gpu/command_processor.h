@@ -179,6 +179,7 @@ class CommandProcessor {
 
   void InitializeRingBuffer(uint32_t ptr, uint32_t size_log2);
   void EnableReadPointerWriteBack(uint32_t ptr, uint32_t block_size_log2);
+  void DisableReadPointerWriteBack() { read_ptr_writeback_ptr_ = 0; }
 
   void UpdateWritePointer(uint32_t value);
 
