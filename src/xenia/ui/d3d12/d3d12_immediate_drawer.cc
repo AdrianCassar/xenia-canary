@@ -60,6 +60,7 @@ D3D12ImmediateDrawer::~D3D12ImmediateDrawer() {
 
   // Texture resources and descriptors are owned and tracked by the immediate
   // drawer. Zombie texture objects are supported, but are meaningless.
+  std::lock_guard<std::mutex> textures_lock(textures_mutex_);
   assert_true(textures_.empty());
   for (D3D12ImmediateTexture* texture : textures_) {
     texture->OnImmediateDrawerDestroyed();
@@ -249,6 +250,7 @@ std::unique_ptr<ImmediateTexture> D3D12ImmediateDrawer::CreateTexture(
       // While the upload has not been yet completed, keep a reference to the
       // resource because its lifetime is not tied to that of the
       // ImmediateTexture (and thus to context's submissions) now.
+      std::lock_guard<std::mutex> textures_lock(textures_mutex_);
       texture_uploads_pending_.emplace_back(resource.Get(), upload_buffer.Get(),
                                             upload_footprint, 0, 0, false);
     } else {
@@ -269,6 +271,7 @@ std::unique_ptr<ImmediateTexture> D3D12ImmediateDrawer::CreateTexture(
   }
 
   // Manage by this immediate drawer if successfully created a resource.
+  std::lock_guard<std::mutex> textures_lock(textures_mutex_);
   std::unique_ptr<D3D12ImmediateTexture> texture =
       std::make_unique<D3D12ImmediateTexture>(
           width, height, resource.Get(), sampler_index,
@@ -296,6 +299,7 @@ bool D3D12ImmediateDrawer::UpdateTexture(ImmediateTexture* texture, uint32_t x,
     return false;
   }
 
+  std::lock_guard<std::mutex> textures_lock(textures_mutex_);
   texture_uploads_pending_.emplace_back(resource, upload_buffer.Get(),
                                         upload_footprint, x, y, true);
   return true;
@@ -320,12 +324,15 @@ void D3D12ImmediateDrawer::Begin(UIDrawContext& ui_draw_context,
       d3d12_ui_draw_context.submission_index_completed();
 
   // Release deleted textures.
-  for (auto it = textures_deleted_.begin(); it != textures_deleted_.end();) {
-    if (it->second > last_completed_submission_index_) {
-      ++it;
-      continue;
+  {
+    std::lock_guard<std::mutex> textures_lock(textures_mutex_);
+    for (auto it = textures_deleted_.begin(); it != textures_deleted_.end();) {
+      if (it->second > last_completed_submission_index_) {
+        ++it;
+        continue;
+      }
+      it = textures_deleted_.erase(it);
     }
-    it = textures_deleted_.erase(it);
   }
 
   // Release upload buffers for completed texture uploads.
@@ -582,8 +589,11 @@ void D3D12ImmediateDrawer::OnLeavePresenter() {
   d3d12_presenter.AwaitUISubmissionCompletionFromUIThread(
       last_paint_submission_index_);
 
-  for (D3D12ImmediateTexture* texture : textures_) {
-    texture->SetLastUsageSubmissionIndex(0);
+  {
+    std::lock_guard<std::mutex> textures_lock(textures_mutex_);
+    for (D3D12ImmediateTexture* texture : textures_) {
+      texture->SetLastUsageSubmissionIndex(0);
+    }
   }
 
   texture_uploads_submitted_.clear();
@@ -597,6 +607,8 @@ void D3D12ImmediateDrawer::OnLeavePresenter() {
 
 void D3D12ImmediateDrawer::OnImmediateTextureDestroyed(
     D3D12ImmediateTexture& texture) {
+  std::lock_guard<std::mutex> textures_lock(textures_mutex_);
+
   // Remove from the texture list.
   size_t texture_index = texture.immediate_drawer_index();
   assert_true(texture_index != SIZE_MAX);
@@ -688,9 +700,16 @@ Microsoft::WRL::ComPtr<ID3D12Resource> D3D12ImmediateDrawer::CreateUploadBuffer(
 }
 
 void D3D12ImmediateDrawer::UploadTextures() {
-  if (texture_uploads_pending_.empty()) {
-    // Called often - don't initialize anything.
-    return;
+  // Take the pending uploads so textures can keep being created on other
+  // threads while recording the copies.
+  std::vector<PendingTextureUpload> texture_uploads_pending;
+  {
+    std::lock_guard<std::mutex> textures_lock(textures_mutex_);
+    if (texture_uploads_pending_.empty()) {
+      // Called often - don't initialize anything.
+      return;
+    }
+    texture_uploads_pending.swap(texture_uploads_pending_);
   }
 
   const D3D12UIDrawContext& d3d12_ui_draw_context =
@@ -699,7 +718,7 @@ void D3D12ImmediateDrawer::UploadTextures() {
       d3d12_ui_draw_context.command_list();
 
   // In order, as a texture may be created and then updated.
-  for (const PendingTextureUpload& pending_upload : texture_uploads_pending_) {
+  for (const PendingTextureUpload& pending_upload : texture_uploads_pending) {
     ID3D12Resource* texture = pending_upload.texture.Get();
 
     D3D12_RESOURCE_BARRIER barrier;
@@ -732,7 +751,6 @@ void D3D12ImmediateDrawer::UploadTextures() {
     texture_uploads_submitted_.emplace_back(
         texture, pending_upload.buffer.Get(), last_paint_submission_index_);
   }
-  texture_uploads_pending_.clear();
 }
 
 }  // namespace d3d12
