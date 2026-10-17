@@ -12,6 +12,7 @@
 
 #include <deque>
 #include <memory>
+#include <mutex>
 #include <utility>
 #include <vector>
 
@@ -136,6 +137,11 @@ class D3D12ImmediateDrawer final : public ImmediateDrawer {
   Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> sampler_heap_;
   D3D12_CPU_DESCRIPTOR_HANDLE sampler_heap_cpu_start_;
   D3D12_GPU_DESCRIPTOR_HANDLE sampler_heap_gpu_start_;
+
+  // Textures may be created and destroyed from threads other than the UI
+  // thread (such as UI dialogs loading images in the background), guards
+  // textures_, texture_uploads_pending_ and textures_deleted_.
+  std::mutex textures_mutex_;
 
   // Only with non-null resources.
   std::vector<D3D12ImmediateTexture*> textures_;
