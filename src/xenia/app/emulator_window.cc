@@ -1284,7 +1284,30 @@ void EmulatorWindow::FileOpen() {
   }
 }
 
-void EmulatorWindow::FileClose() { emulator_->TerminateTitle(); }
+void EmulatorWindow::FileClose() {
+  emulator_->TerminateTitle();
+  ClearLoaderData();
+}
+
+void EmulatorWindow::ExitToDashboard() {
+  // The title already terminated itself, release what it left behind and keep
+  // Xenia open so another title can be launched.
+  emulator_->TerminateTitle();
+  ClearLoaderData();
+  UpdateTitle();
+
+  new xe::ui::HostNotificationWindow(imgui_drawer(), "Title Exited",
+                                     "The title exited to the dashboard.", 0);
+}
+
+void EmulatorWindow::ClearLoaderData() {
+  // A swap's launch path and data must not apply to the next title opened.
+  auto xam = emulator_->kernel_state()->GetKernelModule<kernel::xam::XamModule>(
+      "xam.xex");
+  if (xam) {
+    xam->loader_data() = {};
+  }
+}
 
 void EmulatorWindow::InstallContent() {
   std::vector<std::filesystem::path> paths;

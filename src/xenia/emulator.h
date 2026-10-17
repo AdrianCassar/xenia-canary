@@ -196,16 +196,24 @@ class Emulator {
   // so that another title can be launched.
   X_STATUS TerminateTitle();
 
-  // Makes WaitUntilExit return, the title must then be terminated and the
-  // executable described by the XAM loader data launched.
-  void RequestTitleLaunch() {
-    title_launch_requested_ = true;
-    title_launch_event_->Set();
+  enum class TitleExitRequest {
+    kNone,
+    // Launch the executable described by the XAM loader data (xex swap).
+    kLaunchNext,
+    // The title exited to the dashboard.
+    kDashboard,
+  };
+
+  // Requested by the title through XAM. Makes WaitUntilExit return, the title
+  // must then be terminated from the host and the request handled.
+  void RequestTitleExit(TitleExitRequest request) {
+    title_exit_request_ = request;
+    title_exit_event_->Set();
   }
 
-  bool ConsumeTitleLaunchRequest() {
-    title_launch_event_->Reset();
-    return title_launch_requested_.exchange(false);
+  TitleExitRequest ConsumeTitleExitRequest() {
+    title_exit_event_->Reset();
+    return title_exit_request_.exchange(TitleExitRequest::kNone);
   }
 
   const std::unique_ptr<vfs::Device> CreateVfsDevice(
@@ -388,8 +396,8 @@ class Emulator {
   std::optional<uint32_t> title_id_;  // Currently running title ID
   // VFS device the running title was mounted from.
   std::string title_mount_path_;
-  std::atomic<bool> title_launch_requested_ = false;
-  std::unique_ptr<threading::Event> title_launch_event_ =
+  std::atomic<TitleExitRequest> title_exit_request_ = TitleExitRequest::kNone;
+  std::unique_ptr<threading::Event> title_exit_event_ =
       threading::Event::CreateManualResetEvent(false);
   std::unique_ptr<kernel::util::GameInfoDatabase> game_info_database_;
 
