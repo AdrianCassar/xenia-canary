@@ -32,7 +32,10 @@ enum SessionFlags {
   JOIN_VIA_PRESENCE_DISABLED = 0x0200,
   JOIN_IN_PROGRESS_DISABLED = 0x0400,
   JOIN_VIA_PRESENCE_FRIENDS_ONLY = 0x0800,
-  UNKNOWN = 0x1000,  // 584113DB, 4156091D and 5841128F sets this flag?
+  // Set by 584113DB, 4156091D and 5841128F.
+  // When flushing stats of a STATS | ARBITRATION session, it skips
+  // the stats write and only posts the XArb ReportResult.
+  UNKNOWN = 0x1000,
 
   SINGLEPLAYER_WITH_STATS = PRESENCE | STATS | INVITES_DISABLED |
                             JOIN_VIA_PRESENCE_DISABLED |
