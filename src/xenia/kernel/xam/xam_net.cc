@@ -7,6 +7,7 @@
  ******************************************************************************
  */
 
+#include <mutex>
 #include <random>
 
 // clang-format off
@@ -158,11 +159,20 @@ struct XNetStartupParams {
 };
 static_assert_size(XNetStartupParams, 0xD);
 
-struct XAUTH_SETTINGS {
-  xe::be<uint32_t> SizeOfStruct;
+// Internal settings passed from XAuthStartup.
+// The first two fields are the title's XAUTH_SETTINGS, followed by a 512000
+// byte buffer the title allocates for XAM.
+// XAuthShutdown frees it only if XampXAuthShutdown reports no remaining
+// references and XampXAuthGetTitleBuffer returns it.
+struct XAMP_XAUTH_SETTINGS {
+  xe::be<uint32_t> SizeOfStruct;  // sizeof(XAUTH_SETTINGS)
   xe::be<uint32_t> Flags;
+  xe::be<uint32_t> title_buffer_ptr;
 };
-static_assert_size(XAUTH_SETTINGS, 0x8);
+static_assert_size(XAMP_XAUTH_SETTINGS, 0xC);
+
+// sizeof(XAUTH_SETTINGS) from the title's view.
+constexpr uint32_t kXAuthSettingsSize = 0x8;
 
 struct XNQOSLISTENSTATS {
   uint32_t size_of_struct;
@@ -1585,14 +1595,29 @@ dword_result_t XamGetServiceEndpoint_entry(
 }
 DECLARE_XAM_EXPORT1(XamGetServiceEndpoint, kNetworking, kSketchy);
 
-dword_result_t XampXAuthStartup_entry(pointer_t<XAUTH_SETTINGS> setttings) {
-  if (setttings->SizeOfStruct != sizeof(XAUTH_SETTINGS)) {
+static std::mutex xauth_mutex_;
+static uint32_t xauth_ref_count_ = 0;
+static uint32_t xauth_title_buffer_ptr_ = 0;
+
+dword_result_t XampXAuthStartup_entry(pointer_t<XAMP_XAUTH_SETTINGS> settings) {
+  if (settings->SizeOfStruct != kXAuthSettingsSize) {
     return 0x80158401;
   }
 
   if (!kernel_state()->xam_state()->user_tracker()->LoggedInToLive()) {
     return 0x80158406;
   }
+
+  std::lock_guard<std::mutex> lock(xauth_mutex_);
+
+  // Title frees the buffer it just allocated when already started.
+  if (xauth_ref_count_) {
+    xauth_ref_count_++;
+    return X_XAUTH_S_ALREADY_STARTED;
+  }
+
+  xauth_ref_count_ = 1;
+  xauth_title_buffer_ptr_ = settings->title_buffer_ptr;
 
   return X_ERROR_SUCCESS;
 }
@@ -1604,14 +1629,30 @@ dword_result_t XampXAuthIsLocalSocketAllowed_entry() { return true; }
 DECLARE_XAM_EXPORT1(XampXAuthIsLocalSocketAllowed, kNetworking, kStub);
 
 void XampXAuthShutdown_entry(lpdword_t xauth_count_ptr) {
-  *xauth_count_ptr = 0;
+  std::lock_guard<std::mutex> lock(xauth_mutex_);
+
+  if (xauth_ref_count_) {
+    xauth_ref_count_--;
+  }
+
+  if (xauth_count_ptr) {
+    *xauth_count_ptr = xauth_ref_count_;
+  }
 }
 DECLARE_XAM_EXPORT1(XampXAuthShutdown, kNetworking, kStub);
 
 dword_result_t XampXAuthGetTitleBuffer_entry() {
-  // returns pointer to title buffer set by XampXAuthStartup, non-zero causes
-  // crash.
-  return 0;
+  // Returns the title buffer given to XampXAuthStartup once all references
+  // are released so the title can free it.
+  std::lock_guard<std::mutex> lock(xauth_mutex_);
+
+  if (xauth_ref_count_) {
+    return 0;
+  }
+
+  const uint32_t title_buffer_ptr = xauth_title_buffer_ptr_;
+  xauth_title_buffer_ptr_ = 0;
+  return title_buffer_ptr;
 }
 DECLARE_XAM_EXPORT1(XampXAuthGetTitleBuffer, kNetworking, kStub);
 

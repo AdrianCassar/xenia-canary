@@ -77,6 +77,8 @@ using namespace xe::literals;
 #define X_ONLINE_E_STAT_INVALID_ATTACHMENT                  static_cast<X_HRESULT>(0x80159202L)
 #define X_ONLINE_S_STAT_CAN_UPLOAD_ATTACHMENT               static_cast<X_HRESULT>(0x00159203L)
 
+#define X_XAUTH_S_ALREADY_STARTED                           static_cast<X_HRESULT>(0x00158401L)
+
 #define X_PARTY_E_NOT_IN_PARTY                              static_cast<X_HRESULT>(0x807D0003L)
 
 #define XHTTP_ERROR_BASE                                    12000
