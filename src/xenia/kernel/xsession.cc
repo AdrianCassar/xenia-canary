@@ -318,6 +318,9 @@ X_RESULT XSession::JoinSession(XGI_SESSION_MANAGE* data) {
     XSESSION_MEMBER member = {};
     bool is_local_member = join_local;
 
+    // Members are keyed by the XUID the title joined them with.
+    uint64_t member_xuid = 0;
+
     if (join_local) {
       const uint32_t user_index = static_cast<uint32_t>(indices_array[i]);
 
@@ -331,18 +334,24 @@ X_RESULT XSession::JoinSession(XGI_SESSION_MANAGE* data) {
 
       assert_true(IsValidXUID(xuid_online));
 
-      if (local_members_.count(xuid_online) ||
-          remote_members_.count(xuid_online)) {
+      if (local_members_.contains(xuid_online) ||
+          remote_members_.contains(xuid_online)) {
         return X_ERROR_SUCCESS;
       }
 
+      member_xuid = xuid_online;
       member.OnlineXUID = xuid_online;
       member.UserIndex = user_index;
     } else {
-      const xe::be<uint64_t> xuid_online = xuid_array[i];
+      // Remote XUIDs are title provided and may not be valid XUIDs.
+      // 4156091D in system link joins local players remotely with an XUID
+      // derived from their lowercase gamertag.
+
+      member_xuid = xuid_array[i];
+
       uint8_t user_index =
           kernel_state()->xam_state()->GetUserIndexAssignedToProfileFromXUID(
-              xuid_online);
+              member_xuid);
 
       if (user_index == XUserIndexAny) {
         user_index = XUserIndexNone;
@@ -350,14 +359,21 @@ X_RESULT XSession::JoinSession(XGI_SESSION_MANAGE* data) {
 
       is_local_member = user_index != XUserIndexNone;
 
-      assert_true(IsValidXUID(xuid_online));
-
-      if (remote_members_.count(xuid_online) ||
-          local_members_.count(xuid_online)) {
+      if (remote_members_.contains(member_xuid) ||
+          local_members_.contains(member_xuid)) {
         return X_ERROR_SUCCESS;
       }
 
-      member.OnlineXUID = xuid_online;
+      if (is_local_member) {
+        member.OnlineXUID =
+            kernel_state()
+                ->xam_state()
+                ->GetUserProfile(static_cast<uint32_t>(user_index))
+                ->GetLogonXUID();
+      } else if (IsOnlineXUID(member_xuid) || IsGuestXUID(member_xuid)) {
+        member.OnlineXUID = member_xuid;
+      }
+
       member.UserIndex = user_index;
     }
 
@@ -373,15 +389,15 @@ X_RESULT XSession::JoinSession(XGI_SESSION_MANAGE* data) {
           std::max<int32_t>(0, local_details_.AvailablePublicSlots - 1);
     }
 
-    XELOGI("XUID: {:016X} - Occupying {} slot", member.OnlineXUID.get(),
+    XELOGI("XUID: {:016X} - Occupying {} slot", member_xuid,
            member.IsPrivate() ? "private" : "public");
 
-    members[member.OnlineXUID] = member.IsPrivate();
+    members[member_xuid] = member.IsPrivate();
 
     if (is_local_member) {
-      local_members_.emplace(member.OnlineXUID, member);
+      local_members_.emplace(member_xuid, member);
     } else {
-      remote_members_.emplace(member.OnlineXUID, member);
+      remote_members_.emplace(member_xuid, member);
     }
   }
 
@@ -437,6 +453,7 @@ X_RESULT XSession::LeaveSession(XGI_SESSION_MANAGE* data) {
   for (uint32_t i = 0; i < data->array_count; i++) {
     XSESSION_MEMBER* member = nullptr;
     bool is_local_member = leave_local;
+    uint64_t member_xuid = 0;
 
     if (leave_local) {
       const uint32_t user_index = static_cast<uint32_t>(indices_array[i]);
@@ -447,25 +464,24 @@ X_RESULT XSession::LeaveSession(XGI_SESSION_MANAGE* data) {
 
       const auto user_profile =
           kernel_state()->xam_state()->GetUserProfile(user_index);
-      const xe::be<uint64_t> xuid_online = user_profile->GetLogonXUID();
+      member_xuid = user_profile->GetLogonXUID();
 
-      assert_true(IsValidXUID(xuid_online));
+      assert_true(IsValidXUID(member_xuid));
 
-      if (!local_members_.count(xuid_online)) {
+      if (!local_members_.contains(member_xuid)) {
         return X_ERROR_SUCCESS;
       }
 
-      member = &local_members_[xuid_online];
+      member = &local_members_[member_xuid];
     } else {
-      const xe::be<uint64_t> xuid_online = xuid_array[i];
+      // XUID may be title derived, see JoinSession.
+      member_xuid = xuid_array[i];
 
-      assert_true(IsValidXUID(xuid_online));
-
-      if (local_members_.count(xuid_online)) {
+      if (local_members_.contains(member_xuid)) {
         is_local_member = true;
-        member = &local_members_[xuid_online];
-      } else if (remote_members_.count(xuid_online)) {
-        member = &remote_members_[xuid_online];
+        member = &local_members_[member_xuid];
+      } else if (remote_members_.contains(member_xuid)) {
+        member = &remote_members_[member_xuid];
       } else {
         return X_ERROR_SUCCESS;
       }
@@ -497,21 +513,19 @@ X_RESULT XSession::LeaveSession(XGI_SESSION_MANAGE* data) {
     if (!member->IsZombie()) {
       bool removed = false;
 
-      XELOGI("XUID: {:016X} - Leaving {} slot", member->OnlineXUID.get(),
+      XELOGI("XUID: {:016X} - Leaving {} slot", member_xuid,
              member->IsPrivate() ? "private" : "public");
 
-      const xe::be<uint64_t> xuid_online = member->OnlineXUID;
-
       if (is_local_member) {
-        removed = local_members_.erase(xuid_online);
+        removed = local_members_.erase(member_xuid);
       } else {
-        removed = remote_members_.erase(xuid_online);
+        removed = remote_members_.erase(member_xuid);
       }
 
       assert_true(removed);
 
       if (removed) {
-        xuids.push_back(xuid_online);
+        xuids.push_back(member_xuid);
       }
     }
   }
@@ -1337,11 +1351,12 @@ void XSession::PrintSessionDetails() {
   for (const auto& [xuid, mamber] : remote_members_) {
     XELOGI(
         "\n***************** REMOTE MEMBER {} *****************\n"
+        "XUID: {:016X}\n"
         "Online XUID: {:016X}\n"
         "UserIndex: {}\n"
         "Flags: {:08X}\n"
         "IsPrivate: {}\n",
-        index++, mamber.OnlineXUID.get(), mamber.UserIndex.get(),
+        index++, xuid, mamber.OnlineXUID.get(), mamber.UserIndex.get(),
         mamber.Flags.get(), mamber.IsPrivate() ? "True" : "False");
   }
 }
@@ -1366,7 +1381,7 @@ void XSession::PrintSessionType(SessionFlags flags) {
       {JOIN_VIA_PRESENCE_DISABLED, "Presence Join Disabled"},
       {JOIN_IN_PROGRESS_DISABLED, "In-Progress Join Disabled"},
       {JOIN_VIA_PRESENCE_FRIENDS_ONLY, "Friends Only"},
-      {UNKNOWN, "Unknown Flag 0x1000"}};
+      {UNKNOWN, "Unknown Flag 0x1000 (Arbitration Only Stats)"}};
 
   const std::map<SessionFlags, std::string> extended = {
       {SINGLEPLAYER_WITH_STATS, "Singleplayer with Stats"},
