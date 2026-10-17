@@ -13,6 +13,7 @@
 #include <cstddef>
 #include <deque>
 #include <memory>
+#include <mutex>
 #include <utility>
 #include <vector>
 
@@ -123,6 +124,12 @@ class VulkanImmediateDrawer : public ImmediateDrawer {
 
   const VulkanDevice* vulkan_device_;
   const UISamplers* ui_samplers_;
+
+  // Textures may be created and destroyed from threads other than the UI
+  // thread (such as UI dialogs loading images in the background), guards the
+  // texture descriptor pools, textures_, texture_uploads_pending_ (and the
+  // pending_upload_index_ of textures) and textures_deleted_.
+  std::mutex textures_mutex_;
 
   // Combined image sampler pools for textures.
   VkDescriptorSetLayout texture_descriptor_set_layout_;
