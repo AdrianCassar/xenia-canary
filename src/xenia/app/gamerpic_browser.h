@@ -11,6 +11,7 @@
 #define XENIA_APP_GAMERPIC_BORWSER_DIALOG_H_
 
 #include <future>
+#include <optional>
 #include <vector>
 
 #include "xenia/kernel/json/page_gamerpics_object_json.h"
@@ -78,6 +79,9 @@ class TitleGamerpicBrowser final : public ui::ImGuiDialog {
 
   enum class TitleIDInputState { NOT_FOUND, FOUND, EMPTY };
 
+  // std::nullopt if the request failed.
+  using PageResult = std::optional<xe::kernel::PageGamerpicsObjectJSON>;
+
   using TitlesMap = std::map<uint32_t, std::vector<uint8_t>>;
   using ImmediateTitleMap =
       std::map<uint32_t, std::shared_ptr<xe::ui::ImmediateTexture>>;
@@ -125,15 +129,26 @@ class TitleGamerpicBrowser final : public ui::ImGuiDialog {
           dashboard_title_future,
       uint32_t retry_count);
 
+  bool IsPageLoading();
+
+  void ProcessPageResult();
+
+  void ProcessOpenTitleResult();
+
+  void RetryFailedRequests();
+
+  void DrawStatus();
+
   std::future<std::set<uint32_t>> GetSupportedTitlesAsync();
 
   std::future<xe::kernel::TitleGamerpicsObjectJSON> LoadTitleAsync(
       uint32_t title_id);
 
-  std::future<xe::kernel::PageGamerpicsObjectJSON> LoadPageAsync(
-      uint32_t page_pos);
+  std::future<PageResult> LoadPageAsync(uint32_t page_pos);
 
-  xe::kernel::PageGamerpicsObjectJSON LoadPage(uint32_t page_pos);
+  static PageResult LoadPage(xe::kernel::XLiveAPI* xlive_api, uint32_t page_pos,
+                             uint32_t per_page,
+                             std::string content_types_query);
 
   void LoadGameImagesAsync(const xe::kernel::PageGamerpicsObjectJSON page_info);
 
@@ -146,13 +161,13 @@ class TitleGamerpicBrowser final : public ui::ImGuiDialog {
 
   void LoadDashboardGamerpicsAsync(xe::kernel::GameTitle game);
 
-  std::future<xe::kernel::PageGamerpicsObjectJSON> LoadNextPage();
+  std::future<PageResult> LoadNextPage();
 
-  std::future<xe::kernel::PageGamerpicsObjectJSON> LoadPreviousPage();
+  std::future<PageResult> LoadPreviousPage();
 
-  std::future<xe::kernel::PageGamerpicsObjectJSON> LoadFirstPage();
+  std::future<PageResult> LoadFirstPage();
 
-  std::future<xe::kernel::PageGamerpicsObjectJSON> LoadLastPage();
+  std::future<PageResult> LoadLastPage();
 
   void LoadGamerpicsAsync(const xe::kernel::GameTitle game);
 
@@ -186,9 +201,15 @@ class TitleGamerpicBrowser final : public ui::ImGuiDialog {
 
   xe::kernel::GameTitle selected_title_gamerpics_ = {};
 
+  // Title requested via "Open Title" which isn't on the current page.
+  std::future<xe::kernel::TitleGamerpicsObjectJSON> open_title_;
+  bool open_title_failed_ = false;
+
   xe::kernel::PageGamerpicsObjectJSON current_page_;
-  std::shared_future<xe::kernel::PageGamerpicsObjectJSON> gamerpic_page_;
-  std::atomic<bool> loaded_page_ = false;
+  std::future<PageResult> gamerpic_page_;
+  bool loaded_page_ = false;
+  bool page_load_failed_ = false;
+  uint32_t requested_page_pos_ = 1;
 
   std::shared_ptr<AtomicTitlesMap> title_images_;
   std::shared_ptr<AtomicImmediateTitlesMap> immediate_title_images_;
