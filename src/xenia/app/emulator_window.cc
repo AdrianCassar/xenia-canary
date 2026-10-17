@@ -2346,6 +2346,17 @@ xe::X_STATUS EmulatorWindow::RunTitle(
   return result;
 }
 
+xe::X_STATUS EmulatorWindow::LaunchNextTitle() {
+  auto xam = emulator_->kernel_state()->GetKernelModule<kernel::xam::XamModule>(
+      "xam.xex");
+  const std::filesystem::path host_path = xam->loader_data().host_path;
+
+  // The title already terminated itself, release what it left behind.
+  emulator_->TerminateTitle();
+
+  return RunTitle(host_path);
+}
+
 void EmulatorWindow::RunPreviouslyPlayedTitle() {
   if (recently_launched_titles_.size() >= 1) {
     RunTitle(recently_launched_titles_[0].path_to_file);

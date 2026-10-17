@@ -98,15 +98,9 @@ void XamModule::LoadLoaderData() {
   std::filesystem::remove(kXamModuleLoaderDataFileName);
 }
 
-void XamModule::SaveLoaderData() {
-  FILE* file = xe::filesystem::OpenFile(kXamModuleLoaderDataFileName, "wb");
-
-  if (!file) {
-    return;
-  }
-
+void XamModule::ResolveNextTitlePath() {
   std::filesystem::path host_path = loader_data_.host_path;
-  std::string launch_path = loader_data_.launch_path;
+  std::string& launch_path = loader_data_.launch_path;
 
   auto remove_prefix = [&launch_path](std::string_view prefix) {
     if (xe::utf8::lower_ascii(launch_path)
@@ -118,13 +112,28 @@ void XamModule::SaveLoaderData() {
   remove_prefix(fmt::format("{}\\", kDefaultGameSymbolicLink));
   remove_prefix(fmt::format("{}\\", kDefaultPartitionSymbolicLink));
 
+  // Titles launched from a xex are mounted from its folder, so launch the
+  // sibling xex directly.
   if (host_path.extension() == ".xex") {
     host_path.remove_filename();
     host_path = host_path / launch_path;
-    launch_path = "";
+    launch_path.clear();
   }
 
-  const std::string host_path_as_string = xe::path_to_utf8(host_path);
+  loader_data_.host_path = xe::path_to_utf8(host_path);
+}
+
+void XamModule::SaveLoaderData() {
+  FILE* file = xe::filesystem::OpenFile(kXamModuleLoaderDataFileName, "wb");
+
+  if (!file) {
+    return;
+  }
+
+  ResolveNextTitlePath();
+
+  const std::string& host_path_as_string = loader_data_.host_path;
+  const std::string& launch_path = loader_data_.launch_path;
   const uint16_t host_path_length =
       static_cast<uint16_t>(host_path_as_string.size());
 
