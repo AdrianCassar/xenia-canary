@@ -243,7 +243,6 @@ class TitleGamerpicBrowser final : public ui::ImGuiDialog {
   uint32_t title_gamerpics_columns_ = 5;
 
   bool page_selection_open_ = false;
-  int selected_page_step_ = 1;
   uint32_t selected_page_pos_ = 1;
 };
 
