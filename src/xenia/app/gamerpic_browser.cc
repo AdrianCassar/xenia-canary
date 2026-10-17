@@ -35,6 +35,27 @@ auto item_getter = [](void* data, int idx) {
   return vector.at(idx).c_str();
 };
 
+// Unlike std::async the returned future doesn't block when it's destroyed or
+// replaced, so a slow or unreachable API can't stall the UI thread.
+// func must not capture the browser as it may outlive it.
+template <typename F>
+std::future<std::invoke_result_t<F>> RunDetachedAsync(F&& func) {
+  using Result = std::invoke_result_t<F>;
+
+  auto promise = std::make_shared<std::promise<Result>>();
+  auto future = promise->get_future();
+
+  std::thread([promise, func = std::forward<F>(func)]() mutable {
+    try {
+      promise->set_value(func());
+    } catch (...) {
+      promise->set_exception(std::current_exception());
+    }
+  }).detach();
+
+  return future;
+}
+
 void TitleGamerpicBrowser::Initialize() {
   kernel_state_ = emulator_window_->emulator()->kernel_state();
 
@@ -130,22 +151,17 @@ void TitleGamerpicBrowser::OnDraw(ImGuiIO& io) {
           ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize)) {
     CleanupTitleImagesThreads();
 
-    // loaded_page_ isn't reliable enough?
-    if (!loaded_page_ && IsFutureReady(gamerpic_page_)) {
-      page_changed_ = true;
-      current_page_ = gamerpic_page_.get();
-
-      if (!current_page_.GetTitles().empty()) {
-        LoadGameImagesAsync(current_page_);
-        loaded_page_ = true;
-      }
-    }
+    ProcessPageResult();
+    ProcessOpenTitleResult();
 
     // If we have dashboard info then load dashboard gamerpics in the background
     if (!downloaded_dash_gamerpics) {
-      if (IsFutureReady(dashboard_title_)) {
-        LoadDashboardGamerpicsAsync(
-            GetDashboardTitleResult(dashboard_title_, max_retry_count_));
+      const auto dashboard_title =
+          GetDashboardTitleResult(dashboard_title_, max_retry_count_);
+
+      if (dashboard_title.id == xe::kernel::kDashboardID) {
+        downloaded_dash_gamerpics = true;
+        LoadDashboardGamerpicsAsync(dashboard_title);
       }
     }
 
@@ -177,17 +193,18 @@ void TitleGamerpicBrowser::OnDraw(ImGuiIO& io) {
       if (ImGui::ImageButton("##ProfileIcon",
                              reinterpret_cast<ImTextureID>(profile_icon_),
                              xe::ui::default_image_icon_size)) {
-        selected_title_gamerpics_ =
-            GetDashboardTitleResult(dashboard_title_, max_retry_count_);
-
         if (downloaded_dash_gamerpics) {
+          selected_title_gamerpics_ =
+              GetDashboardTitleResult(dashboard_title_, max_retry_count_);
           gamerpic_args_.browser_open = true;
         }
       }
       ImGui::PopStyleColor(3);
 
       if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip("Xbox 360 Dashboard");
+        ImGui::SetTooltip(downloaded_dash_gamerpics
+                              ? "Xbox 360 Dashboard"
+                              : "Xbox 360 Dashboard (Unavailable)");
       }
 
       ImGui::TableNextColumn();
@@ -334,11 +351,19 @@ void TitleGamerpicBrowser::OnDraw(ImGuiIO& io) {
           }
         }
 
-        ImGui::BeginDisabled(!supported_title);
-        if (ImGui::Button("Open Title", ImVec2(-1, 0))) {
-          if (title_id == xe::kernel::kDashboardID) {
+        const bool opening_title = open_title_.valid();
+
+        ImGui::BeginDisabled(!supported_title || opening_title);
+        if (ImGui::Button(opening_title ? "Loading...###OpenTitle"
+                                        : "Open Title###OpenTitle",
+                          ImVec2(-1, 0))) {
+          open_title_failed_ = false;
+
+          if (title_id == xe::kernel::kDashboardID &&
+              downloaded_dash_gamerpics) {
             selected_title_gamerpics_ =
                 GetDashboardTitleResult(dashboard_title_, max_retry_count_);
+            gamerpic_args_.browser_open = true;
           } else {
             const auto& titles = current_page_.GetTitles();
 
@@ -351,14 +376,12 @@ void TitleGamerpicBrowser::OnDraw(ImGuiIO& io) {
 
             if (title != titles.cend()) {
               selected_title_gamerpics_ = *title;
+              gamerpic_args_.browser_open = true;
             } else {
-              // Synchronous
-              selected_title_gamerpics_ =
-                  LoadTitleAsync(title_id).get().GetTitle();
+              // Opened by ProcessOpenTitleResult once loaded.
+              open_title_ = LoadTitleAsync(title_id);
             }
           }
-
-          gamerpic_args_.browser_open = true;
         }
         ImGui::EndDisabled();
 
@@ -422,10 +445,18 @@ void TitleGamerpicBrowser::OnDraw(ImGuiIO& io) {
 
     ImGui::Separator();
 
+    const float status_start_y = ImGui::GetCursorPosY();
+
+    DrawStatus();
+
+    // The table gives up the space taken by the status so the window height
+    // stays constant instead of overflowing into a scrollbar.
+    const float status_height = ImGui::GetCursorPosY() - status_start_y;
+
     const std::string table_id_str =
         fmt::format("##Page{}", current_page_.GetCurrentPage());
 
-    ImVec2 table_size = ImVec2(-1, 425);
+    ImVec2 table_size = ImVec2(-1, 425 - status_height);
 
     // Set page table focus every page load so navigation via gamepad works
     // continuously.
@@ -444,14 +475,13 @@ void TitleGamerpicBrowser::OnDraw(ImGuiIO& io) {
             table_size)) {
       if (ImGui::IsWindowFocused()) {
         if (ImGui::IsKeyPressed(ImGuiKey::ImGuiKey_GamepadR1, false)) {
-          if (current_page_.GetNextPage() && IsFutureReady(gamerpic_page_)) {
+          if (current_page_.GetNextPage() && !IsPageLoading()) {
             gamerpic_page_ = LoadNextPage();
           }
         }
 
         if (ImGui::IsKeyPressed(ImGuiKey::ImGuiKey_GamepadL1, false)) {
-          if (current_page_.GetPreviousPage() &&
-              IsFutureReady(gamerpic_page_)) {
+          if (current_page_.GetPreviousPage() && !IsPageLoading()) {
             gamerpic_page_ = LoadPreviousPage();
           }
         }
@@ -568,7 +598,7 @@ void TitleGamerpicBrowser::OnDraw(ImGuiIO& io) {
 
     ImGui::BeginDisabled(!current_page_.GetPreviousPage());
     if (ImGui::Button(first_lbl.c_str(), first_btn_size)) {
-      if (IsFutureReady(gamerpic_page_)) {
+      if (!IsPageLoading()) {
         gamerpic_page_ = LoadFirstPage();
       }
     }
@@ -578,7 +608,7 @@ void TitleGamerpicBrowser::OnDraw(ImGuiIO& io) {
     ImGui::SameLine();
 
     if (ImGui::Button(prev_lbl.c_str(), prev_btn_size)) {
-      if (IsFutureReady(gamerpic_page_)) {
+      if (!IsPageLoading()) {
         gamerpic_page_ = LoadPreviousPage();
       }
     }
@@ -603,7 +633,7 @@ void TitleGamerpicBrowser::OnDraw(ImGuiIO& io) {
 
     ImGui::BeginDisabled(!current_page_.GetNextPage());
     if (ImGui::Button(next_lbl.c_str(), next_btn_size)) {
-      if (IsFutureReady(gamerpic_page_)) {
+      if (!IsPageLoading()) {
         gamerpic_page_ = LoadNextPage();
       }
     }
@@ -611,7 +641,7 @@ void TitleGamerpicBrowser::OnDraw(ImGuiIO& io) {
     ImGui::SameLine();
 
     if (ImGui::Button(last_lbl.c_str(), last_btn_size)) {
-      if (IsFutureReady(gamerpic_page_)) {
+      if (!IsPageLoading()) {
         gamerpic_page_ = LoadLastPage();
       }
     }
@@ -774,9 +804,11 @@ void TitleGamerpicBrowser::DrawGamerpicsBrowser(xe::kernel::GameTitle game,
           if (!IsCurrentGamerpic(game, gamerpic)) {
             new_gamerpic_ = gamerpic;
             update_gamerpic_ = true;
-            small_gamerpic_ =
-                kernel_state_->GetXboxLiveAPI()->DownloadGamerpicTileAsync(
-                    game.id, gamerpic.small_tile_id);
+            small_gamerpic_ = RunDetachedAsync(
+                [xlive_api = kernel_state_->GetXboxLiveAPI(),
+                 title_id = game.id, tile_id = gamerpic.small_tile_id]() {
+                  return xlive_api->DownloadGamerpicTile(title_id, tile_id);
+                });
           } else {
             XELOGI(fmt::format("{}: Skiping Gamerpic Update.", game.name));
           }
@@ -959,113 +991,170 @@ void TitleGamerpicBrowser::UpdateGamerpicIfRequested(
   }
 }
 
+// Never blocks, a failed request is retried in the background.
 std::set<uint32_t> TitleGamerpicBrowser::GetSupportedTitlesResult(
     std::shared_future<std::set<uint32_t>>& supported_title_future,
     uint32_t retry_count) {
-  if (supported_title_future.valid()) {
-    // Check if we have a result
-    if (IsFutureReady(supported_title_future)) {
-      std::set<uint32_t> supported_titles_ = supported_title_future.get();
-
-      // If the request failed then retry.
-      if (supported_titles_.empty()) {
-        // Limit retry attempts to prevent continuously failed attempt.
-        if (supported_titles_retry_count_ >= retry_count) {
-          return {};
-        }
-
-        // Cache the future result
-        supported_title_future = GetSupportedTitlesAsync().share();
-
-        // Synchronous we want to return the result now.
-        supported_titles_ = supported_title_future.get();
-        supported_titles_retry_count_++;
-      }
-
-      return supported_titles_;
-    } else {
-      // Result is not ready...
-    }
-  } else {
-    // There is no result...
+  if (!IsFutureReady(supported_title_future)) {
+    return {};
   }
 
-  return {};
-}
+  const std::set<uint32_t>& supported_titles = supported_title_future.get();
 
-xe::kernel::GameTitle TitleGamerpicBrowser::GetDashboardTitleResult(
-    std::shared_future<xe::kernel::TitleGamerpicsObjectJSON>&
-        dashboard_title_future,
-    uint32_t retry_count) {
-  if (dashboard_title_future.valid()) {
-    // Check if we have a result
-    if (IsFutureReady(dashboard_title_future)) {
-      xe::kernel::TitleGamerpicsObjectJSON dash_title =
-          dashboard_title_future.get();
-
-      // If the request failed then retry.
-      if (dash_title.GetTitle().id != xe::kernel::kDashboardID) {
-        // Limit retry attempts to prevent continuously failed attempt.
-        if (dashboard_title_retry_count_ >= retry_count) {
-          return {};
-        }
-
-        // Cache the future result
-        dashboard_title_future =
-            LoadTitleAsync(xe::kernel::kDashboardID).share();
-
-        // Synchronous we want to return the result now.
-        dash_title = dashboard_title_future.get();
-        dashboard_title_retry_count_++;
-      } else if (dash_title.GetTitle().id == xe::kernel::kDashboardID) {
-        downloaded_dash_gamerpics = true;
-      }
-
-      return dash_title.GetTitle();
-    } else {
-      // Result is not ready...
+  // If the request failed then retry.
+  if (supported_titles.empty()) {
+    // Limit retry attempts to prevent continuously failed attempt.
+    if (supported_titles_retry_count_ < retry_count) {
+      supported_title_future = GetSupportedTitlesAsync().share();
+      supported_titles_retry_count_++;
     }
-  } else {
-    // There is no result...
+
+    return {};
   }
-
-  return {};
-}
-
-std::future<std::set<uint32_t>>
-TitleGamerpicBrowser::GetSupportedTitlesAsync() {
-  auto supported_titles = std::async(std::launch::async, [this]() {
-    return kernel_state_->GetXboxLiveAPI()->GetSupportedGamerpicTitles();
-  });
 
   return supported_titles;
 }
 
+// Never blocks, a failed request is retried in the background.
+xe::kernel::GameTitle TitleGamerpicBrowser::GetDashboardTitleResult(
+    std::shared_future<xe::kernel::TitleGamerpicsObjectJSON>&
+        dashboard_title_future,
+    uint32_t retry_count) {
+  if (!IsFutureReady(dashboard_title_future)) {
+    return {};
+  }
+
+  const xe::kernel::GameTitle dash_title =
+      dashboard_title_future.get().GetTitle();
+
+  // If the request failed then retry.
+  if (dash_title.id != xe::kernel::kDashboardID) {
+    // Limit retry attempts to prevent continuously failed attempt.
+    if (dashboard_title_retry_count_ < retry_count) {
+      dashboard_title_future = LoadTitleAsync(xe::kernel::kDashboardID).share();
+      dashboard_title_retry_count_++;
+    }
+
+    return {};
+  }
+
+  return dash_title;
+}
+
+bool TitleGamerpicBrowser::IsPageLoading() {
+  // Futures are reset once their result is processed.
+  return gamerpic_page_.valid();
+}
+
+void TitleGamerpicBrowser::ProcessPageResult() {
+  if (!IsFutureReady(gamerpic_page_)) {
+    return;
+  }
+
+  const PageResult page = gamerpic_page_.get();
+
+  if (!page.has_value()) {
+    page_load_failed_ = true;
+    return;
+  }
+
+  current_page_ = page.value();
+  page_changed_ = true;
+  loaded_page_ = true;
+
+  if (!current_page_.GetTitles().empty()) {
+    LoadGameImagesAsync(current_page_);
+  }
+}
+
+void TitleGamerpicBrowser::ProcessOpenTitleResult() {
+  if (!IsFutureReady(open_title_)) {
+    return;
+  }
+
+  const xe::kernel::GameTitle title = open_title_.get().GetTitle();
+
+  if (!title.id) {
+    XELOGW("{}: Failed to load title gamerpics!", __func__);
+    open_title_failed_ = true;
+    return;
+  }
+
+  selected_title_gamerpics_ = title;
+  gamerpic_args_.browser_open = true;
+}
+
+void TitleGamerpicBrowser::RetryFailedRequests() {
+  if (page_load_failed_) {
+    gamerpic_page_ = LoadPageAsync(requested_page_pos_);
+  }
+
+  if (!downloaded_dash_gamerpics && IsFutureReady(dashboard_title_)) {
+    dashboard_title_retry_count_ = 0;
+    dashboard_title_ = LoadTitleAsync(xe::kernel::kDashboardID).share();
+  }
+
+  if (IsFutureReady(supported_titles_result_) &&
+      supported_titles_result_.get().empty()) {
+    supported_titles_retry_count_ = 0;
+    supported_titles_result_ = GetSupportedTitlesAsync().share();
+  }
+
+  open_title_failed_ = false;
+}
+
+void TitleGamerpicBrowser::DrawStatus() {
+  const bool dashboard_failed =
+      !downloaded_dash_gamerpics && IsFutureReady(dashboard_title_) &&
+      dashboard_title_retry_count_ >= max_retry_count_;
+
+  const bool supported_titles_failed =
+      IsFutureReady(supported_titles_result_) &&
+      supported_titles_result_.get().empty() &&
+      supported_titles_retry_count_ >= max_retry_count_;
+
+  if (page_load_failed_ || open_title_failed_ || dashboard_failed ||
+      supported_titles_failed) {
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f),
+                       "Unable to reach xboxgamer.pics, some content failed to "
+                       "load.");
+
+    ImGui::SameLine();
+
+    if (ImGui::SmallButton("Retry")) {
+      RetryFailedRequests();
+    }
+  } else if (IsPageLoading() && current_page_.GetTitles().empty()) {
+    ImGui::TextDisabled("Loading...");
+  }
+}
+
+std::future<std::set<uint32_t>>
+TitleGamerpicBrowser::GetSupportedTitlesAsync() {
+  return RunDetachedAsync([xlive_api = kernel_state_->GetXboxLiveAPI()]() {
+    return xlive_api->GetSupportedGamerpicTitles();
+  });
+}
+
 std::future<xe::kernel::TitleGamerpicsObjectJSON>
 TitleGamerpicBrowser::LoadTitleAsync(uint32_t title_id) {
-  auto load_title = std::async(std::launch::async, [this, title_id]() {
-    return kernel_state_->GetXboxLiveAPI()->GetTitleGamerpic(title_id);
-  });
-
-  return load_title;
+  return RunDetachedAsync(
+      [xlive_api = kernel_state_->GetXboxLiveAPI(), title_id]() {
+        return xlive_api->GetTitleGamerpic(title_id);
+      });
 }
 
-std::future<xe::kernel::PageGamerpicsObjectJSON>
+std::future<TitleGamerpicBrowser::PageResult>
 TitleGamerpicBrowser::LoadPageAsync(uint32_t page_pos) {
-  auto loaded_page = std::async(
-      std::launch::async, &TitleGamerpicBrowser::LoadPage, this, page_pos);
-
-  return loaded_page;
-}
-
-// Pages aren't cached because per_page_ will change page responses.
-xe::kernel::PageGamerpicsObjectJSON TitleGamerpicBrowser::LoadPage(
-    uint32_t page_pos) {
   loaded_page_ = false;
+  page_load_failed_ = false;
 
   if (!page_pos) {
     page_pos = 1;
   }
+
+  requested_page_pos_ = page_pos;
 
   std::vector<std::string> content_types = {};
 
@@ -1078,38 +1167,49 @@ xe::kernel::PageGamerpicsObjectJSON TitleGamerpicBrowser::LoadPage(
   const std::string content_types_query = xe::kernel::BuildCSVFromVector(
       content_types, std::size(title_type_filter_state_));
 
-  std::optional<xe::kernel::PageGamerpicsObjectJSON> responce =
-      kernel_state_->GetXboxLiveAPI()->GetGamerpicPage(
-          page_pos, per_page_, utf8::lower_ascii(content_types_query));
-
-  if (!responce.has_value()) {
-    return {};
-  }
-
-  const auto& page_info = responce.value();
-
-  XELOGD(fmt::format("{} - Page: {} Loaded!", __func__,
-                     page_info.GetCurrentPage()));
-
-  return page_info;
+  // Request parameters are captured by value as the browser may be closed
+  // before the request completes.
+  return RunDetachedAsync([xlive_api = kernel_state_->GetXboxLiveAPI(),
+                           page_pos, per_page = per_page_.load(),
+                           query = utf8::lower_ascii(content_types_query)]() {
+    return LoadPage(xlive_api, page_pos, per_page, query);
+  });
 }
 
-std::future<xe::kernel::PageGamerpicsObjectJSON>
+// Pages aren't cached because per_page_ will change page responses.
+TitleGamerpicBrowser::PageResult TitleGamerpicBrowser::LoadPage(
+    xe::kernel::XLiveAPI* xlive_api, uint32_t page_pos, uint32_t per_page,
+    std::string content_types_query) {
+  PageResult responce =
+      xlive_api->GetGamerpicPage(page_pos, per_page, content_types_query);
+
+  if (!responce.has_value()) {
+    XELOGW(fmt::format("{} - Page: {} Failed!", __func__, page_pos));
+    return std::nullopt;
+  }
+
+  XELOGD(fmt::format("{} - Page: {} Loaded!", __func__,
+                     responce->GetCurrentPage()));
+
+  return responce;
+}
+
+std::future<TitleGamerpicBrowser::PageResult>
 TitleGamerpicBrowser::LoadNextPage() {
   return LoadPageAsync(current_page_.GetNextPage());
 }
 
-std::future<xe::kernel::PageGamerpicsObjectJSON>
+std::future<TitleGamerpicBrowser::PageResult>
 TitleGamerpicBrowser::LoadPreviousPage() {
   return LoadPageAsync(current_page_.GetPreviousPage());
 }
 
-std::future<xe::kernel::PageGamerpicsObjectJSON>
+std::future<TitleGamerpicBrowser::PageResult>
 TitleGamerpicBrowser::LoadFirstPage() {
   return LoadPageAsync(1);
 }
 
-std::future<xe::kernel::PageGamerpicsObjectJSON>
+std::future<TitleGamerpicBrowser::PageResult>
 TitleGamerpicBrowser::LoadLastPage() {
   return LoadPageAsync(current_page_.GetTotalPages());
 }

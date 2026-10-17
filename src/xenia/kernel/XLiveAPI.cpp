@@ -488,6 +488,8 @@ std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::Get(std::string endpoint,
 
   if (result != CURLE_OK) {
     XELOGE("XLiveAPI::Get: CURL Error Code: {}", static_cast<uint32_t>(result));
+    curl_easy_cleanup(curl_handle);
+    curl_slist_free_all(headers);
     return PraseResponse(chunk);
   }
 
@@ -2311,11 +2313,15 @@ std::vector<uint8_t> XLiveAPI::GetUserGamerpicTile(uint64_t xuid,
   return gamerpic;
 }
 
+// Prevent gamerpic requests from hanging indefinitely if the service is down.
+constexpr uint32_t kGamerpicAPITimeout = 10;
+
 TitleGamerpicsObjectJSON XLiveAPI::GetTitleGamerpic(uint32_t title_id) {
   const std::string endpoint =
       fmt::format("https://xboxgamer.pics/api/title/{:08x}", title_id);
 
-  std::unique_ptr<HTTPResponseObjectJSON> response = Get(endpoint);
+  std::unique_ptr<HTTPResponseObjectJSON> response =
+      Get(endpoint, kGamerpicAPITimeout);
 
   if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_OK) {
     XELOGE("{} error message: {}", __func__, response->Message());
@@ -2330,7 +2336,8 @@ TitleGamerpicsObjectJSON XLiveAPI::GetTitleGamerpic(uint32_t title_id) {
 std::set<uint32_t> XLiveAPI::GetSupportedGamerpicTitles() {
   const std::string endpoint = "https://xboxgamer.pics/api/idlist";
 
-  std::unique_ptr<HTTPResponseObjectJSON> response = Get(endpoint);
+  std::unique_ptr<HTTPResponseObjectJSON> response =
+      Get(endpoint, kGamerpicAPITimeout);
 
   if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_OK) {
     XELOGE("{} error message: {}", __func__, response->Message());
@@ -2364,11 +2371,11 @@ std::optional<PageGamerpicsObjectJSON> XLiveAPI::GetGamerpicPage(
       "https://xboxgamer.pics/api/titles?page={}&per_page={}&type={}", page,
       per_page, type_query.c_str());
 
-  std::unique_ptr<HTTPResponseObjectJSON> response = Get(endpoint);
+  std::unique_ptr<HTTPResponseObjectJSON> response =
+      Get(endpoint, kGamerpicAPITimeout);
 
   if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_OK) {
     XELOGE("{} error message: {}", __func__, response->Message());
-    assert_always();
 
     return std::nullopt;
   }
