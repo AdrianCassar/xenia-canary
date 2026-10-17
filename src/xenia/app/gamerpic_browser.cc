@@ -37,6 +37,17 @@ auto item_getter = [](void* data, int idx) {
   return vector.at(idx).c_str();
 };
 
+// Blue buttons used throughout the browser and its popups.
+void PushButtonStyle() {
+  ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.16f, 0.29f, 0.48f, 1.0f));
+  ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                        ImVec4(0.26f, 0.59f, 0.98f, 1.0f));
+  ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                        ImVec4(0.06f, 0.53f, 0.98f, 1.0f));
+}
+
+void PopButtonStyle() { ImGui::PopStyleColor(3); }
+
 // Unlike std::async the returned future doesn't block when it's destroyed or
 // replaced, so a slow or unreachable API can't stall the UI thread.
 // func must not capture the browser as it may outlive it.
@@ -169,6 +180,9 @@ void TitleGamerpicBrowser::OnDraw(ImGuiIO& io) {
   if (ImGui::BeginPopupModal(
           "Gamerpic Browser", &titles_args_.browser_open,
           ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize)) {
+    // Applies to nested popups too, image buttons override it.
+    PushButtonStyle();
+
     CleanupTitleImagesThreads();
 
     ProcessPageResult();
@@ -691,6 +705,8 @@ void TitleGamerpicBrowser::OnDraw(ImGuiIO& io) {
 
     DrawGamerpicsBrowser(selected_title_gamerpics_, gamerpic_args_);
 
+    PopButtonStyle();
+
     ImGui::EndPopup();
   }
 
@@ -771,17 +787,11 @@ void TitleGamerpicBrowser::DrawPageSelection(
     const ImVec2 action_size = ImVec2(action_width, 0);
 
     ImGui::BeginDisabled(!has_pages || selected_page_pos_ == current_page);
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.16f, 0.29f, 0.48f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                          ImVec4(0.26f, 0.59f, 0.98f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
-                          ImVec4(0.06f, 0.53f, 0.98f, 1.0f));
     if (ImGui::Button(
             fmt::format("Go to Page {}###GoToPage", selected_page_pos_).c_str(),
             action_size)) {
       go_to_page = true;
     }
-    ImGui::PopStyleColor(3);
     ImGui::EndDisabled();
 
     ImGui::SameLine();
