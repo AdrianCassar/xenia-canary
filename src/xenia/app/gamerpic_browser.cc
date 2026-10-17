@@ -58,6 +58,24 @@ std::future<std::invoke_result_t<F>> RunDetachedAsync(F&& func) {
   return future;
 }
 
+// Copy-on-write update which retries if another thread published a new map in
+// the meantime, so concurrent loaders can't discard each other's entries.
+// Discarded entries would destroy textures which may still be drawn.
+template <typename Map, typename Modify>
+void UpdateAtomicMap(std::atomic<std::shared_ptr<const Map>>& atomic_map,
+                     Modify modify) {
+  std::shared_ptr<const Map> current =
+      atomic_map.load(std::memory_order_acquire);
+  std::shared_ptr<const Map> next;
+
+  do {
+    auto updated = std::make_shared<Map>(current ? *current : Map{});
+    modify(*updated);
+    next = std::move(updated);
+  } while (!atomic_map.compare_exchange_weak(
+      current, next, std::memory_order_acq_rel, std::memory_order_acquire));
+}
+
 void TitleGamerpicBrowser::Initialize() {
   kernel_state_ = emulator_window_->emulator()->kernel_state();
 
@@ -1304,13 +1322,10 @@ void TitleGamerpicBrowser::LoadGameImages(
     game_images_desc[title.id] = title.image;
   }
 
-  // We want to cache for performance
-  auto next_images =
-      std::make_shared<TitlesMap>(images ? *images : TitlesMap{});
-  TitlesMap& new_images = *next_images;
-
   const auto images_to_process =
       kernel_state_->GetXboxLiveAPI()->GetMultiGameInfo(game_images_desc);
+
+  TitlesMap downloaded_images = {};
 
   for (const auto& title : page_info.GetTitles()) {
     if (images_to_process.contains(title.id)) {
@@ -1318,23 +1333,28 @@ void TitleGamerpicBrowser::LoadGameImages(
       const bool is_jpeg = IsDataJpegImage(images_to_process.at(title.id));
 
       if (is_png || is_jpeg) {
-        new_images[title.id] = images_to_process.at(title.id);
+        downloaded_images[title.id] = images_to_process.at(title.id);
       } else {
         XELOGW(fmt::format("{} - Invalid PNG/JPG: {}", __func__, title.name));
       }
     }
   }
 
-  title_images->store(next_images, std::memory_order_release);
+  // We want to cache for performance
+  UpdateAtomicMap(*title_images, [&](TitlesMap& new_images) {
+    for (const auto& [title_id, image] : downloaded_images) {
+      new_images.try_emplace(title_id, image);
+    }
+  });
+
+  const auto cached_images = title_images->load(std::memory_order_acquire);
 
   // Processing images asynchronously prevents ImGui drawing from being
   // blocked.
   const auto immediate_images =
       immediate_title_images->load(std::memory_order_acquire);
 
-  auto next_immediate_images = std::make_shared<ImmediateTitleMap>(
-      immediate_images ? *immediate_images : ImmediateTitleMap{});
-  ImmediateTitleMap& new_immediate_images = *next_immediate_images;
+  ImmediateTitleMap created_images = {};
 
   for (const auto& title : page_info.GetTitles()) {
     if (stoken.stop_requested()) {
@@ -1347,11 +1367,11 @@ void TitleGamerpicBrowser::LoadGameImages(
       continue;
     }
 
-    if (new_images.contains(title.id)) {
+    if (cached_images && cached_images->contains(title.id)) {
       XELOGD(fmt::format("{} - Loading Icon: {}", __func__, title.name));
 
-      new_immediate_images[title.id] =
-          imgui_drawer->LoadImGuiIcon(new_images.at(title.id));
+      created_images[title.id] =
+          imgui_drawer->LoadImGuiIcon(cached_images->at(title.id));
 
       // Animate loading images
       // std::this_thread::sleep_for(25ms);
@@ -1359,8 +1379,12 @@ void TitleGamerpicBrowser::LoadGameImages(
   }
 
   // Submit all images at the same time.
-  immediate_title_images->store(next_immediate_images,
-                                std::memory_order_release);
+  UpdateAtomicMap(*immediate_title_images,
+                  [&](ImmediateTitleMap& new_immediate_images) {
+                    for (const auto& [title_id, icon] : created_images) {
+                      new_immediate_images.try_emplace(title_id, icon);
+                    }
+                  });
 
   // Self-request stop so we know thread is completed to cleanup stop_source
   // vector.
@@ -1419,13 +1443,10 @@ void TitleGamerpicBrowser::LoadGamerpics(
       gamerpic_urls.push_back(gamerpic.url);
     }
 
-    // We want to cache for performance
-    auto next_gamerpics =
-        std::make_shared<GamerpicsMap>(gamerpics ? *gamerpics : GamerpicsMap{});
-    GamerpicsMap& new_gamerpics = *next_gamerpics;
-
     const auto gamerpics_to_process =
         kernel_state_->GetXboxLiveAPI()->GetMultiGamerpics(gamerpic_urls);
+
+    TitlesMap downloaded_gamerpics = {};
 
     for (const auto& gamerpic : std::ranges::subrange(begin, next_end)) {
       if (gamerpics_to_process.contains(gamerpic.big_tile_id)) {
@@ -1435,7 +1456,7 @@ void TitleGamerpicBrowser::LoadGamerpics(
             IsDataJpegImage(gamerpics_to_process.at(gamerpic.big_tile_id));
 
         if (is_png || is_jpeg) {
-          new_gamerpics[game.id][gamerpic.big_tile_id] =
+          downloaded_gamerpics[gamerpic.big_tile_id] =
               gamerpics_to_process.at(gamerpic.big_tile_id);
         } else {
           XELOGW(fmt::format("{} - Invalid Gamerpic PNG/JPEG: {:08X}", __func__,
@@ -1444,19 +1465,22 @@ void TitleGamerpicBrowser::LoadGamerpics(
       }
     }
 
-    title_gamerpics->store(next_gamerpics, std::memory_order_release);
+    // We want to cache for performance
+    UpdateAtomicMap(*title_gamerpics, [&](GamerpicsMap& new_gamerpics) {
+      auto& new_title_gamerpics = new_gamerpics[game.id];
+
+      for (const auto& [tile_id, gamerpic] : downloaded_gamerpics) {
+        new_title_gamerpics.try_emplace(tile_id, gamerpic);
+      }
+    });
 
     gamerpics = title_gamerpics->load(std::memory_order_acquire);
 
     // Processing images asynchronously prevents ImGui drawing from being
     // blocked.
     for (const auto& gamerpic : std::ranges::subrange(begin, next_end)) {
-      // Move inside loop if submitting gamerpics individually.
       const auto immediate_gamerpics =
           immediate_title_gamerpics->load(std::memory_order_acquire);
-
-      auto next_immediate_gamerpic = std::make_shared<ImmediateGamerpicsMap>(
-          immediate_gamerpics ? *immediate_gamerpics : ImmediateGamerpicsMap{});
 
       if (stoken.stop_requested()) {
         XELOGD(fmt::format("{} - {}: Stop Requested!", __func__, game.name));
@@ -1475,16 +1499,16 @@ void TitleGamerpicBrowser::LoadGamerpics(
           XELOGD(fmt::format("{} - {}: Loading Gamerpic {:08X}", __func__,
                              game.name, gamerpic.big_tile_id));
 
-          ImmediateGamerpicsMap& new_immediate_gamerpic =
-              *next_immediate_gamerpic;
-
-          new_immediate_gamerpic[game.id][gamerpic.big_tile_id] =
+          std::shared_ptr<xe::ui::ImmediateTexture> icon =
               imgui_drawer->LoadImGuiIcon(
                   gamerpics->at(game.id).at(gamerpic.big_tile_id));
 
           // Submit each gamerpic individually.
-          immediate_title_gamerpics->store(next_immediate_gamerpic,
-                                           std::memory_order_release);
+          UpdateAtomicMap(*immediate_title_gamerpics,
+                          [&](ImmediateGamerpicsMap& new_immediate_gamerpics) {
+                            new_immediate_gamerpics[game.id].try_emplace(
+                                gamerpic.big_tile_id, icon);
+                          });
 
           // Animate loading gamerpics
           // std::this_thread::sleep_for(25ms);
