@@ -228,7 +228,7 @@ class XLiveAPI {
       std::unordered_map<uint32_t, std::string> images_data);
 
   std::map<uint32_t, std::vector<uint8_t>> GetMultiGamerpics(
-      std::vector<std::string> cdn_parts);
+      std::vector<std::string> urls);
 
   std::vector<uint8_t> DownloadGamerpicTile(const uint32_t title_id,
                                             const uint32_t tile_id);

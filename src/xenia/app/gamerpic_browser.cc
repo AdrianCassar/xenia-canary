@@ -1251,7 +1251,7 @@ void TitleGamerpicBrowser::LoadGamerpics(
     auto next_end =
         std::next(begin, std::min<size_t>(range, std::distance(begin, end)));
 
-    std::vector<std::string> cdn_parts = {};
+    std::vector<std::string> gamerpic_urls = {};
 
     for (const auto& gamerpic : std::ranges::subrange(begin, next_end)) {
       if (gamerpics && gamerpics->contains(game.id)) {
@@ -1260,7 +1260,7 @@ void TitleGamerpicBrowser::LoadGamerpics(
         }
       }
 
-      cdn_parts.push_back(gamerpic.cdn);
+      gamerpic_urls.push_back(gamerpic.url);
     }
 
     // We want to cache for performance
@@ -1269,7 +1269,7 @@ void TitleGamerpicBrowser::LoadGamerpics(
     GamerpicsMap& new_gamerpics = *next_gamerpics;
 
     const auto gamerpics_to_process =
-        kernel_state_->GetXboxLiveAPI()->GetMultiGamerpics(cdn_parts);
+        kernel_state_->GetXboxLiveAPI()->GetMultiGamerpics(gamerpic_urls);
 
     for (const auto& gamerpic : std::ranges::subrange(begin, next_end)) {
       if (gamerpics_to_process.contains(gamerpic.big_tile_id)) {

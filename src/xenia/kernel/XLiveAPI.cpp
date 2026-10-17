@@ -2384,9 +2384,8 @@ std::map<uint32_t, std::vector<uint8_t>> XLiveAPI::GetMultiGameInfo(
 
   std::vector<std::string> urls = {};
 
-  for (const auto& [title_id, image] : images_data) {
-    urls.push_back(fmt::format("https://assets.xboxgamer.pics/titles/{:x}/{}",
-                               title_id, image));
+  for (const auto& [title_id, image_url] : images_data) {
+    urls.push_back(image_url);
   }
 
   std::vector<HTTPResponseObjectJSON> games_info = GetMulti(urls, 5);
@@ -2418,28 +2417,22 @@ std::map<uint32_t, std::vector<uint8_t>> XLiveAPI::GetMultiGameInfo(
 }
 
 std::map<uint32_t, std::vector<uint8_t>> XLiveAPI::GetMultiGamerpics(
-    std::vector<std::string> cdn_parts) {
-  if (cdn_parts.empty()) {
+    std::vector<std::string> urls) {
+  if (urls.empty()) {
     return {};
-  }
-
-  std::vector<std::string> urls = {};
-
-  for (const auto& cdn : cdn_parts) {
-    urls.push_back(fmt::format("https://assets.xboxgamer.pics{}", cdn));
   }
 
   std::vector<HTTPResponseObjectJSON> gamerpics_data = GetMulti(urls, 5);
 
   std::map<std::uint32_t, std::vector<uint8_t>> gamerpics = {};
 
-  if (gamerpics_data.size() != cdn_parts.size()) {
+  if (gamerpics_data.size() != urls.size()) {
     assert_always();
     return gamerpics;
   }
 
   // Requires the responses to be in order
-  for (uint32_t i = 0; const auto& cdn : cdn_parts) {
+  for (uint32_t i = 0; const auto& url : urls) {
     const auto& gamerpic = gamerpics_data[i];
 
     if (gamerpic.RawResponse().response) {
@@ -2447,7 +2440,7 @@ std::map<uint32_t, std::vector<uint8_t>> XLiveAPI::GetMultiGamerpics(
       const uint8_t* downloaded_data =
           reinterpret_cast<const uint8_t*>(gamerpic.RawResponse().response);
 
-      std::string gamerpic_id_str = std::filesystem::path(cdn).stem().string();
+      std::string gamerpic_id_str = std::filesystem::path(url).stem().string();
 
       uint32_t tile_id =
           string_util::from_string<uint32_t>(gamerpic_id_str, true);
@@ -2510,8 +2503,9 @@ std::map<uint64_t, std::vector<uint8_t>> XLiveAPI::GetMultiGamerpicsFromXUIDs(
           const uint32_t tile_id = fsmall ? gamerpic_key.GetSmallTileId()
                                           : gamerpic_key.GetBigTileId();
 
-          const std::string gamerpic_cdn = fmt::format(
-              "/titles/{:x}/{:x}.png", gamerpic_key.GetTitleId(), tile_id);
+          const std::string gamerpic_cdn =
+              fmt::format("https://assets.xboxgamer.pics/titles/{:x}/{:x}.png",
+                          gamerpic_key.GetTitleId(), tile_id);
 
           cdn_parts.push_back(gamerpic_cdn);
 
@@ -2540,11 +2534,11 @@ std::shared_future<gamerpics_pair> XLiveAPI::DownloadCompleteGamerpic(
     std::vector<std::string> cdn_parts = {};
 
     const std::string big_gamerpic_cdn =
-        fmt::format("/titles/{:x}/{:x}.png", gamerpic_key.GetTitleId(),
-                    gamerpic_key.GetBigTileId());
+        fmt::format("https://assets.xboxgamer.pics/titles/{:x}/{:x}.png",
+                    gamerpic_key.GetTitleId(), gamerpic_key.GetBigTileId());
     const std::string small_gamerpic_cdn =
-        fmt::format("/titles/{:x}/{:x}.png", gamerpic_key.GetTitleId(),
-                    gamerpic_key.GetSmallTileId());
+        fmt::format("https://assets.xboxgamer.pics/titles/{:x}/{:x}.png",
+                    gamerpic_key.GetTitleId(), gamerpic_key.GetSmallTileId());
 
     cdn_parts.push_back(big_gamerpic_cdn);
     cdn_parts.push_back(small_gamerpic_cdn);

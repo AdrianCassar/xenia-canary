@@ -17,13 +17,9 @@
 namespace xe {
 namespace kernel {
 struct Gamerpic {
-  std::string cdn;
   std::string id;
   uint32_t likes;
-  std::string name;
   std::string url;
-  std::string url_small;
-  std::string cdn_small;
   uint32_t big_tile_id;
   uint32_t small_tile_id;
 };

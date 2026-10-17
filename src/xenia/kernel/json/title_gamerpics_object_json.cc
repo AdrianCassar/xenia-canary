@@ -61,10 +61,6 @@ Gamerpic TitleGamerpicsObjectJSON::DeserializeGamerpic(
     const rapidjson::Value& gamerpicObj) {
   Gamerpic gamepic = {};
 
-  if (gamerpicObj.HasMember("cdn") && !gamerpicObj["cdn"].IsNull()) {
-    gamepic.cdn = gamerpicObj["cdn"].GetString();
-  }
-
   if (gamerpicObj.HasMember("id") && !gamerpicObj["id"].IsNull()) {
     gamepic.id = gamerpicObj["id"].GetString();
   }
@@ -73,34 +69,18 @@ Gamerpic TitleGamerpicsObjectJSON::DeserializeGamerpic(
     gamepic.likes = gamerpicObj["likes"].GetUint();
   }
 
-  if (gamerpicObj.HasMember("name") && !gamerpicObj["name"].IsNull()) {
-    gamepic.name = gamerpicObj["name"].GetString();
-  }
-
   if (gamerpicObj.HasMember("url") && !gamerpicObj["url"].IsNull()) {
     gamepic.url = gamerpicObj["url"].GetString();
 
     std::string big_tile_id_str =
-        std::filesystem::path(gamepic.name).stem().string();
+        std::filesystem::path(gamepic.url).stem().string();
 
     gamepic.big_tile_id =
         string_util::from_string<uint32_t>(big_tile_id_str, true);
-  }
 
-  if (gamerpicObj.HasMember("url_small") &&
-      !gamerpicObj["url_small"].IsNull()) {
-    gamepic.url_small = gamerpicObj["url_small"].GetString();
-
-    std::string small_tile_id_str =
-        std::filesystem::path(gamepic.url_small).stem().string();
-
-    gamepic.small_tile_id =
-        string_util::from_string<uint32_t>(small_tile_id_str, true);
-  }
-
-  if (gamerpicObj.HasMember("cdn_small") &&
-      !gamerpicObj["cdn_small"].IsNull()) {
-    gamepic.cdn_small = gamerpicObj["cdn_small"].GetString();
+    // Backend only provides the big tile, small tiles are stored at the same
+    // index in the 0x1XXXX range (e.g. 20000 -> 10000).
+    gamepic.small_tile_id = gamepic.big_tile_id - 0x10000;
   }
 
   assert_not_zero(gamepic.small_tile_id);
