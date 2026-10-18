@@ -30,6 +30,7 @@
 #include "version.h"
 #include "xenia/app/updater.h"
 #include "xenia/base/logging.h"
+#include "xenia/kernel/util/curl_utils.h"
 #include "xenia/kernel/xnet.h"
 
 namespace xe {
@@ -37,15 +38,6 @@ namespace app {
 namespace {
 
 constexpr uint32_t kRequestError = std::numeric_limits<uint32_t>::max();
-
-inline bool SetCurlOptions(CURL*) { return true; }
-
-template <typename Value, typename... Options>
-bool SetCurlOptions(CURL* curl, CURLoption option, Value value,
-                    Options... options) {
-  return curl_easy_setopt(curl, option, value) == CURLE_OK &&
-         SetCurlOptions(curl, options...);
-}
 
 size_t WriteResponseToFileCallback(void* contents, size_t size, size_t nmemb,
                                    void* userp) {
@@ -67,8 +59,6 @@ size_t WriteResponseToFileCallback(void* contents, size_t size, size_t nmemb,
 
 }  // namespace
 
-// TODO:
-// - SSL backend for libcurl on Linux using wolfssl
 Updater::Updater(const std::string& owner, const std::string& repo)
     : owner_(owner), repo_(repo) {}
 
@@ -84,12 +74,14 @@ uint32_t Updater::GetRequest(const std::string& endpoint,
 
   ProgressCallbackData callback_data = {.cancelled = &cancel_flag};
 
-  const bool options_set = SetCurlOptions(
-      curl.get(), CURLOPT_URL, endpoint.c_str(), CURLOPT_USERAGENT,
-      "xenia-canary", CURLOPT_WRITEFUNCTION, WriteResponceToMemoryCallback,
-      CURLOPT_WRITEDATA, &response_buffer, CURLOPT_FOLLOWLOCATION, 1L,
-      CURLOPT_NOPROGRESS, 0L, CURLOPT_XFERINFODATA, &callback_data,
-      CURLOPT_XFERINFOFUNCTION, CurlProgressCallback);
+  const bool options_set =
+      xe::kernel::util::SetCurlCABundle(curl.get()) == CURLE_OK &&
+      xe::kernel::util::SetCurlOptions(
+          curl.get(), CURLOPT_URL, endpoint.c_str(), CURLOPT_USERAGENT,
+          "xenia-canary", CURLOPT_WRITEFUNCTION, WriteResponceToMemoryCallback,
+          CURLOPT_WRITEDATA, &response_buffer, CURLOPT_FOLLOWLOCATION, 1L,
+          CURLOPT_NOPROGRESS, 0L, CURLOPT_XFERINFODATA, &callback_data,
+          CURLOPT_XFERINFOFUNCTION, CurlProgressCallback);
 
   if (!options_set) {
     return kRequestError;
@@ -570,13 +562,15 @@ uint32_t Updater::DownloadFile(
   ProgressCallbackData callback_data = {.progress_callback = progress_callback,
                                         .cancelled = &cancel_flag};
 
-  const bool options_set = SetCurlOptions(
-      curl.get(), CURLOPT_URL, file_endpoint.c_str(), CURLOPT_USERAGENT,
-      "xenia-canary", CURLOPT_FOLLOWLOCATION, 1L, CURLOPT_WRITEFUNCTION,
-      WriteResponseToFileCallback, CURLOPT_WRITEDATA, &file, CURLOPT_NOPROGRESS,
-      0L, CURLOPT_XFERINFODATA, &callback_data, CURLOPT_XFERINFOFUNCTION,
-      CurlProgressCallback, CURLOPT_LOW_SPEED_LIMIT, 1024L,
-      CURLOPT_LOW_SPEED_TIME, 30L);
+  const bool options_set =
+      xe::kernel::util::SetCurlCABundle(curl.get()) == CURLE_OK &&
+      xe::kernel::util::SetCurlOptions(
+          curl.get(), CURLOPT_URL, file_endpoint.c_str(), CURLOPT_USERAGENT,
+          "xenia-canary", CURLOPT_FOLLOWLOCATION, 1L, CURLOPT_WRITEFUNCTION,
+          WriteResponseToFileCallback, CURLOPT_WRITEDATA, &file,
+          CURLOPT_NOPROGRESS, 0L, CURLOPT_XFERINFODATA, &callback_data,
+          CURLOPT_XFERINFOFUNCTION, CurlProgressCallback,
+          CURLOPT_LOW_SPEED_LIMIT, 1024L, CURLOPT_LOW_SPEED_TIME, 30L);
 
   if (!options_set) {
     file.close();
