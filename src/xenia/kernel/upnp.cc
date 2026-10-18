@@ -7,7 +7,10 @@
  ******************************************************************************
  */
 
+#include <algorithm>
 #include <memory>
+#include <thread>
+#include <utility>
 
 #include <third_party/miniupnp/miniupnpc/include/miniwget.h>
 #include <third_party/miniupnp/miniupnpc/include/upnpcommands.h>
@@ -41,7 +44,14 @@ void UPnP::Initialize() {
     return;
   }
 
-  get_valid_IGD_ = std::async(std::launch::async, &UPnP::GetValidIGD, this);
+  // Detached so shutdown doesn't wait for discovery.
+  std::promise<std::unique_ptr<IGDResult>> igd_promise;
+  get_valid_IGD_ = igd_promise.get_future();
+
+  std::thread([saved_root = cvars::upnp_root,
+               promise = std::move(igd_promise)]() mutable {
+    promise.set_value(GetValidIGD(saved_root));
+  }).detach();
 };
 
 void UPnP::Start() {
@@ -53,11 +63,21 @@ void UPnP::Start() {
     Initialize();
   }
 
-  const std::optional<std::string> igd_desc = get_valid_IGD_.get();
+  const std::unique_ptr<IGDResult> igd = get_valid_IGD_.get();
 
-  if (igd_desc.has_value()) {
-    if (cvars::upnp_root != igd_desc) {
-      cvars::upnp_root = igd_desc.value();
+  if (igd) {
+    {
+      std::lock_guard igd_lock(igd_mutex_);
+
+      CleanupIGD();
+
+      igd_data_ = igd->data;
+      igd_urls_ = std::exchange(igd->urls, UPNPUrls{});
+      std::copy_n(igd->lan_addr, sizeof(lan_addr_), lan_addr_);
+    }
+
+    if (cvars::upnp_root != igd->desc_url) {
+      cvars::upnp_root = igd->desc_url;
       OVERRIDE_string(upnp_root, cvars::upnp_root);
     }
 
@@ -69,16 +89,26 @@ void UPnP::Start() {
   }
 }
 
-std::optional<std::string> UPnP::GetValidIGD() {
+std::unique_ptr<UPnP::IGDResult> UPnP::GetValidIGD(
+    const std::string& saved_root) {
+  auto igd = std::make_unique<IGDResult>();
+
   // Check saved UPnP device is still valid this ensures we do not receive
   // HTTP_UNAUTHORIZED when performing UPnP actions.
-  if (!cvars::upnp_root.empty()) {
-    if (LoadIGD(cvars::upnp_root)) {
-      return cvars::upnp_root;
+  if (!saved_root.empty()) {
+    if (LoadIGD(saved_root, *igd)) {
+      igd->desc_url = saved_root;
+      return igd;
     }
+
+    igd = std::make_unique<IGDResult>();
   }
 
-  return DiscoverValidIGD();
+  if (DiscoverValidIGD(*igd)) {
+    return igd;
+  }
+
+  return nullptr;
 }
 
 UPNPDev* UPnP::DiscoverUPnPDevices() {
@@ -99,36 +129,35 @@ UPNPDev* UPnP::DiscoverUPnPDevices() {
   return device_list;
 }
 
-std::optional<std::string> UPnP::DiscoverValidIGD() {
-  std::lock_guard igd_lock(igd_mutex_);
-
-  CleanupIGD();
-
+bool UPnP::DiscoverValidIGD(IGDResult& igd) {
   std::unique_ptr<UPNPDev, decltype(&freeUPNPDevlist)> device_list(
       DiscoverUPnPDevices(), &freeUPNPDevlist);
 
   if (!device_list) {
     XELOGE("{}: No UPnP devices were found", __func__);
-    return std::nullopt;
+    return false;
   }
 
-  const int status = UPNP_GetValidIGD(device_list.get(), &igd_urls_, &igd_data_,
-                                      lan_addr_, sizeof(lan_addr_), nullptr, 0);
+  const int status =
+      UPNP_GetValidIGD(device_list.get(), &igd.urls, &igd.data, igd.lan_addr,
+                       sizeof(igd.lan_addr), nullptr, 0);
 
-  std::optional<std::string> igd_desc_url;
+  bool valid = false;
 
   switch (status) {
     case UPNP_NO_IGD: {
       XELOGW("No IGD found.");
     } break;
     case UPNP_CONNECTED_IGD: {
-      igd_desc_url = device_list->descURL;
+      igd.desc_url = device_list->descURL;
+      valid = true;
 
       XELOGI("Found valid and connected IGD: {} at {}", device_list->st,
              device_list->descURL);
     } break;
     case UPNP_PRIVATEIP_IGD: {
-      igd_desc_url = device_list->descURL;
+      igd.desc_url = device_list->descURL;
+      valid = true;
 
       XELOGI(
           "Found valid and connected IGD but with a reserved address: {} at {}",
@@ -145,16 +174,12 @@ std::optional<std::string> UPnP::DiscoverValidIGD() {
     } break;
   }
 
-  return igd_desc_url;
+  return valid;
 };
 
-bool UPnP::LoadIGD(std::string igd_root) {
-  std::lock_guard igd_lock(igd_mutex_);
-
-  CleanupIGD();
-
-  return UPNP_GetIGDFromUrl(igd_root.c_str(), &igd_urls_, &igd_data_, lan_addr_,
-                            sizeof(lan_addr_));
+bool UPnP::LoadIGD(const std::string& igd_root, IGDResult& igd) {
+  return UPNP_GetIGDFromUrl(igd_root.c_str(), &igd.urls, &igd.data,
+                            igd.lan_addr, sizeof(igd.lan_addr));
 }
 
 std::future<int32_t> UPnP::AddPortAsync(std::string addr,
