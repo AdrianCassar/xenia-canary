@@ -150,6 +150,10 @@ uint64_t GetLocalMachineId(const MacAddress mac_address) {
 MacAddress GetConsoleMacAddress() {
   uint8_t mac_address[MacAddress::MacAddressSize] = {};
 
+  if (!kernel_state() || !kernel_state()->xconfig()) {
+    return MacAddress(mac_address);
+  }
+
   kernel_state()->xconfig()->ReadSetting(
       XCONFIG_SECURED_CATEGORY, XCONFIG_SECURED_MAC_ADDRESS, &mac_address);
 
