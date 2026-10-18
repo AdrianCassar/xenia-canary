@@ -82,13 +82,7 @@ class UPnP {
 
   void Start();
 
-  std::optional<std::string> GetValidIGD();
-
-  std::optional<std::string> DiscoverValidIGD();
-
-  UPNPDev* DiscoverUPnPDevices();
-
-  bool LoadIGD(std::string igd_root);
+  static UPNPDev* DiscoverUPnPDevices();
 
   std::future<int32_t> AddPortAsync(std::string addr, uint16_t internal_port,
                                     std::string protocol);
@@ -143,10 +137,26 @@ class UPnP {
   }
 
  private:
+  // Result of IGD discovery.
+  struct IGDResult {
+    std::string desc_url;
+    IGDdatas data = {};
+    UPNPUrls urls = {};
+    char lan_addr[NI_MAXHOST] = {};
+
+    ~IGDResult() { FreeUPNPUrls(&urls); }
+  };
+
+  static std::unique_ptr<IGDResult> GetValidIGD(const std::string& saved_root);
+
+  static bool DiscoverValidIGD(IGDResult& igd);
+
+  static bool LoadIGD(const std::string& igd_root, IGDResult& igd);
+
   void CleanupIGD();
   void StartPeriodicPortsRefresher();
 
-  std::future<std::optional<std::string>> get_valid_IGD_;
+  std::future<std::unique_ptr<IGDResult>> get_valid_IGD_;
 
   std::atomic<bool> active_ = false;
   std::atomic<bool> leases_supported_ = true;
