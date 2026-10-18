@@ -22,6 +22,7 @@
 #include "xenia/emulator.h"
 #include "xenia/kernel/XLiveAPI.h"
 #include "xenia/kernel/user_module.h"
+#include "xenia/kernel/util/curl_utils.h"
 #include "xenia/kernel/util/friends_util.h"
 #include "xenia/kernel/util/shim_utils.h"
 
@@ -62,8 +63,6 @@ DEFINE_int32(discord_presence_user_index, 0,
 using namespace rapidjson;
 
 // TODO:
-// libcurl + wolfssl + TLS Support
-//
 // Use the overlapped task for asynchronous curl requests.
 // API endpoint lookup table
 
@@ -462,6 +461,8 @@ std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::Get(std::string endpoint,
     return PraseResponse(chunk);
   }
 
+  util::SetCurlCABundle(curl_handle);
+
   XELOGNET("{} Endpoint: {}", __func__, endpoint);
 
   curl_slist* headers = NULL;
@@ -526,6 +527,8 @@ std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::Post(std::string endpoint,
     XELOGE("XLiveAPI::Post: Cannot initialize CURL");
     return PraseResponse(chunk);
   }
+
+  util::SetCurlCABundle(curl_handle);
 
   XELOGNET("{} Endpoint: {}", __func__, endpoint);
 
@@ -593,6 +596,8 @@ std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::Delete(std::string endpoint) {
     return PraseResponse(chunk);
   }
 
+  util::SetCurlCABundle(curl_handle);
+
   XELOGNET("{} Endpoint: {}", __func__, endpoint);
 
   struct curl_slist* headers = NULL;
@@ -658,6 +663,8 @@ std::vector<HTTPResponseObjectJSON> XLiveAPI::GetMulti(
     std::unique_ptr<response_data> task = std::make_unique<response_data>();
 
     CURL* curl_handle = curl_easy_init();
+
+    util::SetCurlCABundle(curl_handle);
 
     if (per_request_timeout > 0) {
       curl_easy_setopt(curl_handle, CURLOPT_TIMEOUT, per_request_timeout);
@@ -1791,6 +1798,7 @@ bool XLiveAPI::Heartbeat() const {
   std::string endpoint = GetApiAddress();
   bool accessible = false;
 
+  util::SetCurlCABundle(curl);
   curl_easy_setopt(curl, CURLOPT_URL, endpoint.c_str());
   curl_easy_setopt(curl, CURLOPT_NOBODY, 1L);
   curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5L);

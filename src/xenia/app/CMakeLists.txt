@@ -79,17 +79,9 @@ target_link_libraries(xenia-app PRIVATE
   xxhash
 )
 
-if(WIN32)
-  target_link_libraries(xenia-app PRIVATE
-    libcurl
-  )
-endif()
-
-if(LINUX)
-  target_link_libraries(xenia-app PRIVATE
-    curl
-  )
-endif()
+target_link_libraries(xenia-app PRIVATE
+  libcurl
+)
 
 # Vulkan/SPIR-V backends (not macOS)
 if(NOT APPLE)
