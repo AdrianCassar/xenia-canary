@@ -1466,14 +1466,14 @@ void XLiveAPI::DeleteSession(uint64_t sessionId) {
 }
 
 void XLiveAPI::DeleteAllSessionsByMac() {
-  const std::string endpoint = BuildEndpoint(
-      fmt::format("DeleteSessions/{}", GetConsoleMacAddress().to_string()));
-
   // Since we usually delete on close, we don't want to block main thread on
   // close.
   if (!IsConnectedToServer()) {
     return;
   }
+
+  const std::string endpoint = BuildEndpoint(
+      fmt::format("DeleteSessions/{}", GetConsoleMacAddress().to_string()));
 
   std::unique_ptr<HTTPResponseObjectJSON> response = Delete(endpoint);
 
