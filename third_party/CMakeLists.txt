@@ -844,11 +844,80 @@ target_compile_definitions(libcurl PRIVATE
 )
 endif()
 
-# Linking against system library
-# Instead we should build libcurl with wolfssl
 if(LINUX)
-# find_package(CURL 8.20.0 EXACT REQUIRED)
-find_package(CURL REQUIRED)
+  # ============================================================================
+  # wolfSSL (TLS backend for libcurl)
+  # ============================================================================
+  # Options are cache entries so they take precedence over wolfSSL's defaults.
+  set(WOLFSSL_CURL ON CACHE BOOL "" FORCE)
+  set(WOLFSSL_BUILD_OUT_OF_TREE ON CACHE BOOL "" FORCE)
+  set(WOLFSSL_EXAMPLES OFF CACHE BOOL "" FORCE)
+  set(WOLFSSL_CRYPT_TESTS OFF CACHE BOOL "" FORCE)
+  set(WOLFSSL_INSTALL OFF CACHE BOOL "" FORCE)
+
+  # ============================================================================
+  # libcurl (built with wolfSSL)
+  # ============================================================================
+  set(BUILD_CURL_EXE OFF CACHE BOOL "" FORCE)
+  set(BUILD_STATIC_LIBS ON CACHE BOOL "" FORCE)
+  set(BUILD_LIBCURL_DOCS OFF CACHE BOOL "" FORCE)
+  set(BUILD_MISC_DOCS OFF CACHE BOOL "" FORCE)
+  set(ENABLE_CURL_MANUAL OFF CACHE BOOL "" FORCE)
+  set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+  set(CURL_DISABLE_INSTALL ON CACHE BOOL "" FORCE)
+  set(CURL_ENABLE_EXPORT_TARGET OFF CACHE BOOL "" FORCE)
+  set(PICKY_COMPILER OFF CACHE BOOL "" FORCE)
+  set(HTTP_ONLY ON CACHE BOOL "" FORCE)
+  set(CURL_USE_OPENSSL OFF CACHE BOOL "" FORCE)
+  set(CURL_USE_WOLFSSL ON CACHE BOOL "" FORCE)
+  set(CURL_USE_PKGCONFIG OFF CACHE BOOL "" FORCE)
+  set(CURL_ZLIB OFF CACHE STRING "" FORCE)
+  set(CURL_BROTLI OFF CACHE STRING "" FORCE)
+  set(CURL_ZSTD OFF CACHE STRING "" FORCE)
+  set(USE_NGHTTP2 OFF CACHE BOOL "" FORCE)
+  set(USE_LIBIDN2 OFF CACHE BOOL "" FORCE)
+  set(CURL_USE_LIBPSL OFF CACHE BOOL "" FORCE)
+  set(CURL_USE_LIBSSH2 OFF CACHE BOOL "" FORCE)
+  # These are runtime file paths, not embedded certificates. The Mozilla CA
+  # bundle is embedded below and applied per handle via SetCurlCABundle.
+  set(CURL_CA_BUNDLE "none" CACHE STRING "" FORCE)
+  set(CURL_CA_PATH "none" CACHE STRING "" FORCE)
+
+  # Point curl's FindWolfSSL at the in-tree wolfssl target instead of searching
+  # the system.
+  set(WOLFSSL_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/wolfssl CACHE PATH "" FORCE)
+  set(WOLFSSL_LIBRARY wolfssl CACHE STRING "" FORCE)
+  # curl probes these by linking against wolfSSL at configure time, which isn't
+  # built yet, so preset the results for the WOLFSSL_CURL configuration.
+  set(HAVE_WOLFSSL_GET_PEER_CERTIFICATE 1 CACHE INTERNAL "")
+  set(HAVE_WOLFSSL_USEALPN 1 CACHE INTERNAL "")
+  set(HAVE_WOLFSSL_BIO_NEW 1 CACHE INTERNAL "")
+  set(HAVE_WC_DES_ECBENCRYPT 1 CACHE INTERNAL "")
+  set(HAVE_WOLFSSL_BIO_SET_SHUTDOWN 0 CACHE INTERNAL "")
+
+  # Only affects the wolfssl/libcurl subdirectories (static libs only).
+  set(BUILD_SHARED_LIBS OFF)
+  set(BUILD_TESTING OFF)
+  add_subdirectory(wolfssl EXCLUDE_FROM_ALL)
+  add_subdirectory(libcurl EXCLUDE_FROM_ALL)
+  unset(BUILD_SHARED_LIBS)
+  unset(BUILD_TESTING)
+
+  # ============================================================================
+  # cacert (Mozilla CA bundle from https://curl.se/docs/caextract.html)
+  # ============================================================================
+  set(XE_CACERT_PEM ${CMAKE_CURRENT_SOURCE_DIR}/cacert/cacert.pem)
+  set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${XE_CACERT_PEM})
+  file(READ ${XE_CACERT_PEM} _cacert_hex HEX)
+  string(REGEX REPLACE "([0-9a-f][0-9a-f])" "0x\\1," _cacert_bytes "${_cacert_hex}")
+  file(CONFIGURE
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/cacert/cacert_pem.c
+    CONTENT "#include <stddef.h>\nconst unsigned char xe_cacert_pem[] = {@_cacert_bytes@};\nconst size_t xe_cacert_pem_size = sizeof(xe_cacert_pem);\n"
+    @ONLY
+  )
+  unset(_cacert_hex)
+  unset(_cacert_bytes)
+  add_library(cacert STATIC ${CMAKE_CURRENT_BINARY_DIR}/cacert/cacert_pem.c)
 endif()
 
 # ==============================================================================

@@ -2,6 +2,7 @@
 
 *.bat       text eol=crlf
 *.sh        text eol=lf
+*.pem       text eol=lf -whitespace
 
 *.sln       text eol=crlf -whitespace
 *.csproj    text eol=crlf -whitespace merge=union
