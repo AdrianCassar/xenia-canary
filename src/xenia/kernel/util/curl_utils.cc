@@ -28,7 +28,15 @@ CURLcode SetCurlCABundle(CURL* curl) {
   blob.len = xe_cacert_pem_size;
   blob.flags = CURL_BLOB_NOCOPY;
 
-  return curl_easy_setopt(curl, CURLOPT_CAINFO_BLOB, &blob);
+  const CURLcode result = curl_easy_setopt(curl, CURLOPT_CAINFO_BLOB, &blob);
+  if (result != CURLE_OK) {
+    return result;
+  }
+
+  // Also trust the OS store (/etc/ssl/certs etc.) so roots added after this
+  // build still verify. curl continues with the bundle if loading it fails.
+  return curl_easy_setopt(curl, CURLOPT_SSL_OPTIONS,
+                          static_cast<long>(CURLSSLOPT_NATIVE_CA));
 #else
   return CURLE_OK;
 #endif
