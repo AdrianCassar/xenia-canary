@@ -744,13 +744,19 @@ std::vector<HTTPResponseObjectJSON> XLiveAPI::GetMulti(
 }
 
 void XLiveAPI::StartWhoamiAsync() {
-  whoami_result_ = std::async(std::launch::async, &XLiveAPI::Getwhoami, this);
+  // Detached so shutdown doesn't wait for the request.
+  std::promise<sockaddr_in> whoami_promise;
+  whoami_result_ = whoami_promise.get_future();
+
+  std::thread([endpoint = BuildEndpoint("whoami"),
+               promise = std::move(whoami_promise)]() mutable {
+    promise.set_value(Getwhoami(endpoint));
+  }).detach();
 }
 
 // Check connection to xenia web server.
-sockaddr_in XLiveAPI::Getwhoami() {
-  std::unique_ptr<HTTPResponseObjectJSON> response =
-      Get(BuildEndpoint("whoami"));
+sockaddr_in XLiveAPI::Getwhoami(const std::string& endpoint) {
+  std::unique_ptr<HTTPResponseObjectJSON> response = Get(endpoint);
 
   sockaddr_in addr{};
 

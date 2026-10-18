@@ -12,6 +12,7 @@
 
 #include <future>
 #include <span>
+#include <thread>
 #include <unordered_set>
 
 #include "xenia/base/byte_order.h"
@@ -114,7 +115,7 @@ class XLiveAPI {
 
   void StartWhoamiAsync();
 
-  sockaddr_in Getwhoami();
+  static sockaddr_in Getwhoami(const std::string& endpoint);
 
   void DownloadPortMappings();
 
@@ -247,7 +248,8 @@ class XLiveAPI {
   std::future<std::map<uint64_t, std::shared_ptr<xe::ui::ImmediateTexture>>>
   GetFriendsGamerpicsAsync(const uint64_t xuid, ui::ImGuiDrawer* imgui_drawer);
 
-  std::unique_ptr<HTTPResponseObjectJSON> PraseResponse(response_data response);
+  static std::unique_ptr<HTTPResponseObjectJSON> PraseResponse(
+      response_data response);
 
   sockaddr_in OnlineIP() const { return online_ip_; };
 
@@ -316,8 +318,8 @@ class XLiveAPI {
 
   std::map<uint32_t, std::vector<uint8_t>> cached_gamerpics = {};
 
-  std::unique_ptr<HTTPResponseObjectJSON> Get(const std::string endpoint,
-                                              const uint32_t timeout = 0);
+  static std::unique_ptr<HTTPResponseObjectJSON> Get(
+      const std::string endpoint, const uint32_t timeout = 0);
 
   std::unique_ptr<HTTPResponseObjectJSON> Post(const std::string endpoint,
                                                const uint8_t* data,
