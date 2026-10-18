@@ -720,8 +720,8 @@ dword_result_t NetDll_XNetGetTitleXnAddr_entry(dword_t caller,
   }
 
   if (cvars::network_mode != NETWORK_MODE::OFFLINE) {
-    status |= XNADDR_STATUS::XNADDR_ETHERNET | XNADDR_STATUS::XNADDR_STATIC |
-              XNADDR_STATUS::XNADDR_GATEWAY | XNADDR_STATUS::XNADDR_DNS;
+    status |= XNADDR_STATUS::XNADDR_STATIC | XNADDR_STATUS::XNADDR_GATEWAY |
+              XNADDR_STATUS::XNADDR_DNS;
   }
 
   if (cvars::network_mode == NETWORK_MODE::XBOXLIVE) {
