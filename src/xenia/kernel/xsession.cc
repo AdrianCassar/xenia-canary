@@ -44,14 +44,13 @@ X_RESULT XSession::CreateSession(uint32_t user_index, uint8_t public_slots,
                                  uint32_t session_info_ptr,
                                  uint32_t nonce_ptr) {
   if (IsCreated()) {
-    // Todo: Find proper code!
-    return X_ERROR_FUNCTION_FAILED;
+    return X_ONLINE_E_SESSION_WRONG_STATE;
   }
 
   const xam::UserProfile* user_profile =
       kernel_state_->xam_state()->GetUserProfile(user_index);
   if (!user_profile) {
-    return X_ERROR_FUNCTION_FAILED;
+    return X_E_NOTFOUND;
   }
 
   owner_xuid_ = user_profile->xuid();
@@ -287,9 +286,24 @@ X_RESULT XSession::DeleteSession(XGI_SESSION_STATE* state) {
 //
 // TODO(Adrian):
 // Add player to recent player list.
-// Joining a offline session uses which XUID offline or online (flags = 0)
-// Return correct error codes
 X_RESULT XSession::JoinSession(XGI_SESSION_MANAGE* data) {
+  const bool has_xuids = data->xuid_array_ptr != 0;
+  const bool has_indices = data->indices_array_ptr != 0;
+  if (!data->array_count || has_xuids == has_indices ||
+      (has_indices && data->array_count > XUserMaxUserCount)) {
+    return X_E_INVALIDARG;
+  }
+
+  if (IsDeleted()) {
+    return X_ONLINE_E_SESSION_WRONG_STATE;
+  }
+
+  // Joining a started session is only allowed when join in progress is.
+  if (local_details_.eState.get() == XSESSION_STATE::INGAME &&
+      local_details_.Flags & (ARBITRATION | JOIN_IN_PROGRESS_DISABLED)) {
+    return X_ONLINE_E_SESSION_FULL;
+  }
+
   const bool join_local = data->xuid_array_ptr == 0;
 
   std::string join_type =
@@ -325,7 +339,7 @@ X_RESULT XSession::JoinSession(XGI_SESSION_MANAGE* data) {
       const uint32_t user_index = static_cast<uint32_t>(indices_array[i]);
 
       if (!kernel_state()->xam_state()->IsUserSignedIn(user_index)) {
-        return X_ONLINE_E_SESSION_NOT_LOGGED_ON;
+        return X_E_NOTFOUND;
       }
 
       const auto user_profile =
@@ -358,6 +372,20 @@ X_RESULT XSession::JoinSession(XGI_SESSION_MANAGE* data) {
       }
 
       is_local_member = user_index != XUserIndexNone;
+
+      // Offline XUIDs cannot join sessions that use Live features and guests
+      // cannot join ranked sessions.
+      constexpr uint32_t live_flags =
+          PRESENCE | STATS | MATCHMAKING | ARBITRATION;
+      const bool is_guest = IsGuestXUID(member_xuid);
+      if (!IsOnlineXUID(member_xuid) && !is_guest &&
+          local_details_.Flags & live_flags) {
+        return X_ONLINE_E_SESSION_JOIN_ILLEGAL;
+      }
+
+      if (is_guest && local_details_.GameType == X_CONTEXT_GAME_TYPE_RANKED) {
+        return X_ONLINE_E_SESSION_JOIN_ILLEGAL;
+      }
 
       if (remote_members_.contains(member_xuid) ||
           local_members_.contains(member_xuid)) {
@@ -424,6 +452,17 @@ X_RESULT XSession::JoinSession(XGI_SESSION_MANAGE* data) {
 }
 
 X_RESULT XSession::LeaveSession(XGI_SESSION_MANAGE* data) {
+  const bool has_xuids = data->xuid_array_ptr != 0;
+  const bool has_indices = data->indices_array_ptr != 0;
+  if (!data->array_count || has_xuids == has_indices ||
+      (has_indices && data->array_count > XUserMaxUserCount)) {
+    return X_E_INVALIDARG;
+  }
+
+  if (IsDeleted()) {
+    return X_ONLINE_E_SESSION_WRONG_STATE;
+  }
+
   const bool leave_local = data->xuid_array_ptr == 0;
 
   std::string leave_type =
@@ -545,14 +584,22 @@ X_RESULT XSession::ModifySession(XGI_SESSION_MODIFY* data) {
 
   XGI_SESSION_MODIFY modify = *data;
 
+  const uint32_t flags = data->flags;
+
   // Mutually exclusive
-  if (data->flags & JOIN_VIA_PRESENCE_DISABLED &&
-      data->flags & JOIN_VIA_PRESENCE_FRIENDS_ONLY) {
+  if (flags & JOIN_VIA_PRESENCE_DISABLED &&
+      flags & JOIN_VIA_PRESENCE_FRIENDS_ONLY) {
     return X_ERROR_INVALID_PARAMETER;
   }
 
-  const uint32_t modifiable = X_SESSION_CREATE_MODIFIERS_MASK | ARBITRATION;
-  uint32_t modifiers = data->flags & modifiable;
+  constexpr uint32_t modifiable =
+      ARBITRATION | INVITES_DISABLED | JOIN_VIA_PRESENCE_DISABLED |
+      JOIN_IN_PROGRESS_DISABLED | JOIN_VIA_PRESENCE_FRIENDS_ONLY;
+  if ((flags ^ local_details_.Flags) & ~modifiable) {
+    return X_ONLINE_E_SESSION_INVALID_FLAGS;
+  }
+
+  uint32_t modifiers = flags & modifiable;
 
   // If RegisterArbitration is already completed then arbitration flag cannot be
   // removed.
@@ -603,6 +650,10 @@ X_RESULT XSession::ModifySession(XGI_SESSION_MODIFY* data) {
 X_RESULT XSession::GetSessionDetails(XGI_SESSION_DETAILS* data) {
   // 4E4D085C checks ReturnedMemberCount when creating a session
 
+  if (!data->session_details_ptr || !data->details_buffer_size) {
+    return X_E_INVALIDARG;
+  }
+
   XSESSION_LOCAL_DETAILS* local_details_ptr =
       kernel_state_->memory()->TranslateVirtual<XSESSION_LOCAL_DETAILS*>(
           data->session_details_ptr);
@@ -612,7 +663,7 @@ X_RESULT XSession::GetSessionDetails(XGI_SESSION_DETAILS* data) {
           data->details_buffer_size);
 
   if (buffer_size < sizeof(XSESSION_LOCAL_DETAILS)) {
-    return X_ERROR_INVALID_PARAMETER;
+    return X_E_INVALIDARG;
   }
 
   *local_details_ptr = local_details_;
@@ -655,6 +706,10 @@ X_RESULT XSession::GetSessionDetails(XGI_SESSION_DETAILS* data) {
 }
 
 X_RESULT XSession::MigrateHost(XGI_SESSION_MIGRATE* data) {
+  if (IsDeleted()) {
+    return X_ONLINE_E_SESSION_WRONG_STATE;
+  }
+
   auto SessionInfo_ptr =
       kernel_state_->memory()->TranslateVirtual<XSESSION_INFO*>(
           data->session_info_ptr);
@@ -702,6 +757,11 @@ X_RESULT XSession::MigrateHost(XGI_SESSION_MIGRATE* data) {
 }
 
 X_RESULT XSession::RegisterArbitration(XGI_SESSION_ARBITRATION* data) {
+  if (local_details_.eState.get() != XSESSION_STATE::LOBBY &&
+      local_details_.eState.get() != XSESSION_STATE::REGISTRATION) {
+    return X_ONLINE_E_SESSION_WRONG_STATE;
+  }
+
   XSESSION_REGISTRATION_RESULTS* results_ptr =
       kernel_state_->memory()->TranslateVirtual<XSESSION_REGISTRATION_RESULTS*>(
           data->results_ptr);
@@ -801,12 +861,12 @@ X_RESULT XSession::WriteStats(XGI_STATS_WRITE* data) {
   if (!HasSessionFlag(static_cast<SessionFlags>((uint32_t)local_details_.Flags),
                       STATS)) {
     XELOGW("Session does not support stats.");
-    return X_ERROR_FUNCTION_FAILED;
+    return X_ONLINE_E_SESSION_INVALID_FLAGS;
   }
 
   if (local_details_.eState.get() != XSESSION_STATE::INGAME) {
     XELOGW("Writing stats outside of gameplay.");
-    return X_ERROR_FUNCTION_FAILED;
+    return X_ONLINE_E_SESSION_WRONG_STATE;
   }
 
   if (!data->num_views) {
@@ -984,6 +1044,20 @@ X_RESULT XSession::FlushStats() {
 }
 
 X_RESULT XSession::StartSession(XGI_SESSION_STATE* state) {
+  const XSESSION_STATE session_state = local_details_.eState;
+
+  if (session_state != XSESSION_STATE::LOBBY &&
+      session_state != XSESSION_STATE::REGISTRATION) {
+    return X_ONLINE_E_SESSION_WRONG_STATE;
+  }
+
+  // Arbitrated sessions must be registered before they can start.
+  if (HasSessionFlag(static_cast<SessionFlags>((uint32_t)local_details_.Flags),
+                     ARBITRATION) &&
+      session_state != XSESSION_STATE::REGISTRATION) {
+    return X_ONLINE_E_SESSION_NOT_REGISTERED;
+  }
+
   const auto profile = kernel_state()->xam_state()->GetUserProfile(owner_xuid_);
 
   if (!profile || (IsXboxLiveSession() && !profile->IsSignedInToLive())) {
@@ -996,6 +1070,10 @@ X_RESULT XSession::StartSession(XGI_SESSION_STATE* state) {
 }
 
 X_RESULT XSession::EndSession(XGI_SESSION_STATE* state) {
+  if (local_details_.eState.get() != XSESSION_STATE::INGAME) {
+    return X_ONLINE_E_SESSION_WRONG_STATE;
+  }
+
   local_details_.eState = XSESSION_STATE::REPORTING;
 
   const bool stats_enabled = HasSessionFlag(
@@ -1003,11 +1081,8 @@ X_RESULT XSession::EndSession(XGI_SESSION_STATE* state) {
 
   if (!ShouldReportStats()) {
     cached_stats_properties_.clear();
-    return X_ERROR_SUCCESS;
-  }
-
-  // Post the remaining cached stats
-  if (stats_enabled) {
+  } else if (stats_enabled) {
+    // Post the remaining cached stats
     const bool flushed = kernel_state()->GetXboxLiveAPI()->SessionFlushStats(
         session_id_, cached_stats_properties_);
 
@@ -1015,6 +1090,10 @@ X_RESULT XSession::EndSession(XGI_SESSION_STATE* state) {
       cached_stats_properties_.clear();
     }
   }
+
+  // Reset the session to the lobby once reporting is done, so it can be started
+  // again.
+  local_details_.eState = XSESSION_STATE::LOBBY;
 
   return X_ERROR_SUCCESS;
 }
