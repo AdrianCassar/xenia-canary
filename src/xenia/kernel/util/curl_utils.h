@@ -20,9 +20,11 @@ namespace xe {
 namespace kernel {
 namespace util {
 
-// Applies the bundled Mozilla CA store to a curl handle so HTTPS peers can be
-// verified. Required on Linux where libcurl is built against wolfSSL without a
-// CA path, no-op on Windows where Schannel uses the system store.
+// Applies the bundled Mozilla CA store plus the OS CA store to a curl handle so
+// HTTPS peers can be verified. Required on Linux where libcurl is built against
+// wolfSSL without a CA path, no-op on Windows where Schannel uses the system
+// store. Sets CURLOPT_SSL_OPTIONS, so callers must OR in CURLSSLOPT_NATIVE_CA
+// if they set that option themselves.
 CURLcode SetCurlCABundle(CURL* curl);
 
 inline bool SetCurlOptions(CURL*) { return true; }
