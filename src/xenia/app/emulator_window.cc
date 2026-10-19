@@ -22,6 +22,7 @@
 
 #include "xenia/app/console_settings_dialog.h"
 #include "xenia/app/content_list_dialog.h"
+#include "xenia/app/port_permission_dialog.h"
 #include "xenia/base/assert.h"
 #include "xenia/base/clock.h"
 #include "xenia/base/cvar.h"
@@ -286,6 +287,10 @@ void EmulatorWindow::OnEmulatorInitialized() {
     new NoProfileDialog(imgui_drawer_.get(), this);
     disable_hotkeys_ = true;
   }
+
+#if XE_PLATFORM_LINUX
+  PortPermissionDialog::ShowIfNeeded(imgui_drawer_.get());
+#endif
 
   emulator_initialized_ = true;
   window_->SetMainMenuEnabled(true);
