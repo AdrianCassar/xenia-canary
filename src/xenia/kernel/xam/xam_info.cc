@@ -444,26 +444,7 @@ dword_result_t XamXStudioRequest_entry(dword_t unk1, lpdword_t unk2) {
 DECLARE_XAM_EXPORT1(XamXStudioRequest, kNone, kStub);
 
 dword_result_t XamGetSystemVersion_entry() {
-  // eh, just picking one. If we go too low we may break new games, but
-  // this value seems to be used for conditionally loading symbols and if
-  // we pretend to be old we have less to worry with implementing.
-  // 0x200A3200 = 2.0.2610.0
-  // 0x20096B00 = 2.0.2411.0
-  // 0x200CE900 = 2.0.3305.0
-  // Latest
-  // https://support.xbox.com/en-GB/help/xbox-360/console/system-update-operating-system
-  // 0x20449700 = 2.0.17559.0
-
-  auto ver = 0x20449700;
-
-  // auto version = fmt::format("Kernel version: {}.{}.{}.{}", (ver >> 28) &
-  // 0xF,
-  //                            (ver >> 24) & 0xF, (ver >> 8) & 0xFFFF, ver &
-  //                            0xF);
-
-  // XELOGD("{}", version);
-
-  return ver;
+  return kernel_state()->GetKernelVersion()->GetPackedVersion();
 }
 DECLARE_XAM_EXPORT1(XamGetSystemVersion, kNone, kStub);
 
@@ -1157,7 +1138,7 @@ dword_result_t XamUpdateGetBaseSystemVersion_entry() {
 DECLARE_XAM_EXPORT1(XamUpdateGetBaseSystemVersion, kNone, kStub);
 
 dword_result_t XamUpdateGetCurrentSystemVersion_entry() {
-  return kBaseKernelBuildVersion;
+  return kernel_state()->GetKernelVersion()->build.get();
 }
 DECLARE_XAM_EXPORT1(XamUpdateGetCurrentSystemVersion, kNone, kStub);
 

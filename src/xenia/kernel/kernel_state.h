@@ -167,6 +167,16 @@ struct KernelVersion {
     build = std::max(kBaseKernelBuildVersion, build_ver);
     qfe = 0;
   }
+
+  // Packed as major:4 minor:4 build:16 qfe:8, e.g. 2.0.17559.0 = 0x20449700
+  uint32_t GetPackedVersion() const {
+    const uint32_t major_ver = major.get();
+    const uint32_t minor_ver = minor.get();
+    const uint32_t build_ver = build.get();
+    const uint32_t qfe_ver = qfe.get();
+    return ((major_ver & 0xF) << 28) | ((minor_ver & 0xF) << 24) |
+           (build_ver << 8) | (qfe_ver & 0xFF);
+  }
 };
 
 class KernelState {
