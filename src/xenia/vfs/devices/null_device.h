@@ -39,8 +39,15 @@ class NullDevice : public Device {
   uint32_t available_allocation_units() const override { return 0x10; }
 
   // STFC/cache code seems to require the product of the next two to equal
-  // 0x10000
-  uint32_t sectors_per_allocation_unit() const override { return 0x80; }
+  // 0x10000. XapiValidateDiskPartitionEx (FATX utility drive) instead requires
+  // it to equal the dwBytesPerCluster passed to XMountUtilityDrive, so this is
+  // updated from the SectorsPerCluster the game writes when formatting.
+  uint32_t sectors_per_allocation_unit() const override {
+    return sectors_per_allocation_unit_;
+  }
+  void set_sectors_per_allocation_unit(uint32_t value) {
+    sectors_per_allocation_unit_ = value;
+  }
 
   // STFC requires <= 0x1000
   uint32_t bytes_per_sector() const override { return 0x200; }
@@ -49,6 +56,7 @@ class NullDevice : public Device {
   std::string name_;
   std::unique_ptr<Entry> root_entry_;
   std::vector<std::string> null_paths_;
+  uint32_t sectors_per_allocation_unit_ = 0x80;
 };
 
 }  // namespace vfs

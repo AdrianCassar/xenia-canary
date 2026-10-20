@@ -9,6 +9,8 @@
 
 #include "xenia/vfs/devices/null_file.h"
 
+#include "xenia/base/memory.h"
+#include "xenia/vfs/devices/null_device.h"
 #include "xenia/vfs/devices/null_entry.h"
 
 namespace xe {
@@ -35,6 +37,20 @@ X_STATUS NullFile::WriteSync(std::span<const uint8_t> buffer,
   if (!(file_access_ &
         (FileAccess::kFileWriteData | FileAccess::kFileAppendData))) {
     return X_STATUS_ACCESS_DENIED;
+  }
+
+  // XapiFormatFATVolumeEx writes a FATX header at offset 0 when formatting a
+  // cache partition. The game then checks NtQueryVolumeInformationFile's
+  // SectorsPerAllocationUnit * BytesPerSector against its requested cluster
+  // size (e.g. Titanfall uses 0x1000), so report back what was written.
+  if (byte_offset == 0 && buffer.size() >= 12 &&
+      xe::load_and_swap<uint32_t>(buffer.data()) == 0x58544146 /* XTAF */) {
+    uint32_t sectors_per_cluster =
+        xe::load_and_swap<uint32_t>(buffer.data() + 8);
+    if (sectors_per_cluster) {
+      static_cast<NullDevice*>(entry_->device())
+          ->set_sectors_per_allocation_unit(sectors_per_cluster);
+    }
   }
 
   return X_STATUS_SUCCESS;
