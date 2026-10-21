@@ -14,11 +14,10 @@ if(XE_TARGET_X86_64)
     X86_PCLMULQDQ_CRC
     X86_VPCLMULQDQ_CRC
     CURL_STATICLIB
-    MINIUPNP_STATICLIB
   )
 endif()
 target_link_libraries(xenia-kernel PUBLIC
-  aes_128 fmt zlib-ng pugixml miniupnp xenia-apu xenia-base xenia-cpu xenia-hid xenia-vfs xenia-app-discord
+  aes_128 fmt zlib-ng pugixml miniupnpc::miniupnpc xenia-apu xenia-base xenia-cpu xenia-hid xenia-vfs xenia-app-discord
 )
 
 target_link_libraries(xenia-kernel PUBLIC

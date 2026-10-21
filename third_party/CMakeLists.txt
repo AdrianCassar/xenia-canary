@@ -899,42 +899,12 @@ endif()
 # ==============================================================================
 # miniupnp
 # ==============================================================================
-add_library(miniupnp STATIC
-  miniupnp/miniupnpc/src/addr_is_reserved.c
-  miniupnp/miniupnpc/src/connecthostport.c
-  miniupnp/miniupnpc/src/igd_desc_parse.c
-  miniupnp/miniupnpc/src/minisoap.c
-  miniupnp/miniupnpc/src/minissdpc.c
-  miniupnp/miniupnpc/src/miniupnpc.c
-  miniupnp/miniupnpc/src/miniwget.c
-  miniupnp/miniupnpc/src/minixml.c
-  miniupnp/miniupnpc/src/portlistingparse.c
-  miniupnp/miniupnpc/src/receivedata.c
-  miniupnp/miniupnpc/src/upnpcommands.c
-  miniupnp/miniupnpc/src/upnpdev.c
-  miniupnp/miniupnpc/src/upnperrors.c
-  miniupnp/miniupnpc/src/upnpreplyparse.c
-)
-target_include_directories(miniupnp PRIVATE miniupnp/miniupnpc PUBLIC miniupnp/miniupnpc/include)
-target_compile_definitions(miniupnp PRIVATE
-  MINIUPNP_STATICLIB
-)
-
-# configure_file(${CMAKE_CURRENT_SOURCE_DIR}/miniupnp/miniupnpc/miniupnpcstrings.h.cmake "${CMAKE_CURRENT_SOURCE_DIR}/miniupnp/miniupnpc/miniupnpcstrings.h")
-
-if(WIN32)
-  target_link_libraries(miniupnp PRIVATE ws2_32 iphlpapi)
-  execute_process(
-    COMMAND cscript //NoLogo ${CMAKE_CURRENT_SOURCE_DIR}/miniupnp/miniupnpc/msvc/genminiupnpcstrings.vbs
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/miniupnp/miniupnpc/msvc
-  )
-endif()
-if(NOT WIN32)
-  target_compile_definitions(miniupnp PRIVATE
-    _GNU_SOURCE
-  )
-  execute_process(
-    COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/miniupnp/miniupnpc/updateminiupnpcstrings.sh
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/miniupnp/miniupnpc
-  )
-endif()
+# Use upstream's CMake build. It generates miniupnpcstrings.h in the build
+# directory, sets the per-platform definitions and system libraries, and
+# exports MINIUPNP_STATICLIB to consumers.
+set(UPNPC_BUILD_STATIC ON CACHE BOOL "" FORCE)
+set(UPNPC_BUILD_SHARED OFF CACHE BOOL "" FORCE)
+set(UPNPC_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(UPNPC_BUILD_SAMPLE OFF CACHE BOOL "" FORCE)
+set(UPNPC_NO_INSTALL ON CACHE BOOL "" FORCE)
+add_subdirectory(miniupnp/miniupnpc EXCLUDE_FROM_ALL)
