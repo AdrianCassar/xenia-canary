@@ -53,144 +53,9 @@ DECLARE_int32(network_mode);
 
 DECLARE_bool(bind_interface);
 
-enum XNET_QOS {
-  LISTEN_ENABLE = 0x01,
-  LISTEN_DISABLE = 0x02,
-  LISTEN_SET_DATA = 0x04,
-  LISTEN_SET_BITSPERSEC = 0x08,
-  XLISTEN_RELEASE = 0x10
-};
-
-enum XNET_CONNECT {
-  STATUS_IDLE = 0x00,
-  XNET_CONNECT_STATUS_PENDING = 0x01,
-  STATUS_CONNECTED = 0x02,
-  STATUS_LOST = 0x03,
-};
-
-enum XNET_STARTUP {
-  BYPASS_SECURITY = 0x01,
-  ALLOCATE_MAX_DGRAM_SOCKETS = 0x02,
-  ALLOCATE_MAX_STREAM_SOCKETS = 0x04,
-  DISABLE_PEER_ENCRYPTION = 0x08,
-};
-
-enum XNET_XNQOSINFO {
-  COMPLETE = 0x01,
-  TARGET_CONTACTED = 0x02,
-  TARGET_DISABLED = 0x04,
-  DATA_RECEIVED = 0x08,
-  PARTIAL_COMPLETE = 0x10
-};
-
-// XNetGetBroadcastVersionStatus
-enum VERSION {
-  OLDER = 0x01,
-  NEWER = 0x02,
-};
-
 namespace xe {
 namespace kernel {
 namespace xam {
-
-// https://github.com/G91/TitanOffLine/blob/1e692d9bb9dfac386d08045ccdadf4ae3227bb5e/xkelib/xam/xamNet.h
-enum {
-  XNCALLER_INVALID = 0x0,
-  XNCALLER_TITLE = 0x1,
-  XNCALLER_SYSAPP = 0x2,
-  XNCALLER_XBDM = 0x3,
-  XNCALLER_TEST = 0x4,
-  NUM_XNCALLER_TYPES = 0x4,
-};
-
-struct XNDNS {
-  xe::be<int32_t> status;
-  xe::be<uint32_t> cina;
-  in_addr aina[8];
-};
-static_assert_size(XNDNS, 0x28);
-
-struct XNQOSINFO {
-  uint8_t flags;
-  uint8_t reserved;
-  xe::be<uint16_t> probes_xmit;
-  xe::be<uint16_t> probes_recv;
-  xe::be<uint16_t> data_len;
-  xe::be<uint32_t> data_ptr;
-  xe::be<uint16_t> rtt_min_in_msecs;
-  xe::be<uint16_t> rtt_med_in_msecs;
-  xe::be<uint32_t> up_bits_per_sec;
-  xe::be<uint32_t> down_bits_per_sec;
-};
-static_assert_size(XNQOSINFO, 0x18);
-
-struct XNQOS {
-  xe::be<uint32_t> count;
-  xe::be<uint32_t> count_pending;
-  XNQOSINFO info[1];
-};
-static_assert_size(XNQOS, 0x20);
-
-struct X_WSADATA {
-  xe::be<uint16_t> version;
-  xe::be<uint16_t> version_high;
-  char description[256 + 1];
-  char system_status[128 + 1];
-  xe::be<uint16_t> max_sockets;
-  xe::be<uint16_t> max_udpdg;
-  xe::be<uint32_t> vendor_info_ptr;
-};
-static_assert_size(X_WSADATA, 0x190);
-
-// https://github.com/joolswills/mameox/blob/master/MAMEoX/Sources/xbox_Network.cpp#L136
-struct XNetStartupParams {
-  uint8_t cfgSizeOfStruct;
-  uint8_t cfgFlags = 0;
-  uint8_t cfgSockMaxDgramSockets = 8;
-  uint8_t cfgSockMaxStreamSockets = 32;
-  uint8_t cfgSockDefaultRecvBufsizeInK = 16;
-  uint8_t cfgSockDefaultSendBufsizeInK = 16;
-  uint8_t cfgKeyRegMax = 8;
-  uint8_t cfgSecRegMax = 32;
-  uint8_t cfgQosDataLimitDiv4 = 64;
-  uint8_t cfgQosProbeTimeoutInSeconds = 2;
-  uint8_t cfgQosProbeRetries = 3;
-  uint8_t cfgQosSrvMaxSimultaneousResponses = 8;
-  uint8_t cfgQosPairWaitTimeInSeconds = 2;
-};
-static_assert_size(XNetStartupParams, 0xD);
-
-// Internal settings passed from XAuthStartup.
-// The first two fields are the title's XAUTH_SETTINGS, followed by a 512000
-// byte buffer the title allocates for XAM.
-// XAuthShutdown frees it only if XampXAuthShutdown reports no remaining
-// references and XampXAuthGetTitleBuffer returns it.
-struct XAMP_XAUTH_SETTINGS {
-  xe::be<uint32_t> SizeOfStruct;  // sizeof(XAUTH_SETTINGS)
-  xe::be<uint32_t> Flags;
-  xe::be<uint32_t> title_buffer_ptr;
-};
-static_assert_size(XAMP_XAUTH_SETTINGS, 0xC);
-
-// sizeof(XAUTH_SETTINGS) from the title's view.
-constexpr uint32_t kXAuthSettingsSize = 0x8;
-
-struct XNQOSLISTENSTATS {
-  uint32_t size_of_struct;
-  uint32_t requests_received_count;
-  uint32_t probes_received_count;
-  uint32_t slots_full_discards_count;
-  uint32_t data_replies_sent_count;
-  uint32_t data_reply_bytes_sent;
-  uint32_t probe_replies_sent_count;
-};
-static_assert_size(XNQOSLISTENSTATS, 0x1C);
-
-struct X_TIMEVAL {
-  xe::be<uint32_t> tv_sec;
-  xe::be<uint32_t> tv_usec;
-};
-static_assert_size(X_TIMEVAL, 0x8);
 
 // Initialize sockaddr to its default state
 static void InitializeSockaddr(XSOCKADDR_IN* sockaddr_ptr) {
@@ -227,17 +92,17 @@ dword_result_t NetDll_XNetStartup_entry(dword_t caller,
     Update_XNetStartupParams(xnet_startup_params, *params);
 
     switch (xnet_startup_params.cfgFlags) {
-      case BYPASS_SECURITY:
-        XELOGI("XNetStartup BYPASS_SECURITY");
+      case XNET_STARTUP_BYPASS_SECURITY:
+        XELOGI("XNetStartup XNET_STARTUP_BYPASS_SECURITY");
         break;
-      case ALLOCATE_MAX_DGRAM_SOCKETS:
-        XELOGI("XNetStartup ALLOCATE_MAX_DGRAM_SOCKETS");
+      case XNET_STARTUP_ALLOCATE_MAX_DGRAM_SOCKETS:
+        XELOGI("XNetStartup XNET_STARTUP_ALLOCATE_MAX_DGRAM_SOCKETS");
         break;
-      case ALLOCATE_MAX_STREAM_SOCKETS:
-        XELOGI("XNetStartup ALLOCATE_MAX_STREAM_SOCKETS");
+      case XNET_STARTUP_ALLOCATE_MAX_STREAM_SOCKETS:
+        XELOGI("XNetStartup XNET_STARTUP_ALLOCATE_MAX_STREAM_SOCKETS");
         break;
-      case DISABLE_PEER_ENCRYPTION:
-        XELOGI("XNetStartup DISABLE_PEER_ENCRYPTION");
+      case XNET_STARTUP_DISABLE_PEER_ENCRYPTION:
+        XELOGI("XNetStartup XNET_STARTUP_DISABLE_PEER_ENCRYPTION");
         break;
       default:
         break;
@@ -417,8 +282,6 @@ DECLARE_XAM_EXPORT1(NetDll_XNetRandom, kNetworking, kImplemented);
 
 dword_result_t NetDll_WSAStartup_entry(dword_t caller, word_t version,
                                        pointer_t<X_WSADATA> data_ptr) {
-  XELOGNET("NetDll_WSAStartup");
-
   // TODO(benvanik): abstraction layer needed.
   int ret = 0;
 
@@ -809,7 +672,7 @@ dword_result_t NetDll_XNetGetConnectStatus_entry(dword_t caller, dword_t addr) {
   XELOGI("XNetGetConnectStatus({:08X})",
          cvars::log_mask_ips ? 0 : addr.value());
 
-  return STATUS_CONNECTED;
+  return XNET_CONNECT_STATUS_CONNECTED;
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetGetConnectStatus, kNetworking, kStub);
 
@@ -1225,9 +1088,9 @@ dword_result_t NetDll_XNetQosServiceLookup_entry(dword_t caller, dword_t flags,
     qos->info[0].up_bits_per_sec = static_cast<uint32_t>(5_MiB);
     qos->info[0].down_bits_per_sec = static_cast<uint32_t>(5_MiB);
 
-    qos->info[0].flags = XNET_XNQOSINFO::COMPLETE |
-                         XNET_XNQOSINFO::PARTIAL_COMPLETE |
-                         XNET_XNQOSINFO::TARGET_CONTACTED;
+    qos->info[0].flags = XNET_XNQOSINFO_COMPLETE |
+                         XNET_XNQOSINFO_PARTIAL_COMPLETE |
+                         XNET_XNQOSINFO_TARGET_CONTACTED;
 
     qos->count_pending = 0;
     qos->count = 1;
@@ -1270,7 +1133,7 @@ dword_result_t NetDll_XNetQosRelease_entry(dword_t caller,
   for (uint32_t i = 0; i < qos_ptr->count; i++) {
     const XNQOSINFO& qos_info = qos_ptr->info[i];
 
-    if (qos_info.data_ptr && (qos_info.flags & XNET_XNQOSINFO::DATA_RECEIVED)) {
+    if (qos_info.data_ptr && (qos_info.flags & XNET_XNQOSINFO_DATA_RECEIVED)) {
       kernel_memory()->SystemHeapFree(qos_info.data_ptr);
     }
   }
@@ -1292,20 +1155,20 @@ dword_result_t NetDll_XNetQosListen_entry(
          caller.value(), sessionId.host_address(), data.host_address(),
          data_size.value(), bits_per_second.value(), flags.value());
 
-  if (flags & LISTEN_ENABLE) {
-    XELOGI("XNetQosListen LISTEN_ENABLE");
+  if (flags & XNET_QOS_LISTEN_ENABLE) {
+    XELOGI("XNetQosListen XNET_QOS_LISTEN_ENABLE");
   }
 
-  if (flags & LISTEN_DISABLE) {
-    XELOGI("XNetQosListen LISTEN_DISABLE");
+  if (flags & XNET_QOS_LISTEN_DISABLE) {
+    XELOGI("XNetQosListen XNET_QOS_LISTEN_DISABLE");
   }
 
-  if (flags & LISTEN_SET_BITSPERSEC) {
-    XELOGI("XNetQosListen LISTEN_SET_BITSPERSEC");
+  if (flags & XNET_QOS_LISTEN_SET_BITSPERSEC) {
+    XELOGI("XNetQosListen XNET_QOS_LISTEN_SET_BITSPERSEC");
   }
 
-  if (flags & XLISTEN_RELEASE) {
-    XELOGI("XNetQosListen XLISTEN_RELEASE");
+  if (flags & XNET_QOS_LISTEN_RELEASE) {
+    XELOGI("XNetQosListen XNET_QOS_LISTEN_RELEASE");
   }
 
   if (data_size <= 0) {
@@ -1324,13 +1187,13 @@ dword_result_t NetDll_XNetQosListen_entry(
 
   IsValidXNKID(session_id);
 
-  if (flags & LISTEN_SET_DATA) {
+  if (flags & XNET_QOS_LISTEN_SET_DATA) {
     std::vector<uint8_t> qos_buffer(data_size);
     memcpy(qos_buffer.data(), data, data_size);
 
     if (kernel_state()->GetXboxLiveAPI()->UpdateQoSCache(session_id,
                                                          qos_buffer)) {
-      XELOGI("XNetQosListen LISTEN_SET_DATA");
+      XELOGI("XNetQosListen XNET_QOS_LISTEN_SET_DATA");
 
       auto run = [](uint64_t sessionId, std::vector<uint8_t> qosData) {
         kernel_state()->GetXboxLiveAPI()->QoSPost(sessionId, qosData.data(),
@@ -1471,7 +1334,7 @@ dword_result_t NetDll_XNetQosLookup_entry(
 
             qos_info.data_ptr = data_ptr;
             qos_info.data_len = size;
-            qos_info.flags |= XNET_XNQOSINFO::DATA_RECEIVED;
+            qos_info.flags |= XNET_XNQOSINFO_DATA_RECEIVED;
           }
         }
       }
@@ -1484,7 +1347,7 @@ dword_result_t NetDll_XNetQosLookup_entry(
       qos_info.up_bits_per_sec = static_cast<uint32_t>(5_MiB);
       qos_info.down_bits_per_sec = static_cast<uint32_t>(5_MiB);
       qos_info.flags |=
-          XNET_XNQOSINFO::COMPLETE | XNET_XNQOSINFO::TARGET_CONTACTED;
+          XNET_XNQOSINFO_COMPLETE | XNET_XNQOSINFO_TARGET_CONTACTED;
 
       qos->count_pending =
           std::max(static_cast<int32_t>(qos->count_pending - 1), 0);
@@ -2297,11 +2160,6 @@ dword_result_t NetDll_accept_entry(dword_t caller, dword_t socket_handle,
   return new_socket->handle();
 }
 DECLARE_XAM_EXPORT1(NetDll_accept, kNetworking, kImplemented);
-
-struct x_fd_set {
-  xe::be<uint32_t> fd_count;
-  xe::be<uint32_t> fd_array[X_FD_SETSIZE];
-};
 
 struct host_set {
   uint32_t count;

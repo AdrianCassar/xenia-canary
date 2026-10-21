@@ -277,29 +277,6 @@ enum ContextID : uint32_t {
   XCONTEXT_SESSION_JOINABLE = ContextID(true, 0x00C), // 0x0000800C
 };
 
-enum XNADDR_STATUS : uint32_t {
-  XNADDR_PENDING = 0x00000000,              // Address acquisition is not yet complete
-  XNADDR_NONE = 0x00000001,                 // XNet is uninitialized or no debugger found
-  XNADDR_ETHERNET = 0x00000002,             // Host has ethernet address (no IP address)
-  XNADDR_STATIC = 0x00000004,               // Host has statically assigned IP address
-  XNADDR_DHCP = 0x00000008,                 // Host has DHCP assigned IP address
-  XNADDR_PPPOE = 0x00000010,                // Host has PPPoE assigned IP address
-  XNADDR_GATEWAY = 0x00000020,              // Host has one or more gateways configured
-  XNADDR_DNS = 0x00000040,                  // Host has one or more DNS servers configured
-  XNADDR_ONLINE = 0x00000080,               // Host is currently connected to online service
-  XNADDR_TROUBLESHOOT = 0x00008000          // Network configuration requires troubleshooting
-};
-
-enum ETHERNET_STATUS : uint32_t {
-  ETHERNET_LINK_NONE = 0x00000000,          // Ethernet cable is not connected
-  ETHERNET_LINK_ACTIVE = 0x00000001,        // Ethernet cable is connected and active
-  ETHERNET_LINK_100MBPS = 0x00000002,       // Ethernet link is set to 100 Mbps
-  ETHERNET_LINK_10MBPS = 0x00000004,        // Ethernet link is set to 10 Mbps
-  ETHERNET_LINK_FULL_DUPLEX = 0x00000008,   // Ethernet link is in full duplex mode
-  ETHERNET_LINK_HALF_DUPLEX = 0x00000010,   // Ethernet link is in half duplex mode
-  ETHERNET_LINK_WIRELESS = 0x00000020       // Ethernet link is wireless (802.11 based)
-};
-
 enum HTTP_STATUS_CODE {
   HTTP_OK = 200,
   HTTP_CREATED = 201,
@@ -410,19 +387,6 @@ enum DMP_STATUS_TYPE : uint32_t {
 
 enum class X_BACKGROUND_DOWNLOAD_MODE { ALWAYS_ALLOW = 1, AUTO = 2 };
 
-enum class X_INTERNET_SCHEME : uint32_t { HTTP = 1, HTTPS = 2 };
-
-enum class X_URL_COMPONENTS {
-  Full,
-  Protocol,
-  Username,
-  Password,
-  Host,
-  Port,
-  Path,
-  Query
-};
-
 struct XONLINE_SCHEMA_DATA {
   xe::be<uint32_t> schema_ptr;
   xe::be<uint32_t> schema_size;
@@ -528,9 +492,8 @@ static_assert_size(SGADDR, 0x14);
 #pragma pack(pop)
 
 struct XNADDR {
-  // FYI: IN_ADDR should be in network-byte order.
-  in_addr ina;        // IP address (zero if not static/DHCP) - Local IP
-  in_addr inaOnline;  // Online IP address (zero if not online) - Public IP
+  in_addr ina;                   // Local IP
+  in_addr inaOnline;             // Public IP
   xe::be<uint16_t> wPortOnline;  // Online port
   uint8_t abEnet[6];             // Ethernet MAC address
   SGADDR abOnline;               // Online identification
@@ -647,32 +610,6 @@ struct XSESSION_MEMBER {
   }
 };
 static_assert_size(XSESSION_MEMBER, 0x10);
-
-struct XHTTP_URL_COMPONENTS {
-  xe::be<uint32_t> struct_size;
-  xe::be<uint32_t> scheme_ptr;
-  xe::be<uint32_t> scheme_length;
-  xe::be<uint32_t> scheme;
-  xe::be<uint32_t> host_name_ptr;
-  xe::be<uint32_t> host_name_length;
-  xe::be<uint16_t> port;
-  xe::be<uint32_t> user_name_ptr;
-  xe::be<uint32_t> user_name_length;
-  xe::be<uint32_t> password_ptr;
-  xe::be<uint32_t> password_length;
-  xe::be<uint32_t> url_path_ptr;
-  xe::be<uint32_t> url_path_length;
-  xe::be<uint32_t> extra_info_ptr;
-  xe::be<uint32_t> extra_info_length;
-};
-static_assert_size(XHTTP_URL_COMPONENTS, 0x3C);
-
-struct XAM_RELYING_PARTY_TOKEN {
-  xe::be<uint32_t> reserved;
-  xe::be<uint32_t> length;
-  xe::be<uint32_t> token_data_ptr;  // uint8_t*
-};
-static_assert_size(XAM_RELYING_PARTY_TOKEN, 0xC);
 
 struct X_PARTY_CUSTOM_DATA {
   xe::be<uint64_t> first;
@@ -1513,6 +1450,174 @@ inline uint32_t XAccountGetUserInfoResponseSize() {
          (MAX_STATE_SIZE * sizeof(char16_t)) +
          (MAX_POSTALCODE_SIZE * sizeof(char16_t));
 }
+
+#pragma endregion
+
+#pragma region XSession
+
+enum STATE_FLAGS : uint32_t {
+  STATE_FLAGS_CREATED = 0x01,
+  STATE_FLAGS_HOST = 0x02,
+  STATE_FLAGS_MIGRATED = 0x04,
+  STATE_FLAGS_DELETED = 0x08,
+};
+
+struct X_KSESSION {
+  xe::be<uint32_t> handle;
+};
+static_assert_size(X_KSESSION, 4);
+
+struct XGI_SESSION_MODIFY {
+  xe::be<uint32_t> obj_ptr;
+  xe::be<uint32_t> flags;
+  xe::be<uint32_t> maxPublicSlots;
+  xe::be<uint32_t> maxPrivateSlots;
+};
+static_assert_size(XGI_SESSION_MODIFY, 0x10);
+
+struct XGI_SESSION_STATE {
+  xe::be<uint32_t> obj_ptr;
+  xe::be<uint32_t> flags;
+  xe::be<uint64_t> session_nonce;
+};
+static_assert_size(XGI_SESSION_STATE, 0x10);
+
+struct XGI_SESSION_SEARCH {
+  xe::be<uint32_t> proc_index;
+  xe::be<uint32_t> user_index;
+  xe::be<uint32_t> num_results;
+  xe::be<uint16_t> num_props;
+  xe::be<uint16_t> num_ctx;
+  xe::be<uint32_t> props_ptr;
+  xe::be<uint32_t> ctx_ptr;
+  xe::be<uint32_t> results_buffer_size;
+  xe::be<uint32_t> search_results_ptr;
+};
+static_assert_size(XGI_SESSION_SEARCH, 0x20);
+
+struct XGI_SESSION_SEARCH_EX {
+  XGI_SESSION_SEARCH session_search;
+  xe::be<uint32_t> num_users;
+};
+static_assert_size(XGI_SESSION_SEARCH_EX, 0x24);
+
+struct XGI_SESSION_SEARCH_BYID {
+  xe::be<uint32_t> user_index;
+  XNKID session_id;
+  xe::be<uint32_t> results_buffer_size;
+  xe::be<uint32_t> search_results_ptr;
+};
+static_assert_size(XGI_SESSION_SEARCH_BYID, 0x14);
+
+struct XGI_SESSION_SEARCH_BYIDS {
+  xe::be<uint32_t> user_index;
+  xe::be<uint32_t> num_session_ids;
+  xe::be<uint32_t> session_ids_ptr;
+  xe::be<uint32_t> results_buffer_size;
+  xe::be<uint32_t> search_results_ptr;
+  xe::be<uint32_t> reserved1;
+  xe::be<uint32_t> reserved2;
+  xe::be<uint32_t> reserved3;
+};
+static_assert_size(XGI_SESSION_SEARCH_BYIDS, 0x20);
+
+struct XGI_SESSION_SEARCH_WEIGHTED {
+  xe::be<uint32_t> proc_index;
+  xe::be<uint32_t> user_index;
+  xe::be<uint32_t> num_results;
+  xe::be<uint16_t> num_weighted_properties;
+  xe::be<uint16_t> num_weighted_contexts;
+  xe::be<uint32_t> weighted_search_properties_ptr;
+  xe::be<uint32_t> weighted_search_contexts_ptr;
+  xe::be<uint16_t> num_props;
+  xe::be<uint16_t> num_ctx;
+  xe::be<uint32_t> non_weighted_search_properties_ptr;
+  xe::be<uint32_t> non_weighted_search_contexts_ptr;
+  xe::be<uint32_t> results_buffer_size;
+  xe::be<uint32_t> search_results_ptr;
+  xe::be<uint32_t> num_users;
+  xe::be<uint32_t> weighted_search;
+};
+static_assert_size(XGI_SESSION_SEARCH_WEIGHTED, 0x34);
+
+struct XGI_SESSION_DETAILS {
+  xe::be<uint32_t> obj_ptr;
+  xe::be<uint32_t> details_buffer_size;
+  xe::be<uint32_t> session_details_ptr;
+  xe::be<uint32_t> reserved1;
+  xe::be<uint32_t> reserved2;
+  xe::be<uint32_t> reserved3;
+};
+static_assert_size(XGI_SESSION_DETAILS, 0x18);
+
+struct XGI_SESSION_MIGRATE {
+  xe::be<uint32_t> obj_ptr;
+  xe::be<uint32_t> session_info_ptr;
+  xe::be<uint32_t> user_index;
+  xe::be<uint32_t> reserved1;
+  xe::be<uint32_t> reserved2;
+  xe::be<uint32_t> reserved3;
+};
+static_assert_size(XGI_SESSION_MIGRATE, 0x18);
+
+struct XGI_SESSION_ARBITRATION {
+  xe::be<uint32_t> obj_ptr;
+  xe::be<uint32_t> flags;
+  xe::be<uint64_t> session_nonce;
+  xe::be<uint32_t> session_duration_sec;  // 300
+  xe::be<uint32_t> results_buffer_size;
+  xe::be<uint32_t> results_ptr;
+};
+static_assert_size(XGI_SESSION_ARBITRATION, 0x20);
+
+struct XGI_SESSION_CREATE {
+  xe::be<uint32_t> obj_ptr;
+  xe::be<uint32_t> flags;
+  xe::be<uint32_t> num_slots_public;
+  xe::be<uint32_t> num_slots_private;
+  xe::be<uint32_t> user_index;
+  xe::be<uint32_t> session_info_ptr;
+  xe::be<uint32_t> nonce_ptr;
+};
+static_assert_size(XGI_SESSION_CREATE, 0x1C);
+
+struct XGI_STATS_WRITE {
+  xe::be<uint32_t> obj_ptr;
+  xe::be<uint64_t> xuid;
+  xe::be<uint32_t> num_views;
+  xe::be<uint32_t> views_ptr;
+};
+static_assert_size(XGI_STATS_WRITE, 0x18);
+
+struct XGI_SESSION_MODIFYSKILL {
+  xe::be<uint32_t> obj_ptr;
+  xe::be<uint32_t> array_count;
+  xe::be<uint32_t> xuid_array_ptr;
+  xe::be<uint32_t> reserved1;
+  xe::be<uint32_t> reserved2;
+  xe::be<uint32_t> reserved3;
+};
+static_assert_size(XGI_SESSION_MODIFYSKILL, 0x18);
+
+struct XGI_SESSION_MANAGE {
+  xe::be<uint32_t> obj_ptr;
+  xe::be<uint32_t> array_count;
+  xe::be<uint32_t> xuid_array_ptr;
+  xe::be<uint32_t> indices_array_ptr;
+  xe::be<uint32_t> private_slots_array_ptr;
+};
+static_assert_size(XGI_SESSION_MANAGE, 0x14);
+
+struct XGI_SESSION_INVITE {
+  xe::be<uint32_t> user_index;
+  xe::be<uint32_t> session_info_ptr;
+};
+static_assert_size(XGI_SESSION_INVITE, 0x8);
+
+struct SEARCH_RESULTS {
+  XSESSION_SEARCHRESULT_HEADER header;
+  XSESSION_SEARCHRESULT* results_ptr;
+};
 
 #pragma endregion
 
