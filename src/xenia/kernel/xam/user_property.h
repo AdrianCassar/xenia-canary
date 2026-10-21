@@ -69,7 +69,8 @@ class Property : public UserData {
   static std::optional<Property> DeserializeBase64(const std::string base64);
 
   bool operator==(const Property& other) const {
-    return data_ == other.data_ && extended_data_ == other.extended_data_;
+    return property_id_.value == other.property_id_.value &&
+           data_ == other.data_ && extended_data_ == other.extended_data_;
   }
 
  private:
