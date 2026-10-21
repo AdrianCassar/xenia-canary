@@ -31,6 +31,7 @@
 #include "xenia/kernel/xam/unmarshaller/xstring_verify_unmarshaller.h"
 #include "xenia/kernel/xam/unmarshaller/xuser_estimate_rank_for_ratings_unmarshaller.h"
 #include "xenia/kernel/xam/unmarshaller/xuser_findusers_unmarshaller.h"
+#include "xenia/kernel/xboxkrnl/xboxkrnl_modules.h"
 #include "xenia/kernel/xenumerator.h"
 #include "xenia/ui/imgui_host_notification.h"
 
@@ -1144,13 +1145,15 @@ X_HRESULT XLiveBaseApp::XUserMuteListRemove(uint32_t buffer_ptr) {
 }
 
 X_HRESULT XLiveBaseApp::XAccountGetUserInfo(uint32_t buffer_ptr) {
-  // Requires privilege XEX_SYSTEM_ACCESS_PII (Personally Identifiable
-  // Information)
-  //
-  // 41560855 (TU 7+), 4D530AA5
+  // 41560855 (TU 7+)
 
   if (!buffer_ptr) {
     return X_E_INVALIDARG;
+  }
+
+  if (!xboxkrnl::XexCheckExecutablePrivilege(XEX_PRIVILEGE_PII_ACCESS)) {
+    XELOGW("{}: Title doesn't have PII access privilege", __func__);
+    return X_ONLINE_E_ACCESS_DENIED;
   }
 
   XAccountGetUserInfoUnmarshaller unmarshaller(kernel_state_, buffer_ptr);
@@ -1166,40 +1169,59 @@ X_HRESULT XLiveBaseApp::XAccountGetUserInfo(uint32_t buffer_ptr) {
 
   unmarshaller.ZeroResults();
 
-  // Example usage
-  std::u16string first_name = u"First Name";
-  std::u16string last_name = u"Last Name";
-  std::u16string email = u"example@email.com";
-
-  char16_t* first_name_ptr =
+  // Strings are packed after the response in the same order as
+  // XAccountGetUserInfoResponseSize.
+  char16_t* string_ptr =
       reinterpret_cast<char16_t*>(user_info_response_ptr + 1);
-  string_util::copy_and_swap_truncating(first_name_ptr, first_name.data(),
-                                        MAX_FIRSTNAME_SIZE);
 
-  char16_t* last_name_ptr =
-      reinterpret_cast<char16_t*>(first_name_ptr + MAX_FIRSTNAME_SIZE);
-  string_util::copy_and_swap_truncating(last_name_ptr, last_name.data(),
-                                        MAX_LASTNAME_SIZE);
+  auto write_string = [&](std::u16string_view value, uint32_t max_size,
+                          xe::be<uint16_t>& length,
+                          xe::be<uint32_t>& guest_ptr) {
+    length = static_cast<uint16_t>(
+        string_util::copy_and_swap_truncating(string_ptr, value, max_size));
+    guest_ptr = memory_->HostToGuestVirtual(std::to_address(string_ptr));
+    string_ptr += max_size;
+  };
 
-  char16_t* email_ptr =
-      reinterpret_cast<char16_t*>(last_name_ptr + MAX_LASTNAME_SIZE);
-  string_util::copy_and_swap_truncating(email_ptr, email.data(),
-                                        MAX_EMAIL_SIZE);
+  X_ADDRESS_INFO& address_info = user_info_response_ptr->address_info;
 
-  user_info_response_ptr->first_name_length =
-      static_cast<uint32_t>(first_name.size());
-  user_info_response_ptr->first_name =
-      memory_->HostToGuestVirtual(std::to_address(first_name_ptr));
+  write_string(u"First Name", MAX_FIRSTNAME_SIZE,
+               user_info_response_ptr->first_name_length,
+               user_info_response_ptr->first_name);
+  write_string(u"Last Name", MAX_LASTNAME_SIZE,
+               user_info_response_ptr->last_name_length,
+               user_info_response_ptr->last_name);
+  // 4D530AA5 wants an email, dereferences it without a null check
+  write_string(u"example@email.com", MAX_EMAIL_SIZE,
+               user_info_response_ptr->email_length,
+               user_info_response_ptr->email);
+  write_string(u"1 Street", MAX_STREET_SIZE, address_info.street_1_length,
+               address_info.street_1);
+  write_string(u"", MAX_STREET_SIZE, address_info.street_2_length,
+               address_info.street_2);
+  write_string(u"City", MAX_CITY_SIZE, address_info.city_length,
+               address_info.city);
+  write_string(u"District", MAX_DISTRICT_SIZE, address_info.district_length,
+               address_info.district);
+  write_string(u"State", MAX_STATE_SIZE, address_info.state_length,
+               address_info.state);
+  write_string(u"00000", MAX_POSTALCODE_SIZE, address_info.postal_code_length,
+               address_info.postal_code);
 
-  user_info_response_ptr->last_name_length =
-      static_cast<uint32_t>(last_name.size());
-  user_info_response_ptr->last_name =
-      memory_->HostToGuestVirtual(std::to_address(last_name_ptr));
+  const auto user_profile =
+      kernel_state_->xam_state()->GetUserProfileAny(unmarshaller.XUID());
 
-  // 4D530AA5 wants an email
-  user_info_response_ptr->email_length = static_cast<uint32_t>(email.size());
-  user_info_response_ptr->email =
-      memory_->HostToGuestVirtual(std::to_address(email_ptr));
+  if (user_profile) {
+    user_info_response_ptr->language_id =
+        static_cast<uint16_t>(user_profile->GetLanguage());
+    user_info_response_ptr->country_id =
+        static_cast<uint8_t>(user_profile->GetCountry());
+  }
+
+  user_info_response_ptr->msft_optin = 0;
+  user_info_response_ptr->parter_optin = 0;
+  // Matches XamUserGetAgeGroup returning X_USER_AGE_GROUP::ADULT
+  user_info_response_ptr->age = 18;
 
   return X_E_SUCCESS;
 }
