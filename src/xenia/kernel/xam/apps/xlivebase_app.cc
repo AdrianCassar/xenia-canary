@@ -7,6 +7,7 @@
  ******************************************************************************
  */
 
+#include <ranges>
 #include <span>
 
 #include "xenia/kernel/xam/apps/xlivebase_app.h"
@@ -16,6 +17,7 @@
 #include "xenia/emulator.h"
 #include "xenia/kernel/XLiveAPI.h"
 #include "xenia/kernel/user_module.h"
+#include "xenia/kernel/util/guest_string_writer.h"
 #include "xenia/kernel/xam/unmarshaller/generic_unmarshaller.h"
 #include "xenia/kernel/xam/unmarshaller/schema_in_memory.h"
 #include "xenia/kernel/xam/unmarshaller/xaccount_getuserinfo_unmarshaller.h"
@@ -58,6 +60,19 @@ namespace apps {
 // therefore we can retain the functionality for now.
 // Alternatively we could rely on the ordinal for async tasks instead of message
 // ID?
+
+namespace {
+
+// Returns the requested page of items, empty when start_index is out of range.
+template <std::ranges::viewable_range R>
+auto Paginate(R&& items, uint32_t start_index, uint32_t max_count) {
+  return std::views::all(std::forward<R>(items)) |
+         std::views::drop(start_index) | std::views::take(max_count);
+}
+
+}  // namespace
+
+using util::GuestStringWriter;
 
 XLiveBaseApp::XLiveBaseApp(KernelState* kernel_state)
     : App(kernel_state, 0xFC) {}
@@ -2499,37 +2514,23 @@ X_HRESULT XLiveBaseApp::XOfferingContentEnumerate(uint32_t buffer_ptr) {
   const std::vector<std::u16string> contents = {
       u"Content 1", u"Content 2", u"Content 3", u"Content 4", u"Content 5"};
 
-  char16_t* content_names_ptr = reinterpret_cast<char16_t*>(
-      content_info_ptr + content_enumerate_request_ptr->max_results);
+  GuestStringWriter content_names(
+      memory_,
+      reinterpret_cast<char16_t*>(content_info_ptr +
+                                  content_enumerate_request_ptr->max_results));
 
-  const uint32_t end_index = content_enumerate_request_ptr->starting_index +
-                             content_enumerate_request_ptr->max_results;
-
-  uint32_t total_content_count = static_cast<uint32_t>(contents.size());
+  const uint32_t total_content_count = static_cast<uint32_t>(contents.size());
   uint32_t returned_content_count = 0;
 
-  // Paging
-  for (uint32_t i = content_enumerate_request_ptr->starting_index;
-       i < end_index; i++) {
-    if (i >= contents.size()) {
-      break;
-    }
+  for (const std::u16string& content_name :
+       Paginate(contents, content_enumerate_request_ptr->starting_index,
+                content_enumerate_request_ptr->max_results)) {
+    const auto [name_address, name_length] = content_names.Write(content_name);
 
-    const std::u16string content_name = contents[i];
+    CONTENT_INFO& content_info = content_info_ptr[returned_content_count++];
 
-    const uint16_t size = static_cast<uint16_t>(content_name.size() + 1);
-
-    xe::string_util::copy_and_swap_truncating(content_names_ptr,
-                                              content_name.c_str(), size);
-
-    content_info_ptr->offer_name =
-        memory_->HostToGuestVirtual(std::to_address(content_names_ptr));
-    content_info_ptr->offer_name_length = size;
-
-    content_info_ptr += 1;
-    content_names_ptr += size;
-
-    returned_content_count++;
+    content_info.offer_name = name_address;
+    content_info.offer_name_length = name_length;
   }
 
   content_enumerate_results_ptr->content_total = total_content_count;
@@ -2581,37 +2582,22 @@ X_HRESULT XLiveBaseApp::XGenresEnumerate(uint32_t buffer_ptr) {
       u"Shooter", u"Sports",    u"Puzzle",     u"RPG",
   };
 
-  char16_t* genre_names_ptr = reinterpret_cast<char16_t*>(
-      genre_info_ptr + genre_enumerate_request_ptr->max_count);
+  GuestStringWriter genre_names(
+      memory_, reinterpret_cast<char16_t*>(
+                   genre_info_ptr + genre_enumerate_request_ptr->max_count));
 
-  const uint32_t end_index = genre_enumerate_request_ptr->start_index +
-                             genre_enumerate_request_ptr->max_count;
-
-  uint32_t total_genres_count = static_cast<uint32_t>(genres.size());
+  const uint32_t total_genres_count = static_cast<uint32_t>(genres.size());
   uint32_t returned_genres_count = 0;
 
-  // Paging
-  for (uint32_t i = genre_enumerate_request_ptr->start_index; i < end_index;
-       i++) {
-    if (i >= genres.size()) {
-      break;
-    }
+  for (const std::u16string& genre_name :
+       Paginate(genres, genre_enumerate_request_ptr->start_index,
+                genre_enumerate_request_ptr->max_count)) {
+    const auto [name_address, name_length] = genre_names.Write(genre_name);
 
-    const std::u16string genre_name = genres[i];
+    GENRE_INFO& genre_info = genre_info_ptr[returned_genres_count++];
 
-    const uint16_t size = static_cast<uint16_t>(genre_name.size() + 1);
-
-    xe::string_util::copy_and_swap_truncating(genre_names_ptr,
-                                              genre_name.c_str(), size);
-
-    genre_info_ptr->localized_genre_name =
-        memory_->HostToGuestVirtual(std::to_address(genre_names_ptr));
-    genre_info_ptr->localized_genre_length = size;
-
-    genre_info_ptr += 1;
-    genre_names_ptr += size;
-
-    returned_genres_count++;
+    genre_info.localized_genre_name = name_address;
+    genre_info.localized_genre_length = name_length;
   }
 
   genre_enumerate_results_ptr->geners_total = total_genres_count;
@@ -2690,37 +2676,23 @@ X_HRESULT XLiveBaseApp::XEnumerateTitlesByFilter(uint32_t buffer_ptr) {
 
     total_titles_count = static_cast<uint32_t>(played_titles.size());
 
-    char16_t* titles_names_ptr = reinterpret_cast<char16_t*>(
-        title_info_ptr + enumerate_titles_request_ptr->max_count);
+    GuestStringWriter title_names(
+        memory_, reinterpret_cast<char16_t*>(
+                     title_info_ptr + enumerate_titles_request_ptr->max_count));
 
-    const uint32_t end_index = enumerate_titles_request_ptr->start_index +
-                               enumerate_titles_request_ptr->max_count;
+    for (const TitleInfo& played_title :
+         Paginate(played_titles, enumerate_titles_request_ptr->start_index,
+                  enumerate_titles_request_ptr->max_count)) {
+      const auto [name_address, name_length] =
+          title_names.Write(played_title.title_name);
 
-    // Paging
-    for (uint32_t i = enumerate_titles_request_ptr->start_index; i < end_index;
-         i++) {
-      if (i >= played_titles.size()) {
-        break;
-      }
+      ENUMERATE_TITLES_INFO& title_info =
+          title_info_ptr[returned_titles_count++];
 
-      const TitleInfo played_title = played_titles[i];
-
-      const uint16_t size =
-          static_cast<uint16_t>(played_title.title_name.size() + 1);
-
-      xe::string_util::copy_and_swap_truncating(
-          titles_names_ptr, played_title.title_name.c_str(), size);
-
-      title_info_ptr->title_id = played_title.id;
-      title_info_ptr->played = true;
-      title_info_ptr->title_name =
-          memory_->HostToGuestVirtual(std::to_address(titles_names_ptr));
-      title_info_ptr->title_name_length = size;
-
-      title_info_ptr += 1;
-      titles_names_ptr += size;
-
-      returned_titles_count++;
+      title_info.title_id = played_title.id;
+      title_info.played = true;
+      title_info.title_name = name_address;
+      title_info.title_name_length = name_length;
     }
   }
 
@@ -2798,36 +2770,27 @@ X_HRESULT XLiveBaseApp::XOfferingSubscriptionEnumerate(uint32_t buffer_ptr) {
       u"Premium Lite Xenia Canary",
   };
 
-  char16_t* offer_names_ptr = reinterpret_cast<char16_t*>(
-      subscriptions_info_ptr + subscription_enumerate_ptr->max_results);
+  GuestStringWriter offer_names(
+      memory_,
+      reinterpret_cast<char16_t*>(subscriptions_info_ptr +
+                                  subscription_enumerate_ptr->max_results));
 
-  uint32_t total_membership_count = static_cast<uint32_t>(memberships.size());
+  const uint32_t total_membership_count =
+      static_cast<uint32_t>(memberships.size());
   uint32_t returned_membership_count = 0;
 
-  const uint32_t end_index = subscription_enumerate_ptr->starting_index +
-                             subscription_enumerate_ptr->max_results;
+  for (const std::u16string& membership :
+       Paginate(memberships, subscription_enumerate_ptr->starting_index,
+                subscription_enumerate_ptr->max_results)) {
+    const auto [name_address, name_length] = offer_names.Write(membership);
 
-  // Paging
-  for (uint32_t i = subscription_enumerate_ptr->starting_index; i < end_index;
-       i++) {
-    if (i >= memberships.size()) {
-      break;
-    }
+    SUBSCRIPTION_INFO& subscription_info =
+        subscriptions_info_ptr[returned_membership_count];
 
-    const std::u16string membership = memberships[i];
-
-    const uint16_t size = static_cast<uint16_t>(membership.size() + 1);
-
-    xe::string_util::copy_and_swap_truncating(
-        offer_names_ptr, membership.c_str(), membership.size() + 1);
-
-    subscriptions_info_ptr->offer_id = i;
-    subscriptions_info_ptr->offer_name =
-        memory_->HostToGuestVirtual(std::to_address(offer_names_ptr));
-    subscriptions_info_ptr->offer_name_length = size;
-
-    subscriptions_info_ptr += 1;
-    offer_names_ptr += size;
+    subscription_info.offer_id =
+        subscription_enumerate_ptr->starting_index + returned_membership_count;
+    subscription_info.offer_name = name_address;
+    subscription_info.offer_name_length = name_length;
 
     returned_membership_count++;
   }
