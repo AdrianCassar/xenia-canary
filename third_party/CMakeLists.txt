@@ -803,19 +803,6 @@ ffmpeg_common(libavformat)
 # libcurl
 # ==============================================================================
 
-if(WIN32)
-file(GLOB_RECURSE CURL_SOURCES 
-    "${CMAKE_CURRENT_SOURCE_DIR}/libcurl/lib/**.c" 
-    "${CMAKE_CURRENT_SOURCE_DIR}/libcurl/lib/**.h"
-)
-add_library(libcurl STATIC ${CURL_SOURCES})
-target_link_libraries(libcurl PRIVATE crypt32 secur32)
-target_include_directories(libcurl PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/libcurl/lib ${CMAKE_CURRENT_SOURCE_DIR}/libcurl/include)
-target_compile_definitions(libcurl PRIVATE
-  BUILDING_LIBCURL HTTP_ONLY USE_SCHANNEL USE_WINDOWS_SSPI
-)
-endif()
-
 if(LINUX)
   # ============================================================================
   # wolfSSL (TLS backend for libcurl)
@@ -827,8 +814,15 @@ if(LINUX)
   set(WOLFSSL_CRYPT_TESTS OFF CACHE BOOL "" FORCE)
   set(WOLFSSL_INSTALL OFF CACHE BOOL "" FORCE)
 
+  # Only affects the wolfssl subdirectory (static libs only).
+  set(BUILD_SHARED_LIBS OFF)
+  add_subdirectory(wolfssl EXCLUDE_FROM_ALL)
+  unset(BUILD_SHARED_LIBS)
+endif()
+
+if(WIN32 OR LINUX)
   # ============================================================================
-  # libcurl (built with wolfSSL)
+  # libcurl (Schannel on Windows, wolfSSL on Linux)
   # ============================================================================
   set(BUILD_CURL_EXE OFF CACHE BOOL "" FORCE)
   set(BUILD_STATIC_LIBS ON CACHE BOOL "" FORCE)
@@ -841,7 +835,6 @@ if(LINUX)
   set(PICKY_COMPILER OFF CACHE BOOL "" FORCE)
   set(HTTP_ONLY ON CACHE BOOL "" FORCE)
   set(CURL_USE_OPENSSL OFF CACHE BOOL "" FORCE)
-  set(CURL_USE_WOLFSSL ON CACHE BOOL "" FORCE)
   set(CURL_USE_PKGCONFIG OFF CACHE BOOL "" FORCE)
   set(CURL_ZLIB OFF CACHE STRING "" FORCE)
   set(CURL_BROTLI OFF CACHE STRING "" FORCE)
@@ -850,31 +843,42 @@ if(LINUX)
   set(USE_LIBIDN2 OFF CACHE BOOL "" FORCE)
   set(CURL_USE_LIBPSL OFF CACHE BOOL "" FORCE)
   set(CURL_USE_LIBSSH2 OFF CACHE BOOL "" FORCE)
-  # These are runtime file paths, not embedded certificates. The Mozilla CA
-  # bundle is embedded below and applied per handle via SetCurlCABundle.
-  set(CURL_CA_BUNDLE "none" CACHE STRING "" FORCE)
-  set(CURL_CA_PATH "none" CACHE STRING "" FORCE)
 
-  # Point curl's FindWolfSSL at the in-tree wolfssl target instead of searching
-  # the system.
-  set(WOLFSSL_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/wolfssl CACHE PATH "" FORCE)
-  set(WOLFSSL_LIBRARY wolfssl CACHE STRING "" FORCE)
-  # curl probes these by linking against wolfSSL at configure time, which isn't
-  # built yet, so preset the results for the WOLFSSL_CURL configuration.
-  set(HAVE_WOLFSSL_GET_PEER_CERTIFICATE 1 CACHE INTERNAL "")
-  set(HAVE_WOLFSSL_USEALPN 1 CACHE INTERNAL "")
-  set(HAVE_WOLFSSL_BIO_NEW 1 CACHE INTERNAL "")
-  set(HAVE_WC_DES_ECBENCRYPT 1 CACHE INTERNAL "")
-  set(HAVE_WOLFSSL_BIO_SET_SHUTDOWN 0 CACHE INTERNAL "")
+  if(WIN32)
+    # Only the static library is built, so skip the shared object target.
+    set(SHARE_LIB_OBJECT OFF)
+    set(CURL_USE_SCHANNEL ON CACHE BOOL "" FORCE)
+    set(CURL_WINDOWS_SSPI ON CACHE BOOL "" FORCE)
+    set(CURL_USE_WOLFSSL OFF CACHE BOOL "" FORCE)
+  else()
+    set(CURL_USE_WOLFSSL ON CACHE BOOL "" FORCE)
+    # These are runtime file paths, not embedded certificates. The Mozilla CA
+    # bundle is embedded below and applied per handle via SetCurlCABundle.
+    set(CURL_CA_BUNDLE "none" CACHE STRING "" FORCE)
+    set(CURL_CA_PATH "none" CACHE STRING "" FORCE)
 
-  # Only affects the wolfssl/libcurl subdirectories (static libs only).
+    # Point curl's FindWolfSSL at the in-tree wolfssl target instead of
+    # searching the system.
+    set(WOLFSSL_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/wolfssl CACHE PATH "" FORCE)
+    set(WOLFSSL_LIBRARY wolfssl CACHE STRING "" FORCE)
+    # curl probes these by linking against wolfSSL at configure time, which
+    # isn't built yet, so preset the results for the WOLFSSL_CURL configuration.
+    set(HAVE_WOLFSSL_GET_PEER_CERTIFICATE 1 CACHE INTERNAL "")
+    set(HAVE_WOLFSSL_USEALPN 1 CACHE INTERNAL "")
+    set(HAVE_WOLFSSL_BIO_NEW 1 CACHE INTERNAL "")
+    set(HAVE_WC_DES_ECBENCRYPT 1 CACHE INTERNAL "")
+    set(HAVE_WOLFSSL_BIO_SET_SHUTDOWN 0 CACHE INTERNAL "")
+  endif()
+
+  # Only affects the libcurl subdirectory (static libs only).
   set(BUILD_SHARED_LIBS OFF)
   set(BUILD_TESTING OFF)
-  add_subdirectory(wolfssl EXCLUDE_FROM_ALL)
   add_subdirectory(libcurl EXCLUDE_FROM_ALL)
   unset(BUILD_SHARED_LIBS)
   unset(BUILD_TESTING)
+endif()
 
+if(LINUX)
   # ============================================================================
   # cacert (Mozilla CA bundle from https://curl.se/docs/caextract.html)
   # ============================================================================
