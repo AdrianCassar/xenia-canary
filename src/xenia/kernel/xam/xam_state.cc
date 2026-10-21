@@ -12,6 +12,7 @@
 #include "xenia/emulator.h"
 #include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/util/friends_util.h"
+#include "xenia/kernel/util/guest_string_writer.h"
 #include "xenia/kernel/xam/online_schema.h"
 
 namespace xe {
@@ -96,15 +97,12 @@ void XamState::LoadLanguageLocaleFallback() {
           ->LookupHeap(0x80000000)
           ->AllocFixed(array_start, 0xC8, 0x1000, kMemoryAllocationCommit,
                        kMemoryProtectRead | kMemoryProtectWrite)) {
-    char16_t* ptr =
-        kernel_state_->memory()->TranslateVirtual<char16_t*>(array_start);
+    util::GuestStringWriter writer(
+        kernel_state_->memory(),
+        kernel_state_->memory()->TranslateVirtual<char16_t*>(array_start));
 
     for (size_t i = 1; i < locale_data.size(); i++) {
-      language_fallback_address_[i] =
-          kernel_state_->memory()->HostToGuestVirtual(ptr);
-      ptr += xe::string_util::copy_and_swap_truncating(
-                 ptr, locale_data.at(i), locale_data.at(i).size() + 1) +
-             1;
+      language_fallback_address_[i] = writer.Write(locale_data[i]).address;
     }
   }
 }
@@ -125,15 +123,12 @@ void XamState::LoadLanguageTypefacePatch() {
           ->LookupHeap(0x80000000)
           ->AllocFixed(array_start, 0x168, 0x1000, kMemoryAllocationCommit,
                        kMemoryProtectRead | kMemoryProtectWrite)) {
-    char16_t* ptr =
-        kernel_state_->memory()->TranslateVirtual<char16_t*>(array_start);
+    util::GuestStringWriter writer(
+        kernel_state_->memory(),
+        kernel_state_->memory()->TranslateVirtual<char16_t*>(array_start));
 
     for (size_t i = 1; i < patch_data.size(); i++) {
-      language_type_face_patch_[i] =
-          kernel_state_->memory()->HostToGuestVirtual(ptr);
-      ptr += xe::string_util::copy_and_swap_truncating(
-                 ptr, patch_data.at(i), patch_data.at(i).size() + 1) +
-             1;
+      language_type_face_patch_[i] = writer.Write(patch_data[i]).address;
     }
   }
 }
