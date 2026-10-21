@@ -11,6 +11,7 @@
 #define XENIA_KERNEL_XLIVEAPI_H_
 
 #include <future>
+#include <mutex>
 #include <span>
 #include <thread>
 #include <unordered_set>
@@ -289,6 +290,7 @@ class XLiveAPI {
 
   inline static std::map<uint32_t, uint64_t> sessionIdCache = {};
   inline static std::map<uint32_t, uint64_t> macAddressCache = {};
+  inline static std::mutex xnaddrCacheMutex;
 
  private:
   const std::string default_local_server_ = "192.168.0.1:36000/";

@@ -842,24 +842,33 @@ dword_result_t NetDll_XNetInAddrToXnAddr_entry(dword_t caller, dword_t in_addr,
   const uint64_t cached_session_id =
       kernel_state()->GetXboxLiveAPI()->GetSystemlinkID();
 
+  const uint32_t online_ip = xn_addr->inaOnline.s_addr;
+
+  // Lookups return 0 when not cached.
+  auto get_cached = [](const std::map<uint32_t, uint64_t>& cache,
+                       uint32_t ip) -> uint64_t {
+    std::lock_guard lock(XLiveAPI::xnaddrCacheMutex);
+    const auto it = cache.find(ip);
+    return it != cache.end() ? it->second : 0;
+  };
+
   // Find cached online IP?
-  if (XLiveAPI::macAddressCache.find(xn_addr->inaOnline.s_addr) ==
-      XLiveAPI::macAddressCache.end()) {
+  if (!get_cached(XLiveAPI::macAddressCache, online_ip)) {
     const auto player = kernel_state()->GetXboxLiveAPI()->FindPlayer(
         ip_to_string(xn_addr->inaOnline));
+
+    std::lock_guard lock(XLiveAPI::xnaddrCacheMutex);
 
     // FIXME
     if (!cached_session_id || EXPLICIT_XBOXLIVE_KEY) {
       IsValidXNKID(player->SessionID());
 
       if (player->SessionID()) {
-        XLiveAPI::sessionIdCache[xn_addr->inaOnline.s_addr] =
-            player->SessionID();
+        XLiveAPI::sessionIdCache[online_ip] = player->SessionID();
       }
 
       if (player->MacAddress()) {
-        XLiveAPI::macAddressCache[xn_addr->inaOnline.s_addr] =
-            player->MacAddress();
+        XLiveAPI::macAddressCache[online_ip] = player->MacAddress();
       }
     } else {
       // Remote mac missing for systemlink!
@@ -867,19 +876,13 @@ dword_result_t NetDll_XNetInAddrToXnAddr_entry(dword_t caller, dword_t in_addr,
       //
       // If we're connected to server then use it
       if (player->MacAddress()) {
-        XLiveAPI::macAddressCache[xn_addr->inaOnline.s_addr] =
-            player->MacAddress();
+        XLiveAPI::macAddressCache[online_ip] = player->MacAddress();
       }
     }
   }
 
-  const uint64_t remote_mac =
-      XLiveAPI::macAddressCache[xn_addr->inaOnline.s_addr];
-  MacAddress mac = MacAddress(static_cast<uint64_t>(0));
-
-  if (remote_mac) {
-    mac = MacAddress(XLiveAPI::macAddressCache[xn_addr->inaOnline.s_addr]);
-  }
+  const MacAddress mac =
+      MacAddress(get_cached(XLiveAPI::macAddressCache, online_ip));
 
   std::memcpy(xn_addr->abEnet, mac.raw(), MacAddress::MacAddressSize);
 
@@ -891,7 +894,7 @@ dword_result_t NetDll_XNetInAddrToXnAddr_entry(dword_t caller, dword_t in_addr,
     if (cached_session_id) {
       session_id = cached_session_id;
     } else {
-      session_id = XLiveAPI::sessionIdCache[xn_addr->inaOnline.s_addr];
+      session_id = get_cached(XLiveAPI::sessionIdCache, online_ip);
     }
 
     memcpy(sessionId_ptr, &session_id, sizeof(uint64_t));

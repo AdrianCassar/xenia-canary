@@ -445,6 +445,7 @@ uint16_t XLiveAPI::GetPlayerPort() const { return 36000; }
 int8_t XLiveAPI::GetVersionStatus() const { return version_status_; }
 
 void XLiveAPI::clearXnaddrCache() {
+  std::lock_guard lock(xnaddrCacheMutex);
   sessionIdCache.clear();
   macAddressCache.clear();
 }
