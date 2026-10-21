@@ -1,106 +1,30 @@
-# Xenia Canary Netplay
-
-This is a fork of [Xenia Canary](https://github.com/xenia-canary/xenia-canary) which implements online multiplayer features. The REST API powering this fork can be found [here](https://github.com/AdrianCassar/Xenia-WebServices#xenia-web-services).
-
-Current online sessions are displayed at [https://xenia-netplay-2a0298c0e3f4.herokuapp.com/](https://xenia-netplay-2a0298c0e3f4.herokuapp.com/).
-
----
-
-## Netplay Wiki
-
-The wiki contains a compatibility list and general information about the current state netplay.
-
-To get started with netplay read [config setup](https://github.com/AdrianCassar/xenia-canary/wiki/Config-Setup).
-
-### Wiki Pages:
-* [Home](https://github.com/AdrianCassar/xenia-canary/wiki)
-* [Netplay Compatibility](https://github.com/AdrianCassar/xenia-canary/wiki/Netplay-Compatibility)
-* [Testing Procedure](https://github.com/AdrianCassar/xenia-canary/wiki/Testing-Procedure)
-* [Config Setup](https://github.com/AdrianCassar/xenia-canary/wiki/Config-Setup)
-* [Systemlink](https://github.com/AdrianCassar/xenia-canary/wiki/Systemlink)
-* [FAQ](https://github.com/AdrianCassar/xenia-canary/wiki/FAQ)
-
-### Netplay Builds:
-* [Latest stable release](https://github.com/AdrianCassar/xenia-canary/releases/latest)
-* [Github Actions](https://github.com/AdrianCassar/xenia-canary/actions?query=actor%3AAdrianCassar+branch%3Anetplay_canary_experimental)
-    * These builds are latest work in progress and require a github account to download.
-* [Mousehook](https://github.com/marinesciencedude/xenia-canary-mousehook/releases?q=Netplay)
-    * A limited number of games have netplay and mousehook support.
-
----
-
 <p align="center">
     <a href="https://github.com/xenia-canary/xenia-canary/tree/canary_experimental/assets/icon">
         <img height="256px" src="https://raw.githubusercontent.com/xenia-canary/xenia/master/assets/icon/256.png" />
     </a>
 </p>
 
-<h1 align="center">Xenia Canary - Xbox 360 Emulator</h1>
+<h1 align="center">Xenia Canary Netplay - Xbox 360 Emulator</h1>
 
-Xenia Canary is an experimental fork of the Xenia emulator. For more information, see the
-[Xenia Canary wiki](https://github.com/xenia-canary/xenia-canary/wiki).
+[![Release](https://img.shields.io/github/v/release/AdrianCassar/xenia-canary?label=release)](https://github.com/AdrianCassar/xenia-canary/releases/latest)
+[![CI](https://github.com/AdrianCassar/xenia-canary/actions/workflows/Orchestrator.yml/badge.svg?branch=netplay_canary_experimental)](https://github.com/AdrianCassar/xenia-canary/actions?query=branch%3Anetplay_canary_experimental)
+[![Codacy Badge](https://app.codacy.com/project/badge/Grade/d814c4b6aa444dcc9c1631e0224b2739)](https://app.codacy.com/gh/AdrianCassar/xenia-canary/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade)
 
-Come chat with us about **emulator-related topics** on [Discord](https://discord.gg/Q9mxZf9).
-For developer chat join `#dev` but stay on topic. Lurking is not only fine, but encouraged!
-Please check the [FAQ](https://github.com/xenia-canary/xenia-canary/wiki/FAQ) page before asking questions.
-We've got jobs/lives/etc, so don't expect instant answers.
+A fork of [Xenia Canary](https://github.com/xenia-canary/xenia-canary) that adds online multiplayer to Xbox 360 games, over the internet (emulated Xbox Live) or on a local network (Systemlink).
 
-Discussing illegal activities will get you banned.
+Sessions are matched through [Xenia Web Services](https://github.com/AdrianCassar/Xenia-WebServices#xenia-web-services), a REST API that anyone can self-host. Sessions currently online on the public server are listed at **[xenia-netplay-2a0298c0e3f4.herokuapp.com](https://xenia-netplay-2a0298c0e3f4.herokuapp.com/)**.
 
-## Status
+## Features
 
-Buildbot | Status | Releases
--------- | ------ | --------
-Canary (🪟, 🐧) | [![CI](https://github.com/xenia-canary/xenia-canary/actions/workflows/Orchestrator.yml/badge.svg?branch=canary_experimental)](https://github.com/xenia-canary/xenia-canary/actions/workflows/Orchestrator.yml/badge.svg?branch=canary_experimental) [![Codacy Badge](https://app.codacy.com/project/badge/Grade/cd506034fd8148309a45034925648499)](https://app.codacy.com/gh/xenia-canary/xenia-canary/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade) | [Latest](https://github.com/xenia-canary/xenia-canary/releases/latest) ◦ [All](https://github.com/xenia-canary/xenia-canary/releases) ◦ [Old](https://github.com/xenia-canary/xenia-canary-releases/releases)
+* **Xbox Live** - Create, search and join online sessions through a Xenia Web Services server.
+* **Systemlink** - LAN play, including over tunnels/VPNs such as XLink Kai.
+* **UPnP** - Automatic port forwarding on supported routers.
+* **Friends & profiles** - Friends lists, gamerpics and Discord rich presence.
+* **XStorage** - Title storage content served from the backend, with a local fallback.
+* **Update checker** - Notifies you when a new netplay build is available.
+* **Windows & Linux** builds.
 
-### Experimental Netplay
+## Builds
 
-Buildbot | Status | Releases
--------- | ------ | --------
-Windows | [![Codacy Badge](https://app.codacy.com/project/badge/Grade/d814c4b6aa444dcc9c1631e0224b2739)](https://app.codacy.com/gh/AdrianCassar/xenia-canary/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade) | [Latest](https://github.com/AdrianCassar/xenia-canary/releases/latest)
-
-## Quickstart
-
-See the [Quickstart](https://github.com/xenia-canary/xenia-canary/wiki/Quickstart) page.
-
-## FAQ
-
-See the [frequently asked questions](https://github.com/xenia-canary/xenia-canary/wiki/FAQ) page.
-
-## Game Compatibility
-
-See the [Game compatibility list](https://github.com/xenia-canary/game-compatibility/issues)
-for currently tracked games, and feel free to contribute your own updates,
-screenshots, and information there following the [existing conventions](https://github.com/xenia-canary/game-compatibility/blob/canary/README.md).
-
-## Building
-
-See [building.md](docs/building.md) for setup and information about the
-`xb` script. When writing code, check the [style guide](docs/style_guide.md)
-and be sure to run clang-format!
-
-## Contributors Wanted!
-
-Have some spare time, know advanced C++, and want to write an emulator?
-Contribute! There's a ton of work that needs to be done, a lot of which
-is wide open greenfield fun.
-
-**For general rules and guidelines please see [CONTRIBUTING.md](.github/CONTRIBUTING.md).**
-
-Fixes and optimizations are always welcome (please!), but in addition to
-that there are some major work areas still untouched:
-
-* Help work through [missing functionality/bugs in games](https://github.com/xenia-canary/xenia-canary/labels/compat)
-* Reduce the size of Xenia's [huge log files](https://github.com/xenia-canary/xenia-canary/issues/1526)
-* Skilled with Linux? A strong contributor is needed to [help with porting](https://github.com/xenia-canary/xenia-canary/labels/platform-linux)
-
-See more projects [good for contributors](https://github.com/xenia-canary/xenia-canary/labels/good%20first%20issue). It's a good idea to ask on Discord and check the issues page before beginning work on
-something.
-
-## Disclaimer
-
-The goal of this project is to experiment, research, and educate on the topic
-of emulation of modern devices and operating systems. **It is not for enabling
-illegal activity**. All information is obtained via reverse engineering of
-legally purchased devices and games and information made public on the internet
-(you'd be surprised what's indexed on Google...).
+* [Latest release](https://github.com/AdrianCassar/xenia-canary/releases/latest)
+* [Mousehook](https://github.com/marinesciencedude/xenia-canary-mousehook/releases?q=Netplay) - Netplay with mouse and keyboard support for a limited number of games.
