@@ -259,8 +259,10 @@ X_STATUS XSocket::Connect(const XSOCKADDR_IN* name, int name_len) {
   int ret = connect(native_handle_, &addr, name_len);
 
   // Implicit Bind
-  bound_port_ = sa_in.address_port;
-  bound_ = true;
+  if (!bound_port_) {
+    bound_port_ = GetImplicitlyBoundPort();
+    bound_ = true;
+  }
 
   if (ret < 0) {
     return X_STATUS_UNSUCCESSFUL;
@@ -477,7 +479,7 @@ int XSocket::PollWSASendTo(bool wait, WSASendToData send_async_data,
 
     XELOGE("WSASelectWrite failed with error {}", error);
 
-    if (send_async_data.overlapped->internal) {
+    if (send_async_data.overlapped) {
       send_async_data.overlapped->internal = error;
     }
 
@@ -487,7 +489,7 @@ int XSocket::PollWSASendTo(bool wait, WSASendToData send_async_data,
   if (data_available == X_ERROR_SUCCESS) {
     // There's no available space for writing therefore return and start
     // pending operation.
-    if (send_async_data.overlapped->internal) {
+    if (send_async_data.overlapped) {
       send_async_data.overlapped->internal = X_STATUS_PENDING;
     }
 
@@ -518,14 +520,16 @@ int XSocket::PollWSASendTo(bool wait, WSASendToData send_async_data,
   int saddr_len = 0;
 
   if (send_async_data.to) {
-    saddr = send_async_data.to->to_host();
-    sockaddr_in* addr_in = reinterpret_cast<sockaddr_in*>(&saddr);
+    XSOCKADDR_IN target = *send_async_data.to;
 
     const auto upnp = kernel_state()->emulator()->GetUPnP();
 
     if (upnp) {
-      addr_in->sin_port = upnp->GetMappedBindPort(addr_in->sin_port);
+      target.address_port = upnp->GetMappedBindPort(target.address_port);
     }
+
+    saddr = target.to_host();
+    sockaddr_in* addr_in = reinterpret_cast<sockaddr_in*>(&saddr);
 
     // Ensure the bound interface can route to the loopback interface/itself
     if (cvars::bind_interface) {
@@ -662,6 +666,10 @@ int XSocket::WSASendTo(XWSABUF* buffers, uint32_t num_buffers,
       XELOGNETD("{} overlapped task {:08X} is pending!", __func__,
                 overlapped_address);
     }
+
+    // Overlapped is being reused for a new request.
+    std::lock_guard lock(cancelled_overlapped_io_mutex_);
+    cancelled_overlapped_io_.erase(overlapped_address);
   }
 
   uint32_t num_bytes_sent = 0;
@@ -974,6 +982,10 @@ int XSocket::WSARecvFrom(XWSABUF* buffers, uint32_t num_buffers,
       XELOGNETD("{} overlapped task {:08X} is pending!", __func__,
                 overlapped_address);
     }
+
+    // Overlapped is being reused for a new request.
+    std::lock_guard lock(cancelled_overlapped_io_mutex_);
+    cancelled_overlapped_io_.erase(overlapped_address);
   }
 
   // Check for immediate completion.
@@ -1265,6 +1277,9 @@ int XSocket::WSACancelOverlappedIO() {
     std::lock_guard send_lock(send_socket_mutex_);
     send_polling_tasks_.clear();
   }
+
+  // Only pending requests are cancelled, allow new requests.
+  cancel_overlapped_ = false;
 
   XWSASetLastError(X_WSA_ERROR::X_WSA_NO_ERROR);
 
