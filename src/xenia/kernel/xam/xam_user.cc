@@ -1766,6 +1766,10 @@ dword_result_t XamUserGetUserTenure_entry(
   const auto& user_profile =
       kernel_state()->xam_state()->GetUserProfile(user_index);
 
+  if (!user_profile->IsSignedInToLive()) {
+    return X_E_NO_SUCH_USER;
+  }
+
   if (const auto setting =
           kernel_state()->xam_state()->user_tracker()->GetSetting(
               user_profile, kDashboardID,
