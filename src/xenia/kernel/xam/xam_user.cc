@@ -668,6 +668,13 @@ dword_result_t XamUserContentRestrictionGetFlags_entry(dword_t user_index,
     return X_ERROR_NO_SUCH_USER;
   }
 
+  if (!kernel_state()
+           ->xam_state()
+           ->GetUserProfile(user_index)
+           ->IsSignedInToLive()) {
+    return X_ERROR_NOT_LOGGED_ON;
+  }
+
   // No restrictions?
   *out_flags = 0;
   return X_ERROR_SUCCESS;
