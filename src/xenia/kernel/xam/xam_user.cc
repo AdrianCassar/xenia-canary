@@ -81,15 +81,23 @@ DECLARE_XAM_EXPORT1(XamUserGetXUID, kUserProfiles, kImplemented);
 
 dword_result_t XamUserGetIndexFromXUID_entry(qword_t xuid, dword_t flags,
                                              lpdword_t index) {
-  if (!index) {
-    return X_E_INVALIDARG;
-  }
-
   const uint8_t user_index =
       kernel_state()->xam_state()->GetUserIndexAssignedToProfileFromXUID(xuid);
 
   if (user_index == XUserIndexAny) {
     return X_E_NO_SUCH_USER;
+  }
+
+  // Without flags an offline user's XUID isn't found, before the pointer is
+  // checked.
+  const auto user_profile = kernel_state()->xam_state()->GetUserProfile(
+      static_cast<uint32_t>(user_index));
+  if (!flags && (!user_profile || !user_profile->IsSignedInToLive())) {
+    return X_E_NO_SUCH_USER;
+  }
+
+  if (!index) {
+    return X_E_INVALIDARG;
   }
 
   *index = user_index;
@@ -231,10 +239,11 @@ uint32_t XamUserReadProfileSettingsEx(
     return X_ERROR_INVALID_PARAMETER;
   }
 
-  if (!setting_ids || (xuid_count && !xuids)) {
+  if (!setting_ids) {
     return X_ERROR_INVALID_PARAMETER;
   }
 
+  // A null XUID array reads the requesting user's settings.
   const bool use_xuids = xuids && xuid_count;
 
   // buffer size pointer must be valid
@@ -806,6 +815,13 @@ dword_result_t XamUserContentRestrictionGetFlags_entry(dword_t user_index,
 
   if (!kernel_state()->xam_state()->IsUserSignedIn(user_index)) {
     return X_ERROR_NO_SUCH_USER;
+  }
+
+  if (!kernel_state()
+           ->xam_state()
+           ->GetUserProfile(user_index)
+           ->IsSignedInToLive()) {
+    return X_ERROR_NOT_LOGGED_ON;
   }
 
   // No restrictions?
@@ -1608,7 +1624,7 @@ dword_result_t XamSessionRefObjByHandle_entry(dword_t handle,
   auto object = kernel_state()->object_table()->LookupObject<XSession>(handle);
 
   if (!object) {
-    return X_STATUS_INVALID_HANDLE;
+    return X_ERROR_INVALID_HANDLE;
   }
 
   object->RetainHandle();
@@ -1627,6 +1643,21 @@ dword_result_t XamUserIsUnsafeProgrammingAllowed_entry(dword_t user_index,
 
   if (user_index != XUserIndexAny && user_index >= XUserMaxUserCount) {
     return X_ERROR_INVALID_PARAMETER;
+  }
+
+  // Any user is checked like the first signed-in one
+  if (user_index == XUserIndexAny) {
+    for (uint32_t i = 0; i < XUserMaxUserCount; ++i) {
+      if (kernel_state()->xam_state()->IsUserSignedIn(i)) {
+        return XamUserIsUnsafeProgrammingAllowed_entry(i, pc_check, result_ptr);
+      }
+    }
+  } else if (kernel_state()->xam_state()->IsUserSignedIn(user_index) &&
+             !kernel_state()
+                  ->xam_state()
+                  ->GetUserProfile(user_index)
+                  ->IsSignedInToLive()) {
+    return X_ERROR_NOT_LOGGED_ON;
   }
   // ExGetXConfigSetting(3,0xf,&pc_flags,1,*size_out);
   // uint32_t result = XamUserCheckPrivilege_entry(user_index, 0xD4u,
@@ -1652,7 +1683,7 @@ dword_result_t XamUserGetSubscriptionType_entry(
   const auto user_profile =
       kernel_state()->xam_state()->GetUserProfile(user_index);
 
-  if (!user_profile) {
+  if (!user_profile || !user_profile->IsSignedInToLive()) {
     return X_E_NO_SUCH_USER;
   }
 
@@ -1771,7 +1802,10 @@ dword_result_t XamUserCreateStatsEnumerator_entry(
 
   *buffer_size_ptr = 0;
 
-  if (!pivot_user || !stats_ptr) {
+  // A starting rank of 0 is accepted
+  const bool is_by_rank = enumerator_type == X_STATS_ENUMERATOR_TYPE::RANK;
+
+  if ((!pivot_user && !is_by_rank) || !stats_ptr) {
     return X_ERROR_INVALID_PARAMETER;
   }
 
@@ -1899,6 +1933,10 @@ dword_result_t XamUserGetUserTenure_entry(
 
   const auto& user_profile =
       kernel_state()->xam_state()->GetUserProfile(user_index);
+
+  if (!user_profile->IsSignedInToLive()) {
+    return X_E_NO_SUCH_USER;
+  }
 
   if (const auto setting =
           kernel_state()->xam_state()->user_tracker()->GetSetting(
