@@ -1659,7 +1659,10 @@ dword_result_t XamUserCreateStatsEnumerator_entry(
 
   *buffer_size_ptr = 0;
 
-  if (!pivot_user || !stats_ptr) {
+  // A starting rank of 0 is accepted
+  const bool is_by_rank = enumerator_type == X_STATS_ENUMERATOR_TYPE::RANK;
+
+  if ((!pivot_user && !is_by_rank) || !stats_ptr) {
     return X_ERROR_INVALID_PARAMETER;
   }
 
