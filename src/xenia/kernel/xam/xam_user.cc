@@ -1503,6 +1503,21 @@ dword_result_t XamUserIsUnsafeProgrammingAllowed_entry(dword_t user_index,
   if (user_index != XUserIndexAny && user_index >= XUserMaxUserCount) {
     return X_ERROR_INVALID_PARAMETER;
   }
+
+  // Any user is checked like the first signed-in one
+  if (user_index == XUserIndexAny) {
+    for (uint32_t i = 0; i < XUserMaxUserCount; ++i) {
+      if (kernel_state()->xam_state()->IsUserSignedIn(i)) {
+        return XamUserIsUnsafeProgrammingAllowed_entry(i, pc_check, result_ptr);
+      }
+    }
+  } else if (kernel_state()->xam_state()->IsUserSignedIn(user_index) &&
+             !kernel_state()
+                  ->xam_state()
+                  ->GetUserProfile(user_index)
+                  ->IsSignedInToLive()) {
+    return X_ERROR_NOT_LOGGED_ON;
+  }
   // ExGetXConfigSetting(3,0xf,&pc_flags,1,*size_out);
   // uint32_t result = XamUserCheckPrivilege_entry(user_index, 0xD4u,
   // result_ptr);
