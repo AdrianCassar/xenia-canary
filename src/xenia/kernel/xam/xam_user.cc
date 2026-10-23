@@ -81,15 +81,23 @@ DECLARE_XAM_EXPORT1(XamUserGetXUID, kUserProfiles, kImplemented);
 
 dword_result_t XamUserGetIndexFromXUID_entry(qword_t xuid, dword_t flags,
                                              lpdword_t index) {
-  if (!index) {
-    return X_E_INVALIDARG;
-  }
-
   const uint8_t user_index =
       kernel_state()->xam_state()->GetUserIndexAssignedToProfileFromXUID(xuid);
 
   if (user_index == XUserIndexAny) {
     return X_E_NO_SUCH_USER;
+  }
+
+  // Without flags an offline user's XUID isn't found, before the pointer is
+  // checked.
+  const auto user_profile = kernel_state()->xam_state()->GetUserProfile(
+      static_cast<uint32_t>(user_index));
+  if (!flags && (!user_profile || !user_profile->IsSignedInToLive())) {
+    return X_E_NO_SUCH_USER;
+  }
+
+  if (!index) {
+    return X_E_INVALIDARG;
   }
 
   *index = user_index;
