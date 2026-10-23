@@ -1491,7 +1491,7 @@ dword_result_t XamSessionRefObjByHandle_entry(dword_t handle,
   auto object = kernel_state()->object_table()->LookupObject<XSession>(handle);
 
   if (!object) {
-    return X_STATUS_INVALID_HANDLE;
+    return X_ERROR_INVALID_HANDLE;
   }
 
   object->RetainHandle();
