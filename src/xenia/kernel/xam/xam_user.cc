@@ -124,7 +124,7 @@ X_HRESULT_result_t XamUserGetSigninInfo_entry(
   info_ptr.Zero();
 
   if (user_index >= XUserMaxUserCount) {
-    return X_E_NO_SUCH_USER;
+    return X_E_INVALIDARG;
   }
 
   if (!kernel_state()->xam_state()->IsUserSignedIn(user_index)) {
