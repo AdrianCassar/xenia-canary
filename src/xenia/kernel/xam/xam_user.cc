@@ -230,10 +230,11 @@ uint32_t XamUserReadProfileSettingsEx(
     return X_ERROR_INVALID_PARAMETER;
   }
 
-  if (!setting_ids || (xuid_count && !xuids)) {
+  if (!setting_ids) {
     return X_ERROR_INVALID_PARAMETER;
   }
 
+  // A null XUID array reads the requesting user's settings.
   const bool use_xuids = xuids && xuid_count;
 
   // buffer size pointer must be valid
