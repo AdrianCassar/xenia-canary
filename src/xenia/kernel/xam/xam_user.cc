@@ -1527,7 +1527,7 @@ dword_result_t XamUserGetSubscriptionType_entry(
   const auto user_profile =
       kernel_state()->xam_state()->GetUserProfile(user_index);
 
-  if (!user_profile) {
+  if (!user_profile || !user_profile->IsSignedInToLive()) {
     return X_E_NO_SUCH_USER;
   }
 
