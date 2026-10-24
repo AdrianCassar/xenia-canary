@@ -424,8 +424,11 @@ X_HRESULT XLiveBaseApp::XPresenceSubscribe(uint32_t buffer_ptr,
       xe::load_and_swap<uint32_t>(memory_->TranslateVirtual(
           static_cast<uint32_t>(subscribe_args->peers.argument_value_ptr)));
 
-  if (!kernel_state_->xam_state()->IsUserSignedIn(user_index)) {
-    return X_E_INVALIDARG;
+  const auto user_profile =
+      kernel_state_->xam_state()->GetUserProfile(user_index);
+
+  if (!user_profile || !user_profile->IsSignedInToLive()) {
+    return X_E_NO_SUCH_USER;
   }
 
   const uint32_t xuid_address =
@@ -438,8 +441,7 @@ X_HRESULT XLiveBaseApp::XPresenceSubscribe(uint32_t buffer_ptr,
   const xe::be<uint64_t>* peer_xuids =
       memory_->TranslateVirtual<xe::be<uint64_t>*>(xuid_address);
 
-  const auto user_xuid =
-      kernel_state_->xam_state()->GetUserProfile(user_index)->xuid();
+  const auto user_xuid = user_profile->xuid();
 
   for (uint32_t i = 0; i < num_peers; i++) {
     const xe::be<uint64_t> peer_xuid = peer_xuids[i];
@@ -895,15 +897,15 @@ X_HRESULT XLiveBaseApp::XFriendsCreateEnumerator(uint32_t buffer_ptr,
     return X_E_INVALIDARG;
   }
 
-  if (friends_amount > X_ONLINE_MAX_FRIENDS) {
+  if (!friends_amount || friends_amount > X_ONLINE_MAX_FRIENDS) {
     return X_E_INVALIDARG;
   }
 
-  if (!kernel_state_->xam_state()->IsUserSignedIn(user_index)) {
-    return X_E_NO_SUCH_USER;
-  }
-
   auto const profile = kernel_state_->xam_state()->GetUserProfile(user_index);
+
+  if (!profile || !profile->IsSignedInToLive()) {
+    return X_E_INVALIDARG;
+  }
 
   auto e = object_ref<FriendsEnumerator>(
       new FriendsEnumerator(kernel_state_, friends_amount));
@@ -977,12 +979,12 @@ X_HRESULT XLiveBaseApp::XInviteGetAcceptedInfo(uint32_t buffer_ptr,
   X_INVITE_INFO* invite_info = memory_->TranslateVirtual<X_INVITE_INFO*>(
       static_cast<uint32_t>(accepted_info->invite_info.argument_value_ptr));
 
-  if (!kernel_state_->xam_state()->IsUserSignedIn(user_index)) {
-    return X_E_FAIL;
-  }
-
   const auto user_profile =
       kernel_state_->xam_state()->GetUserProfile(user_index);
+
+  if (!user_profile || !user_profile->IsSignedInToLive()) {
+    return X_E_INVALIDARG;
+  }
 
   *invite_info = user_profile->GetSelfInvite();
 
@@ -1063,8 +1065,8 @@ X_HRESULT XLiveBaseApp::XUserMuteListQuery(uint32_t buffer_ptr,
     return X_E_INVALIDARG;
   }
 
-  X_MUTE_SET_STATE* remote_player_ptr =
-      memory_->TranslateVirtual<X_MUTE_SET_STATE*>(buffer_ptr);
+  X_MUTE_LIST_QUERY* remote_player_ptr =
+      memory_->TranslateVirtual<X_MUTE_LIST_QUERY*>(buffer_ptr);
 
   if (remote_player_ptr->user_index >= XUserMaxUserCount) {
     return X_E_INVALIDARG;
@@ -1079,7 +1081,8 @@ X_HRESULT XLiveBaseApp::XUserMuteListQuery(uint32_t buffer_ptr,
 
   // Is mute list used with systemlink?
 
-  if (!user_profile) {
+  if (!user_profile || !user_profile->IsSignedInToLive()) {
+    remote_player_ptr->result = X_ERROR_NOT_LOGGED_ON;
     return X_ONLINE_E_LOGON_NOT_LOGGED_ON;
   }
 
@@ -1094,8 +1097,8 @@ X_HRESULT XLiveBaseApp::XUserMuteListQuery(uint32_t buffer_ptr,
 }
 
 X_HRESULT XLiveBaseApp::XUserMuteListAdd(uint32_t buffer_ptr) {
-  X_MUTE_SET_STATE* remote_player_ptr =
-      memory_->TranslateVirtual<X_MUTE_SET_STATE*>(buffer_ptr);
+  X_MUTE_LIST_QUERY* remote_player_ptr =
+      memory_->TranslateVirtual<X_MUTE_LIST_QUERY*>(buffer_ptr);
 
   if (remote_player_ptr->user_index >= XUserMaxUserCount) {
     return X_E_INVALIDARG;
@@ -1119,8 +1122,8 @@ X_HRESULT XLiveBaseApp::XUserMuteListAdd(uint32_t buffer_ptr) {
 }
 
 X_HRESULT XLiveBaseApp::XUserMuteListRemove(uint32_t buffer_ptr) {
-  X_MUTE_SET_STATE* remote_player_ptr =
-      memory_->TranslateVirtual<X_MUTE_SET_STATE*>(buffer_ptr);
+  X_MUTE_LIST_QUERY* remote_player_ptr =
+      memory_->TranslateVirtual<X_MUTE_LIST_QUERY*>(buffer_ptr);
 
   if (remote_player_ptr->user_index >= XUserMaxUserCount) {
     return X_E_INVALIDARG;

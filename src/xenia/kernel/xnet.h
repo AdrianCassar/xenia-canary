@@ -812,12 +812,12 @@ struct X_STORAGE_FACILITY_INFO_GAME_CLIP {
 };
 static_assert_size(X_STORAGE_FACILITY_INFO_GAME_CLIP, 0x4);
 
-struct X_MUTE_SET_STATE {
+struct X_MUTE_LIST_QUERY {
   xe::be<uint32_t> user_index;
   xe::be<uint64_t> remote_xuid;
-  xe::be<uint32_t> set_muted;
+  xe::be<uint32_t> result;
 };
-static_assert_size(X_MUTE_SET_STATE, 0x18);
+static_assert_size(X_MUTE_LIST_QUERY, 0x18);
 
 struct X_CREATE_FRIENDS_ENUMERATOR {
   X_ARGUMENT_ENTRY user_index;
