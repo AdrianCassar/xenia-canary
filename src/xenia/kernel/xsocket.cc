@@ -444,8 +444,7 @@ int XSocket::RecvFrom(uint8_t* buf, uint32_t buf_len, uint32_t flags,
   int ret = recvfrom(native_handle_, reinterpret_cast<char*>(buf), buf_len, 0,
                      from ? &sa : nullptr, from_len);
 
-  // 555307EE expects port even with TCP, include IP anyway.
-  // Verified on console.
+  // TCP receives report the peer's address, e.g. 555307EE reads the port.
   if (proto_ == X_IPPROTO_TCP) {
     socklen_t peer_addr_len = sizeof(sockaddr);
     getpeername(native_handle_, &sa, &peer_addr_len);
@@ -954,7 +953,6 @@ int XSocket::PollWSARecvFrom(bool wait, WSARecvFromData receive_async_data) {
   if (result == X_ERROR_SUCCESS) {
     if (receive_async_data.from) {
       // Copy behavior from recvfrom.
-      // Verified on console.
       if (proto_ == X_IPPROTO_TCP) {
         socklen_t peer_addar_len = sizeof(sockaddr);
         getpeername(native_handle_, &saddr, &peer_addar_len);
