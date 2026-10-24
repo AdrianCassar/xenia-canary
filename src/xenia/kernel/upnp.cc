@@ -286,8 +286,10 @@ int32_t UPnP::AddPort(std::string addr, uint16_t internal_port,
 
 std::future<int32_t> UPnP::RemovePortAsync(uint16_t port,
                                            std::string protocol) {
-  return QueuePortAction(
-      [this, port, protocol]() { return RemovePort(port, protocol); });
+  return QueuePortAction([this, port, protocol]() {
+    UntrackPort(port, protocol);
+    return RemovePort(port, protocol);
+  });
 }
 
 int32_t UPnP::RemovePort(uint16_t internal_port, std::string protocol) {
@@ -374,6 +376,20 @@ std::string UPnP::GetLocalIP_wget() {
 void UPnP::TrackPort(uint16_t port, std::string protocol) {
   std::lock_guard tracked_lock(mutex_tracked_ports_);
   tracked_ports_[protocol].insert(port);
+}
+
+void UPnP::UntrackPort(uint16_t port, std::string protocol) {
+  std::lock_guard tracked_lock(mutex_tracked_ports_);
+
+  auto protocol_it = tracked_ports_.find(protocol);
+  if (protocol_it == tracked_ports_.end()) {
+    return;
+  }
+
+  protocol_it->second.erase(port);
+  if (protocol_it->second.empty()) {
+    tracked_ports_.erase(protocol_it);
+  }
 }
 
 void UPnP::OpenTrackedPorts() {

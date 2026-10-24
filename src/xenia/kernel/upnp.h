@@ -103,6 +103,8 @@ class UPnP {
 
   void TrackPort(uint16_t port, std::string protocol);
 
+  void UntrackPort(uint16_t port, std::string protocol);
+
   void OpenTrackedPorts();
 
   void OpenPorts(
