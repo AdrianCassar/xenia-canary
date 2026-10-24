@@ -90,6 +90,12 @@ X_RESULT XSession::CreateSession(uint32_t user_index, uint8_t public_slots,
     return X_ONLINE_E_SESSION_NOT_LOGGED_ON;
   }
 
+  // Hosting a system link session registers its key with XNet.
+  if (HasSessionFlag(static_cast<SessionFlags>(flags), HOST) &&
+      IsSystemlinkSession() && !xam::IsXNetInitialized()) {
+    return X_ONLINE_E_SESSION_REGISTER_KEY_FAILED;
+  }
+
   XSESSION_INFO* SessionInfo_ptr =
       kernel_state_->memory()->TranslateVirtual<XSESSION_INFO*>(
           session_info_ptr);
