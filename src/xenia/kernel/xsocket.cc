@@ -1007,6 +1007,16 @@ int XSocket::WSARecvFrom(XWSABUF* buffers, uint32_t num_buffers,
     return X_SOCKET_ERROR;
   }
 
+  // Only one overlapped receive can be pending per socket.
+  if (overlapped_ptr) {
+    for (auto& [pending_overlapped_ptr, task] : receive_polling_tasks_) {
+      if (task.valid() && task.wait_for(0s) != std::future_status::ready) {
+        XWSASetLastError(X_WSA_ERROR::X_WSAEWOULDBLOCK);
+        return X_SOCKET_ERROR;
+      }
+    }
+  }
+
   // On win32 we could pipe all this directly to WSARecvFrom.
   // We would however need find a way to call the completion callback without
   // relying on the caller to set the "alertable" flag to true when waiting. We
