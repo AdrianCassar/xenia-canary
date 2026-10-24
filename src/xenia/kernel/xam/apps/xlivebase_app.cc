@@ -895,7 +895,7 @@ X_HRESULT XLiveBaseApp::XFriendsCreateEnumerator(uint32_t buffer_ptr,
     return X_E_INVALIDARG;
   }
 
-  if (friends_amount > X_ONLINE_MAX_FRIENDS) {
+  if (!friends_amount || friends_amount > X_ONLINE_MAX_FRIENDS) {
     return X_E_INVALIDARG;
   }
 
