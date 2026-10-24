@@ -1004,10 +1004,11 @@ X_RESULT XSession::WriteStats(XGI_STATS_WRITE* data) {
 
 // Flush cached leaderboard stats to the backend
 X_RESULT XSession::FlushStats() {
+  // There are no stats to flush.
   if (!HasSessionFlag(static_cast<SessionFlags>((uint32_t)local_details_.Flags),
                       STATS)) {
     XELOGW("Session does not support stats.");
-    return X_ONLINE_E_SESSION_WRONG_STATE;
+    return X_ERROR_SUCCESS;
   }
 
   if (local_details_.eState.get() != XSESSION_STATE::INGAME) {
