@@ -34,6 +34,13 @@ const std::map<uint32_t, uint32_t> supported_socket_options = {
     {0x1001, SO_SNDBUF},    {0x1002, SO_RCVBUF},    {0x1005, SO_SNDTIMEO},
     {0x1006, SO_RCVTIMEO},  {~0x0080, ~SO_LINGER},  {~0x0004, ~SO_REUSEADDR}};
 
+// Socket options that can only be read
+const std::map<uint32_t, uint32_t> supported_get_socket_options = {
+    {0x0002, SO_ACCEPTCONN}, {0x0004, SO_REUSEADDR},  {0x0020, SO_BROADCAST},
+    {0x0080, SO_LINGER},     {0x1001, SO_SNDBUF},     {0x1002, SO_RCVBUF},
+    {0x1005, SO_SNDTIMEO},   {0x1006, SO_RCVTIMEO},   {0x1008, SO_TYPE},
+    {~0x0080, ~SO_LINGER},   {~0x0004, ~SO_REUSEADDR}};
+
 // Translate socket TCP options to native
 const std::map<uint32_t, uint32_t> supported_tcp_options = {
     {0x0001, TCP_NODELAY}};
@@ -119,9 +126,22 @@ int XSocket::Close() {
 
 X_STATUS XSocket::GetOption(uint32_t level, uint32_t optname, void* optval_ptr,
                             uint32_t* optlen) {
-  int ret =
-      getsockopt(native_handle_, level, optname, static_cast<char*>(optval_ptr),
-                 reinterpret_cast<socklen_t*>(optlen));
+  if (!supported_levels.contains(level)) {
+    XWSASetLastError(X_WSA_ERROR::X_WSAEINVAL);
+    return X_STATUS_UNSUCCESSFUL;
+  }
+
+  const auto& supported_options =
+      level == 0xFFFF ? supported_get_socket_options : supported_tcp_options;
+
+  if (!supported_options.contains(optname)) {
+    XWSASetLastError(X_WSA_ERROR::X_WSAENOPROTOOPT);
+    return X_STATUS_UNSUCCESSFUL;
+  }
+
+  int ret = getsockopt(
+      native_handle_, supported_levels.at(level), supported_options.at(optname),
+      static_cast<char*>(optval_ptr), reinterpret_cast<socklen_t*>(optlen));
   if (ret < 0) {
     // TODO: WSAGetLastError()
     return X_STATUS_UNSUCCESSFUL;
