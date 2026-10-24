@@ -414,7 +414,15 @@ object_ref<XSocket> XSocket::Accept(XSOCKADDR_IN* name, int* name_len) {
   return socket;
 }
 
-int XSocket::Shutdown(int how) { return shutdown(native_handle_, how); }
+int XSocket::Shutdown(int how) {
+  // An out-of-range how shuts down both directions. The host rejects it with
+  // WSAEINVAL.
+  if (how < 0 || how > 2) {
+    how = 2;
+  }
+
+  return shutdown(native_handle_, how);
+}
 
 int XSocket::Recv(uint8_t* buf, uint32_t buf_len, uint32_t flags) {
   return recv(native_handle_, reinterpret_cast<char*>(buf), buf_len, flags);
