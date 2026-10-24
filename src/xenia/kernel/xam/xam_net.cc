@@ -138,7 +138,7 @@ DECLARE_XAM_EXPORT1(NetDll_XNetStartupEx, kNetworking, kImplemented);
 
 dword_result_t NetDll_XNetCleanup_entry(dword_t caller) {
   if (!initialized_xnet_) {
-    return static_cast<uint32_t>(X_WSA_ERROR::X_WSANOTINITIALISED);
+    return X_WSA_ERROR::X_WSANOTINITIALISED;
   }
 
   initialized_xnet_ = false;
@@ -252,13 +252,13 @@ dword_result_t NetDll_XNetGetOpt_entry(dword_t caller, dword_t option_id,
     case 1:
       if (*buffer_size < sizeof(XNetStartupParams)) {
         *buffer_size = sizeof(XNetStartupParams);
-        return uint32_t(X_WSA_ERROR::X_WSAEMSGSIZE);
+        return X_WSA_ERROR::X_WSAEMSGSIZE;
       }
       std::memcpy(buffer_ptr, &xnet_startup_params, sizeof(XNetStartupParams));
       return 0;
     default:
       XELOGE("NetDll_XNetGetOpt: option {} unimplemented", option_id.value());
-      return uint32_t(X_WSA_ERROR::X_WSAEINVAL);
+      return X_WSA_ERROR::X_WSAEINVAL;
   }
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetGetOpt, kNetworking, kSketchy);
@@ -344,8 +344,7 @@ DECLARE_XAM_EXPORT1(NetDll_WSAStartupEx, kNetworking, kImplemented);
 
 dword_result_t NetDll_WSACleanup_entry(dword_t caller) {
   if (!winsock_reference_count_) {
-    XThread::SetLastError(
-        static_cast<uint32_t>(X_WSA_ERROR::X_WSANOTINITIALISED));
+    XThread::SetLastError(X_WSA_ERROR::X_WSANOTINITIALISED);
     return X_SOCKET_ERROR;
   }
 
@@ -385,7 +384,7 @@ dword_result_t NetDll_WSARecvFrom_entry(
   auto socket =
       kernel_state()->object_table()->LookupObject<XSocket>(socket_handle);
   if (!socket) {
-    XThread::SetLastError(uint32_t(X_WSA_ERROR::X_WSAENOTSOCK));
+    XThread::SetLastError(X_WSA_ERROR::X_WSAENOTSOCK);
     return -1;
   }
 
@@ -415,7 +414,7 @@ dword_result_t NetDll_WSAGetOverlappedResult_entry(
   auto socket =
       kernel_state()->object_table()->LookupObject<XSocket>(socket_handle);
   if (!socket) {
-    XThread::SetLastError(uint32_t(X_WSA_ERROR::X_WSAENOTSOCK));
+    XThread::SetLastError(X_WSA_ERROR::X_WSAENOTSOCK);
     return 0;
   }
 
@@ -440,7 +439,7 @@ dword_result_t NetDll_WSASendTo_entry(
   auto socket =
       kernel_state()->object_table()->LookupObject<XSocket>(socket_handle);
   if (!socket) {
-    XThread::SetLastError(uint32_t(X_WSA_ERROR::X_WSAENOTSOCK));
+    XThread::SetLastError(X_WSA_ERROR::X_WSAENOTSOCK);
     return -1;
   }
 
@@ -471,7 +470,7 @@ dword_result_t NetDll_WSACancelOverlappedIO_entry(dword_t caller,
   auto socket =
       kernel_state()->object_table()->LookupObject<XSocket>(socket_handle);
   if (!socket) {
-    XThread::SetLastError(uint32_t(X_WSA_ERROR::X_WSAENOTSOCK));
+    XThread::SetLastError(X_WSA_ERROR::X_WSAENOTSOCK);
     return -1;
   }
 
@@ -487,7 +486,7 @@ dword_result_t NetDll_WSAWaitForMultipleEvents_entry(dword_t num_events,
                                                      dword_t timeout,
                                                      dword_t alertable) {
   if (num_events > 64) {
-    XThread::SetLastError(uint32_t(X_WSA_ERROR::X_WSA_INVALID_PARAMETER));
+    XThread::SetLastError(X_WSA_ERROR::X_WSA_INVALID_PARAMETER);
     return -1;
   }
 
@@ -638,7 +637,7 @@ dword_result_t NetDll_XNetXnAddrToMachineId_entry(dword_t caller,
   id_ptr.Zero();
 
   if (!addr_ptr->inaOnline.s_addr || !addr_ptr->wPortOnline) {
-    return static_cast<uint32_t>(X_WSA_ERROR::X_WSAEINVAL);
+    return X_WSA_ERROR::X_WSAEINVAL;
   }
 
   const MacAddress mac = MacAddress(addr_ptr->abEnet);
@@ -654,7 +653,7 @@ dword_result_t NetDll_XNetUnregisterInAddr_entry(dword_t caller, dword_t addr) {
   XELOGI("NetDll_XNetUnregisterInAddr({:08X})",
          cvars::log_mask_ips ? 0 : addr.value());
 
-  // return static_cast<uint32_t>(X_WSA_ERROR::X_WSAEINVAL);
+  // return X_WSA_ERROR::X_WSAEINVAL;
 
   return X_ERROR_SUCCESS;
 }
@@ -686,11 +685,11 @@ dword_result_t NetDll_XNetServerToInAddr_entry(dword_t caller,
 
   if (kernel_state()->GetXboxLiveAPI()->GetInitState() ==
       XLiveAPI::InitState::Pending) {
-    return static_cast<uint32_t>(X_WSA_ERROR::X_WSANOTINITIALISED);
+    return X_WSA_ERROR::X_WSANOTINITIALISED;
   }
 
   if (!server_addr || !service_id) {
-    return static_cast<uint32_t>(X_WSA_ERROR::X_WSAEINVAL);
+    return X_WSA_ERROR::X_WSAEINVAL;
   }
 
   pina->s_addr = htonl(server_addr);
@@ -707,7 +706,7 @@ dword_result_t NetDll_XNetInAddrToServer_entry(dword_t caller,
   XELOGI("XNetInAddrToServer");
 
   if (!server_addr) {
-    return static_cast<uint32_t>(X_WSA_ERROR::X_WSAEINVAL);
+    return X_WSA_ERROR::X_WSAEINVAL;
   }
 
   pina->s_addr = htonl(server_addr);
@@ -726,7 +725,7 @@ dword_result_t NetDll_XNetTsAddrToInAddr_entry(dword_t caller,
   XELOGI("XNetTsAddrToInAddr");
 
   if (!tsaddr_ptr || !service_id || !xnkid_ptr || !ina_ptr) {
-    return static_cast<uint32_t>(X_WSA_ERROR::X_WSAEINVAL);
+    return X_WSA_ERROR::X_WSAEINVAL;
   }
 
   // Use XNKID to lookup security association?
@@ -914,14 +913,14 @@ dword_result_t NetDll_XNetSetSystemLinkPort_entry(dword_t caller, word_t port) {
   if (!xboxkrnl::XexCheckExecutablePrivilege(
           XEX_PRIVILEGE_CROSSPLATFORM_SYSTEM_LINK)) {
     XELOGW("Title not allowed to set System Link port!");
-    return static_cast<uint32_t>(X_WSA_ERROR::X_WSAEACCES);
+    return X_WSA_ERROR::X_WSAEACCES;
   }
 
   // XNET_SYSTEMLINK_PORT = port;
 
   XELOGI("XNetSetSystemLinkPort: {}", port.value());
 
-  return static_cast<uint32_t>(X_WSA_ERROR::X_WSAEADDRINUSE);
+  return X_WSA_ERROR::X_WSAEADDRINUSE;
 }
 DECLARE_XAM_EXPORT1(NetDll_XNetSetSystemLinkPort, kNetworking, kImplemented);
 
@@ -929,7 +928,7 @@ dword_result_t NetDll_XNetGetSystemLinkPort_entry(dword_t caller,
                                                   lpword_t port) {
   if (!xboxkrnl::XexCheckExecutablePrivilege(
           XEX_PRIVILEGE_CROSSPLATFORM_SYSTEM_LINK)) {
-    return static_cast<uint32_t>(X_WSA_ERROR::X_WSAEACCES);
+    return X_WSA_ERROR::X_WSAEACCES;
   }
 
   *port = XNET_SYSTEMLINK_PORT;
@@ -964,13 +963,13 @@ dword_result_t NetDll_XNetDnsLookup_entry(dword_t caller, lpstring_t host,
   XELOGI("DNS Lookup: {}", host.value());
 
   if (!dns_ptr) {
-    return static_cast<uint32_t>(X_WSA_ERROR::X_WSAEINVAL);
+    return X_WSA_ERROR::X_WSAEINVAL;
   }
 
   const uint32_t dns_address = kernel_memory()->SystemHeapAlloc(sizeof(XNDNS));
   XNDNS* dns = kernel_memory()->TranslateVirtual<XNDNS*>(dns_address);
 
-  dns->status = static_cast<uint32_t>(X_WSA_ERROR::X_WSAEINPROGRESS);
+  dns->status = X_WSA_ERROR::X_WSAEINPROGRESS;
 
   *dns_ptr = dns_address;
 
@@ -1031,7 +1030,7 @@ DECLARE_XAM_EXPORT1(NetDll_XNetDnsLookup, kNetworking, kImplemented);
 dword_result_t NetDll_XNetDnsRelease_entry(dword_t caller,
                                            pointer_t<XNDNS> dns_ptr) {
   if (!dns_ptr) {
-    return static_cast<uint32_t>(X_WSA_ERROR::X_WSAEINVAL);
+    return X_WSA_ERROR::X_WSAEINVAL;
   }
 
   const uint32_t dns_address =
@@ -1062,7 +1061,7 @@ dword_result_t NetDll_XNetQosServiceLookup_entry(dword_t caller, dword_t flags,
          flags.value(), event_handle.value(), qos_ptr.guest_address());
 
   if (!qos_ptr) {
-    return static_cast<uint32_t>(X_WSA_ERROR::X_WSAEINVAL);
+    return X_WSA_ERROR::X_WSAEINVAL;
   }
 
   const uint32_t qos_address = kernel_memory()->SystemHeapAlloc(sizeof(XNQOS));
@@ -1119,7 +1118,7 @@ DECLARE_XAM_EXPORT1(NetDll_XNetQosServiceLookup, kNetworking, kStub);
 dword_result_t NetDll_XNetQosRelease_entry(dword_t caller,
                                            pointer_t<XNQOS> qos_ptr) {
   if (!qos_ptr) {
-    return static_cast<uint32_t>(X_WSA_ERROR::X_WSAEINVAL);
+    return X_WSA_ERROR::X_WSAEINVAL;
   }
 
   const uint32_t qos_address =
@@ -1223,7 +1222,7 @@ dword_result_t NetDll_XNetQosLookup_entry(
     dword_t probes_count, dword_t bits_per_second, dword_t flags,
     dword_t event_handle, lpdword_t qos_ptr) {
   if (!qos_ptr) {
-    return static_cast<uint32_t>(X_WSA_ERROR::X_WSAEACCES);
+    return X_WSA_ERROR::X_WSAEACCES;
   }
 
   auto session_ids = std::make_shared<std::vector<XNKID>>();
@@ -1910,8 +1909,7 @@ bool optEnable = true;
 dword_result_t NetDll_socket_entry(dword_t caller, dword_t af, dword_t type,
                                    dword_t protocol) {
   if (!winsock_reference_count_) {
-    XThread::SetLastError(
-        static_cast<uint32_t>(X_WSA_ERROR::X_WSANOTINITIALISED));
+    XThread::SetLastError(X_WSA_ERROR::X_WSANOTINITIALISED);
     return -1;
   }
 
@@ -1940,7 +1938,7 @@ dword_result_t NetDll_closesocket_entry(dword_t caller, dword_t socket_handle) {
   auto socket =
       kernel_state()->object_table()->LookupObject<XSocket>(socket_handle);
   if (!socket) {
-    XThread::SetLastError(uint32_t(X_WSA_ERROR::X_WSAENOTSOCK));
+    XThread::SetLastError(X_WSA_ERROR::X_WSAENOTSOCK);
     return -1;
   }
 
@@ -1976,7 +1974,7 @@ int_result_t NetDll_shutdown_entry(dword_t caller, dword_t socket_handle,
   auto socket =
       kernel_state()->object_table()->LookupObject<XSocket>(socket_handle);
   if (!socket) {
-    XThread::SetLastError(uint32_t(X_WSA_ERROR::X_WSAENOTSOCK));
+    XThread::SetLastError(X_WSA_ERROR::X_WSAENOTSOCK);
     return -1;
   }
 
@@ -1994,7 +1992,7 @@ dword_result_t NetDll_setsockopt_entry(dword_t caller, dword_t socket_handle,
   auto socket =
       kernel_state()->object_table()->LookupObject<XSocket>(socket_handle);
   if (!socket) {
-    XThread::SetLastError(uint32_t(X_WSA_ERROR::X_WSAENOTSOCK));
+    XThread::SetLastError(X_WSA_ERROR::X_WSAENOTSOCK);
     return -1;
   }
 
@@ -2014,7 +2012,7 @@ dword_result_t NetDll_getsockopt_entry(dword_t caller, dword_t socket_handle,
   auto socket =
       kernel_state()->object_table()->LookupObject<XSocket>(socket_handle);
   if (!socket) {
-    XThread::SetLastError(uint32_t(X_WSA_ERROR::X_WSAENOTSOCK));
+    XThread::SetLastError(X_WSA_ERROR::X_WSAENOTSOCK);
     return -1;
   }
 
@@ -2036,7 +2034,7 @@ dword_result_t NetDll_ioctlsocket_entry(dword_t caller, dword_t socket_handle,
   auto socket =
       kernel_state()->object_table()->LookupObject<XSocket>(socket_handle);
   if (!socket) {
-    XThread::SetLastError(uint32_t(X_WSA_ERROR::X_WSAENOTSOCK));
+    XThread::SetLastError(X_WSA_ERROR::X_WSAENOTSOCK);
     return -1;
   }
 
@@ -2059,7 +2057,7 @@ dword_result_t NetDll_bind_entry(dword_t caller, dword_t socket_handle,
   auto socket =
       kernel_state()->object_table()->LookupObject<XSocket>(socket_handle);
   if (!socket) {
-    XThread::SetLastError(uint32_t(X_WSA_ERROR::X_WSAENOTSOCK));
+    XThread::SetLastError(X_WSA_ERROR::X_WSAENOTSOCK);
     return -1;
   }
 
@@ -2114,7 +2112,7 @@ dword_result_t NetDll_connect_entry(dword_t caller, dword_t socket_handle,
   auto socket =
       kernel_state()->object_table()->LookupObject<XSocket>(socket_handle);
   if (!socket) {
-    XThread::SetLastError(uint32_t(X_WSA_ERROR::X_WSAENOTSOCK));
+    XThread::SetLastError(X_WSA_ERROR::X_WSAENOTSOCK);
     return -1;
   }
 
@@ -2133,7 +2131,7 @@ dword_result_t NetDll_listen_entry(dword_t caller, dword_t socket_handle,
   auto socket =
       kernel_state()->object_table()->LookupObject<XSocket>(socket_handle);
   if (!socket) {
-    XThread::SetLastError(uint32_t(X_WSA_ERROR::X_WSAENOTSOCK));
+    XThread::SetLastError(X_WSA_ERROR::X_WSAENOTSOCK);
     return -1;
   }
 
@@ -2153,7 +2151,7 @@ dword_result_t NetDll_accept_entry(dword_t caller, dword_t socket_handle,
   auto socket =
       kernel_state()->object_table()->LookupObject<XSocket>(socket_handle);
   if (!socket) {
-    XThread::SetLastError(uint32_t(X_WSA_ERROR::X_WSAENOTSOCK));
+    XThread::SetLastError(X_WSA_ERROR::X_WSAENOTSOCK);
     return -1;
   }
 
@@ -2275,7 +2273,7 @@ int_result_t NetDll_select_entry(dword_t caller, dword_t nfds,
   fd_set native_readfds = {0};
   if (readfds) {
     if (!verify_x_fd_set(readfds)) {
-      XThread::SetLastError(uint32_t(X_WSA_ERROR::X_WSAENOTSOCK));
+      XThread::SetLastError(X_WSA_ERROR::X_WSAENOTSOCK);
       return -1;
     }
 
@@ -2286,7 +2284,7 @@ int_result_t NetDll_select_entry(dword_t caller, dword_t nfds,
   fd_set native_writefds = {0};
   if (use_writefds) {
     if (!verify_x_fd_set(writefds)) {
-      XThread::SetLastError(uint32_t(X_WSA_ERROR::X_WSAENOTSOCK));
+      XThread::SetLastError(X_WSA_ERROR::X_WSAENOTSOCK);
       return -1;
     }
 
@@ -2297,7 +2295,7 @@ int_result_t NetDll_select_entry(dword_t caller, dword_t nfds,
   fd_set native_exceptfds = {0};
   if (use_exceptfds) {
     if (!verify_x_fd_set(exceptfds)) {
-      XThread::SetLastError(uint32_t(X_WSA_ERROR::X_WSAENOTSOCK));
+      XThread::SetLastError(X_WSA_ERROR::X_WSAENOTSOCK);
       return -1;
     }
 
@@ -2349,7 +2347,7 @@ dword_result_t NetDll_recv_entry(dword_t caller, dword_t socket_handle,
   auto socket =
       kernel_state()->object_table()->LookupObject<XSocket>(socket_handle);
   if (!socket) {
-    XThread::SetLastError(uint32_t(X_WSA_ERROR::X_WSAENOTSOCK));
+    XThread::SetLastError(X_WSA_ERROR::X_WSAENOTSOCK);
     return -1;
   }
 
@@ -2373,7 +2371,7 @@ dword_result_t NetDll_recvfrom_entry(dword_t caller, dword_t socket_handle,
   auto socket =
       kernel_state()->object_table()->LookupObject<XSocket>(socket_handle);
   if (!socket) {
-    XThread::SetLastError(uint32_t(X_WSA_ERROR::X_WSAENOTSOCK));
+    XThread::SetLastError(X_WSA_ERROR::X_WSAENOTSOCK);
     return -1;
   }
 
@@ -2405,7 +2403,7 @@ dword_result_t NetDll_send_entry(dword_t caller, dword_t socket_handle,
   auto socket =
       kernel_state()->object_table()->LookupObject<XSocket>(socket_handle);
   if (!socket) {
-    XThread::SetLastError(uint32_t(X_WSA_ERROR::X_WSAENOTSOCK));
+    XThread::SetLastError(X_WSA_ERROR::X_WSAENOTSOCK);
     return -1;
   }
 
@@ -2429,7 +2427,7 @@ dword_result_t NetDll_sendto_entry(dword_t caller, dword_t socket_handle,
   auto socket =
       kernel_state()->object_table()->LookupObject<XSocket>(socket_handle);
   if (!socket) {
-    XThread::SetLastError(uint32_t(X_WSA_ERROR::X_WSAENOTSOCK));
+    XThread::SetLastError(X_WSA_ERROR::X_WSAENOTSOCK);
     return -1;
   }
 
@@ -2453,13 +2451,13 @@ dword_result_t NetDll_WSAEventSelect_entry(dword_t caller,
   auto socket =
       kernel_state()->object_table()->LookupObject<XSocket>(socket_handle);
   if (!socket) {
-    XThread::SetLastError(uint32_t(X_WSA_ERROR::X_WSAENOTSOCK));
+    XThread::SetLastError(X_WSA_ERROR::X_WSAENOTSOCK);
     return -1;
   }
 
   auto ev = kernel_state()->object_table()->LookupObject<XEvent>(event_handle);
   if (!ev) {
-    XThread::SetLastError(uint32_t(X_WSA_ERROR::X_WSAENOTSOCK));
+    XThread::SetLastError(X_WSA_ERROR::X_WSAENOTSOCK);
     return -1;
   }
 
@@ -2495,14 +2493,14 @@ dword_result_t NetDll_getpeername_entry(dword_t caller, dword_t socket_handle,
                                         pointer_t<XSOCKADDR_IN> addr_ptr,
                                         lpdword_t addrlen_ptr) {
   if (!addr_ptr) {
-    XThread::SetLastError(uint32_t(X_WSA_ERROR::X_WSAEFAULT));
+    XThread::SetLastError(X_WSA_ERROR::X_WSAEFAULT);
     return -1;
   }
 
   auto socket =
       kernel_state()->object_table()->LookupObject<XSocket>(socket_handle);
   if (!socket) {
-    XThread::SetLastError(uint32_t(X_WSA_ERROR::X_WSAENOTSOCK));
+    XThread::SetLastError(X_WSA_ERROR::X_WSAENOTSOCK);
     return -1;
   }
 
@@ -2522,14 +2520,14 @@ dword_result_t NetDll_getsockname_entry(dword_t caller, dword_t socket_handle,
                                         pointer_t<XSOCKADDR_IN> addr_ptr,
                                         lpdword_t addrlen_ptr) {
   if (!addr_ptr) {
-    XThread::SetLastError(uint32_t(X_WSA_ERROR::X_WSAEFAULT));
+    XThread::SetLastError(X_WSA_ERROR::X_WSAEFAULT);
     return -1;
   }
 
   auto socket =
       kernel_state()->object_table()->LookupObject<XSocket>(socket_handle);
   if (!socket) {
-    XThread::SetLastError(uint32_t(X_WSA_ERROR::X_WSAENOTSOCK));
+    XThread::SetLastError(X_WSA_ERROR::X_WSAENOTSOCK);
     return -1;
   }
 
