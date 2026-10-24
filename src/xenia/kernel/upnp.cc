@@ -305,8 +305,6 @@ int32_t UPnP::RemovePort(uint16_t internal_port, std::string protocol) {
 
   auto binding_it = protocol_it->second.find(internal_port);
   if (binding_it == protocol_it->second.end()) {
-    XELOGE("Tried to unbind port mapping {}({}) but it isn't bound",
-           internal_port, protocol);
     return UPNPCOMMAND_UNKNOWN_ERROR;
   }
 
