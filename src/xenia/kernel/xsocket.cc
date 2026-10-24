@@ -53,6 +53,12 @@ const std::map<uint32_t, uint32_t> supported_levels = {{0xFFFF, SOL_SOCKET},
 const std::map<uint32_t, uint32_t> supported_controls = {
     {0x8004667E, FIONBIO}, {0x4004667F, FIONREAD}};
 
+// UDP/VDP ports reserved by the system. Titles can't bind them.
+constexpr bool IsReservedDatagramPort(uint16_t port) {
+  return port == 68 || port == 1256 || port == 1900 || port == 3074 ||
+         (port >= 50000 && port <= 50100);
+}
+
 XSocket::XSocket(KernelState* kernel_state)
     : XObject(kernel_state, kObjectType) {}
 
@@ -284,6 +290,11 @@ X_STATUS XSocket::Connect(const XSOCKADDR_IN* name, int name_len) {
 }
 
 X_STATUS XSocket::Bind(const XSOCKADDR_IN* name, int name_len) {
+  if (type_ == X_SOCK_DGRAM && IsReservedDatagramPort(name->address_port)) {
+    XWSASetLastError(X_WSA_ERROR::X_WSAEADDRINUSE);
+    return X_STATUS_UNSUCCESSFUL;
+  }
+
   XSOCKADDR_IN sa_in = *name;
 
   const auto upnp = kernel_state()->emulator()->GetUPnP();
