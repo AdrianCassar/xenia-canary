@@ -1364,7 +1364,9 @@ int XSocket::Send(const uint8_t* buf, uint32_t buf_len, uint32_t flags) {
 
 int XSocket::SendTo(uint8_t* buf, uint32_t buf_len, uint32_t flags,
                     XSOCKADDR_IN* to, uint32_t to_len) {
-  if (IsAnyAddressDatagram(type_, to)) {
+  // 415607FF sends to port 0.
+  if (IsAnyAddressDatagram(type_, to) ||
+      (type_ == X_SOCK_DGRAM && to && !to->address_port)) {
     XWSASetLastError(X_WSA_ERROR::X_WSAEADDRNOTAVAIL);
     return X_SOCKET_ERROR;
   }
