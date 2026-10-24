@@ -59,6 +59,12 @@ constexpr bool IsReservedDatagramPort(uint16_t port) {
          (port >= 50000 && port <= 50100);
 }
 
+// Datagram sockets can't send to ADDR_ANY (stream sockets ignore the
+// destination). The host may accept it.
+static bool IsAnyAddressDatagram(XSocket::Type type, const XSOCKADDR_IN* to) {
+  return type == XSocket::X_SOCK_DGRAM && to && !to->address_ip.s_addr;
+}
+
 XSocket::XSocket(KernelState* kernel_state)
     : XObject(kernel_state, kObjectType) {}
 
@@ -264,6 +270,12 @@ X_STATUS XSocket::IOControl(uint32_t cmd, uint32_t* arg_ptr) {
 }
 
 X_STATUS XSocket::Connect(const XSOCKADDR_IN* name, int name_len) {
+  // The host may accept this.
+  if (!name->address_ip.s_addr) {
+    XWSASetLastError(X_WSA_ERROR::X_WSAEADDRNOTAVAIL);
+    return X_STATUS_UNSUCCESSFUL;
+  }
+
   XSOCKADDR_IN sa_in = *name;
 
   const auto upnp = kernel_state()->emulator()->GetUPnP();
@@ -662,6 +674,11 @@ int XSocket::WSASendTo(XWSABUF* buffers, uint32_t num_buffers,
       to_ptr && (to_len < sizeof(XSOCKADDR_IN) ||
                  to_ptr->address_family != X_AF_INET)) {
     XWSASetLastError(X_WSA_ERROR::X_WSA_INVALID_PARAMETER);
+    return X_SOCKET_ERROR;
+  }
+
+  if (IsAnyAddressDatagram(type_, to_ptr)) {
+    XWSASetLastError(X_WSA_ERROR::X_WSAEADDRNOTAVAIL);
     return X_SOCKET_ERROR;
   }
 
@@ -1316,6 +1333,11 @@ int XSocket::Send(const uint8_t* buf, uint32_t buf_len, uint32_t flags) {
 
 int XSocket::SendTo(uint8_t* buf, uint32_t buf_len, uint32_t flags,
                     XSOCKADDR_IN* to, uint32_t to_len) {
+  if (IsAnyAddressDatagram(type_, to)) {
+    XWSASetLastError(X_WSA_ERROR::X_WSAEADDRNOTAVAIL);
+    return X_SOCKET_ERROR;
+  }
+
   sockaddr addr = {};
   sockaddr* addr_ptr = nullptr;
 
