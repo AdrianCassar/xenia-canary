@@ -424,8 +424,10 @@ int XSocket::Shutdown(int how) {
   return shutdown(native_handle_, how);
 }
 
+// Receive flags must be 0. They're accepted but ignored, e.g. MSG_PEEK still
+// consumes the data, so don't pass them on.
 int XSocket::Recv(uint8_t* buf, uint32_t buf_len, uint32_t flags) {
-  return recv(native_handle_, reinterpret_cast<char*>(buf), buf_len, flags);
+  return recv(native_handle_, reinterpret_cast<char*>(buf), buf_len, 0);
 }
 
 int XSocket::RecvFrom(uint8_t* buf, uint32_t buf_len, uint32_t flags,
@@ -436,8 +438,8 @@ int XSocket::RecvFrom(uint8_t* buf, uint32_t buf_len, uint32_t flags,
     sa = from->to_host();
   }
 
-  int ret = recvfrom(native_handle_, reinterpret_cast<char*>(buf), buf_len,
-                     flags, from ? &sa : nullptr, from_len);
+  int ret = recvfrom(native_handle_, reinterpret_cast<char*>(buf), buf_len, 0,
+                     from ? &sa : nullptr, from_len);
 
   // 555307EE expects port even with TCP, include IP anyway.
   // Verified on console.
@@ -878,14 +880,12 @@ int XSocket::PollWSARecvFrom(bool wait, WSARecvFromData receive_async_data) {
   }
 
   uint32_t bytes_received = 0;
+
+  // Input flags must be 0 and are ignored, like recv (see XSocket::Recv).
+  // flags is only used for output.
   uint32_t flags = 0;
   int from_len =
       receive_async_data.from_len ? receive_async_data.from_len->get() : 0;
-
-  // num_bytes_recv and flags are only updated on immediate completion.
-  if (!wait && receive_async_data.flags) {
-    flags = receive_async_data.flags->get();
-  }
 
   int result = 0;
 
