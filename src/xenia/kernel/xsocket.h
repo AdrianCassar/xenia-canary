@@ -285,6 +285,8 @@ class XSocket : public XObject {
   xe::be<uint16_t> bound_port_ = 0;
 
   bool broadcast_socket_ = false;
+  bool listening_ = false;
+  bool shutdown_receive_ = false;
 
   uint32_t event_select_handle_ = 0;
   uint32_t event_select_flags_ = 0;
