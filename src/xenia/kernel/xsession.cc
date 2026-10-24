@@ -360,7 +360,9 @@ X_RESULT XSession::JoinSession(XGI_SESSION_MANAGE* data) {
       }
 
       member_xuid = xuid_online;
-      member.OnlineXUID = xuid_online;
+      // A profile that isn't signed in to Live has no online XUID.
+      member.OnlineXUID =
+          user_profile->IsSignedInToLive() ? xuid_online.get() : 0;
       member.UserIndex = user_index;
     } else {
       // Remote XUIDs are title provided and may not be valid XUIDs.
