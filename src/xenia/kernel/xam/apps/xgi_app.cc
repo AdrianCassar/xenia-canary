@@ -115,6 +115,22 @@ XgiApp::XgiApp(KernelState* kernel_state) : App(kernel_state, 0xFB) {}
 X_HRESULT XgiApp::ExecuteDispatchMessage(uint32_t message, uint32_t buffer_ptr,
                                          uint32_t buffer_length,
                                          uint32_t* extended_error) {
+  const X_HRESULT result =
+      HandleMessage(message, buffer_ptr, buffer_length, extended_error);
+
+  // A request with an XOVERLAPPED reports the failure as its extended error,
+  // e.g. XSessionEnd on a session that hasn't started gives
+  // X_ONLINE_E_SESSION_WRONG_STATE.
+  if (extended_error && !*extended_error && XFAILED(result)) {
+    *extended_error = result;
+  }
+
+  return result;
+}
+
+X_HRESULT XgiApp::HandleMessage(uint32_t message, uint32_t buffer_ptr,
+                                uint32_t buffer_length,
+                                uint32_t* extended_error) {
   // NOTE: buffer_length may be zero or valid.
   auto buffer = memory_->TranslateVirtual(buffer_ptr);
 
