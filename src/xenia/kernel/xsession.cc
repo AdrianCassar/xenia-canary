@@ -90,6 +90,12 @@ X_RESULT XSession::CreateSession(uint32_t user_index, uint8_t public_slots,
     return X_ONLINE_E_SESSION_NOT_LOGGED_ON;
   }
 
+  // Hosting a system link session registers its key with XNet.
+  if (HasSessionFlag(static_cast<SessionFlags>(flags), HOST) &&
+      IsSystemlinkSession() && !xam::IsXNetInitialized()) {
+    return X_ONLINE_E_SESSION_REGISTER_KEY_FAILED;
+  }
+
   XSESSION_INFO* SessionInfo_ptr =
       kernel_state_->memory()->TranslateVirtual<XSESSION_INFO*>(
           session_info_ptr);
@@ -97,8 +103,8 @@ X_RESULT XSession::CreateSession(uint32_t user_index, uint8_t public_slots,
   GenerateIdentityExchangeKey(&SessionInfo_ptr->keyExchangeKey);
   PrintSessionType((SessionFlags)flags);
 
-  uint64_t* Nonce_ptr =
-      kernel_state_->memory()->TranslateVirtual<uint64_t*>(nonce_ptr);
+  xe::be<uint64_t>* Nonce_ptr =
+      kernel_state_->memory()->TranslateVirtual<xe::be<uint64_t>*>(nonce_ptr);
 
   local_details_.UserIndexHost = XUserIndexNone;
 
@@ -154,8 +160,8 @@ X_RESULT XSession::CreateSession(uint32_t user_index, uint8_t public_slots,
 }
 
 X_RESULT XSession::CreateHostSession(XSESSION_INFO* session_info,
-                                     uint64_t* nonce_ptr, uint8_t user_index,
-                                     uint8_t public_slots,
+                                     xe::be<uint64_t>* nonce_ptr,
+                                     uint8_t user_index, uint8_t public_slots,
                                      uint8_t private_slots, uint32_t flags) {
   state_ |= STATE_FLAGS_HOST;
 
@@ -217,8 +223,8 @@ X_RESULT XSession::CreateHostSession(XSESSION_INFO* session_info,
 }
 
 X_RESULT XSession::CreateStatsSession(XSESSION_INFO* session_info,
-                                      uint64_t* nonce_ptr, uint8_t user_index,
-                                      uint8_t public_slots,
+                                      xe::be<uint64_t>* nonce_ptr,
+                                      uint8_t user_index, uint8_t public_slots,
                                       uint8_t private_slots, uint32_t flags) {
   return CreateHostSession(session_info, nonce_ptr, user_index, public_slots,
                            private_slots, flags);
@@ -256,7 +262,7 @@ X_RESULT XSession::DeleteSession(XGI_SESSION_STATE* state) {
   // Begin XNetUnregisterKey?
 
   if (IsDeleted()) {
-    return X_ERROR_SUCCESS;
+    return X_ONLINE_E_SESSION_WRONG_STATE;
   }
 
   state_ |= STATE_FLAGS_DELETED;
@@ -354,7 +360,9 @@ X_RESULT XSession::JoinSession(XGI_SESSION_MANAGE* data) {
       }
 
       member_xuid = xuid_online;
-      member.OnlineXUID = xuid_online;
+      // A profile that isn't signed in to Live has no online XUID.
+      member.OnlineXUID =
+          user_profile->IsSignedInToLive() ? xuid_online.get() : 0;
       member.UserIndex = user_index;
     } else {
       // Remote XUIDs are title provided and may not be valid XUIDs.
@@ -667,6 +675,13 @@ X_RESULT XSession::GetSessionDetails(XGI_SESSION_DETAILS* data) {
   }
 
   *local_details_ptr = local_details_;
+
+  // Offline and system link sessions report no available slots, before and
+  // after members join.
+  if (!IsXboxLiveSession()) {
+    local_details_ptr->AvailablePublicSlots = 0;
+    local_details_ptr->AvailablePrivateSlots = 0;
+  }
 
   const uint32_t members_count =
       (buffer_size - sizeof(XSESSION_LOCAL_DETAILS)) / sizeof(XSESSION_MEMBER);
@@ -991,10 +1006,11 @@ X_RESULT XSession::WriteStats(XGI_STATS_WRITE* data) {
 
 // Flush cached leaderboard stats to the backend
 X_RESULT XSession::FlushStats() {
+  // There are no stats to flush.
   if (!HasSessionFlag(static_cast<SessionFlags>((uint32_t)local_details_.Flags),
                       STATS)) {
     XELOGW("Session does not support stats.");
-    return X_ONLINE_E_SESSION_WRONG_STATE;
+    return X_ERROR_SUCCESS;
   }
 
   if (local_details_.eState.get() != XSESSION_STATE::INGAME) {

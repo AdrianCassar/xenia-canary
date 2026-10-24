@@ -435,7 +435,9 @@ X_HRESULT XgiApp::HandleMessage(uint32_t message, uint32_t buffer_ptr,
       }
 
       const X_RESULT result = session->DeleteSession(data);
-      session->ReleaseHandle();
+      if (result == X_ERROR_SUCCESS) {
+        session->ReleaseHandle();
+      }
 
       return result;
     }
