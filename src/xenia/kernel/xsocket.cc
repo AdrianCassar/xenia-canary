@@ -62,6 +62,18 @@ const std::map<uint32_t, uint32_t> supported_levels = {
 const std::map<uint32_t, uint32_t> supported_controls = {
     {X_FIONBIO, FIONBIO}, {X_FIONREAD, FIONREAD}};
 
+// UDP/VDP ports reserved by the system. Titles can't bind them.
+constexpr bool IsReservedDatagramPort(uint16_t port) {
+  return port == 68 || port == 1256 || port == 1900 || port == 3074 ||
+         (port >= 50000 && port <= 50100);
+}
+
+// Datagram sockets can't send to ADDR_ANY (stream sockets ignore the
+// destination). The host may accept it.
+static bool IsAnyAddressDatagram(XSocket::Type type, const XSOCKADDR_IN* to) {
+  return type == XSocket::X_SOCK_DGRAM && to && !to->address_ip.s_addr;
+}
+
 XSocket::XSocket(KernelState* kernel_state)
     : XObject(kernel_state, kObjectType) {}
 
@@ -105,7 +117,7 @@ X_STATUS XSocket::Initialize(AddressFamily af, Type type, Protocol proto) {
     proto_ = X_IPPROTO_TCP;
   }
 
-  native_handle_ = socket(af, type_, proto_);
+  native_handle_ = socket(af ? af : X_AF_INET, type_, proto_);
   if (native_handle_ == X_INVALID_SOCKET) {
     return X_STATUS_UNSUCCESSFUL;
   }
@@ -341,6 +353,16 @@ X_STATUS XSocket::IOControl(uint32_t cmd, uint32_t* arg_ptr) {
 }
 
 X_STATUS XSocket::Connect(const XSOCKADDR_IN* name, int name_len) {
+  if (listening_) {
+    XWSASetLastError(X_WSA_ERROR::X_WSAEINVAL);
+    return X_STATUS_UNSUCCESSFUL;
+  }
+
+  if (!name->address_ip.s_addr) {
+    XWSASetLastError(X_WSA_ERROR::X_WSAEADDRNOTAVAIL);
+    return X_STATUS_UNSUCCESSFUL;
+  }
+
   XSOCKADDR_IN sa_in = *name;
 
   const auto upnp = kernel_state()->emulator()->GetUPnP();
@@ -353,6 +375,8 @@ X_STATUS XSocket::Connect(const XSOCKADDR_IN* name, int name_len) {
 
   int ret = connect(native_handle_, &addr, name_len);
 
+  const uint32_t connect_error = ret < 0 ? XWSAGetLastError() : 0;
+
   // Implicit Bind
   if (!bound_port_) {
     bound_port_ = GetImplicitlyBoundPort();
@@ -360,6 +384,7 @@ X_STATUS XSocket::Connect(const XSOCKADDR_IN* name, int name_len) {
   }
 
   if (ret < 0) {
+    XWSASetLastError(X_WSA_ERROR(connect_error));
     return X_STATUS_UNSUCCESSFUL;
   }
 
@@ -367,6 +392,11 @@ X_STATUS XSocket::Connect(const XSOCKADDR_IN* name, int name_len) {
 }
 
 X_STATUS XSocket::Bind(const XSOCKADDR_IN* name, int name_len) {
+  if (type_ == X_SOCK_DGRAM && IsReservedDatagramPort(name->address_port)) {
+    XWSASetLastError(X_WSA_ERROR::X_WSAEADDRINUSE);
+    return X_STATUS_UNSUCCESSFUL;
+  }
+
   XSOCKADDR_IN sa_in = *name;
 
   const auto upnp = kernel_state()->emulator()->GetUPnP();
@@ -494,10 +524,17 @@ int XSocket::SetNativeOption(int level, int optname, const void* value,
 }
 
 X_STATUS XSocket::Listen(int backlog) {
+  if (!bound_) {
+    XWSASetLastError(X_WSA_ERROR::X_WSAEINVAL);
+    return X_STATUS_UNSUCCESSFUL;
+  }
+
   int ret = listen(native_handle_, backlog);
   if (ret < 0) {
     return X_STATUS_UNSUCCESSFUL;
   }
+
+  listening_ = true;
 
   return X_STATUS_SUCCESS;
 }
@@ -537,14 +574,43 @@ object_ref<XSocket> XSocket::Accept(XSOCKADDR_IN* name, int* name_len) {
   return socket;
 }
 
-int XSocket::Shutdown(int how) { return shutdown(native_handle_, how); }
+int XSocket::Shutdown(int how) {
+  // An out-of-range how shuts down both directions. The host rejects it with
+  // WSAEINVAL.
+  if (how < 0 || how > 2) {
+    how = 2;
+  }
+
+  const int ret = shutdown(native_handle_, how);
+
+  if (!ret && how != 1) {
+    shutdown_receive_ = true;
+  }
+
+  return ret;
+}
 
 int XSocket::Recv(uint8_t* buf, uint32_t buf_len, uint32_t flags) {
+  if (type_ == X_SOCK_STREAM && shutdown_receive_) {
+    XWSASetLastError(X_WSA_ERROR::X_WSAESHUTDOWN);
+    return X_SOCKET_ERROR;
+  }
+
   return recv(native_handle_, reinterpret_cast<char*>(buf), buf_len, flags);
 }
 
 int XSocket::RecvFrom(uint8_t* buf, uint32_t buf_len, uint32_t flags,
                       XSOCKADDR_IN* from, socklen_t* from_len) {
+  if (type_ == X_SOCK_DGRAM && !bound_) {
+    XWSASetLastError(X_WSA_ERROR::X_WSAEINVAL);
+    return X_SOCKET_ERROR;
+  }
+
+  if (type_ == X_SOCK_STREAM && shutdown_receive_) {
+    XWSASetLastError(X_WSA_ERROR::X_WSAESHUTDOWN);
+    return X_SOCKET_ERROR;
+  }
+
   sockaddr sa = {};
 
   if (from) {
@@ -797,6 +863,12 @@ int XSocket::WSASendTo(XWSABUF* buffers, uint32_t num_buffers,
       to_ptr && (to_len < sizeof(XSOCKADDR_IN) ||
                  to_ptr->address_family != X_AF_INET)) {
     XWSASetLastError(X_WSA_ERROR::X_WSA_INVALID_PARAMETER);
+    return X_SOCKET_ERROR;
+  }
+
+  if (IsAnyAddressDatagram(type_, to_ptr) ||
+      (type_ == X_SOCK_DGRAM && to_ptr && !to_ptr->address_port)) {
+    XWSASetLastError(X_WSA_ERROR::X_WSAEADDRNOTAVAIL);
     return X_SOCKET_ERROR;
   }
 
@@ -1451,6 +1523,13 @@ int XSocket::Send(const uint8_t* buf, uint32_t buf_len, uint32_t flags) {
 
 int XSocket::SendTo(uint8_t* buf, uint32_t buf_len, uint32_t flags,
                     XSOCKADDR_IN* to, uint32_t to_len) {
+  // 415607FF sends to port 0.
+  if (IsAnyAddressDatagram(type_, to) ||
+      (type_ == X_SOCK_DGRAM && to && !to->address_port)) {
+    XWSASetLastError(X_WSA_ERROR::X_WSAEADDRNOTAVAIL);
+    return X_SOCKET_ERROR;
+  }
+
   sockaddr addr = {};
   sockaddr* addr_ptr = nullptr;
 
@@ -1550,6 +1629,11 @@ X_STATUS XSocket::GetPeerName(XSOCKADDR_IN* name, socklen_t* name_len) {
 }
 
 X_STATUS XSocket::GetSockName(XSOCKADDR_IN* name, socklen_t* name_len) {
+  if (!bound_) {
+    XWSASetLastError(X_WSA_ERROR::X_WSAEINVAL);
+    return X_STATUS_UNSUCCESSFUL;
+  }
+
   sockaddr addr = name->to_host();
 
   int ret = getsockname(native_handle_, &addr, name_len);

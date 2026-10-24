@@ -1909,6 +1909,12 @@ DECLARE_XAM_EXPORT1(NetDll_inet_addr, kNetworking, kImplemented);
 bool optEnable = true;
 dword_result_t NetDll_socket_entry(dword_t caller, dword_t af, dword_t type,
                                    dword_t protocol) {
+  if (!winsock_reference_count_) {
+    XThread::SetLastError(
+        static_cast<uint32_t>(X_WSA_ERROR::X_WSANOTINITIALISED));
+    return -1;
+  }
+
   auto socket = object_ref<XSocket>(new XSocket(kernel_state()));
   X_STATUS result = socket->Initialize(XSocket::AddressFamily((uint32_t)af),
                                        XSocket::Type((uint32_t)type),
