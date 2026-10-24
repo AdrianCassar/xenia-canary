@@ -884,8 +884,11 @@ int XSocket::PollWSARecvFrom(bool wait, WSARecvFromData receive_async_data) {
   // Input flags must be 0 and are ignored, like recv (see XSocket::Recv).
   // flags is only used for output.
   uint32_t flags = 0;
-  int from_len =
-      receive_async_data.from_len ? receive_async_data.from_len->get() : 0;
+
+  // lpFromlen is only used when lpFrom is provided. The host rejects a length
+  // without an address with WSAEFAULT.
+  const bool has_from = receive_async_data.from && receive_async_data.from_len;
+  int from_len = has_from ? receive_async_data.from_len->get() : 0;
 
   int result = 0;
 
@@ -893,15 +896,14 @@ int XSocket::PollWSARecvFrom(bool wait, WSARecvFromData receive_async_data) {
   result = ::WSARecvFrom(
       native_handle_, &recv_buffer, receive_async_data.num_buffers,
       reinterpret_cast<DWORD*>(&bytes_received),
-      reinterpret_cast<DWORD*>(&flags),
-      receive_async_data.from ? &saddr : nullptr,
-      receive_async_data.from_len ? &from_len : nullptr, nullptr, nullptr);
+      reinterpret_cast<DWORD*>(&flags), has_from ? &saddr : nullptr,
+      has_from ? &from_len : nullptr, nullptr, nullptr);
 #else
   sockaddr_in sender_addr = {};
   msghdr message = {};
 
-  message.msg_name = receive_async_data.from ? &saddr : nullptr;
-  message.msg_namelen = receive_async_data.from_len ? from_len : 0;
+  message.msg_name = has_from ? &saddr : nullptr;
+  message.msg_namelen = has_from ? from_len : 0;
 
   // Setup scatter-gather destination buffers (Equivalent to WSABUF array)
   message.msg_iov = &recv_buffer;
