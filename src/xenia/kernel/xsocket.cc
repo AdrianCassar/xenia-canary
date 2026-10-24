@@ -65,6 +65,9 @@ static bool IsAnyAddressDatagram(XSocket::Type type, const XSOCKADDR_IN* to) {
   return type == XSocket::X_SOCK_DGRAM && to && !to->address_ip.s_addr;
 }
 
+// How often overlapped polling checks for cancellation.
+constexpr long kOverlappedPollIntervalUs = 10000;
+
 XSocket::XSocket(KernelState* kernel_state)
     : XObject(kernel_state, kObjectType) {}
 
@@ -459,6 +462,10 @@ int XSocket::RecvFrom(uint8_t* buf, uint32_t buf_len, uint32_t flags,
 int XSocket::WSASelectWrite(bool wait, X_WSA_ERROR* error) {
   int activity = 0;
 
+  if (wait) {
+    XELOGNETD("{} Blocking...", __func__);
+  }
+
   do {
     fd_set writefds = {};
     FD_ZERO(&writefds);
@@ -474,8 +481,7 @@ int XSocket::WSASelectWrite(bool wait, X_WSA_ERROR* error) {
 #endif
 
     timeval tv = {};
-    tv.tv_sec = wait ? 1 : 0;
-    tv.tv_usec = 0;
+    tv.tv_usec = wait ? kOverlappedPollIntervalUs : 0;
 
     activity = select(nfds, nullptr, &writefds, nullptr, &tv);
 
@@ -486,10 +492,6 @@ int XSocket::WSASelectWrite(bool wait, X_WSA_ERROR* error) {
       }
 
       activity = X_SOCKET_ERROR;
-    }
-
-    if (wait) {
-      XELOGNETD("{} Blocking...", __func__);
     }
   } while (activity == 0 && wait);
 
@@ -778,6 +780,10 @@ int XSocket::WSASendTo(XWSABUF* buffers, uint32_t num_buffers,
 int XSocket::WSASelectRead(bool wait, X_WSA_ERROR* error) {
   int activity = 0;
 
+  if (wait) {
+    XELOGNETD("{} Blocking...", __func__);
+  }
+
   do {
     fd_set readfds = {};
     FD_ZERO(&readfds);
@@ -793,8 +799,7 @@ int XSocket::WSASelectRead(bool wait, X_WSA_ERROR* error) {
 #endif
 
     timeval tv = {};
-    tv.tv_sec = wait ? 1 : 0;
-    tv.tv_usec = 0;
+    tv.tv_usec = wait ? kOverlappedPollIntervalUs : 0;
 
     activity = select(nfds, &readfds, nullptr, nullptr, &tv);
 
@@ -805,10 +810,6 @@ int XSocket::WSASelectRead(bool wait, X_WSA_ERROR* error) {
       }
 
       activity = X_SOCKET_ERROR;
-    }
-
-    if (wait) {
-      XELOGNETD("{} Blocking...", __func__);
     }
   } while (activity == 0 && wait);
 
