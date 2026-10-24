@@ -1065,8 +1065,8 @@ X_HRESULT XLiveBaseApp::XUserMuteListQuery(uint32_t buffer_ptr,
     return X_E_INVALIDARG;
   }
 
-  X_MUTE_SET_STATE* remote_player_ptr =
-      memory_->TranslateVirtual<X_MUTE_SET_STATE*>(buffer_ptr);
+  X_MUTE_LIST_QUERY* remote_player_ptr =
+      memory_->TranslateVirtual<X_MUTE_LIST_QUERY*>(buffer_ptr);
 
   if (remote_player_ptr->user_index >= XUserMaxUserCount) {
     return X_E_INVALIDARG;
@@ -1081,7 +1081,8 @@ X_HRESULT XLiveBaseApp::XUserMuteListQuery(uint32_t buffer_ptr,
 
   // Is mute list used with systemlink?
 
-  if (!user_profile) {
+  if (!user_profile || !user_profile->IsSignedInToLive()) {
+    remote_player_ptr->result = X_ERROR_NOT_LOGGED_ON;
     return X_ONLINE_E_LOGON_NOT_LOGGED_ON;
   }
 
@@ -1096,8 +1097,8 @@ X_HRESULT XLiveBaseApp::XUserMuteListQuery(uint32_t buffer_ptr,
 }
 
 X_HRESULT XLiveBaseApp::XUserMuteListAdd(uint32_t buffer_ptr) {
-  X_MUTE_SET_STATE* remote_player_ptr =
-      memory_->TranslateVirtual<X_MUTE_SET_STATE*>(buffer_ptr);
+  X_MUTE_LIST_QUERY* remote_player_ptr =
+      memory_->TranslateVirtual<X_MUTE_LIST_QUERY*>(buffer_ptr);
 
   if (remote_player_ptr->user_index >= XUserMaxUserCount) {
     return X_E_INVALIDARG;
@@ -1121,8 +1122,8 @@ X_HRESULT XLiveBaseApp::XUserMuteListAdd(uint32_t buffer_ptr) {
 }
 
 X_HRESULT XLiveBaseApp::XUserMuteListRemove(uint32_t buffer_ptr) {
-  X_MUTE_SET_STATE* remote_player_ptr =
-      memory_->TranslateVirtual<X_MUTE_SET_STATE*>(buffer_ptr);
+  X_MUTE_LIST_QUERY* remote_player_ptr =
+      memory_->TranslateVirtual<X_MUTE_LIST_QUERY*>(buffer_ptr);
 
   if (remote_player_ptr->user_index >= XUserMaxUserCount) {
     return X_E_INVALIDARG;
