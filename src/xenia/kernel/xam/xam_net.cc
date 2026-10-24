@@ -2019,6 +2019,8 @@ dword_result_t NetDll_getsockopt_entry(dword_t caller, dword_t socket_handle,
     return -1;
   }
 
+  *optlen = native_len;
+
   return 0;
 }
 DECLARE_XAM_EXPORT1(NetDll_getsockopt, kNetworking, kImplemented);
