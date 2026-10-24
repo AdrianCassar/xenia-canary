@@ -17,6 +17,10 @@
 #include "xenia/kernel/xam/xam_module.h"
 #include "xenia/kernel/xboxkrnl/xboxkrnl_threading.h"
 
+#if XE_PLATFORM_WIN32
+#include <mswsock.h>
+#endif
+
 DECLARE_bool(bind_interface);
 
 using namespace std::chrono_literals;
@@ -115,6 +119,17 @@ X_STATUS XSocket::Initialize(AddressFamily af, Type type, Protocol proto) {
   if (native_handle_ == X_INVALID_SOCKET) {
     return X_STATUS_UNSUCCESSFUL;
   }
+
+#if XE_PLATFORM_WIN32
+  // 415607FF fails on WSAECONNRESET after sending to a port with no socket.
+  if (type_ == X_SOCK_DGRAM) {
+    BOOL report_resets = FALSE;
+    DWORD bytes_returned = 0;
+    WSAIoctl(static_cast<SOCKET>(native_handle_), SIO_UDP_CONNRESET,
+             &report_resets, sizeof(report_resets), nullptr, 0, &bytes_returned,
+             nullptr, nullptr);
+  }
+#endif
 
   return X_STATUS_SUCCESS;
 }
