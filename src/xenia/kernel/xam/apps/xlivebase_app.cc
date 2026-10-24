@@ -899,11 +899,11 @@ X_HRESULT XLiveBaseApp::XFriendsCreateEnumerator(uint32_t buffer_ptr,
     return X_E_INVALIDARG;
   }
 
-  if (!kernel_state_->xam_state()->IsUserSignedIn(user_index)) {
-    return X_E_NO_SUCH_USER;
-  }
-
   auto const profile = kernel_state_->xam_state()->GetUserProfile(user_index);
+
+  if (!profile || !profile->IsSignedInToLive()) {
+    return X_E_INVALIDARG;
+  }
 
   auto e = object_ref<FriendsEnumerator>(
       new FriendsEnumerator(kernel_state_, friends_amount));
