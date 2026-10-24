@@ -2519,8 +2519,6 @@ DECLARE_XAM_EXPORT1(NetDll_getpeername, kNetworking, kImplemented);
 dword_result_t NetDll_getsockname_entry(dword_t caller, dword_t socket_handle,
                                         pointer_t<XSOCKADDR_IN> addr_ptr,
                                         lpdword_t addrlen_ptr) {
-  InitializeSockaddr(addr_ptr);
-
   if (!addr_ptr) {
     XThread::SetLastError(uint32_t(X_WSA_ERROR::X_WSAEFAULT));
     return -1;
