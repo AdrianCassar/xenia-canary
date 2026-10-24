@@ -979,12 +979,12 @@ X_HRESULT XLiveBaseApp::XInviteGetAcceptedInfo(uint32_t buffer_ptr,
   X_INVITE_INFO* invite_info = memory_->TranslateVirtual<X_INVITE_INFO*>(
       static_cast<uint32_t>(accepted_info->invite_info.argument_value_ptr));
 
-  if (!kernel_state_->xam_state()->IsUserSignedIn(user_index)) {
-    return X_E_FAIL;
-  }
-
   const auto user_profile =
       kernel_state_->xam_state()->GetUserProfile(user_index);
+
+  if (!user_profile || !user_profile->IsSignedInToLive()) {
+    return X_E_INVALIDARG;
+  }
 
   *invite_info = user_profile->GetSelfInvite();
 
