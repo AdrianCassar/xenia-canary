@@ -1002,6 +1002,11 @@ int XSocket::WSARecvFrom(XWSABUF* buffers, uint32_t num_buffers,
     return X_SOCKET_ERROR;
   }
 
+  if (!bound_) {
+    XWSASetLastError(X_WSA_ERROR::X_WSAEINVAL);
+    return X_SOCKET_ERROR;
+  }
+
   // On win32 we could pipe all this directly to WSARecvFrom.
   // We would however need find a way to call the completion callback without
   // relying on the caller to set the "alertable" flag to true when waiting. We
