@@ -30,21 +30,23 @@ namespace kernel {
 // SO_EXCLUSIVEADDRUSE = ~SO_REUSEADDR
 // TODO: Check SO_DONTLINGER and SO_EXCLUSIVEADDRUSE usage on linux
 const std::map<uint32_t, uint32_t> supported_socket_options = {
-    {0x0004, SO_REUSEADDR}, {0x0020, SO_BROADCAST}, {0x0080, SO_LINGER},
-    {0x1001, SO_SNDBUF},    {0x1002, SO_RCVBUF},    {0x1005, SO_SNDTIMEO},
-    {0x1006, SO_RCVTIMEO},  {~0x0080, ~SO_LINGER},  {~0x0004, ~SO_REUSEADDR}};
+    {0x0004, SO_REUSEADDR},   {X_SO_BROADCAST, SO_BROADCAST},
+    {X_SO_LINGER, SO_LINGER}, {0x1001, SO_SNDBUF},
+    {0x1002, SO_RCVBUF},      {0x1005, SO_SNDTIMEO},
+    {0x1006, SO_RCVTIMEO},    {~X_SO_LINGER, ~SO_LINGER},
+    {~0x0004, ~SO_REUSEADDR}};
 
 // Translate socket TCP options to native
 const std::map<uint32_t, uint32_t> supported_tcp_options = {
     {0x0001, TCP_NODELAY}};
 
 // Translate socket levels to native
-const std::map<uint32_t, uint32_t> supported_levels = {{0xFFFF, SOL_SOCKET},
-                                                       {0x6, IPPROTO_TCP}};
+const std::map<uint32_t, uint32_t> supported_levels = {
+    {X_SOL_SOCKET, SOL_SOCKET}, {0x6, IPPROTO_TCP}};
 
 // Translate ioctl commands to native
 const std::map<uint32_t, uint32_t> supported_controls = {
-    {0x8004667E, FIONBIO}, {0x4004667F, FIONREAD}};
+    {X_FIONBIO, FIONBIO}, {X_FIONREAD, FIONREAD}};
 
 XSocket::XSocket(KernelState* kernel_state)
     : XObject(kernel_state, kObjectType) {}
@@ -151,8 +153,9 @@ X_STATUS XSocket::GetOption(uint32_t level, uint32_t optname, void* optval_ptr,
 
 int XSocket::SetOption(uint32_t level, uint32_t optname, void* optval_ptr,
                        uint32_t optlen) {
-  if (level == 0xFFFF && (optname == SO_MARKINSECURE || optname == SO_PRIVATE ||
-                          optname == SO_GRANTINSECURE)) {
+  if (level == X_SOL_SOCKET &&
+      (optname == SO_MARKINSECURE || optname == SO_PRIVATE ||
+       optname == SO_GRANTINSECURE)) {
     // Disable socket encryption
     secure_ = false;
     return X_ERROR_SUCCESS;
@@ -168,7 +171,7 @@ int XSocket::SetOption(uint32_t level, uint32_t optname, void* optval_ptr,
 
   int native_optname = optname;
 
-  if (level == 0xFFFF) {
+  if (level == X_SOL_SOCKET) {
     assert_false(!supported_socket_options.contains(optname));
 
     if (supported_socket_options.contains(optname)) {
@@ -201,7 +204,7 @@ int XSocket::SetOption(uint32_t level, uint32_t optname, void* optval_ptr,
     return X_SOCKET_ERROR;
   }
 
-  if (level == 0xFFFF && optname == 0x0020) {
+  if (level == X_SOL_SOCKET && optname == X_SO_BROADCAST) {
     broadcast_socket_ = true;
   }
 
