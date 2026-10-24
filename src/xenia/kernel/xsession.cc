@@ -262,7 +262,7 @@ X_RESULT XSession::DeleteSession(XGI_SESSION_STATE* state) {
   // Begin XNetUnregisterKey?
 
   if (IsDeleted()) {
-    return X_ERROR_SUCCESS;
+    return X_ONLINE_E_SESSION_WRONG_STATE;
   }
 
   state_ |= STATE_FLAGS_DELETED;
