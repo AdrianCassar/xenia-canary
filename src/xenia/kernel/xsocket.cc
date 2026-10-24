@@ -332,11 +332,30 @@ int XSocket::SetOption(uint32_t level, uint32_t optname, void* optval_ptr,
 }
 
 X_STATUS XSocket::IOControl(uint32_t cmd, uint32_t* arg_ptr) {
+  if (!supported_controls.contains(cmd)) {
+    XWSASetLastError(X_WSA_ERROR::X_WSAENOPROTOOPT);
+    return X_STATUS_UNSUCCESSFUL;
+  }
+
 #ifdef XE_PLATFORM_WIN32
   const u_long initial_param = xe::load_and_swap<uint32_t>(arg_ptr);
   u_long param = initial_param;
 
   int ret = ioctlsocket(native_handle_, cmd, &param);
+
+  // The host counts every queued datagram. Report only the size of the next
+  // one, which is what a single receive returns.
+  if (!ret && cmd == X_FIONREAD && type_ == X_SOCK_DGRAM && param) {
+    std::vector<char> datagram(param);
+
+    const int peeked =
+        recvfrom(native_handle_, datagram.data(), static_cast<int>(param),
+                 MSG_PEEK, nullptr, nullptr);
+
+    if (peeked >= 0) {
+      param = peeked;
+    }
+  }
 
   // Parameter was written to therefore byte swap output
   if (initial_param != param) {
@@ -350,13 +369,7 @@ X_STATUS XSocket::IOControl(uint32_t cmd, uint32_t* arg_ptr) {
 
   return X_STATUS_SUCCESS;
 #else
-  int native_cmd = cmd;
-
-  assert_false(!supported_controls.contains(cmd));
-
-  if (supported_controls.contains(cmd)) {
-    native_cmd = supported_controls.at(cmd);
-  }
+  const int native_cmd = supported_controls.at(cmd);
 
   int ret = ioctl(native_handle_, native_cmd, arg_ptr);
 
