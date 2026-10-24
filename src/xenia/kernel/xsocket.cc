@@ -36,6 +36,20 @@ const std::map<uint32_t, uint32_t> supported_socket_options = {
     {0x1006, SO_RCVTIMEO},    {~X_SO_LINGER, ~SO_LINGER},
     {~0x0004, ~SO_REUSEADDR}};
 
+// Socket options that can only be read
+const std::map<uint32_t, uint32_t> supported_get_socket_options = {
+    {0x0002, SO_ACCEPTCONN},
+    {0x0004, SO_REUSEADDR},
+    {X_SO_BROADCAST, SO_BROADCAST},
+    {X_SO_LINGER, SO_LINGER},
+    {0x1001, SO_SNDBUF},
+    {0x1002, SO_RCVBUF},
+    {0x1005, SO_SNDTIMEO},
+    {0x1006, SO_RCVTIMEO},
+    {0x1008, SO_TYPE},
+    {~X_SO_LINGER, ~SO_LINGER},
+    {~0x0004, ~SO_REUSEADDR}};
+
 // Translate socket TCP options to native
 const std::map<uint32_t, uint32_t> supported_tcp_options = {
     {0x0001, TCP_NODELAY}};
@@ -121,11 +135,71 @@ int XSocket::Close() {
 
 X_STATUS XSocket::GetOption(uint32_t level, uint32_t optname, void* optval_ptr,
                             uint32_t* optlen) {
+  if (!supported_levels.contains(level)) {
+    XWSASetLastError(X_WSA_ERROR::X_WSAEINVAL);
+    return X_STATUS_UNSUCCESSFUL;
+  }
+
+  const auto& supported_options = level == X_SOL_SOCKET
+                                      ? supported_get_socket_options
+                                      : supported_tcp_options;
+
+  if (!supported_options.contains(optname)) {
+    XWSASetLastError(X_WSA_ERROR::X_WSAENOPROTOOPT);
+    return X_STATUS_UNSUCCESSFUL;
+  }
+
+  if (level == X_SOL_SOCKET && optname == X_SO_LINGER &&
+      type_ == X_SOCK_DGRAM) {
+    XWSASetLastError(X_WSA_ERROR::X_WSAENOPROTOOPT);
+    return X_STATUS_UNSUCCESSFUL;
+  }
+
+  // LINGER is two 16-bit fields, and the Linux host uses ints, so convert
+  // each field instead of byte-swapping the whole option.
+  if (level == X_SOL_SOCKET && optname == X_SO_LINGER &&
+      *optlen >= sizeof(X_LINGER)) {
+    linger native_linger = {};
+    socklen_t native_linger_len = sizeof(native_linger);
+
+    if (getsockopt(native_handle_, SOL_SOCKET, SO_LINGER,
+                   reinterpret_cast<char*>(&native_linger),
+                   &native_linger_len) < 0) {
+      return X_STATUS_UNSUCCESSFUL;
+    }
+
+    X_LINGER* x_linger = static_cast<X_LINGER*>(optval_ptr);
+    x_linger->l_onoff = static_cast<uint16_t>(native_linger.l_onoff);
+    x_linger->l_linger = static_cast<uint16_t>(native_linger.l_linger);
+    *optlen = sizeof(X_LINGER);
+
+    return X_STATUS_SUCCESS;
+  }
+
+  // A buffer shorter than the option gets the low byte, the rest of it is
+  // zeroed and optlen is set to 1.
+  if (*optlen && *optlen < sizeof(uint32_t)) {
+    uint32_t value = 0;
+    socklen_t value_len = sizeof(value);
+
+    if (GetNativeOption(supported_levels.at(level),
+                        supported_options.at(optname), &value,
+                        &value_len) < 0) {
+      return X_STATUS_UNSUCCESSFUL;
+    }
+
+    std::memset(optval_ptr, 0, *optlen);
+    *static_cast<uint8_t*>(optval_ptr) = static_cast<uint8_t>(value);
+    *optlen = 1;
+
+    return X_STATUS_SUCCESS;
+  }
+
   int ret =
-      getsockopt(native_handle_, level, optname, static_cast<char*>(optval_ptr),
-                 reinterpret_cast<socklen_t*>(optlen));
+      GetNativeOption(supported_levels.at(level), supported_options.at(optname),
+                      optval_ptr, reinterpret_cast<socklen_t*>(optlen));
+
   if (ret < 0) {
-    // TODO: WSAGetLastError()
     return X_STATUS_UNSUCCESSFUL;
   }
 
@@ -161,45 +235,63 @@ int XSocket::SetOption(uint32_t level, uint32_t optname, void* optval_ptr,
     return X_ERROR_SUCCESS;
   }
 
-  int native_level = level;
-
-  assert_false(!supported_levels.contains(level));
-
-  if (supported_levels.contains(level)) {
-    native_level = supported_levels.at(level);
+  if (!supported_levels.contains(level)) {
+    XWSASetLastError(X_WSA_ERROR::X_WSAEINVAL);
+    return X_SOCKET_ERROR;
   }
 
-  int native_optname = optname;
+  const int native_level = supported_levels.at(level);
 
-  if (level == X_SOL_SOCKET) {
-    assert_false(!supported_socket_options.contains(optname));
+  const auto& supported_options =
+      level == X_SOL_SOCKET ? supported_socket_options : supported_tcp_options;
 
-    if (supported_socket_options.contains(optname)) {
-      native_optname = supported_socket_options.at(optname);
+  // Unsupported options fail whether or not the socket is bound.
+  if (!supported_options.contains(optname)) {
+    XWSASetLastError(X_WSA_ERROR::X_WSAENOPROTOOPT);
+    return X_SOCKET_ERROR;
+  }
+
+  if (level == X_SOL_SOCKET && optname == X_SO_LINGER &&
+      type_ == X_SOCK_DGRAM) {
+    XWSASetLastError(X_WSA_ERROR::X_WSAENOPROTOOPT);
+    return X_SOCKET_ERROR;
+  }
+
+  const int native_optname = supported_options.at(optname);
+
+  int ret = 0;
+
+  // LINGER is two 16-bit fields, and the Linux host uses ints, so convert
+  // each field instead of byte-swapping the whole option.
+  if (level == X_SOL_SOCKET && optname == X_SO_LINGER &&
+      optlen >= sizeof(X_LINGER)) {
+    const X_LINGER* x_linger = static_cast<const X_LINGER*>(optval_ptr);
+
+    linger native_linger = {};
+    native_linger.l_onoff = x_linger->l_onoff;
+    native_linger.l_linger = x_linger->l_linger;
+
+    ret = setsockopt(native_handle_, SOL_SOCKET, SO_LINGER,
+                     reinterpret_cast<const char*>(&native_linger),
+                     sizeof(native_linger));
+  } else if (optlen && optlen < sizeof(uint32_t)) {
+    // A value shorter than the option is read as its first byte.
+    const uint32_t value = *static_cast<uint8_t*>(optval_ptr);
+
+    ret = SetNativeOption(native_level, native_optname, &value, sizeof(value));
+  } else {
+    void* proper_ptr =
+        GetOptValueWithProperEndianness(optval_ptr, optname, optlen);
+
+    ret = SetNativeOption(native_level, native_optname, proper_ptr, optlen);
+
+    // Cheezy way to check if we created some additional allocation.
+    if (optval_ptr != proper_ptr) {
+      free(proper_ptr);
     }
-  }
-
-  if (level == IPPROTO_TCP) {
-    assert_false(!supported_tcp_options.contains(optname));
-
-    if (supported_tcp_options.contains(optname)) {
-      native_optname = supported_tcp_options.at(optname);
-    }
-  }
-
-  void* proper_ptr =
-      GetOptValueWithProperEndianness(optval_ptr, optname, optlen);
-
-  int ret = setsockopt(native_handle_, native_level, native_optname,
-                       static_cast<const char*>(proper_ptr), optlen);
-
-  // Cheezy way to check if we created some additional allocation.
-  if (optval_ptr != proper_ptr) {
-    free(proper_ptr);
   }
 
   if (ret < 0) {
-    // TODO: WSAGetLastError()
     XELOGE("XSocket::SetOption: failed with error {:08X}", XWSAGetLastError());
     return X_SOCKET_ERROR;
   }
@@ -336,6 +428,69 @@ uint16_t XSocket::GetImplicitlyBoundPort() const {
 
   assert_always();
   return 0;
+}
+
+int XSocket::GetNativeOption(int level, int optname, void* value,
+                             socklen_t* len) {
+#if !XE_PLATFORM_WIN32
+  // Linux can round a timeout when it is read back, so report the
+  // milliseconds that were set.
+  if (level == SOL_SOCKET &&
+      (optname == SO_RCVTIMEO || optname == SO_SNDTIMEO) &&
+      *len >= sizeof(uint32_t)) {
+    const uint32_t timeout_ms =
+        optname == SO_RCVTIMEO ? receive_timeout_ms_ : send_timeout_ms_;
+    std::memcpy(value, &timeout_ms, sizeof(timeout_ms));
+    *len = sizeof(timeout_ms);
+    return 0;
+  }
+
+  if (level == SOL_SOCKET && (optname == SO_RCVBUF || optname == SO_SNDBUF) &&
+      *len >= sizeof(uint32_t)) {
+    int size = 0;
+    socklen_t size_len = sizeof(size);
+
+    if (getsockopt(native_handle_, level, optname, &size, &size_len) < 0) {
+      return -1;
+    }
+
+    const uint32_t set_size = static_cast<uint32_t>(size) / 2;
+    std::memcpy(value, &set_size, sizeof(set_size));
+    *len = sizeof(set_size);
+    return 0;
+  }
+#endif
+
+  return getsockopt(native_handle_, level, optname, static_cast<char*>(value),
+                    len);
+}
+
+int XSocket::SetNativeOption(int level, int optname, const void* value,
+                             socklen_t len) {
+#if !XE_PLATFORM_WIN32
+  // Linux takes a timeval instead of milliseconds.
+  if (level == SOL_SOCKET &&
+      (optname == SO_RCVTIMEO || optname == SO_SNDTIMEO) &&
+      len == sizeof(uint32_t)) {
+    uint32_t timeout_ms = 0;
+    std::memcpy(&timeout_ms, value, sizeof(timeout_ms));
+
+    timeval timeout = {};
+    timeout.tv_sec = timeout_ms / 1000;
+    timeout.tv_usec = (timeout_ms % 1000) * 1000;
+
+    const int ret =
+        setsockopt(native_handle_, level, optname, &timeout, sizeof(timeout));
+    if (!ret) {
+      (optname == SO_RCVTIMEO ? receive_timeout_ms_ : send_timeout_ms_) =
+          timeout_ms;
+    }
+    return ret;
+  }
+#endif
+
+  return setsockopt(native_handle_, level, optname,
+                    static_cast<const char*>(value), len);
 }
 
 X_STATUS XSocket::Listen(int backlog) {

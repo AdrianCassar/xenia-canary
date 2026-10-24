@@ -137,6 +137,12 @@ struct XWSAOVERLAPPED {
 };
 static_assert_size(XWSAOVERLAPPED, 0x14);
 
+struct X_LINGER {
+  xe::be<uint16_t> l_onoff;
+  xe::be<uint16_t> l_linger;
+};
+static_assert_size(X_LINGER, 0x4);
+
 struct WSASendToData {
   std::shared_ptr<XWSABUF[]> buffers;
   uint32_t num_buffers;
@@ -283,6 +289,9 @@ class XSocket : public XObject {
   uint32_t event_select_handle_ = 0;
   uint32_t event_select_flags_ = 0;
 
+  uint32_t receive_timeout_ms_ = 0;
+  uint32_t send_timeout_ms_ = 0;
+
   std::unique_ptr<xe::threading::Event> event_;
   std::mutex incoming_packet_mutex_;
   std::queue<uint8_t*> incoming_packets_;
@@ -294,6 +303,9 @@ class XSocket : public XObject {
   std::map<XWSAOVERLAPPED*, std::future<int32_t>> receive_polling_tasks_;
 
   uint16_t GetImplicitlyBoundPort() const;
+
+  int GetNativeOption(int level, int optname, void* value, socklen_t* len);
+  int SetNativeOption(int level, int optname, const void* value, socklen_t len);
 
   std::atomic<bool> cancel_overlapped_ = false;
 
