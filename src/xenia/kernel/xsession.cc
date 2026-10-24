@@ -668,6 +668,13 @@ X_RESULT XSession::GetSessionDetails(XGI_SESSION_DETAILS* data) {
 
   *local_details_ptr = local_details_;
 
+  // Offline and system link sessions report no available slots, before and
+  // after members join.
+  if (!IsXboxLiveSession()) {
+    local_details_ptr->AvailablePublicSlots = 0;
+    local_details_ptr->AvailablePrivateSlots = 0;
+  }
+
   const uint32_t members_count =
       (buffer_size - sizeof(XSESSION_LOCAL_DETAILS)) / sizeof(XSESSION_MEMBER);
 
