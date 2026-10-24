@@ -424,8 +424,11 @@ X_HRESULT XLiveBaseApp::XPresenceSubscribe(uint32_t buffer_ptr,
       xe::load_and_swap<uint32_t>(memory_->TranslateVirtual(
           static_cast<uint32_t>(subscribe_args->peers.argument_value_ptr)));
 
-  if (!kernel_state_->xam_state()->IsUserSignedIn(user_index)) {
-    return X_E_INVALIDARG;
+  const auto user_profile =
+      kernel_state_->xam_state()->GetUserProfile(user_index);
+
+  if (!user_profile || !user_profile->IsSignedInToLive()) {
+    return X_E_NO_SUCH_USER;
   }
 
   const uint32_t xuid_address =
@@ -438,8 +441,7 @@ X_HRESULT XLiveBaseApp::XPresenceSubscribe(uint32_t buffer_ptr,
   const xe::be<uint64_t>* peer_xuids =
       memory_->TranslateVirtual<xe::be<uint64_t>*>(xuid_address);
 
-  const auto user_xuid =
-      kernel_state_->xam_state()->GetUserProfile(user_index)->xuid();
+  const auto user_xuid = user_profile->xuid();
 
   for (uint32_t i = 0; i < num_peers; i++) {
     const xe::be<uint64_t> peer_xuid = peer_xuids[i];
