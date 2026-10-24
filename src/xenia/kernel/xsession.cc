@@ -97,8 +97,8 @@ X_RESULT XSession::CreateSession(uint32_t user_index, uint8_t public_slots,
   GenerateIdentityExchangeKey(&SessionInfo_ptr->keyExchangeKey);
   PrintSessionType((SessionFlags)flags);
 
-  uint64_t* Nonce_ptr =
-      kernel_state_->memory()->TranslateVirtual<uint64_t*>(nonce_ptr);
+  xe::be<uint64_t>* Nonce_ptr =
+      kernel_state_->memory()->TranslateVirtual<xe::be<uint64_t>*>(nonce_ptr);
 
   local_details_.UserIndexHost = XUserIndexNone;
 
@@ -154,8 +154,8 @@ X_RESULT XSession::CreateSession(uint32_t user_index, uint8_t public_slots,
 }
 
 X_RESULT XSession::CreateHostSession(XSESSION_INFO* session_info,
-                                     uint64_t* nonce_ptr, uint8_t user_index,
-                                     uint8_t public_slots,
+                                     xe::be<uint64_t>* nonce_ptr,
+                                     uint8_t user_index, uint8_t public_slots,
                                      uint8_t private_slots, uint32_t flags) {
   state_ |= STATE_FLAGS_HOST;
 
@@ -217,8 +217,8 @@ X_RESULT XSession::CreateHostSession(XSESSION_INFO* session_info,
 }
 
 X_RESULT XSession::CreateStatsSession(XSESSION_INFO* session_info,
-                                      uint64_t* nonce_ptr, uint8_t user_index,
-                                      uint8_t public_slots,
+                                      xe::be<uint64_t>* nonce_ptr,
+                                      uint8_t user_index, uint8_t public_slots,
                                       uint8_t private_slots, uint32_t flags) {
   return CreateHostSession(session_info, nonce_ptr, user_index, public_slots,
                            private_slots, flags);

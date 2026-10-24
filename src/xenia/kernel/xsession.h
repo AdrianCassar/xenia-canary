@@ -238,12 +238,14 @@ class XSession : public XObject {
   void PrintSessionDetails();
   void PrintSessionType(SessionFlags flags);
 
-  X_RESULT CreateHostSession(XSESSION_INFO* session_info, uint64_t* nonce_ptr,
-                             uint8_t user_index, uint8_t public_slots,
-                             uint8_t private_slots, uint32_t flags);
-  X_RESULT CreateStatsSession(XSESSION_INFO* session_info, uint64_t* nonce_ptr,
-                              uint8_t user_index, uint8_t public_slots,
-                              uint8_t private_slots, uint32_t flags);
+  X_RESULT CreateHostSession(XSESSION_INFO* session_info,
+                             xe::be<uint64_t>* nonce_ptr, uint8_t user_index,
+                             uint8_t public_slots, uint8_t private_slots,
+                             uint32_t flags);
+  X_RESULT CreateStatsSession(XSESSION_INFO* session_info,
+                              xe::be<uint64_t>* nonce_ptr, uint8_t user_index,
+                              uint8_t public_slots, uint8_t private_slots,
+                              uint32_t flags);
   X_RESULT JoinExistingSession(XSESSION_INFO* session_info);
 
   const bool HasSessionFlag(SessionFlags flags,
