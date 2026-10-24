@@ -81,6 +81,8 @@ void Update_XNetStartupParams(XNetStartupParams& dest,
   }
 }
 
+bool IsXNetInitialized() { return initialized_xnet_; }
+
 dword_result_t NetDll_XNetStartup_entry(dword_t caller,
                                         pointer_t<XNetStartupParams> params) {
   if (initialized_xnet_) {

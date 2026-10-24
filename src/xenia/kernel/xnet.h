@@ -57,6 +57,7 @@ using namespace xe::literals;
 #define X_ONLINE_E_SESSION_REQUIRES_ARBITRATION             static_cast<X_HRESULT>(0x80155205L)
 #define X_ONLINE_E_SESSION_NOT_LOGGED_ON                    static_cast<X_HRESULT>(0x80155209L)
 #define X_ONLINE_E_SESSION_NOT_REGISTERED                   static_cast<X_HRESULT>(0x8015520CL)
+#define X_ONLINE_E_SESSION_REGISTER_KEY_FAILED              static_cast<X_HRESULT>(0x8015520DL)
 #define X_ONLINE_E_SESSION_FULL                             static_cast<X_HRESULT>(0x80155202L)
 #define X_ONLINE_STRING_TOO_LONG                            static_cast<X_HRESULT>(0x80157101L)
 #define X_ONLINE_STRING_OFFENSIVE_TEXT                      static_cast<X_HRESULT>(0x80157102L)
@@ -298,6 +299,11 @@ enum HTTP_STATUS_CODE {
 namespace kernel {
 
 constexpr uint16_t XNET_SYSTEMLINK_PORT = 3074;
+
+namespace xam {
+// Whether the title has started XNet with XNetStartup.
+bool IsXNetInitialized();
+}  // namespace xam
 
 constexpr uint32_t XEX_PRIVILEGE_PII_ACCESS = 13;
 constexpr uint32_t XEX_PRIVILEGE_CROSSPLATFORM_SYSTEM_LINK = 14;
