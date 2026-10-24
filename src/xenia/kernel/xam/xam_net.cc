@@ -2220,6 +2220,24 @@ struct host_set {
     }
   }
 
+  void Add(fd_set* native_set) {
+    for (uint32_t i = 0; i < count; ++i) {
+      const object_ref<XSocket>& socket = sockets[i];
+      if (socket) {
+        FD_SET(socket->native_handle(), native_set);
+      }
+    }
+  }
+
+  void SetIfIn(fd_set* native_set, fd_set* other_native_set) {
+    for (uint32_t i = 0; i < count; ++i) {
+      const object_ref<XSocket>& socket = sockets[i];
+      if (socket && FD_ISSET(socket->native_handle(), other_native_set)) {
+        FD_SET(socket->native_handle(), native_set);
+      }
+    }
+  }
+
   void UpdateFrom(fd_set* native_set) {
     uint32_t new_count = 0;
     for (uint32_t i = 0; i < count; ++i) {
@@ -2259,6 +2277,11 @@ int_result_t NetDll_select_entry(dword_t caller, dword_t nfds,
                                  pointer_t<x_fd_set> writefds,
                                  pointer_t<x_fd_set> exceptfds,
                                  pointer_t<X_TIMEVAL> timeout_ptr) {
+  if (!readfds && !writefds && !exceptfds) {
+    XThread::SetLastError(X_WSA_ERROR::X_WSAEINVAL);
+    return X_SOCKET_ERROR;
+  }
+
   // 4B4D07E7 passes one set as read, write and except to poll for data treating
   // it as writable spins forever.
   const bool write_aliased =
@@ -2290,6 +2313,10 @@ int_result_t NetDll_select_entry(dword_t caller, dword_t nfds,
 
     host_writefds.Load(writefds);
     host_writefds.Store(&native_writefds);
+  } else if (write_aliased) {
+    // Let a writable socket end the wait, but only the read result is written
+    // back.
+    host_readfds.Store(&native_writefds);
   }
   host_set host_exceptfds = {0};
   fd_set native_exceptfds = {0};
@@ -2302,6 +2329,11 @@ int_result_t NetDll_select_entry(dword_t caller, dword_t nfds,
     host_exceptfds.Load(exceptfds);
     host_exceptfds.Store(&native_exceptfds);
   }
+  // The host reports a refused connect only in exceptfds, so watch the write
+  // sockets there too.
+  if (use_writefds) {
+    host_writefds.Add(&native_exceptfds);
+  }
   timeval* timeout_in = nullptr;
   timeval timeout = {};
   if (timeout_ptr) {
@@ -2313,10 +2345,10 @@ int_result_t NetDll_select_entry(dword_t caller, dword_t nfds,
     timeout_in = &timeout;
   }
 
-  const int handles_count =
-      select(nfds, readfds ? &native_readfds : nullptr,
-             use_writefds ? &native_writefds : nullptr,
-             use_exceptfds ? &native_exceptfds : nullptr, timeout_in);
+  const int handles_count = select(
+      nfds, readfds ? &native_readfds : nullptr,
+      writefds ? &native_writefds : nullptr,
+      use_exceptfds || use_writefds ? &native_exceptfds : nullptr, timeout_in);
 
   if (handles_count == X_SOCKET_ERROR) {
     XThread::SetLastError(XSocket::XWSAGetLastError());
@@ -2327,6 +2359,8 @@ int_result_t NetDll_select_entry(dword_t caller, dword_t nfds,
     host_readfds.Store(readfds);
   }
   if (use_writefds) {
+    // A refused connect is writable as well as in exceptfds.
+    host_writefds.SetIfIn(&native_writefds, &native_exceptfds);
     host_writefds.UpdateFrom(&native_writefds);
     host_writefds.Store(writefds);
   }
@@ -2335,9 +2369,13 @@ int_result_t NetDll_select_entry(dword_t caller, dword_t nfds,
     host_exceptfds.Store(exceptfds);
   }
 
-  // TODO(gibbed): modify ret to be what's actually copied to the guest
-  // fd_sets?
-  return handles_count;
+  if (handles_count == X_SOCKET_ERROR) {
+    return handles_count;
+  }
+
+  // Count what was written to the guest sets. The host merges a socket listed
+  // twice in one set, so its own count can be lower.
+  return host_readfds.count + host_writefds.count + host_exceptfds.count;
 }
 DECLARE_XAM_EXPORT1(NetDll_select, kNetworking, kImplemented);
 
