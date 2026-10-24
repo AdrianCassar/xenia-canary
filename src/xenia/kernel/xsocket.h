@@ -40,7 +40,7 @@
 namespace xe {
 namespace kernel {
 // https://learn.microsoft.com/en-us/windows/win32/winsock/windows-sockets-error-codes-2
-enum class X_WSA_ERROR : uint32_t {
+enum X_WSA_ERROR : uint32_t {
   X_WSA_NO_ERROR = 0,
   X_WSA_INVALID_PARAMETER = 87,
   X_WSA_OPERATION_ABORTED = 995,
@@ -250,7 +250,7 @@ class XSocket : public XObject {
 
   int WSACancelOverlappedIO();
 
-  static bool XWSAIsKnownError(X_WSA_ERROR error);
+  static bool XWSAIsKnownError(uint32_t error);
 
   static uint32_t XWSAGetLastError();
 
@@ -324,7 +324,7 @@ class XSocket : public XObject {
 
   int PollWSARecvFrom(bool wait, WSARecvFromData receive_async_data);
 
-  void XWSASetLastError(X_WSA_ERROR) const;
+  void XWSASetLastError(uint32_t error) const;
 };
 
 }  // namespace kernel
