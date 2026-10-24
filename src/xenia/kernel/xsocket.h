@@ -129,8 +129,9 @@ struct XWSABUF {
 static_assert_size(XWSABUF, 0x8);
 
 struct XWSAOVERLAPPED {
-  xe::be<uint32_t> internal;       // Status/Error Codes HRESULT
-  xe::be<uint32_t> internal_high;  // Transfer
+  // STATUS_PENDING while pending, 0 once complete, or the error as an HRESULT
+  xe::be<uint32_t> internal;
+  xe::be<uint32_t> internal_high;  // Bytes transferred
   xe::be<uint32_t> offset;         // Flags
   xe::be<uint32_t> offset_high;
   xe::be<uint32_t> event_handle;

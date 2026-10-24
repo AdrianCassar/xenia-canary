@@ -17,6 +17,10 @@
 #include "xenia/kernel/xam/xam_module.h"
 #include "xenia/kernel/xboxkrnl/xboxkrnl_threading.h"
 
+#if XE_PLATFORM_WIN32
+#include <mswsock.h>
+#endif
+
 DECLARE_bool(bind_interface);
 
 using namespace std::chrono_literals;
@@ -74,6 +78,8 @@ static bool IsAnyAddressDatagram(XSocket::Type type, const XSOCKADDR_IN* to) {
   return type == XSocket::X_SOCK_DGRAM && to && !to->address_ip.s_addr;
 }
 
+constexpr std::chrono::microseconds kOverlappedPollInterval = 10ms;
+
 XSocket::XSocket(KernelState* kernel_state)
     : XObject(kernel_state, kObjectType) {}
 
@@ -121,6 +127,17 @@ X_STATUS XSocket::Initialize(AddressFamily af, Type type, Protocol proto) {
   if (native_handle_ == X_INVALID_SOCKET) {
     return X_STATUS_UNSUCCESSFUL;
   }
+
+#if XE_PLATFORM_WIN32
+  // 415607FF fails on WSAECONNRESET after sending to a port with no socket.
+  if (type_ == X_SOCK_DGRAM) {
+    BOOL report_resets = FALSE;
+    DWORD bytes_returned = 0;
+    WSAIoctl(static_cast<SOCKET>(native_handle_), SIO_UDP_CONNRESET,
+             &report_resets, sizeof(report_resets), nullptr, 0, &bytes_returned,
+             nullptr, nullptr);
+  }
+#endif
 
   return X_STATUS_SUCCESS;
 }
@@ -257,7 +274,6 @@ int XSocket::SetOption(uint32_t level, uint32_t optname, void* optval_ptr,
   const auto& supported_options =
       level == X_SOL_SOCKET ? supported_socket_options : supported_tcp_options;
 
-  // Unsupported options fail whether or not the socket is bound.
   if (!supported_options.contains(optname)) {
     XWSASetLastError(X_WSA_ERROR::X_WSAENOPROTOOPT);
     return X_SOCKET_ERROR;
@@ -575,8 +591,6 @@ object_ref<XSocket> XSocket::Accept(XSOCKADDR_IN* name, int* name_len) {
 }
 
 int XSocket::Shutdown(int how) {
-  // An out-of-range how shuts down both directions. The host rejects it with
-  // WSAEINVAL.
   if (how < 0 || how > 2) {
     how = 2;
   }
@@ -590,13 +604,15 @@ int XSocket::Shutdown(int how) {
   return ret;
 }
 
+// Receive flags must be 0. They're accepted but ignored, e.g. MSG_PEEK still
+// consumes the data, so don't pass them on.
 int XSocket::Recv(uint8_t* buf, uint32_t buf_len, uint32_t flags) {
   if (type_ == X_SOCK_STREAM && shutdown_receive_) {
     XWSASetLastError(X_WSA_ERROR::X_WSAESHUTDOWN);
     return X_SOCKET_ERROR;
   }
 
-  return recv(native_handle_, reinterpret_cast<char*>(buf), buf_len, flags);
+  return recv(native_handle_, reinterpret_cast<char*>(buf), buf_len, 0);
 }
 
 int XSocket::RecvFrom(uint8_t* buf, uint32_t buf_len, uint32_t flags,
@@ -617,11 +633,10 @@ int XSocket::RecvFrom(uint8_t* buf, uint32_t buf_len, uint32_t flags,
     sa = from->to_host();
   }
 
-  int ret = recvfrom(native_handle_, reinterpret_cast<char*>(buf), buf_len,
-                     flags, from ? &sa : nullptr, from_len);
+  int ret = recvfrom(native_handle_, reinterpret_cast<char*>(buf), buf_len, 0,
+                     from ? &sa : nullptr, from_len);
 
-  // 555307EE expects port even with TCP, include IP anyway.
-  // Verified on console.
+  // TCP receives report the peer's address, e.g. 555307EE reads the port.
   if (proto_ == X_IPPROTO_TCP) {
     socklen_t peer_addr_len = sizeof(sockaddr);
     getpeername(native_handle_, &sa, &peer_addr_len);
@@ -638,6 +653,10 @@ int XSocket::RecvFrom(uint8_t* buf, uint32_t buf_len, uint32_t flags,
 int XSocket::WSASelectWrite(bool wait, X_WSA_ERROR* error) {
   int activity = 0;
 
+  if (wait) {
+    XELOGNETD("{} Blocking...", __func__);
+  }
+
   do {
     fd_set writefds = {};
     FD_ZERO(&writefds);
@@ -653,22 +672,16 @@ int XSocket::WSASelectWrite(bool wait, X_WSA_ERROR* error) {
 #endif
 
     timeval tv = {};
-    tv.tv_sec = wait ? 1 : 0;
-    tv.tv_usec = 0;
+    tv.tv_usec = wait ? static_cast<long>(kOverlappedPollInterval.count()) : 0;
 
     activity = select(nfds, nullptr, &writefds, nullptr, &tv);
 
     if (cancel_overlapped_) {
       if (error) {
         *error = X_WSA_ERROR::X_WSAECANCELLED;
-        // *error = X_HRESULT_FROM_WIN32(X_WSA_ERROR::X_WSAECANCELLED);
       }
 
       activity = X_SOCKET_ERROR;
-    }
-
-    if (wait) {
-      XELOGNETD("{} Blocking...", __func__);
     }
   } while (activity == 0 && wait);
 
@@ -820,9 +833,6 @@ int XSocket::PollWSASendTo(bool wait, WSASendToData send_async_data,
       send_async_data.overlapped->internal = X_STATUS_PENDING;
     } else {
       send_async_data.overlapped->internal = XWSAGetLastError();
-
-      // send_async_data.overlapped->internal =
-      //     X_HRESULT_FROM_WIN32(XWSAGetLastError());
     }
   }
 
@@ -904,6 +914,9 @@ int XSocket::WSASendTo(XWSABUF* buffers, uint32_t num_buffers,
 
   uint32_t num_bytes_sent = 0;
 
+  const uint32_t previous_internal =
+      overlapped_ptr ? overlapped_ptr->internal.get() : 0;
+
   // Check for immediate completion.
   const int result = PollWSASendTo(false, send_async_data, &num_bytes_sent);
 
@@ -939,6 +952,8 @@ int XSocket::WSASendTo(XWSABUF* buffers, uint32_t num_buffers,
 
     XWSASetLastError(X_WSA_ERROR::X_WSA_IO_PENDING);
   } else {
+    overlapped_ptr->internal = previous_internal;
+
     XWSASetLastError(wsa_error);
 
     // An error occurred that's not X_STATUS_PENDING
@@ -958,6 +973,10 @@ int XSocket::WSASendTo(XWSABUF* buffers, uint32_t num_buffers,
 int XSocket::WSASelectRead(bool wait, X_WSA_ERROR* error) {
   int activity = 0;
 
+  if (wait) {
+    XELOGNETD("{} Blocking...", __func__);
+  }
+
   do {
     fd_set readfds = {};
     FD_ZERO(&readfds);
@@ -973,22 +992,16 @@ int XSocket::WSASelectRead(bool wait, X_WSA_ERROR* error) {
 #endif
 
     timeval tv = {};
-    tv.tv_sec = wait ? 1 : 0;
-    tv.tv_usec = 0;
+    tv.tv_usec = wait ? static_cast<long>(kOverlappedPollInterval.count()) : 0;
 
     activity = select(nfds, &readfds, nullptr, nullptr, &tv);
 
     if (cancel_overlapped_) {
       if (error) {
         *error = X_WSA_ERROR::X_WSAECANCELLED;
-        // *error = X_HRESULT_FROM_WIN32(X_WSA_ERROR::X_WSAECANCELLED);
       }
 
       activity = X_SOCKET_ERROR;
-    }
-
-    if (wait) {
-      XELOGNETD("{} Blocking...", __func__);
     }
   } while (activity == 0 && wait);
 
@@ -1023,7 +1036,7 @@ int XSocket::PollWSARecvFrom(bool wait, WSARecvFromData receive_async_data) {
     XELOGE("WSASelectRead failed with error {}", error);
 
     if (receive_async_data.overlapped) {
-      receive_async_data.overlapped->internal = error;
+      receive_async_data.overlapped->internal = X_HRESULT_FROM_WIN32(error);
     }
 
     return X_SOCKET_ERROR;
@@ -1060,14 +1073,15 @@ int XSocket::PollWSARecvFrom(bool wait, WSARecvFromData receive_async_data) {
   }
 
   uint32_t bytes_received = 0;
-  uint32_t flags = 0;
-  int from_len =
-      receive_async_data.from_len ? receive_async_data.from_len->get() : 0;
 
-  // num_bytes_recv and flags are only updated on immediate completion.
-  if (!wait && receive_async_data.flags) {
-    flags = receive_async_data.flags->get();
-  }
+  // Input flags must be 0 and are ignored, like recv (see XSocket::Recv).
+  // flags is only used for output.
+  uint32_t flags = 0;
+
+  // lpFromlen is only used when lpFrom is provided. The host rejects a length
+  // without an address with WSAEFAULT.
+  const bool has_from = receive_async_data.from && receive_async_data.from_len;
+  int from_len = has_from ? receive_async_data.from_len->get() : 0;
 
   int result = 0;
 
@@ -1075,15 +1089,14 @@ int XSocket::PollWSARecvFrom(bool wait, WSARecvFromData receive_async_data) {
   result = ::WSARecvFrom(
       native_handle_, &recv_buffer, receive_async_data.num_buffers,
       reinterpret_cast<DWORD*>(&bytes_received),
-      reinterpret_cast<DWORD*>(&flags),
-      receive_async_data.from ? &saddr : nullptr,
-      receive_async_data.from_len ? &from_len : nullptr, nullptr, nullptr);
+      reinterpret_cast<DWORD*>(&flags), has_from ? &saddr : nullptr,
+      has_from ? &from_len : nullptr, nullptr, nullptr);
 #else
   sockaddr_in sender_addr = {};
   msghdr message = {};
 
-  message.msg_name = receive_async_data.from ? &saddr : nullptr;
-  message.msg_namelen = receive_async_data.from_len ? from_len : 0;
+  message.msg_name = has_from ? &saddr : nullptr;
+  message.msg_namelen = has_from ? from_len : 0;
 
   // Setup scatter-gather destination buffers (Equivalent to WSABUF array)
   message.msg_iov = &recv_buffer;
@@ -1112,21 +1125,33 @@ int XSocket::PollWSARecvFrom(bool wait, WSARecvFromData receive_async_data) {
     XELOGI("WSARecvFrom failed with error {}", XWSAGetLastError());
   }
 
+  // A truncated datagram also sets MSG_PARTIAL. The host only reports
+  // WSAEMSGSIZE.
+  const bool truncated =
+      result == X_SOCKET_ERROR && type_ == X_SOCK_DGRAM &&
+      XWSAGetLastError() == static_cast<uint32_t>(X_WSA_ERROR::X_WSAEMSGSIZE);
+
+  if (truncated) {
+    flags |= X_MSG_PARTIAL;
+  }
+
   if (receive_async_data.overlapped && result == X_SOCKET_ERROR) {
     if (pending) {
       receive_async_data.overlapped->internal = X_STATUS_PENDING;
     } else {
-      receive_async_data.overlapped->internal = XWSAGetLastError();
+      receive_async_data.overlapped->internal =
+          X_HRESULT_FROM_WIN32(XWSAGetLastError());
+    }
 
-      // receive_async_data.overlapped->internal =
-      //     X_HRESULT_FROM_WIN32(XWSAGetLastError());
+    if (truncated) {
+      receive_async_data.overlapped->internal_high =
+          receive_async_data.buffers->len;
     }
   }
 
   if (result == X_ERROR_SUCCESS) {
     if (receive_async_data.from) {
       // Copy behavior from recvfrom.
-      // Verified on console.
       if (proto_ == X_IPPROTO_TCP) {
         socklen_t peer_addar_len = sizeof(sockaddr);
         getpeername(native_handle_, &saddr, &peer_addar_len);
@@ -1182,11 +1207,20 @@ int XSocket::WSARecvFrom(XWSABUF* buffers, uint32_t num_buffers,
     return X_SOCKET_ERROR;
   }
 
-  // On win32 we could pipe all this directly to WSARecvFrom.
-  // We would however need find a way to call the completion callback without
-  // relying on the caller to set the "alertable" flag to true when waiting. We
-  // also need to do our own async handling anyway for Linux so we might as well
-  // make the code paths the same to improve symmetry in behavior.
+  if (!bound_) {
+    XWSASetLastError(X_WSA_ERROR::X_WSAEINVAL);
+    return X_SOCKET_ERROR;
+  }
+
+  // Only one overlapped receive can be pending per socket.
+  if (overlapped_ptr) {
+    for (auto& [pending_overlapped_ptr, task] : receive_polling_tasks_) {
+      if (task.valid() && task.wait_for(0s) != std::future_status::ready) {
+        XWSASetLastError(X_WSA_ERROR::X_WSAEWOULDBLOCK);
+        return X_SOCKET_ERROR;
+      }
+    }
+  }
 
   WSARecvFromData receive_async_data = {};
 
@@ -1233,8 +1267,8 @@ int XSocket::WSARecvFrom(XWSABUF* buffers, uint32_t num_buffers,
 
   // Perform overlapped completion.
 
-  const X_WSA_ERROR wsa_error =
-      X_WSA_ERROR(receive_async_data.overlapped->internal.get());
+  const X_WSA_ERROR wsa_error = X_WSA_ERROR(
+      X_WIN32_FROM_HRESULT(receive_async_data.overlapped->internal.get()));
 
   if (wsa_error == X_WSA_ERROR(X_STATUS_PENDING)) {
     xboxkrnl::xeNtClearEvent(overlapped_ptr->event_handle);
@@ -1310,6 +1344,18 @@ bool XSocket::WSAGetOverlappedResult(XWSAOVERLAPPED* overlapped_ptr,
   if (!pending_io) {
     XELOGNETD("Overlap not in operation!");
 
+    const uint32_t internal = overlapped_ptr->internal;
+
+    if (internal == X_STATUS_PENDING) {
+      XWSASetLastError(X_WSA_ERROR::X_WSA_IO_INCOMPLETE);
+      return false;
+    }
+
+    if (X_HRESULT_FACILITY(internal) == X_FACILITY_WIN32 && XFAILED(internal)) {
+      XWSASetLastError(X_WSA_ERROR(X_WIN32_FROM_HRESULT(internal)));
+      return false;
+    }
+
     *bytes_transferred = overlapped_ptr->internal_high;
     *flags_ptr = overlapped_ptr->offset;
 
@@ -1332,14 +1378,6 @@ bool XSocket::WSAGetOverlappedResult(XWSAOVERLAPPED* overlapped_ptr,
 
   X_WSA_ERROR internal_result =
       X_WSA_ERROR(X_WIN32_FROM_HRESULT(overlapped_ptr->internal.get()));
-
-  bool valid_hresult =
-      X_HRESULT_FACILITY(overlapped_ptr->internal.get()) == X_FACILITY_WIN32;
-
-  // If result is invalid HRESULT then recover it.
-  // if (!valid_hresult) {
-  //   internal_result = X_WSA_ERROR(XThread::GetLastError());
-  // }
 
   if (wait) {
     if (sending_io) {
