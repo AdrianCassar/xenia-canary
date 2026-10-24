@@ -158,31 +158,23 @@ int XSocket::SetOption(uint32_t level, uint32_t optname, void* optval_ptr,
     return X_ERROR_SUCCESS;
   }
 
-  int native_level = level;
-
-  assert_false(!supported_levels.contains(level));
-
-  if (supported_levels.contains(level)) {
-    native_level = supported_levels.at(level);
+  if (!supported_levels.contains(level)) {
+    XWSASetLastError(X_WSA_ERROR::X_WSAEINVAL);
+    return X_SOCKET_ERROR;
   }
 
-  int native_optname = optname;
+  const int native_level = supported_levels.at(level);
 
-  if (level == 0xFFFF) {
-    assert_false(!supported_socket_options.contains(optname));
+  const auto& supported_options =
+      level == 0xFFFF ? supported_socket_options : supported_tcp_options;
 
-    if (supported_socket_options.contains(optname)) {
-      native_optname = supported_socket_options.at(optname);
-    }
+  // Unsupported options fail whether or not the socket is bound.
+  if (!supported_options.contains(optname)) {
+    XWSASetLastError(X_WSA_ERROR::X_WSAENOPROTOOPT);
+    return X_SOCKET_ERROR;
   }
 
-  if (level == IPPROTO_TCP) {
-    assert_false(!supported_tcp_options.contains(optname));
-
-    if (supported_tcp_options.contains(optname)) {
-      native_optname = supported_tcp_options.at(optname);
-    }
-  }
+  const int native_optname = supported_options.at(optname);
 
   void* proper_ptr =
       GetOptValueWithProperEndianness(optval_ptr, optname, optlen);
