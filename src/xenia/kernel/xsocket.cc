@@ -932,6 +932,13 @@ int XSocket::PollWSARecvFrom(bool wait, WSARecvFromData receive_async_data) {
     XELOGI("WSARecvFrom failed with error {}", XWSAGetLastError());
   }
 
+  // A truncated datagram also sets MSG_PARTIAL. The host only reports
+  // WSAEMSGSIZE.
+  if (result == X_SOCKET_ERROR && type_ == X_SOCK_DGRAM &&
+      XWSAGetLastError() == static_cast<uint32_t>(X_WSA_ERROR::X_WSAEMSGSIZE)) {
+    flags |= X_MSG_PARTIAL;
+  }
+
   if (receive_async_data.overlapped && result == X_SOCKET_ERROR) {
     if (pending) {
       receive_async_data.overlapped->internal = X_STATUS_PENDING;

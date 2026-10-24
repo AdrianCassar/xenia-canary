@@ -86,6 +86,8 @@ enum class X_WSA_ERROR : uint32_t {
 #define SO_PRIVATE 0x5802        // bool TRUE for private
 #define SO_GRANTINSECURE 0x5803  // bool TRUE for insecure
 
+#define X_MSG_PARTIAL 0x8000
+
 struct XSOCKADDR {
   xe::be<uint16_t> address_family;
   char sa_data[14];
