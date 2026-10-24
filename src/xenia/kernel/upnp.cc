@@ -31,6 +31,13 @@ namespace kernel {
 UPnP::UPnP() {}
 
 UPnP::~UPnP() {
+  {
+    std::lock_guard actions_lock(mutex_port_actions_);
+    if (last_port_action_.valid()) {
+      last_port_action_.wait();
+    }
+  }
+
   CloseOpenPorts();
 
   std::lock_guard igd_lock(igd_mutex_);
@@ -182,13 +189,31 @@ bool UPnP::LoadIGD(const std::string& igd_root, IGDResult& igd) {
                             igd.lan_addr, sizeof(igd.lan_addr));
 }
 
+std::future<int32_t> UPnP::QueuePortAction(std::function<int32_t()> action) {
+  std::lock_guard actions_lock(mutex_port_actions_);
+
+  auto promise = std::make_shared<std::promise<int32_t>>();
+  auto result = promise->get_future();
+
+  last_port_action_ =
+      std::async(std::launch::async, [previous = last_port_action_,
+                                      action = std::move(action), promise]() {
+        if (previous.valid()) {
+          previous.wait();
+        }
+
+        promise->set_value(action());
+      }).share();
+
+  return result;
+}
+
 std::future<int32_t> UPnP::AddPortAsync(std::string addr,
                                         uint16_t internal_port,
                                         std::string protocol) {
-  auto add_port = std::async(std::launch::async, &UPnP::AddPort, this, addr,
-                             internal_port, protocol);
-
-  return add_port;
+  return QueuePortAction([this, addr, internal_port, protocol]() {
+    return AddPort(addr, internal_port, protocol);
+  });
 }
 
 // Games can bind to ports or close sockets from any thread therefore all member
@@ -261,10 +286,8 @@ int32_t UPnP::AddPort(std::string addr, uint16_t internal_port,
 
 std::future<int32_t> UPnP::RemovePortAsync(uint16_t port,
                                            std::string protocol) {
-  auto remove_port =
-      std::async(std::launch::async, &UPnP::RemovePort, this, port, protocol);
-
-  return remove_port;
+  return QueuePortAction(
+      [this, port, protocol]() { return RemovePort(port, protocol); });
 }
 
 int32_t UPnP::RemovePort(uint16_t internal_port, std::string protocol) {

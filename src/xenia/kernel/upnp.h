@@ -10,6 +10,7 @@
 #ifndef XENIA_KERNEL_UPNP_H_
 #define XENIA_KERNEL_UPNP_H_
 
+#include <functional>
 #include <future>
 #include <set>
 #include <shared_mutex>
@@ -155,6 +156,11 @@ class UPnP {
 
   void CleanupIGD();
   void StartPeriodicPortsRefresher();
+
+  std::future<int32_t> QueuePortAction(std::function<int32_t()> action);
+
+  std::mutex mutex_port_actions_;
+  std::shared_future<void> last_port_action_;
 
   std::future<std::unique_ptr<IGDResult>> get_valid_IGD_;
 
