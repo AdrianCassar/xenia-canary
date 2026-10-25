@@ -449,8 +449,6 @@ uint32_t XamUserReadProfileSettingsEx(
     user_settings_map users_settings = std::move(local_user_settings);
     users_settings.merge(remote_user_settings);
 
-    std::memset(buffer, 0, needed_size);
-
     X_USER_READ_PROFILE_SETTINGS* profile_settings_results_ptr =
         reinterpret_cast<X_USER_READ_PROFILE_SETTINGS*>(buffer);
 
@@ -467,6 +465,24 @@ uint32_t XamUserReadProfileSettingsEx(
     uint32_t additional_data_buffer_ptr =
         kernel_state()->memory()->HostToGuestVirtual(
             std::to_address(additional_data_ptr));
+
+    // Reading by user index only writes the user index into the user union,
+    // the rest is left as the caller filled it. 584109E2 fills the buffer
+    // with 0xFF and fails if the whole union is zero.
+    for (uint32_t i = 0; i < total_settings_count; i++) {
+      X_USER_PROFILE_SETTING& profile_setting = profile_settings_ptr[i];
+      const uint64_t user_union = profile_setting.xuid;
+
+      std::memset(&profile_setting, 0, sizeof(X_USER_PROFILE_SETTING));
+
+      if (!use_xuids) {
+        profile_setting.xuid = user_union;
+        profile_setting.user_index = user_index;
+      }
+    }
+
+    std::memset(additional_data_ptr, 0,
+                needed_size - (additional_data_ptr - buffer));
 
     profile_settings_results_ptr->setting_count =
         static_cast<uint32_t>(valid_requested_settings_ids.size());
