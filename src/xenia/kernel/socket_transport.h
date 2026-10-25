@@ -61,7 +61,7 @@ class SocketTransport {
                         socklen_t* len) = 0;
   virtual int SetOption(int level, int optname, const void* value,
                         socklen_t len) = 0;
-  // cmd and *arg_ptr are the guest's values.
+  // cmd is the host's value and *arg_ptr the guest's.
   virtual int IOControl(uint32_t cmd, uint32_t* arg_ptr) = 0;
   // signal sets the guest event. A transport calls it itself when the host
   // can't signal native_event_handle directly.

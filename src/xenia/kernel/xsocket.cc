@@ -322,7 +322,7 @@ X_STATUS XSocket::IOControl(uint32_t cmd, uint32_t* arg_ptr) {
     return X_STATUS_UNSUCCESSFUL;
   }
 
-  if (transport_->IOControl(cmd, arg_ptr) < 0) {
+  if (transport_->IOControl(supported_controls.at(cmd), arg_ptr) < 0) {
     return X_STATUS_UNSUCCESSFUL;
   }
 
