@@ -53,9 +53,6 @@ class SocketTransport {
  public:
   virtual ~SocketTransport() = default;
 
-  // The host socket select waits on, or X_INVALID_SOCKET without one.
-  virtual uint64_t native_handle() const = 0;
-
   virtual bool Open(int af, int type, int protocol) = 0;
   virtual int Close() = 0;
 
@@ -98,6 +95,42 @@ class SocketTransport {
   // Waits up to timeout_us for the socket to become readable or writable.
   // Returns 1 if it did, 0 on timeout or a negative value on failure.
   virtual int Select(bool write, long timeout_us) = 0;
+};
+
+// Waits on several transports at once, like select. Sockets are added to the
+// read, write or except set, then Wait blocks until one is ready.
+class TransportSelect {
+ public:
+  // A set that isn't used is passed to the host as null.
+  TransportSelect(bool use_read, bool use_write, bool use_except);
+
+  void AddRead(SocketTransport* transport);
+  // Also watches for a refused connect, which the host only reports in the
+  // except set.
+  void AddWrite(SocketTransport* transport);
+  // Lets the socket end the wait by becoming writable, without reporting it.
+  void AddWriteWake(SocketTransport* transport);
+  void AddExcept(SocketTransport* transport);
+
+  // nfds is the guest's value. Returns the select result.
+  int Wait(uint32_t nfds, timeval* timeout);
+
+  bool IsReadable(SocketTransport* transport) const;
+  bool IsWritable(SocketTransport* transport) const;
+  bool IsExcepted(SocketTransport* transport) const;
+
+ private:
+  bool use_read_;
+  bool use_write_;
+  bool use_except_;
+
+  fd_set read_ = {};
+  fd_set write_ = {};
+  fd_set except_ = {};
+  // Except set sockets the host only reports as errored, not in except_.
+  fd_set errored_ = {};
+  std::vector<uint64_t> except_handles_;
+  int highest_ = -1;
 };
 
 }  // namespace kernel

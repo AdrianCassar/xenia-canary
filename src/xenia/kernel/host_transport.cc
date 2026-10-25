@@ -9,6 +9,8 @@
 
 #include "xenia/kernel/host_transport.h"
 
+#include <algorithm>
+
 #include "xenia/base/byte_order.h"
 
 // The calls that differ between hosts are in host_transport_win.cc and
@@ -16,6 +18,20 @@
 
 namespace xe {
 namespace kernel {
+
+namespace {
+
+// Every transport is a HostTransport until another kind exists.
+uint64_t HandleOf(const SocketTransport* transport) {
+  return static_cast<const HostTransport*>(transport)->native_handle();
+}
+
+// Winsock's FD_ISSET takes a non-const set.
+bool IsSet(uint64_t handle, const fd_set& set) {
+  return FD_ISSET(handle, const_cast<fd_set*>(&set));
+}
+
+}  // namespace
 
 std::unique_ptr<SocketTransport> HostTransport::Accept(sockaddr* addr,
                                                        socklen_t* len) {
@@ -73,6 +89,55 @@ int HostTransport::SendTo(const uint8_t* buf, uint32_t len, const sockaddr* to,
   ReportTimeout(ret, send_timeout_ms_);
 
   return ret;
+}
+
+TransportSelect::TransportSelect(bool use_read, bool use_write, bool use_except)
+    : use_read_(use_read), use_write_(use_write), use_except_(use_except) {
+  FD_ZERO(&read_);
+  FD_ZERO(&write_);
+  FD_ZERO(&except_);
+  FD_ZERO(&errored_);
+}
+
+void TransportSelect::AddRead(SocketTransport* transport) {
+  const uint64_t handle = HandleOf(transport);
+  FD_SET(handle, &read_);
+  highest_ = std::max(highest_, static_cast<int>(handle));
+}
+
+void TransportSelect::AddWrite(SocketTransport* transport) {
+  const uint64_t handle = HandleOf(transport);
+  FD_SET(handle, &write_);
+  FD_SET(handle, &except_);
+  highest_ = std::max(highest_, static_cast<int>(handle));
+}
+
+void TransportSelect::AddWriteWake(SocketTransport* transport) {
+  const uint64_t handle = HandleOf(transport);
+  FD_SET(handle, &write_);
+  highest_ = std::max(highest_, static_cast<int>(handle));
+}
+
+void TransportSelect::AddExcept(SocketTransport* transport) {
+  const uint64_t handle = HandleOf(transport);
+  FD_SET(handle, &except_);
+  except_handles_.push_back(handle);
+  highest_ = std::max(highest_, static_cast<int>(handle));
+}
+
+bool TransportSelect::IsReadable(SocketTransport* transport) const {
+  return IsSet(HandleOf(transport), read_);
+}
+
+// A refused connect is writable as well as in the except set.
+bool TransportSelect::IsWritable(SocketTransport* transport) const {
+  const uint64_t handle = HandleOf(transport);
+  return IsSet(handle, write_) || IsSet(handle, except_);
+}
+
+bool TransportSelect::IsExcepted(SocketTransport* transport) const {
+  const uint64_t handle = HandleOf(transport);
+  return IsSet(handle, except_) || IsSet(handle, errored_);
 }
 
 }  // namespace kernel

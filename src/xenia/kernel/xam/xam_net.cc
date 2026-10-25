@@ -2230,71 +2230,23 @@ struct host_set {
     }
   }
 
-  void Store(fd_set* native_set) {
-    FD_ZERO(native_set);
+  template <typename Function>
+  void ForEach(Function function) const {
     for (uint32_t i = 0; i < count; ++i) {
-      const object_ref<XSocket>& socket = sockets[i];
-      if (socket) {
-        FD_SET(socket->native_handle(), native_set);
+      if (sockets[i]) {
+        function(sockets[i]->transport());
       }
     }
   }
 
-  void Add(fd_set* native_set) {
-    for (uint32_t i = 0; i < count; ++i) {
-      const object_ref<XSocket>& socket = sockets[i];
-      if (socket) {
-        FD_SET(socket->native_handle(), native_set);
-      }
-    }
-  }
-
-  void SetIfIn(fd_set* native_set, fd_set* other_native_set) {
-    for (uint32_t i = 0; i < count; ++i) {
-      const object_ref<XSocket>& socket = sockets[i];
-      if (socket && FD_ISSET(socket->native_handle(), other_native_set)) {
-        FD_SET(socket->native_handle(), native_set);
-      }
-    }
-  }
-
-#if !XE_PLATFORM_WIN32
-  void SetIfErrored(fd_set* native_set) {
-    for (uint32_t i = 0; i < count; ++i) {
-      const object_ref<XSocket>& socket = sockets[i];
-      if (!socket) {
-        continue;
-      }
-
-      pollfd poll_fd = {};
-      poll_fd.fd = static_cast<int>(socket->native_handle());
-
-      if (poll(&poll_fd, 1, 0) > 0 && (poll_fd.revents & POLLERR)) {
-        FD_SET(poll_fd.fd, native_set);
-      }
-    }
-  }
-#endif
-
-  int HighestNativeHandle() const {
-    int highest = -1;
-    for (uint32_t i = 0; i < count; ++i) {
-      const object_ref<XSocket>& socket = sockets[i];
-      if (socket) {
-        highest = std::max(highest, static_cast<int>(socket->native_handle()));
-      }
-    }
-    return highest;
-  }
-
-  void UpdateFrom(fd_set* native_set) {
+  // Keeps only the sockets that are ready.
+  template <typename Ready>
+  void Keep(Ready ready) {
     uint32_t new_count = 0;
     for (uint32_t i = 0; i < count; ++i) {
       const object_ref<XSocket>& socket = sockets[i];
-      if (socket) {
-        if (FD_ISSET(socket->native_handle(), native_set)) {
-          sockets[new_count++] = socket;
-        }
+      if (socket && ready(socket->transport())) {
+        sockets[new_count++] = socket;
       }
     }
     count = new_count;
@@ -2341,8 +2293,9 @@ int_result_t NetDll_select_entry(dword_t caller, dword_t nfds,
   const bool use_writefds = writefds && !write_aliased;
   const bool use_exceptfds = exceptfds && !except_aliased;
 
+  TransportSelect selector(readfds, writefds, use_exceptfds || use_writefds);
+
   host_set host_readfds = {0};
-  fd_set native_readfds = {0};
   if (readfds) {
     if (!verify_x_fd_set(readfds)) {
       XThread::SetLastError(X_WSA_ERROR::X_WSAENOTSOCK);
@@ -2350,10 +2303,9 @@ int_result_t NetDll_select_entry(dword_t caller, dword_t nfds,
     }
 
     host_readfds.Load(readfds);
-    host_readfds.Store(&native_readfds);
+    host_readfds.ForEach([&](auto* t) { selector.AddRead(t); });
   }
   host_set host_writefds = {0};
-  fd_set native_writefds = {0};
   if (use_writefds) {
     if (!verify_x_fd_set(writefds)) {
       XThread::SetLastError(X_WSA_ERROR::X_WSAENOTSOCK);
@@ -2361,14 +2313,13 @@ int_result_t NetDll_select_entry(dword_t caller, dword_t nfds,
     }
 
     host_writefds.Load(writefds);
-    host_writefds.Store(&native_writefds);
+    host_writefds.ForEach([&](auto* t) { selector.AddWrite(t); });
   } else if (write_aliased) {
     // Let a writable socket end the wait, but only the read result is written
     // back.
-    host_readfds.Store(&native_writefds);
+    host_readfds.ForEach([&](auto* t) { selector.AddWriteWake(t); });
   }
   host_set host_exceptfds = {0};
-  fd_set native_exceptfds = {0};
   if (use_exceptfds) {
     if (!verify_x_fd_set(exceptfds)) {
       XThread::SetLastError(X_WSA_ERROR::X_WSAENOTSOCK);
@@ -2376,12 +2327,7 @@ int_result_t NetDll_select_entry(dword_t caller, dword_t nfds,
     }
 
     host_exceptfds.Load(exceptfds);
-    host_exceptfds.Store(&native_exceptfds);
-  }
-  // The host reports a refused connect only in exceptfds, so watch the write
-  // sockets there too.
-  if (use_writefds) {
-    host_writefds.Add(&native_exceptfds);
+    host_exceptfds.ForEach([&](auto* t) { selector.AddExcept(t); });
   }
   timeval* timeout_in = nullptr;
   timeval timeout = {};
@@ -2394,43 +2340,22 @@ int_result_t NetDll_select_entry(dword_t caller, dword_t nfds,
     timeout_in = &timeout;
   }
 
-#if XE_PLATFORM_WIN32
-  const int native_nfds = nfds;
-#else
-  // Linux only checks descriptors below nfds. Winsock ignores it, so titles
-  // usually pass 0.
-  const int native_nfds = std::max({host_readfds.HighestNativeHandle(),
-                                    host_writefds.HighestNativeHandle(),
-                                    host_exceptfds.HighestNativeHandle()}) +
-                          1;
-#endif
-
-  const int handles_count = select(
-      native_nfds, readfds ? &native_readfds : nullptr,
-      writefds ? &native_writefds : nullptr,
-      use_exceptfds || use_writefds ? &native_exceptfds : nullptr, timeout_in);
+  const int handles_count = selector.Wait(nfds, timeout_in);
 
   if (handles_count == X_SOCKET_ERROR) {
     XThread::SetLastError(XSocket::XWSAGetLastError());
   }
 
   if (readfds) {
-    host_readfds.UpdateFrom(&native_readfds);
+    host_readfds.Keep([&](auto* t) { return selector.IsReadable(t); });
     host_readfds.Store(readfds);
   }
   if (use_writefds) {
-    // A refused connect is writable as well as in exceptfds.
-    host_writefds.SetIfIn(&native_writefds, &native_exceptfds);
-    host_writefds.UpdateFrom(&native_writefds);
+    host_writefds.Keep([&](auto* t) { return selector.IsWritable(t); });
     host_writefds.Store(writefds);
   }
   if (use_exceptfds) {
-#if !XE_PLATFORM_WIN32
-    if (handles_count != X_SOCKET_ERROR) {
-      host_exceptfds.SetIfErrored(&native_exceptfds);
-    }
-#endif
-    host_exceptfds.UpdateFrom(&native_exceptfds);
+    host_exceptfds.Keep([&](auto* t) { return selector.IsExcepted(t); });
     host_exceptfds.Store(exceptfds);
   }
 
