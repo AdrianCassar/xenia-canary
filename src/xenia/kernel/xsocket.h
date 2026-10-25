@@ -300,6 +300,10 @@ class XSocket : public XObject {
   // SO_EXCLUSIVEADDRUSE, which Linux doesn't have.
   bool exclusive_address_use_ = false;
 
+  // The connected peer. Linux forgets it once the connection is reset.
+  sockaddr_storage peer_ = {};
+  socklen_t peer_len_ = 0;
+
   std::unique_ptr<xe::threading::Event> event_;
   std::mutex incoming_packet_mutex_;
   std::queue<uint8_t*> incoming_packets_;
@@ -311,6 +315,9 @@ class XSocket : public XObject {
   std::map<XWSAOVERLAPPED*, std::future<int32_t>> receive_polling_tasks_;
 
   uint16_t GetImplicitlyBoundPort() const;
+
+  void RememberPeer();
+  int GetHostPeerName(sockaddr* addr, socklen_t* len);
 
   void ReportTimeout(int ret, uint32_t timeout_ms) const;
 

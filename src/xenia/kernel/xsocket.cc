@@ -9,6 +9,7 @@
 
 #include "src/xenia/kernel/xsocket.h"
 
+#include <algorithm>
 #include <cstring>
 #include <ranges>
 
@@ -423,6 +424,12 @@ X_STATUS XSocket::Connect(const XSOCKADDR_IN* name, int name_len) {
 
   const uint32_t connect_error = ret < 0 ? XWSAGetLastError() : 0;
 
+#if !XE_PLATFORM_WIN32
+  if (!ret) {
+    RememberPeer();
+  }
+#endif
+
   // Implicit Bind
   if (!bound_port_) {
     bound_port_ = GetImplicitlyBoundPort();
@@ -498,6 +505,37 @@ X_STATUS XSocket::Bind(const XSOCKADDR_IN* name, int name_len) {
   bound_ = true;
 
   return X_STATUS_SUCCESS;
+}
+
+void XSocket::RememberPeer() {
+  peer_len_ = sizeof(peer_);
+
+  if (getpeername(native_handle_, reinterpret_cast<sockaddr*>(&peer_),
+                  &peer_len_) < 0) {
+    peer_len_ = 0;
+  }
+}
+
+int XSocket::GetHostPeerName(sockaddr* addr, socklen_t* len) {
+  const int ret = getpeername(native_handle_, addr, len);
+
+#if !XE_PLATFORM_WIN32
+  // A non-blocking connect only shows its peer once it completes.
+  if (!ret) {
+    peer_len_ = std::min<socklen_t>(*len, sizeof(peer_));
+    std::memcpy(&peer_, addr, peer_len_);
+  }
+
+  // Linux fails with ENOTCONN once the connection is reset, but the peer is
+  // still reported.
+  if (ret < 0 && errno == ENOTCONN && peer_len_) {
+    std::memcpy(addr, &peer_, std::min(*len, peer_len_));
+    *len = peer_len_;
+    return 0;
+  }
+#endif
+
+  return ret;
 }
 
 uint16_t XSocket::GetImplicitlyBoundPort() const {
@@ -703,6 +741,10 @@ object_ref<XSocket> XSocket::Accept(XSOCKADDR_IN* name, int* name_len) {
   socket->proto_ = proto_;
   socket->vdp_ = vdp_;
 
+#if !XE_PLATFORM_WIN32
+  socket->RememberPeer();
+#endif
+
   // Implicit Bind
   socket->bound_port_ = bound_port_ = GetImplicitlyBoundPort();
   socket->bound_ = true;
@@ -785,7 +827,7 @@ int XSocket::RecvFrom(uint8_t* buf, uint32_t buf_len, uint32_t flags,
   // TCP receives report the peer's address, e.g. 555307EE reads the port.
   if (proto_ == X_IPPROTO_TCP) {
     socklen_t peer_addr_len = sizeof(sockaddr);
-    getpeername(native_handle_, &sa, &peer_addr_len);
+    GetHostPeerName(&sa, &peer_addr_len);
   }
 
   if (from) {
@@ -1304,7 +1346,7 @@ int XSocket::PollWSARecvFrom(bool wait, WSARecvFromData receive_async_data) {
       // Copy behavior from recvfrom.
       if (proto_ == X_IPPROTO_TCP) {
         socklen_t peer_addar_len = sizeof(sockaddr);
-        getpeername(native_handle_, &saddr, &peer_addar_len);
+        GetHostPeerName(&saddr, &peer_addar_len);
       }
 
       receive_async_data.from->to_guest(&saddr);
@@ -1372,8 +1414,7 @@ int XSocket::WSARecvFrom(XWSABUF* buffers, uint32_t num_buffers,
     socklen_t peer_len = sizeof(peer);
 
     if (listening_ ||
-        getpeername(native_handle_, reinterpret_cast<sockaddr*>(&peer),
-                    &peer_len) != 0) {
+        GetHostPeerName(reinterpret_cast<sockaddr*>(&peer), &peer_len) != 0) {
       XWSASetLastError(X_WSA_ERROR::X_WSAENOTCONN);
       return X_SOCKET_ERROR;
     }
@@ -1858,7 +1899,7 @@ bool XSocket::QueuePacket(uint32_t src_ip, uint16_t src_port,
 X_STATUS XSocket::GetPeerName(XSOCKADDR_IN* name, socklen_t* name_len) {
   sockaddr addr = name->to_host();
 
-  int ret = getpeername(native_handle_, &addr, name_len);
+  int ret = GetHostPeerName(&addr, name_len);
   if (ret < 0) {
     return X_STATUS_UNSUCCESSFUL;
   }
