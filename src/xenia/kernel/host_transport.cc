@@ -95,6 +95,16 @@ int HostTransport::SendTo(const uint8_t* buf, uint32_t len, const sockaddr* to,
   return ret;
 }
 
+void HostTransport::EventReset() { last_queued_bytes_ = QueuedReceiveBytes(); }
+
+void HostTransport::StopEventWatcher() {
+  stop_event_watcher_ = true;
+
+  if (event_watcher_.joinable()) {
+    event_watcher_.join();
+  }
+}
+
 TransportSelect::TransportSelect(bool use_read, bool use_write, bool use_except)
     : use_read_(use_read), use_write_(use_write), use_except_(use_except) {
   FD_ZERO(&read_);
