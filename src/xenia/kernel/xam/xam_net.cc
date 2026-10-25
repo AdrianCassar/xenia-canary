@@ -7,6 +7,7 @@
  ******************************************************************************
  */
 
+#include <algorithm>
 #include <mutex>
 #include <random>
 
@@ -987,7 +988,21 @@ dword_result_t NetDll_XNetDnsLookup_entry(dword_t caller, lpstring_t host,
 
     if (status != 0 || !addr_info) {
       XELOGI("DNS Lookup: Failed ({})", status);
+#if XE_PLATFORM_WIN32
       dns->status = XSocket::XWSAGetLastError();
+#else
+      switch (status) {
+        case EAI_AGAIN:
+          dns->status = X_WSA_ERROR::X_WSATRY_AGAIN;
+          break;
+        case EAI_NONAME:
+          dns->status = X_WSA_ERROR::X_WSAHOST_NOT_FOUND;
+          break;
+        default:
+          dns->status = X_WSA_ERROR::X_WSANO_DATA;
+          break;
+      }
+#endif
       xboxkrnl::xeNtSetEvent(event_handle, nullptr);
       if (addr_info) {
         freeaddrinfo(addr_info);
@@ -2238,6 +2253,35 @@ struct host_set {
     }
   }
 
+#if !XE_PLATFORM_WIN32
+  void SetIfErrored(fd_set* native_set) {
+    for (uint32_t i = 0; i < count; ++i) {
+      const object_ref<XSocket>& socket = sockets[i];
+      if (!socket) {
+        continue;
+      }
+
+      pollfd poll_fd = {};
+      poll_fd.fd = static_cast<int>(socket->native_handle());
+
+      if (poll(&poll_fd, 1, 0) > 0 && (poll_fd.revents & POLLERR)) {
+        FD_SET(poll_fd.fd, native_set);
+      }
+    }
+  }
+#endif
+
+  int HighestNativeHandle() const {
+    int highest = -1;
+    for (uint32_t i = 0; i < count; ++i) {
+      const object_ref<XSocket>& socket = sockets[i];
+      if (socket) {
+        highest = std::max(highest, static_cast<int>(socket->native_handle()));
+      }
+    }
+    return highest;
+  }
+
   void UpdateFrom(fd_set* native_set) {
     uint32_t new_count = 0;
     for (uint32_t i = 0; i < count; ++i) {
@@ -2345,8 +2389,19 @@ int_result_t NetDll_select_entry(dword_t caller, dword_t nfds,
     timeout_in = &timeout;
   }
 
+#if XE_PLATFORM_WIN32
+  const int native_nfds = nfds;
+#else
+  // Linux only checks descriptors below nfds. Winsock ignores it, so titles
+  // usually pass 0.
+  const int native_nfds = std::max({host_readfds.HighestNativeHandle(),
+                                    host_writefds.HighestNativeHandle(),
+                                    host_exceptfds.HighestNativeHandle()}) +
+                          1;
+#endif
+
   const int handles_count = select(
-      nfds, readfds ? &native_readfds : nullptr,
+      native_nfds, readfds ? &native_readfds : nullptr,
       writefds ? &native_writefds : nullptr,
       use_exceptfds || use_writefds ? &native_exceptfds : nullptr, timeout_in);
 
@@ -2365,6 +2420,11 @@ int_result_t NetDll_select_entry(dword_t caller, dword_t nfds,
     host_writefds.Store(writefds);
   }
   if (use_exceptfds) {
+#if !XE_PLATFORM_WIN32
+    if (handles_count != X_SOCKET_ERROR) {
+      host_exceptfds.SetIfErrored(&native_exceptfds);
+    }
+#endif
     host_exceptfds.UpdateFrom(&native_exceptfds);
     host_exceptfds.Store(exceptfds);
   }

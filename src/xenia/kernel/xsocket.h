@@ -288,6 +288,7 @@ class XSocket : public XObject {
   bool broadcast_socket_ = false;
   bool listening_ = false;
   bool shutdown_receive_ = false;
+  bool shutdown_send_ = false;
 
   uint32_t event_select_handle_ = 0;
   uint32_t event_select_flags_ = 0;
@@ -306,6 +307,8 @@ class XSocket : public XObject {
   std::map<XWSAOVERLAPPED*, std::future<int32_t>> receive_polling_tasks_;
 
   uint16_t GetImplicitlyBoundPort() const;
+
+  void ReportReceiveTimeout(int ret) const;
 
   int GetNativeOption(int level, int optname, void* value, socklen_t* len);
   int SetNativeOption(int level, int optname, const void* value, socklen_t len);

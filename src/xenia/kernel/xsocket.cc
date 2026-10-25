@@ -19,6 +19,8 @@
 
 #if XE_PLATFORM_WIN32
 #include <mswsock.h>
+#else
+#include <fcntl.h>
 #endif
 
 DECLARE_bool(bind_interface);
@@ -371,11 +373,15 @@ X_STATUS XSocket::IOControl(uint32_t cmd, uint32_t* arg_ptr) {
 #else
   const int native_cmd = supported_controls.at(cmd);
 
-  int ret = ioctl(native_handle_, native_cmd, arg_ptr);
+  int param = static_cast<int>(xe::load_and_swap<uint32_t>(arg_ptr));
+
+  int ret = ioctl(native_handle_, native_cmd, &param);
 
   if (ret < 0) {
     return X_STATUS_UNSUCCESSFUL;
   }
+
+  xe::store_and_swap<uint32_t>(arg_ptr, static_cast<uint32_t>(param));
 
   return X_STATUS_SUCCESS;
 #endif
@@ -487,6 +493,17 @@ uint16_t XSocket::GetImplicitlyBoundPort() const {
 
   assert_always();
   return 0;
+}
+
+void XSocket::ReportReceiveTimeout(int ret) const {
+#if !XE_PLATFORM_WIN32
+  // Linux reports a timed out blocking receive as EAGAIN, the same error as a
+  // non-blocking receive with no data.
+  if (ret < 0 && errno == EAGAIN && receive_timeout_ms_ &&
+      !(fcntl(native_handle_, F_GETFL) & O_NONBLOCK)) {
+    XWSASetLastError(X_WSA_ERROR::X_WSAETIMEDOUT);
+  }
+#endif
 }
 
 int XSocket::GetNativeOption(int level, int optname, void* value,
@@ -614,6 +631,10 @@ int XSocket::Shutdown(int how) {
     shutdown_receive_ = true;
   }
 
+  if (!ret && how != 0) {
+    shutdown_send_ = true;
+  }
+
   return ret;
 }
 
@@ -625,7 +646,21 @@ int XSocket::Recv(uint8_t* buf, uint32_t buf_len, uint32_t flags) {
     return X_SOCKET_ERROR;
   }
 
+#if XE_PLATFORM_WIN32
   return recv(native_handle_, reinterpret_cast<char*>(buf), buf_len, 0);
+#else
+  const int ret =
+      recv(native_handle_, buf, buf_len, type_ == X_SOCK_DGRAM ? MSG_TRUNC : 0);
+
+  ReportReceiveTimeout(ret);
+
+  if (ret > static_cast<int>(buf_len)) {
+    XWSASetLastError(X_WSA_ERROR::X_WSAEMSGSIZE);
+    return X_SOCKET_ERROR;
+  }
+
+  return ret;
+#endif
 }
 
 int XSocket::RecvFrom(uint8_t* buf, uint32_t buf_len, uint32_t flags,
@@ -646,8 +681,16 @@ int XSocket::RecvFrom(uint8_t* buf, uint32_t buf_len, uint32_t flags,
     sa = from->to_host();
   }
 
+#if XE_PLATFORM_WIN32
   int ret = recvfrom(native_handle_, reinterpret_cast<char*>(buf), buf_len, 0,
                      from ? &sa : nullptr, from_len);
+#else
+  int ret = recvfrom(native_handle_, buf, buf_len,
+                     type_ == X_SOCK_DGRAM ? MSG_TRUNC : 0,
+                     from ? &sa : nullptr, from_len);
+
+  ReportReceiveTimeout(ret);
+#endif
 
   // TCP receives report the peer's address, e.g. 555307EE reads the port.
   if (proto_ == X_IPPROTO_TCP) {
@@ -658,6 +701,13 @@ int XSocket::RecvFrom(uint8_t* buf, uint32_t buf_len, uint32_t flags,
   if (from) {
     from->to_guest(&sa);
   }
+
+#if !XE_PLATFORM_WIN32
+  if (ret > static_cast<int>(buf_len)) {
+    XWSASetLastError(X_WSA_ERROR::X_WSAEMSGSIZE);
+    return X_SOCKET_ERROR;
+  }
+#endif
 
   return ret;
 }
@@ -1111,10 +1161,10 @@ int XSocket::PollWSARecvFrom(bool wait, WSARecvFromData receive_async_data) {
 
   ssize_t received_bytes = recvmsg(native_handle_, &message, flags);
 
-  // Posix flags are not the same as Windows flags.
-  // flags = message.msg_flags;
-
-  if (received_bytes >= 0) {
+  if (received_bytes >= 0 && (message.msg_flags & MSG_TRUNC)) {
+    XWSASetLastError(X_WSA_ERROR::X_WSAEMSGSIZE);
+    result = X_SOCKET_ERROR;
+  } else if (received_bytes >= 0) {
     bytes_received = received_bytes;
     result = X_ERROR_SUCCESS;
   } else {
@@ -1555,8 +1605,16 @@ int XSocket::WSACancelOverlappedIO() {
 }
 
 int XSocket::Send(const uint8_t* buf, uint32_t buf_len, uint32_t flags) {
-  return send(native_handle_, reinterpret_cast<const char*>(buf), buf_len,
-              flags);
+  const int ret =
+      send(native_handle_, reinterpret_cast<const char*>(buf), buf_len, flags);
+
+#if !XE_PLATFORM_WIN32
+  if (ret < 0 && errno == EPIPE && !shutdown_send_) {
+    XWSASetLastError(X_WSA_ERROR::X_WSAENOTCONN);
+  }
+#endif
+
+  return ret;
 }
 
 int XSocket::SendTo(uint8_t* buf, uint32_t buf_len, uint32_t flags,
@@ -1622,8 +1680,18 @@ int XSocket::WSAEventSelect(uint32_t event_handle, uint64_t native_event_handle,
   }
 
   return ret;
-#endif
+#else
+  int non_blocking = 1;
+
+  if (ioctl(native_handle_, FIONBIO, &non_blocking) < 0) {
+    return X_SOCKET_ERROR;
+  }
+
+  event_select_handle_ = flags ? event_handle : 0;
+  event_select_flags_ = flags;
+
   return X_ERROR_SUCCESS;
+#endif
 }
 
 bool XSocket::IsEventSelectPending(uint32_t event_handle) {
@@ -1740,11 +1808,76 @@ uint32_t XSocket::XWSAGetLastError() {
 #else
   last_error = errno;
 
-  // For now only use switch case. If this will expand to more than 3-4 entries
-  // then it will be reasonable to create some form of map.
   switch (last_error) {
     case EWOULDBLOCK:
+    case EINPROGRESS:
       last_error = X_WSA_ERROR::X_WSAEWOULDBLOCK;
+      break;
+    case EALREADY:
+      last_error = X_WSA_ERROR::X_WSAEALREADY;
+      break;
+    case EACCES:
+      last_error = X_WSA_ERROR::X_WSAEACCES;
+      break;
+    case EFAULT:
+      last_error = X_WSA_ERROR::X_WSAEFAULT;
+      break;
+    case EINVAL:
+      last_error = X_WSA_ERROR::X_WSAEINVAL;
+      break;
+    case EBADF:
+    case ENOTSOCK:
+      last_error = X_WSA_ERROR::X_WSAENOTSOCK;
+      break;
+    case EMSGSIZE:
+      last_error = X_WSA_ERROR::X_WSAEMSGSIZE;
+      break;
+    case ENOPROTOOPT:
+      last_error = X_WSA_ERROR::X_WSAENOPROTOOPT;
+      break;
+    case EPROTONOSUPPORT:
+      last_error = X_WSA_ERROR::X_WSAEPROTONOSUPPORT;
+      break;
+    case ESOCKTNOSUPPORT:
+      last_error = X_WSA_ERROR::X_WSAESOCKTNOSUPPORT;
+      break;
+    case EAFNOSUPPORT:
+      last_error = X_WSA_ERROR::X_WSAEAFNOSUPPORT;
+      break;
+    case EADDRINUSE:
+      last_error = X_WSA_ERROR::X_WSAEADDRINUSE;
+      break;
+    case EADDRNOTAVAIL:
+      last_error = X_WSA_ERROR::X_WSAEADDRNOTAVAIL;
+      break;
+    case ENETDOWN:
+      last_error = X_WSA_ERROR::X_WSAENETDOWN;
+      break;
+    case ECONNRESET:
+      last_error = X_WSA_ERROR::X_WSAECONNRESET;
+      break;
+    case ENOBUFS:
+      last_error = X_WSA_ERROR::X_WSAENOBUFS;
+      break;
+    case EISCONN:
+      last_error = X_WSA_ERROR::X_WSAEISCONN;
+      break;
+    case ENOTCONN:
+    case EDESTADDRREQ:
+      last_error = X_WSA_ERROR::X_WSAENOTCONN;
+      break;
+    case ESHUTDOWN:
+    case EPIPE:
+      last_error = X_WSA_ERROR::X_WSAESHUTDOWN;
+      break;
+    case ETIMEDOUT:
+      last_error = X_WSA_ERROR::X_WSAETIMEDOUT;
+      break;
+    case ECONNREFUSED:
+      last_error = X_WSA_ERROR::X_WSAECONNREFUSED;
+      break;
+    case EHOSTUNREACH:
+      last_error = X_WSA_ERROR::X_WSAEHOSTUNREACH;
       break;
   }
 #endif
