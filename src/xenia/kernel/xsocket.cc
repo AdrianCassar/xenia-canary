@@ -13,6 +13,7 @@
 #include <ranges>
 
 #include "xenia/base/platform.h"
+#include "xenia/kernel/host_transport.h"
 #include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/xam/xam_module.h"
 #include "xenia/kernel/xboxkrnl/xboxkrnl_threading.h"
@@ -81,7 +82,7 @@ XSocket::XSocket(KernelState* kernel_state)
       transport_(std::make_unique<HostTransport>()) {}
 
 XSocket::XSocket(KernelState* kernel_state,
-                 std::unique_ptr<HostTransport> transport)
+                 std::unique_ptr<SocketTransport> transport)
     : XObject(kernel_state, kObjectType), transport_(std::move(transport)) {}
 
 XSocket::~XSocket() {
@@ -452,9 +453,9 @@ object_ref<XSocket> XSocket::Accept(XSOCKADDR_IN* name, int* name_len) {
     addrlen = xe::byte_swap(*name_len);
   }
 
-  const uint64_t socket_handle =
+  auto accepted =
       transport_->Accept(name ? &sa : nullptr, name_len ? &addrlen : nullptr);
-  if (socket_handle == X_INVALID_SOCKET) {
+  if (!accepted) {
     return nullptr;
   }
 
@@ -465,9 +466,8 @@ object_ref<XSocket> XSocket::Accept(XSOCKADDR_IN* name, int* name_len) {
 
   // Create a kernel object to represent the new socket, and copy parameters
   // over.
-  auto socket = object_ref<XSocket>(new XSocket(
-      kernel_state_,
-      std::make_unique<HostTransport>(socket_handle, type_ == X_SOCK_DGRAM)));
+  auto socket =
+      object_ref<XSocket>(new XSocket(kernel_state_, std::move(accepted)));
   socket->af_ = af_;
   socket->type_ = type_;
   socket->proto_ = proto_;

@@ -17,8 +17,14 @@
 namespace xe {
 namespace kernel {
 
-uint64_t HostTransport::Accept(sockaddr* addr, socklen_t* len) {
-  return accept(native_handle_, addr, len);
+std::unique_ptr<SocketTransport> HostTransport::Accept(sockaddr* addr,
+                                                       socklen_t* len) {
+  const uint64_t accepted = accept(native_handle_, addr, len);
+  if (accepted == X_INVALID_SOCKET) {
+    return nullptr;
+  }
+
+  return std::make_unique<HostTransport>(accepted, datagram_);
 }
 
 int HostTransport::Shutdown(int how) {

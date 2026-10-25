@@ -10,84 +10,53 @@
 #ifndef XENIA_KERNEL_HOST_TRANSPORT_H_
 #define XENIA_KERNEL_HOST_TRANSPORT_H_
 
-#include <cstdint>
-#include <vector>
-
-#include "xenia/xbox.h"
-
-#ifdef XE_PLATFORM_WIN32
-// clang-format off
-#include "xenia/base/platform.h"
-#include <WS2tcpip.h>
-#include <WinSock2.h>
-// clang-format on
-#else
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <netinet/ip.h>
-#include <netinet/tcp.h>
-#include <poll.h>
-#include <sys/ioctl.h>
-#include <sys/socket.h>
-#include <unistd.h>
-#endif
+#include "xenia/kernel/socket_transport.h"
 
 namespace xe {
 namespace kernel {
 
-// A buffer of an overlapped send, already translated to host memory.
-struct HostBuffer {
-  char* data;
-  uint32_t len;
-};
-
-// Carries an XSocket's traffic over a host socket. Every call works like its
-// Winsock counterpart: it returns a negative value on failure and leaves the
-// error in the last error, where XSocket::XWSAGetLastError reads it.
-class HostTransport {
+// Carries an XSocket's traffic over a host socket.
+class HostTransport final : public SocketTransport {
  public:
   HostTransport() = default;
   // Wraps a socket returned by Accept.
   HostTransport(uint64_t native_handle, bool datagram);
 
-  uint64_t native_handle() const { return native_handle_; }
+  uint64_t native_handle() const override { return native_handle_; }
 
-  bool Open(int af, int type, int protocol);
-  int Close();
+  bool Open(int af, int type, int protocol) override;
+  int Close() override;
 
-  // level and optname are the host's values.
-  int GetOption(int level, int optname, void* value, socklen_t* len);
-  int SetOption(int level, int optname, const void* value, socklen_t len);
-  // cmd and *arg_ptr are the guest's values.
-  int IOControl(uint32_t cmd, uint32_t* arg_ptr);
-  int EventSelect(uint64_t native_event_handle, uint32_t flags);
+  int GetOption(int level, int optname, void* value, socklen_t* len) override;
+  int SetOption(int level, int optname, const void* value,
+                socklen_t len) override;
+  int IOControl(uint32_t cmd, uint32_t* arg_ptr) override;
+  int EventSelect(uint64_t native_event_handle, uint32_t flags) override;
 
-  int Bind(const sockaddr* addr, socklen_t len);
-  int Connect(const sockaddr* addr);
-  int Listen(int backlog);
-  uint64_t Accept(sockaddr* addr, socklen_t* len);
-  int Shutdown(int how);
+  int Bind(const sockaddr* addr, socklen_t len) override;
+  int Connect(const sockaddr* addr) override;
+  int Listen(int backlog) override;
+  std::unique_ptr<SocketTransport> Accept(sockaddr* addr,
+                                          socklen_t* len) override;
+  int Shutdown(int how) override;
 
-  int GetPeerName(sockaddr* addr, socklen_t* len);
-  int GetSockName(sockaddr* addr, socklen_t* len);
-  // The port the host bound, in network byte order, or 0.
-  uint16_t GetBoundPort() const;
+  int GetPeerName(sockaddr* addr, socklen_t* len) override;
+  int GetSockName(sockaddr* addr, socklen_t* len) override;
+  uint16_t GetBoundPort() const override;
 
-  int Recv(uint8_t* buf, uint32_t len);
-  int RecvFrom(uint8_t* buf, uint32_t len, sockaddr* from, socklen_t* from_len);
-  int Send(const uint8_t* buf, uint32_t len);
+  int Recv(uint8_t* buf, uint32_t len) override;
+  int RecvFrom(uint8_t* buf, uint32_t len, sockaddr* from,
+               socklen_t* from_len) override;
+  int Send(const uint8_t* buf, uint32_t len) override;
   int SendTo(const uint8_t* buf, uint32_t len, const sockaddr* to,
-             socklen_t to_len);
+             socklen_t to_len) override;
 
-  // Overlapped I/O. Both return 0 or X_SOCKET_ERROR.
   int SendBuffers(const std::vector<HostBuffer>& buffers, const sockaddr* to,
-                  int to_len, uint32_t* bytes_sent);
+                  int to_len, uint32_t* bytes_sent) override;
   int ReceiveBuffer(const HostBuffer& buffer, sockaddr* from, int* from_len,
-                    uint32_t* bytes_received, uint32_t* flags);
+                    uint32_t* bytes_received, uint32_t* flags) override;
 
-  // Waits up to timeout_us for the socket to become readable or writable.
-  // Returns the select result.
-  int Select(bool write, long timeout_us);
+  int Select(bool write, long timeout_us) override;
 
  private:
   void ReportTimeout(int ret, uint32_t timeout_ms) const;
