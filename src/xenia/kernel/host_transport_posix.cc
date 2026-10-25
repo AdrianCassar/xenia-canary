@@ -24,13 +24,17 @@ namespace kernel {
 using namespace std::chrono_literals;
 
 constexpr uint32_t X_FD_READ = 0x01;
+constexpr uint32_t X_FD_WRITE = 0x02;
 constexpr uint32_t X_FD_ACCEPT = 0x08;
+constexpr uint32_t X_FD_CONNECT = 0x10;
+constexpr uint32_t X_FD_CLOSE = 0x20;
 
 constexpr auto kEventWatchInterval = 10ms;
 
 HostTransport::HostTransport(uint64_t native_handle, bool datagram)
     : native_handle_(native_handle), datagram_(datagram) {
   RememberPeer();
+  connected_ = true;
 }
 
 HostTransport::~HostTransport() { StopEventWatcher(); }
@@ -185,38 +189,79 @@ int HostTransport::EventSelect(uint64_t, uint32_t flags,
   StopEventWatcher();
 
   event_select_active_ = flags != 0;
+  event_flags_ = flags;
+  event_signal_ = std::move(signal);
 
-  // Signal while there's data to read or a connection to accept.
-  if (flags & (X_FD_READ | X_FD_ACCEPT)) {
+  if (flags) {
     read_armed_ = true;
+    write_armed_ = true;
+    close_armed_ = true;
     stop_event_watcher_ = false;
 
-    event_watcher_ = std::thread([this, signal = std::move(signal)] {
-      while (!stop_event_watcher_) {
-        pollfd poll_fd = {};
-        poll_fd.fd = static_cast<int>(native_handle_);
-        poll_fd.events = POLLIN;
-
-        const bool readable =
-            poll(&poll_fd, 1, static_cast<int>(kEventWatchInterval.count())) >
-                0 &&
-            (poll_fd.revents & POLLIN);
-
-        if (!readable) {
-          read_armed_ = true;
-          continue;
-        }
-
-        if (read_armed_.exchange(false)) {
-          signal();
-        }
-
-        std::this_thread::sleep_for(kEventWatchInterval);
-      }
-    });
+    event_watcher_ = std::thread(&HostTransport::WatchEvents, this);
   }
 
   return X_ERROR_SUCCESS;
+}
+
+void HostTransport::WatchEvents() {
+  while (!stop_event_watcher_) {
+    pollfd poll_fd = {};
+    poll_fd.fd = static_cast<int>(native_handle_);
+    poll_fd.events = POLLIN | POLLOUT | POLLRDHUP;
+
+    const int ready =
+        poll(&poll_fd, 1, static_cast<int>(kEventWatchInterval.count()));
+    const short revents = ready > 0 ? poll_fd.revents : 0;
+
+    bool signal = false;
+
+    // Data to read or a connection to accept.
+    if (event_flags_ & (X_FD_READ | X_FD_ACCEPT)) {
+      if (!(revents & POLLIN)) {
+        read_armed_ = true;
+      } else if (read_armed_.exchange(false)) {
+        signal = true;
+      }
+    }
+
+    // A non-blocking connect finished, whether it succeeded or not.
+    if (connect_pending_ && (revents & (POLLOUT | POLLERR | POLLHUP))) {
+      connect_pending_ = false;
+
+      sockaddr_storage peer = {};
+      socklen_t peer_len = sizeof(peer);
+      connected_ =
+          getpeername(native_handle_, reinterpret_cast<sockaddr*>(&peer),
+                      &peer_len) == 0;
+
+      if (event_flags_ & X_FD_CONNECT) {
+        signal = true;
+      }
+    }
+
+    // An unconnected stream socket also reports POLLOUT.
+    if ((event_flags_ & X_FD_WRITE) && (revents & POLLOUT) &&
+        (datagram_ || connected_) && write_armed_.exchange(false)) {
+      signal = true;
+    }
+
+    // The peer shut down sending or reset the connection.
+    if ((event_flags_ & X_FD_CLOSE) && !datagram_ && connected_ &&
+        (revents & (POLLRDHUP | POLLHUP | POLLERR)) &&
+        close_armed_.exchange(false)) {
+      signal = true;
+    }
+
+    if (signal) {
+      event_signal_();
+    }
+
+    // Something is still ready, so wait before looking again.
+    if (ready > 0) {
+      std::this_thread::sleep_for(kEventWatchInterval);
+    }
+  }
 }
 
 void HostTransport::StopEventWatcher() {
@@ -237,7 +282,11 @@ int HostTransport::Connect(const sockaddr* addr) {
 
   if (!ret) {
     RememberPeer();
+    connected_ = true;
   }
+
+  // The event watcher reports when a selected or failed connect finishes.
+  connect_pending_ = ret < 0 || (event_flags_ & X_FD_CONNECT);
 
   return ret;
 }
@@ -323,6 +372,10 @@ int HostTransport::RecvFrom(uint8_t* buf, uint32_t len, sockaddr* from,
 int HostTransport::Send(const uint8_t* buf, uint32_t len) {
   const int ret = send(native_handle_, buf, len, 0);
 
+  if (ret < 0) {
+    write_armed_ = true;
+  }
+
   ReportTimeout(ret, send_timeout_ms_);
 
   if (ret < 0 && errno == EPIPE && !shutdown_send_) {
@@ -354,6 +407,7 @@ int HostTransport::SendBuffers(const std::vector<HostBuffer>& buffers,
   ssize_t sent_bytes = sendmsg(native_handle_, &message, 0);
 
   if (sent_bytes < 0) {
+    write_armed_ = true;
     return X_SOCKET_ERROR;
   }
 
