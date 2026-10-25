@@ -10,6 +10,9 @@
 #ifndef XENIA_KERNEL_HOST_TRANSPORT_H_
 #define XENIA_KERNEL_HOST_TRANSPORT_H_
 
+#include <atomic>
+#include <thread>
+
 #include "xenia/kernel/socket_transport.h"
 
 namespace xe {
@@ -21,6 +24,7 @@ class HostTransport final : public SocketTransport {
   HostTransport() = default;
   // Wraps a socket returned by Accept.
   HostTransport(uint64_t native_handle, bool datagram);
+  ~HostTransport() override;
 
   uint64_t native_handle() const { return native_handle_; }
 
@@ -31,7 +35,8 @@ class HostTransport final : public SocketTransport {
   int SetOption(int level, int optname, const void* value,
                 socklen_t len) override;
   int IOControl(uint32_t cmd, uint32_t* arg_ptr) override;
-  int EventSelect(uint64_t native_event_handle, uint32_t flags) override;
+  int EventSelect(uint64_t native_event_handle, uint32_t flags,
+                  std::function<void()> signal) override;
 
   int Bind(const sockaddr* addr, socklen_t len) override;
   int Connect(const sockaddr* addr) override;
@@ -61,6 +66,7 @@ class HostTransport final : public SocketTransport {
  private:
   void ReportTimeout(int ret, uint32_t timeout_ms) const;
   void RememberPeer();
+  void StopEventWatcher();
 
   uint64_t native_handle_ = X_INVALID_SOCKET;
   bool datagram_ = false;
@@ -76,6 +82,13 @@ class HostTransport final : public SocketTransport {
   // The connected peer. Linux forgets it once the connection is reset.
   sockaddr_storage peer_ = {};
   socklen_t peer_len_ = 0;
+
+  // Linux has no WSAEventSelect, so a thread signals the event instead.
+  std::thread event_watcher_;
+  std::atomic<bool> stop_event_watcher_ = false;
+  // Cleared once the event is signalled, and set again by a receive or once
+  // the socket has nothing left to read.
+  std::atomic<bool> read_armed_ = true;
 };
 
 }  // namespace kernel

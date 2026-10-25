@@ -12,6 +12,7 @@
 #include <fcntl.h>
 #include <algorithm>
 #include <cerrno>
+#include <chrono>
 #include <cstring>
 
 #include "xenia/base/byte_order.h"
@@ -20,10 +21,19 @@
 namespace xe {
 namespace kernel {
 
+using namespace std::chrono_literals;
+
+constexpr uint32_t X_FD_READ = 0x01;
+constexpr uint32_t X_FD_ACCEPT = 0x08;
+
+constexpr auto kEventWatchInterval = 10ms;
+
 HostTransport::HostTransport(uint64_t native_handle, bool datagram)
     : native_handle_(native_handle), datagram_(datagram) {
   RememberPeer();
 }
+
+HostTransport::~HostTransport() { StopEventWatcher(); }
 
 bool HostTransport::Open(int af, int type, int protocol) {
   datagram_ = type == XSocket::X_SOCK_DGRAM;
@@ -32,7 +42,10 @@ bool HostTransport::Open(int af, int type, int protocol) {
   return native_handle_ != X_INVALID_SOCKET;
 }
 
-int HostTransport::Close() { return close(static_cast<int>(native_handle_)); }
+int HostTransport::Close() {
+  StopEventWatcher();
+  return close(static_cast<int>(native_handle_));
+}
 
 int HostTransport::GetOption(int level, int optname, void* value,
                              socklen_t* len) {
@@ -161,16 +174,57 @@ int HostTransport::IOControl(uint32_t cmd, uint32_t* arg_ptr) {
   return ret;
 }
 
-int HostTransport::EventSelect(uint64_t native_event_handle, uint32_t flags) {
+int HostTransport::EventSelect(uint64_t, uint32_t flags,
+                               std::function<void()> signal) {
   int non_blocking = 1;
 
   if (ioctl(native_handle_, FIONBIO, &non_blocking) < 0) {
     return X_SOCKET_ERROR;
   }
 
+  StopEventWatcher();
+
   event_select_active_ = flags != 0;
 
+  // Signal while there's data to read or a connection to accept.
+  if (flags & (X_FD_READ | X_FD_ACCEPT)) {
+    read_armed_ = true;
+    stop_event_watcher_ = false;
+
+    event_watcher_ = std::thread([this, signal = std::move(signal)] {
+      while (!stop_event_watcher_) {
+        pollfd poll_fd = {};
+        poll_fd.fd = static_cast<int>(native_handle_);
+        poll_fd.events = POLLIN;
+
+        const bool readable =
+            poll(&poll_fd, 1, static_cast<int>(kEventWatchInterval.count())) >
+                0 &&
+            (poll_fd.revents & POLLIN);
+
+        if (!readable) {
+          read_armed_ = true;
+          continue;
+        }
+
+        if (read_armed_.exchange(false)) {
+          signal();
+        }
+
+        std::this_thread::sleep_for(kEventWatchInterval);
+      }
+    });
+  }
+
   return X_ERROR_SUCCESS;
+}
+
+void HostTransport::StopEventWatcher() {
+  stop_event_watcher_ = true;
+
+  if (event_watcher_.joinable()) {
+    event_watcher_.join();
+  }
 }
 
 int HostTransport::Bind(const sockaddr* addr, socklen_t len) {
@@ -235,6 +289,8 @@ void HostTransport::ReportTimeout(int ret, uint32_t timeout_ms) const {
 }
 
 int HostTransport::Recv(uint8_t* buf, uint32_t len) {
+  read_armed_ = true;
+
   const int ret = recv(native_handle_, buf, len, datagram_ ? MSG_TRUNC : 0);
 
   ReportTimeout(ret, receive_timeout_ms_);
@@ -249,6 +305,8 @@ int HostTransport::Recv(uint8_t* buf, uint32_t len) {
 
 int HostTransport::RecvFrom(uint8_t* buf, uint32_t len, sockaddr* from,
                             socklen_t* from_len) {
+  read_armed_ = true;
+
   const int ret = recvfrom(native_handle_, buf, len, datagram_ ? MSG_TRUNC : 0,
                            from, from_len);
 
@@ -306,6 +364,8 @@ int HostTransport::SendBuffers(const std::vector<HostBuffer>& buffers,
 int HostTransport::ReceiveBuffer(const HostBuffer& buffer, sockaddr* from,
                                  int* from_len, uint32_t* bytes_received,
                                  uint32_t* flags) {
+  read_armed_ = true;
+
   iovec recv_buffer = {};
   recv_buffer.iov_base = buffer.data;
   recv_buffer.iov_len = buffer.len;
