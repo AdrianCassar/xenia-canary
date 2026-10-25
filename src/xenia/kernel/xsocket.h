@@ -316,6 +316,9 @@ class XSocket : public XObject {
   int SetNativeOption(int level, int optname, const void* value, socklen_t len);
 
   std::atomic<bool> cancel_overlapped_ = false;
+  // Cancel only the pending receive or send.
+  std::atomic<bool> cancel_receive_ = false;
+  std::atomic<bool> cancel_send_ = false;
 
   std::set<uint32_t> cancelled_overlapped_io_;
   std::mutex cancelled_overlapped_io_mutex_;

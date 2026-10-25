@@ -754,7 +754,7 @@ int XSocket::WSASelectWrite(bool wait, X_WSA_ERROR* error) {
 
     activity = select(nfds, nullptr, &writefds, nullptr, &tv);
 
-    if (cancel_overlapped_) {
+    if (cancel_overlapped_ || cancel_send_) {
       if (error) {
         *error = X_WSA_ERROR::X_WSAECANCELLED;
       }
@@ -1073,7 +1073,7 @@ int XSocket::WSASelectRead(bool wait, X_WSA_ERROR* error) {
 
     activity = select(nfds, &readfds, nullptr, nullptr, &tv);
 
-    if (cancel_overlapped_) {
+    if (cancel_overlapped_ || cancel_receive_) {
       if (error) {
         *error = X_WSA_ERROR::X_WSAECANCELLED;
       }
@@ -1453,20 +1453,6 @@ bool XSocket::WSAGetOverlappedResult(XWSAOVERLAPPED* overlapped_ptr,
     return true;
   }
 
-  std::future<int32_t>* current_task_ptr = nullptr;
-
-  if (sending_io) {
-    auto it = send_polling_tasks_.find(overlapped_ptr);
-    if (it != send_polling_tasks_.end()) {
-      current_task_ptr = &it->second;
-    }
-  } else if (receiving_io) {
-    auto it = receive_polling_tasks_.find(overlapped_ptr);
-    if (it != receive_polling_tasks_.end()) {
-      current_task_ptr = &it->second;
-    }
-  }
-
   uint32_t internal_result =
       X_WIN32_FROM_HRESULT(overlapped_ptr->internal.get());
 
@@ -1482,28 +1468,49 @@ bool XSocket::WSAGetOverlappedResult(XWSAOVERLAPPED* overlapped_ptr,
 
     bool pending = internal_result == X_STATUS_PENDING;
 
+    // With no event there's nothing to wait on, so the request is cancelled.
+    if (pending && !event) {
+      auto& tasks = sending_io ? send_polling_tasks_ : receive_polling_tasks_;
+      std::atomic<bool>& cancel = sending_io ? cancel_send_ : cancel_receive_;
+
+      std::future<int32_t> task;
+      auto it = tasks.find(overlapped_ptr);
+      if (it != tasks.end()) {
+        task = std::move(it->second);
+        tasks.erase(it);
+      }
+
+      // The task takes the mutex to finish.
+      task_mutex.unlock();
+
+      cancel = true;
+      if (task.valid()) {
+        task.wait();
+      }
+      cancel = false;
+
+      overlapped_ptr->internal =
+          X_HRESULT_FROM_WIN32(X_WSA_ERROR::X_WSAECANCELLED);
+
+      {
+        std::lock_guard lock(cancelled_overlapped_io_mutex_);
+        cancelled_overlapped_io_.insert(overlapped_address);
+      }
+
+      XWSASetLastError(X_WSA_ERROR::X_WSAECANCELLED);
+      return false;
+    }
+
     if (pending) {
       // Unlock so overlapped task can update internal result after completion.
       task_mutex.unlock();
-    }
 
-    if (event) {
       // https://learn.microsoft.com/en-us/windows/win32/sync/synchronization-and-overlapped-input-and-output
       // 434D07D8 uses an auto reset event which causes signaled event
       // notifications to be missed causing an infinite wait deadlock.
       // As a result we check if task is completed before deciding to wait for
       // event.
-      if (pending) {
-        event->Wait(3, 1, 0, nullptr);
-      }
-    } else {
-      // If we don't have an event then we must wait for the future to complete.
-      // This should never happen because overlapped_ptr->event_handle should
-      // always have a valid event handle.
-      assert_always();
-      if (pending && current_task_ptr && current_task_ptr->valid()) {
-        current_task_ptr->wait();
-      }
+      event->Wait(3, 1, 0, nullptr);
     }
 
     if (pending) {
@@ -1542,8 +1549,6 @@ bool XSocket::WSAGetOverlappedResult(XWSAOVERLAPPED* overlapped_ptr,
       } else if (receiving_io) {
         receive_polling_tasks_.erase(overlapped_ptr);
       }
-
-      current_task_ptr = nullptr;
 
       result = true;
     } break;
