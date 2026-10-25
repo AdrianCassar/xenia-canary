@@ -18,7 +18,7 @@
 #include <vector>
 
 #include "xenia/base/byte_order.h"
-#include "xenia/kernel/host_transport.h"
+#include "xenia/kernel/socket_transport.h"
 #include "xenia/kernel/xobject.h"
 
 namespace xe {
@@ -253,8 +253,9 @@ class XSocket : public XObject {
                    size_t len);
 
  private:
-  XSocket(KernelState* kernel_state, std::unique_ptr<HostTransport> transport);
-  std::unique_ptr<HostTransport> transport_;
+  XSocket(KernelState* kernel_state,
+          std::unique_ptr<SocketTransport> transport);
+  std::unique_ptr<SocketTransport> transport_;
   bool socket_closed_ = false;
 
   AddressFamily af_;     // Address family
