@@ -343,6 +343,13 @@ X_STATUS XSocket::IOControl(uint32_t cmd, uint32_t* arg_ptr) {
   const u_long initial_param = xe::load_and_swap<uint32_t>(arg_ptr);
   u_long param = initial_param;
 
+  // The host refuses to make a socket blocking while WSAEventSelect is
+  // active, so cancel its association first. The guest event stays recorded
+  // for WSAResetEvent.
+  if (cmd == X_FIONBIO && !param && event_select_flags_) {
+    ::WSAEventSelect(native_handle_, nullptr, 0);
+  }
+
   int ret = ioctlsocket(native_handle_, cmd, &param);
 
   // The host counts every queued datagram. Report only the size of the next
@@ -365,7 +372,6 @@ X_STATUS XSocket::IOControl(uint32_t cmd, uint32_t* arg_ptr) {
   }
 
   if (ret < 0) {
-    // TODO: Get last error
     return X_STATUS_UNSUCCESSFUL;
   }
 
@@ -491,7 +497,6 @@ uint16_t XSocket::GetImplicitlyBoundPort() const {
     }
   }
 
-  assert_always();
   return 0;
 }
 
@@ -570,7 +575,7 @@ int XSocket::SetNativeOption(int level, int optname, const void* value,
 }
 
 X_STATUS XSocket::Listen(int backlog) {
-  if (!bound_) {
+  if (!bound_ || type_ == X_SOCK_DGRAM) {
     XWSASetLastError(X_WSA_ERROR::X_WSAEINVAL);
     return X_STATUS_UNSUCCESSFUL;
   }
