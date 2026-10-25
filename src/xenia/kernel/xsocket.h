@@ -42,6 +42,7 @@ namespace kernel {
 // https://learn.microsoft.com/en-us/windows/win32/winsock/windows-sockets-error-codes-2
 enum X_WSA_ERROR : uint32_t {
   X_WSA_NO_ERROR = 0,
+  X_WSA_INVALID_HANDLE = 6,
   X_WSA_INVALID_PARAMETER = 87,
   X_WSA_OPERATION_ABORTED = 995,
   X_WSA_IO_INCOMPLETE = 996,
