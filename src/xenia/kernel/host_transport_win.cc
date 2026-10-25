@@ -187,5 +187,11 @@ int HostTransport::Select(bool write, long timeout_us) {
                 &tv);
 }
 
+int TransportSelect::Wait(uint32_t nfds, timeval* timeout) {
+  return select(nfds, use_read_ ? &read_ : nullptr,
+                use_write_ ? &write_ : nullptr,
+                use_except_ ? &except_ : nullptr, timeout);
+}
+
 }  // namespace kernel
 }  // namespace xe

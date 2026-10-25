@@ -172,7 +172,7 @@ class XSocket : public XObject {
   XSocket(KernelState* kernel_state);
   ~XSocket();
 
-  uint64_t native_handle() const { return transport_->native_handle(); }
+  SocketTransport* transport() const { return transport_.get(); }
   uint16_t bound_port() const { return bound_port_; }
   Protocol protocol() const { return proto_; }
   bool IsBound() const { return bound_; }
