@@ -34,7 +34,7 @@ namespace kernel {
 // Note:
 // SO_DONTLINGER = ~SO_LINGER
 // SO_EXCLUSIVEADDRUSE = ~SO_REUSEADDR
-// TODO: Check SO_DONTLINGER and SO_EXCLUSIVEADDRUSE usage on linux
+// Linux has neither, so GetNativeOption and SetNativeOption emulate them.
 const std::map<uint32_t, uint32_t> supported_socket_options = {
     {0x0004, SO_REUSEADDR},   {X_SO_BROADCAST, SO_BROADCAST},
     {X_SO_LINGER, SO_LINGER}, {0x1001, SO_SNDBUF},
@@ -180,7 +180,9 @@ X_STATUS XSocket::GetOption(uint32_t level, uint32_t optname, void* optval_ptr,
     return X_STATUS_UNSUCCESSFUL;
   }
 
-  if (level == X_SOL_SOCKET && optname == X_SO_LINGER &&
+  // SO_LINGER and SO_DONTLINGER only apply to stream sockets.
+  if (level == X_SOL_SOCKET &&
+      (optname == X_SO_LINGER || optname == ~X_SO_LINGER) &&
       type_ == X_SOCK_DGRAM) {
     XWSASetLastError(X_WSA_ERROR::X_WSAENOPROTOOPT);
     return X_STATUS_UNSUCCESSFUL;
@@ -281,7 +283,9 @@ int XSocket::SetOption(uint32_t level, uint32_t optname, void* optval_ptr,
     return X_SOCKET_ERROR;
   }
 
-  if (level == X_SOL_SOCKET && optname == X_SO_LINGER &&
+  // SO_LINGER and SO_DONTLINGER only apply to stream sockets.
+  if (level == X_SOL_SOCKET &&
+      (optname == X_SO_LINGER || optname == ~X_SO_LINGER) &&
       type_ == X_SOCK_DGRAM) {
     XWSASetLastError(X_WSA_ERROR::X_WSAENOPROTOOPT);
     return X_SOCKET_ERROR;
@@ -511,11 +515,11 @@ uint16_t XSocket::GetImplicitlyBoundPort() const {
   return 0;
 }
 
-void XSocket::ReportReceiveTimeout(int ret) const {
+void XSocket::ReportTimeout(int ret, uint32_t timeout_ms) const {
 #if !XE_PLATFORM_WIN32
-  // Linux reports a timed out blocking receive as EAGAIN, the same error as a
-  // non-blocking receive with no data.
-  if (ret < 0 && errno == EAGAIN && receive_timeout_ms_ &&
+  // Linux reports a timed out blocking receive or send as EAGAIN, the same
+  // error as a non-blocking call that can't complete.
+  if (ret < 0 && errno == EAGAIN && timeout_ms &&
       !(fcntl(native_handle_, F_GETFL) & O_NONBLOCK)) {
     XWSASetLastError(X_WSA_ERROR::X_WSAETIMEDOUT);
   }
@@ -534,6 +538,30 @@ int XSocket::GetNativeOption(int level, int optname, void* value,
         optname == SO_RCVTIMEO ? receive_timeout_ms_ : send_timeout_ms_;
     std::memcpy(value, &timeout_ms, sizeof(timeout_ms));
     *len = sizeof(timeout_ms);
+    return 0;
+  }
+
+  if (level == SOL_SOCKET && optname == ~SO_LINGER &&
+      *len >= sizeof(uint32_t)) {
+    linger native_linger = {};
+    socklen_t linger_len = sizeof(native_linger);
+
+    if (getsockopt(native_handle_, SOL_SOCKET, SO_LINGER, &native_linger,
+                   &linger_len) < 0) {
+      return -1;
+    }
+
+    const uint32_t dont_linger = !native_linger.l_onoff;
+    std::memcpy(value, &dont_linger, sizeof(dont_linger));
+    *len = sizeof(dont_linger);
+    return 0;
+  }
+
+  if (level == SOL_SOCKET && optname == ~SO_REUSEADDR &&
+      *len >= sizeof(uint32_t)) {
+    const uint32_t exclusive = exclusive_address_use_;
+    std::memcpy(value, &exclusive, sizeof(exclusive));
+    *len = sizeof(exclusive);
     return 0;
   }
 
@@ -579,6 +607,36 @@ int XSocket::SetNativeOption(int level, int optname, const void* value,
     }
     return ret;
   }
+
+  // SO_DONTLINGER turns SO_LINGER off, keeping its timeout.
+  if (level == SOL_SOCKET && optname == ~SO_LINGER && len >= sizeof(uint32_t)) {
+    uint32_t dont_linger = 0;
+    std::memcpy(&dont_linger, value, sizeof(dont_linger));
+
+    linger native_linger = {};
+    socklen_t linger_len = sizeof(native_linger);
+
+    if (getsockopt(native_handle_, SOL_SOCKET, SO_LINGER, &native_linger,
+                   &linger_len) < 0) {
+      return -1;
+    }
+
+    native_linger.l_onoff = !dont_linger;
+
+    return setsockopt(native_handle_, SOL_SOCKET, SO_LINGER, &native_linger,
+                      sizeof(native_linger));
+  }
+
+  // Linux never shares a port unless both sockets set SO_REUSEADDR, so
+  // SO_EXCLUSIVEADDRUSE only needs reporting back.
+  if (level == SOL_SOCKET && optname == ~SO_REUSEADDR &&
+      len >= sizeof(uint32_t)) {
+    uint32_t exclusive = 0;
+    std::memcpy(&exclusive, value, sizeof(exclusive));
+
+    exclusive_address_use_ = exclusive;
+    return 0;
+  }
 #endif
 
   return setsockopt(native_handle_, level, optname,
@@ -598,6 +656,17 @@ X_STATUS XSocket::Listen(int backlog) {
 
   int ret = listen(native_handle_, backlog);
   if (ret < 0) {
+#if !XE_PLATFORM_WIN32
+    // Linux reports listen on a connected socket as EINVAL.
+    sockaddr_storage peer = {};
+    socklen_t peer_len = sizeof(peer);
+
+    if (errno == EINVAL &&
+        getpeername(native_handle_, reinterpret_cast<sockaddr*>(&peer),
+                    &peer_len) == 0) {
+      XWSASetLastError(X_WSA_ERROR::X_WSAEISCONN);
+    }
+#endif
     return X_STATUS_UNSUCCESSFUL;
   }
 
@@ -673,7 +742,7 @@ int XSocket::Recv(uint8_t* buf, uint32_t buf_len, uint32_t flags) {
   const int ret =
       recv(native_handle_, buf, buf_len, type_ == X_SOCK_DGRAM ? MSG_TRUNC : 0);
 
-  ReportReceiveTimeout(ret);
+  ReportTimeout(ret, receive_timeout_ms_);
 
   if (ret > static_cast<int>(buf_len)) {
     XWSASetLastError(X_WSA_ERROR::X_WSAEMSGSIZE);
@@ -710,7 +779,7 @@ int XSocket::RecvFrom(uint8_t* buf, uint32_t buf_len, uint32_t flags,
                      type_ == X_SOCK_DGRAM ? MSG_TRUNC : 0,
                      from ? &sa : nullptr, from_len);
 
-  ReportReceiveTimeout(ret);
+  ReportTimeout(ret, receive_timeout_ms_);
 #endif
 
   // TCP receives report the peer's address, e.g. 555307EE reads the port.
@@ -1659,6 +1728,8 @@ int XSocket::Send(const uint8_t* buf, uint32_t buf_len, uint32_t flags) {
   const int ret =
       send(native_handle_, reinterpret_cast<const char*>(buf), buf_len, 0);
 
+  ReportTimeout(ret, send_timeout_ms_);
+
 #if !XE_PLATFORM_WIN32
   if (ret < 0 && errno == EPIPE && !shutdown_send_) {
     XWSASetLastError(X_WSA_ERROR::X_WSAENOTCONN);
@@ -1710,6 +1781,8 @@ int XSocket::SendTo(uint8_t* buf, uint32_t buf_len, uint32_t flags,
   // Flags are ignored, like send.
   int ret = sendto(native_handle_, reinterpret_cast<char*>(buf), buf_len, 0,
                    addr_ptr, to ? sizeof(sockaddr_in) : 0);
+
+  ReportTimeout(ret, send_timeout_ms_);
 
   const uint32_t send_error = ret < 0 ? XWSAGetLastError() : 0;
 

@@ -297,6 +297,8 @@ class XSocket : public XObject {
 
   uint32_t receive_timeout_ms_ = 0;
   uint32_t send_timeout_ms_ = 0;
+  // SO_EXCLUSIVEADDRUSE, which Linux doesn't have.
+  bool exclusive_address_use_ = false;
 
   std::unique_ptr<xe::threading::Event> event_;
   std::mutex incoming_packet_mutex_;
@@ -310,7 +312,7 @@ class XSocket : public XObject {
 
   uint16_t GetImplicitlyBoundPort() const;
 
-  void ReportReceiveTimeout(int ret) const;
+  void ReportTimeout(int ret, uint32_t timeout_ms) const;
 
   int GetNativeOption(int level, int optname, void* value, socklen_t* len);
   int SetNativeOption(int level, int optname, const void* value, socklen_t len);
