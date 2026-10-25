@@ -76,6 +76,12 @@ enum X_WSA_ERROR : uint32_t {
 #define X_FIONBIO 0x8004667E
 #define X_FIONREAD 0x4004667F
 
+#define X_FD_READ 0x01
+#define X_FD_WRITE 0x02
+#define X_FD_ACCEPT 0x08
+#define X_FD_CONNECT 0x10
+#define X_FD_CLOSE 0x20
+
 #define X_SOL_SOCKET 0xFFFF
 #define X_SO_BROADCAST 0x0020
 #define X_SO_LINGER 0x0080
