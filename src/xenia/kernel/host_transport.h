@@ -67,6 +67,7 @@ class HostTransport final : public SocketTransport {
   void ReportTimeout(int ret, uint32_t timeout_ms) const;
   void RememberPeer();
   void StopEventWatcher();
+  void WatchEvents();
 
   uint64_t native_handle_ = X_INVALID_SOCKET;
   bool datagram_ = false;
@@ -86,9 +87,18 @@ class HostTransport final : public SocketTransport {
   // Linux has no WSAEventSelect, so a thread signals the event instead.
   std::thread event_watcher_;
   std::atomic<bool> stop_event_watcher_ = false;
+  uint32_t event_flags_ = 0;
+  std::function<void()> event_signal_;
   // Cleared once the event is signalled, and set again by a receive or once
   // the socket has nothing left to read.
   std::atomic<bool> read_armed_ = true;
+  // Cleared once the event is signalled, and set again by a send that
+  // couldn't complete.
+  std::atomic<bool> write_armed_ = true;
+  // Cleared once the peer's close is signalled.
+  std::atomic<bool> close_armed_ = true;
+  std::atomic<bool> connect_pending_ = false;
+  std::atomic<bool> connected_ = false;
 };
 
 }  // namespace kernel
