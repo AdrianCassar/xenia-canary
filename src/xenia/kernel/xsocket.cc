@@ -1428,9 +1428,21 @@ int XSocket::SendTo(uint8_t* buf, uint32_t buf_len, uint32_t flags,
 
 int XSocket::WSAEventSelect(uint32_t event_handle, uint64_t native_event_handle,
                             uint32_t flags) {
-  return transport_->EventSelect(native_event_handle, flags, [event_handle] {
-    xboxkrnl::xeNtSetEvent(event_handle, nullptr);
-  });
+  const int ret = transport_->EventSelect(
+      native_event_handle, flags,
+      [event_handle] { xboxkrnl::xeNtSetEvent(event_handle, nullptr); });
+
+  if (ret == X_ERROR_SUCCESS) {
+    event_select_handle_ = flags ? event_handle : 0;
+  }
+
+  return ret;
+}
+
+void XSocket::EventReset(uint32_t event_handle) {
+  if (!socket_closed_ && event_handle && event_select_handle_ == event_handle) {
+    transport_->EventReset();
+  }
 }
 
 bool XSocket::QueuePacket(uint32_t src_ip, uint16_t src_port,

@@ -10,6 +10,7 @@
 #include "xenia/kernel/host_transport.h"
 
 #include <mswsock.h>
+#include <chrono>
 
 #include "xenia/base/byte_order.h"
 #include "xenia/kernel/xsocket.h"
@@ -17,10 +18,16 @@
 namespace xe {
 namespace kernel {
 
+using namespace std::chrono_literals;
+
+constexpr uint32_t X_FD_READ = 0x01;
+
+constexpr auto kEventWatchInterval = 10ms;
+
 HostTransport::HostTransport(uint64_t native_handle, bool datagram)
     : native_handle_(native_handle), datagram_(datagram) {}
 
-HostTransport::~HostTransport() = default;
+HostTransport::~HostTransport() { StopEventWatcher(); }
 
 bool HostTransport::Open(int af, int type, int protocol) {
   datagram_ = type == XSocket::X_SOCK_DGRAM;
@@ -43,6 +50,7 @@ bool HostTransport::Open(int af, int type, int protocol) {
 }
 
 int HostTransport::Close() {
+  StopEventWatcher();
   return closesocket(static_cast<SOCKET>(native_handle_));
 }
 
@@ -92,18 +100,57 @@ int HostTransport::IOControl(uint32_t cmd, uint32_t* arg_ptr) {
   return ret;
 }
 
-// The host signals the event itself.
+// The host signals the event itself, apart from FD_READ for more data that
+// arrives before a receive.
 int HostTransport::EventSelect(uint64_t native_event_handle, uint32_t flags,
-                               std::function<void()>) {
+                               std::function<void()> signal) {
   const HANDLE hEvent =
       reinterpret_cast<HANDLE>(static_cast<uintptr_t>(native_event_handle));
   const int ret = ::WSAEventSelect(native_handle_, hEvent, flags);
 
-  if (ret == X_ERROR_SUCCESS) {
-    event_select_active_ = flags != 0;
+  if (ret != X_ERROR_SUCCESS) {
+    return ret;
+  }
+
+  StopEventWatcher();
+
+  event_select_active_ = flags != 0;
+  event_flags_ = flags;
+  event_signal_ = std::move(signal);
+
+  if (flags & X_FD_READ) {
+    last_queued_bytes_ = QueuedReceiveBytes();
+    stop_event_watcher_ = false;
+
+    event_watcher_ = std::thread(&HostTransport::WatchEvents, this);
   }
 
   return ret;
+}
+
+// The host only signals FD_READ again after a receive, so 494707E4 (Race Pro)
+// would never be signalled again after resetting its event on a timeout.
+void HostTransport::WatchEvents() {
+  while (!stop_event_watcher_) {
+    const uint64_t queued = QueuedReceiveBytes();
+
+    if (queued > last_queued_bytes_.exchange(queued)) {
+      event_signal_();
+    }
+
+    std::this_thread::sleep_for(kEventWatchInterval);
+  }
+}
+
+// FIONREAD counts every queued datagram.
+uint64_t HostTransport::QueuedReceiveBytes() const {
+  u_long queued = 0;
+
+  if (ioctlsocket(native_handle_, FIONREAD, &queued) != 0) {
+    return 0;
+  }
+
+  return queued;
 }
 
 int HostTransport::Bind(const sockaddr* addr, socklen_t len) {
