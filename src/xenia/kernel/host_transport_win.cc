@@ -21,8 +21,6 @@ namespace kernel {
 
 using namespace std::chrono_literals;
 
-constexpr uint32_t X_FD_READ = 0x01;
-
 constexpr auto kEventWatchInterval = 10ms;
 
 HostTransport::HostTransport(uint64_t native_handle, bool datagram)
@@ -73,7 +71,7 @@ int HostTransport::IOControl(uint32_t cmd, uint32_t* arg_ptr) {
 
   // The host refuses to make a socket blocking while WSAEventSelect is
   // active, so cancel its association first.
-  if (cmd == X_FIONBIO && !param && event_select_active_) {
+  if (cmd == FIONBIO && !param && event_select_active_) {
     ::WSAEventSelect(native_handle_, nullptr, 0);
   }
 
@@ -81,7 +79,7 @@ int HostTransport::IOControl(uint32_t cmd, uint32_t* arg_ptr) {
 
   // The host counts every queued datagram. Report only the size of the next
   // one, which is what a single receive returns.
-  if (!ret && cmd == X_FIONREAD && datagram_ && param) {
+  if (!ret && cmd == FIONREAD && datagram_ && param) {
     std::vector<char> datagram(param);
 
     const int peeked =

@@ -24,12 +24,6 @@ namespace kernel {
 
 using namespace std::chrono_literals;
 
-constexpr uint32_t X_FD_READ = 0x01;
-constexpr uint32_t X_FD_WRITE = 0x02;
-constexpr uint32_t X_FD_ACCEPT = 0x08;
-constexpr uint32_t X_FD_CONNECT = 0x10;
-constexpr uint32_t X_FD_CLOSE = 0x20;
-
 constexpr auto kEventWatchInterval = 10ms;
 
 HostTransport::HostTransport(uint64_t native_handle, bool datagram)
@@ -164,11 +158,9 @@ int HostTransport::SetOption(int level, int optname, const void* value,
 }
 
 int HostTransport::IOControl(uint32_t cmd, uint32_t* arg_ptr) {
-  const int native_cmd = cmd == X_FIONBIO ? FIONBIO : FIONREAD;
-
   int param = static_cast<int>(xe::load_and_swap<uint32_t>(arg_ptr));
 
-  int ret = ioctl(native_handle_, native_cmd, &param);
+  int ret = ioctl(native_handle_, cmd, &param);
 
   if (ret < 0) {
     return ret;
