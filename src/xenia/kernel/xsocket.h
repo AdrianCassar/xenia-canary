@@ -215,8 +215,6 @@ class XSocket : public XObject {
   int WSAEventSelect(uint32_t event_handle, uint64_t native_event_handle,
                      uint32_t flags);
 
-  bool IsEventSelectPending(uint32_t event_handle);
-
   int WSASendTo(XWSABUF* buffers, uint32_t num_buffers,
                 xe::be<uint32_t>* num_bytes_sent_ptr, uint32_t flags,
                 XSOCKADDR_IN* to_ptr, uint32_t to_len,
@@ -277,9 +275,6 @@ class XSocket : public XObject {
   uint32_t connect_error_ = 0;
   bool shutdown_receive_ = false;
   bool shutdown_send_ = false;
-
-  uint32_t event_select_handle_ = 0;
-  uint32_t event_select_flags_ = 0;
 
   std::unique_ptr<xe::threading::Event> event_;
   std::mutex incoming_packet_mutex_;
