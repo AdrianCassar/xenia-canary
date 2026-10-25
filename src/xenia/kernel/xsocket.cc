@@ -2,14 +2,13 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2013 Ben Vanik. All rights reserved.                             *
+ * Copyright 2026 Xenia Canary. All rights reserved.                          *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
 
 #include "src/xenia/kernel/xsocket.h"
 
-#include <algorithm>
 #include <cstring>
 #include <ranges>
 
@@ -17,12 +16,6 @@
 #include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/xam/xam_module.h"
 #include "xenia/kernel/xboxkrnl/xboxkrnl_threading.h"
-
-#if XE_PLATFORM_WIN32
-#include <mswsock.h>
-#else
-#include <fcntl.h>
-#endif
 
 DECLARE_bool(bind_interface);
 
@@ -35,7 +28,7 @@ namespace kernel {
 // Note:
 // SO_DONTLINGER = ~SO_LINGER
 // SO_EXCLUSIVEADDRUSE = ~SO_REUSEADDR
-// Linux has neither, so GetNativeOption and SetNativeOption emulate them.
+// Linux has neither, so HostTransport emulates them.
 const std::map<uint32_t, uint32_t> supported_socket_options = {
     {0x0004, SO_REUSEADDR},   {X_SO_BROADCAST, SO_BROADCAST},
     {X_SO_LINGER, SO_LINGER}, {0x1001, SO_SNDBUF},
@@ -84,10 +77,12 @@ static bool IsAnyAddressDatagram(XSocket::Type type, const XSOCKADDR_IN* to) {
 constexpr std::chrono::microseconds kOverlappedPollInterval = 10ms;
 
 XSocket::XSocket(KernelState* kernel_state)
-    : XObject(kernel_state, kObjectType) {}
+    : XObject(kernel_state, kObjectType),
+      transport_(std::make_unique<HostTransport>()) {}
 
-XSocket::XSocket(KernelState* kernel_state, uint64_t native_handle)
-    : XObject(kernel_state, kObjectType), native_handle_(native_handle) {}
+XSocket::XSocket(KernelState* kernel_state,
+                 std::unique_ptr<HostTransport> transport)
+    : XObject(kernel_state, kObjectType), transport_(std::move(transport)) {}
 
 XSocket::~XSocket() {
   if (!socket_closed_) {
@@ -126,21 +121,9 @@ X_STATUS XSocket::Initialize(AddressFamily af, Type type, Protocol proto) {
     proto_ = X_IPPROTO_TCP;
   }
 
-  native_handle_ = socket(af ? af : X_AF_INET, type_, proto_);
-  if (native_handle_ == X_INVALID_SOCKET) {
+  if (!transport_->Open(af ? af : X_AF_INET, type_, proto_)) {
     return X_STATUS_UNSUCCESSFUL;
   }
-
-#if XE_PLATFORM_WIN32
-  // 415607FF fails on WSAECONNRESET after sending to a port with no socket.
-  if (type_ == X_SOCK_DGRAM) {
-    BOOL report_resets = FALSE;
-    DWORD bytes_returned = 0;
-    WSAIoctl(static_cast<SOCKET>(native_handle_), SIO_UDP_CONNRESET,
-             &report_resets, sizeof(report_resets), nullptr, 0, &bytes_returned,
-             nullptr, nullptr);
-  }
-#endif
 
   return X_STATUS_SUCCESS;
 }
@@ -148,13 +131,7 @@ X_STATUS XSocket::Initialize(AddressFamily af, Type type, Protocol proto) {
 int XSocket::Close() {
   WSACancelOverlappedIO();
 
-  int ret = 0;
-
-#if XE_PLATFORM_WIN32
-  ret = closesocket(static_cast<SOCKET>(native_handle_));
-#else
-  ret = close(static_cast<int>(native_handle_));
-#endif
+  int ret = transport_->Close();
 
   if (ret == X_ERROR_SUCCESS) {
     socket_closed_ = true;
@@ -196,9 +173,8 @@ X_STATUS XSocket::GetOption(uint32_t level, uint32_t optname, void* optval_ptr,
     linger native_linger = {};
     socklen_t native_linger_len = sizeof(native_linger);
 
-    if (getsockopt(native_handle_, SOL_SOCKET, SO_LINGER,
-                   reinterpret_cast<char*>(&native_linger),
-                   &native_linger_len) < 0) {
+    if (transport_->GetOption(SOL_SOCKET, SO_LINGER, &native_linger,
+                              &native_linger_len) < 0) {
       return X_STATUS_UNSUCCESSFUL;
     }
 
@@ -216,9 +192,9 @@ X_STATUS XSocket::GetOption(uint32_t level, uint32_t optname, void* optval_ptr,
     uint32_t value = 0;
     socklen_t value_len = sizeof(value);
 
-    if (GetNativeOption(supported_levels.at(level),
-                        supported_options.at(optname), &value,
-                        &value_len) < 0) {
+    if (transport_->GetOption(supported_levels.at(level),
+                              supported_options.at(optname), &value,
+                              &value_len) < 0) {
       return X_STATUS_UNSUCCESSFUL;
     }
 
@@ -229,9 +205,9 @@ X_STATUS XSocket::GetOption(uint32_t level, uint32_t optname, void* optval_ptr,
     return X_STATUS_SUCCESS;
   }
 
-  int ret =
-      GetNativeOption(supported_levels.at(level), supported_options.at(optname),
-                      optval_ptr, reinterpret_cast<socklen_t*>(optlen));
+  int ret = transport_->GetOption(supported_levels.at(level),
+                                  supported_options.at(optname), optval_ptr,
+                                  reinterpret_cast<socklen_t*>(optlen));
 
   if (ret < 0) {
     return X_STATUS_UNSUCCESSFUL;
@@ -306,19 +282,20 @@ int XSocket::SetOption(uint32_t level, uint32_t optname, void* optval_ptr,
     native_linger.l_onoff = x_linger->l_onoff;
     native_linger.l_linger = x_linger->l_linger;
 
-    ret = setsockopt(native_handle_, SOL_SOCKET, SO_LINGER,
-                     reinterpret_cast<const char*>(&native_linger),
-                     sizeof(native_linger));
+    ret = transport_->SetOption(SOL_SOCKET, SO_LINGER, &native_linger,
+                                sizeof(native_linger));
   } else if (optlen && optlen < sizeof(uint32_t)) {
     // A value shorter than the option is read as its first byte.
     const uint32_t value = *static_cast<uint8_t*>(optval_ptr);
 
-    ret = SetNativeOption(native_level, native_optname, &value, sizeof(value));
+    ret = transport_->SetOption(native_level, native_optname, &value,
+                                sizeof(value));
   } else {
     void* proper_ptr =
         GetOptValueWithProperEndianness(optval_ptr, optname, optlen);
 
-    ret = SetNativeOption(native_level, native_optname, proper_ptr, optlen);
+    ret =
+        transport_->SetOption(native_level, native_optname, proper_ptr, optlen);
 
     // Cheezy way to check if we created some additional allocation.
     if (optval_ptr != proper_ptr) {
@@ -344,58 +321,11 @@ X_STATUS XSocket::IOControl(uint32_t cmd, uint32_t* arg_ptr) {
     return X_STATUS_UNSUCCESSFUL;
   }
 
-#ifdef XE_PLATFORM_WIN32
-  const u_long initial_param = xe::load_and_swap<uint32_t>(arg_ptr);
-  u_long param = initial_param;
-
-  // The host refuses to make a socket blocking while WSAEventSelect is
-  // active, so cancel its association first. The guest event stays recorded
-  // for WSAResetEvent.
-  if (cmd == X_FIONBIO && !param && event_select_flags_) {
-    ::WSAEventSelect(native_handle_, nullptr, 0);
-  }
-
-  int ret = ioctlsocket(native_handle_, cmd, &param);
-
-  // The host counts every queued datagram. Report only the size of the next
-  // one, which is what a single receive returns.
-  if (!ret && cmd == X_FIONREAD && type_ == X_SOCK_DGRAM && param) {
-    std::vector<char> datagram(param);
-
-    const int peeked =
-        recvfrom(native_handle_, datagram.data(), static_cast<int>(param),
-                 MSG_PEEK, nullptr, nullptr);
-
-    if (peeked >= 0) {
-      param = peeked;
-    }
-  }
-
-  // Parameter was written to therefore byte swap output
-  if (initial_param != param) {
-    xe::store_and_swap(arg_ptr, static_cast<uint32_t>(param));
-  }
-
-  if (ret < 0) {
+  if (transport_->IOControl(cmd, arg_ptr) < 0) {
     return X_STATUS_UNSUCCESSFUL;
   }
 
   return X_STATUS_SUCCESS;
-#else
-  const int native_cmd = supported_controls.at(cmd);
-
-  int param = static_cast<int>(xe::load_and_swap<uint32_t>(arg_ptr));
-
-  int ret = ioctl(native_handle_, native_cmd, &param);
-
-  if (ret < 0) {
-    return X_STATUS_UNSUCCESSFUL;
-  }
-
-  xe::store_and_swap<uint32_t>(arg_ptr, static_cast<uint32_t>(param));
-
-  return X_STATUS_SUCCESS;
-#endif
 }
 
 X_STATUS XSocket::Connect(const XSOCKADDR_IN* name, int name_len) {
@@ -419,20 +349,13 @@ X_STATUS XSocket::Connect(const XSOCKADDR_IN* name, int name_len) {
 
   sockaddr addr = sa_in.to_host();
 
-  // The guest's length is ignored, the whole address is always read.
-  int ret = connect(native_handle_, &addr, sizeof(sockaddr_in));
+  int ret = transport_->Connect(&addr);
 
   const uint32_t connect_error = ret < 0 ? XWSAGetLastError() : 0;
 
-#if !XE_PLATFORM_WIN32
-  if (!ret) {
-    RememberPeer();
-  }
-#endif
-
   // Implicit Bind
   if (!bound_port_) {
-    bound_port_ = GetImplicitlyBoundPort();
+    bound_port_ = transport_->GetBoundPort();
     bound_ = true;
   }
 
@@ -485,200 +408,19 @@ X_STATUS XSocket::Bind(const XSOCKADDR_IN* name, int name_len) {
     assert_zero(name->address_ip.s_addr);
   }
 
-  int ret = bind(native_handle_, &addr, name_len);
-  if (ret < 0) {
-#if XE_PLATFORM_WIN32
-    // The host reports a port held with SO_EXCLUSIVEADDRUSE as WSAEACCES.
-    if (XWSAGetLastError() == X_WSA_ERROR::X_WSAEACCES) {
-      XWSASetLastError(X_WSA_ERROR::X_WSAEADDRINUSE);
-    }
-#endif
+  if (transport_->Bind(&addr, name_len) < 0) {
     return X_STATUS_UNSUCCESSFUL;
   }
 
   bound_port_ = sa_in.address_port;
 
   if (!bound_port_) {
-    bound_port_ = GetImplicitlyBoundPort();
+    bound_port_ = transport_->GetBoundPort();
   }
 
   bound_ = true;
 
   return X_STATUS_SUCCESS;
-}
-
-void XSocket::RememberPeer() {
-  peer_len_ = sizeof(peer_);
-
-  if (getpeername(native_handle_, reinterpret_cast<sockaddr*>(&peer_),
-                  &peer_len_) < 0) {
-    peer_len_ = 0;
-  }
-}
-
-int XSocket::GetHostPeerName(sockaddr* addr, socklen_t* len) {
-  const int ret = getpeername(native_handle_, addr, len);
-
-#if !XE_PLATFORM_WIN32
-  // A non-blocking connect only shows its peer once it completes.
-  if (!ret) {
-    peer_len_ = std::min<socklen_t>(*len, sizeof(peer_));
-    std::memcpy(&peer_, addr, peer_len_);
-  }
-
-  // Linux fails with ENOTCONN once the connection is reset, but the peer is
-  // still reported.
-  if (ret < 0 && errno == ENOTCONN && peer_len_) {
-    std::memcpy(addr, &peer_, std::min(*len, peer_len_));
-    *len = peer_len_;
-    return 0;
-  }
-#endif
-
-  return ret;
-}
-
-uint16_t XSocket::GetImplicitlyBoundPort() const {
-  sockaddr_storage storage = {};
-  socklen_t addr_len = sizeof(storage);
-
-  if (getsockname(native_handle_, reinterpret_cast<sockaddr*>(&storage),
-                  &addr_len) == 0) {
-    if (storage.ss_family == AF_INET) {
-      const sockaddr_in* sockaddr = reinterpret_cast<sockaddr_in*>(&storage);
-      return xe::byte_swap(sockaddr->sin_port);
-    }
-  }
-
-  return 0;
-}
-
-void XSocket::ReportTimeout(int ret, uint32_t timeout_ms) const {
-#if !XE_PLATFORM_WIN32
-  // Linux reports a timed out blocking receive or send as EAGAIN, the same
-  // error as a non-blocking call that can't complete.
-  if (ret < 0 && errno == EAGAIN && timeout_ms &&
-      !(fcntl(native_handle_, F_GETFL) & O_NONBLOCK)) {
-    XWSASetLastError(X_WSA_ERROR::X_WSAETIMEDOUT);
-  }
-#endif
-}
-
-int XSocket::GetNativeOption(int level, int optname, void* value,
-                             socklen_t* len) {
-#if !XE_PLATFORM_WIN32
-  // Linux can round a timeout when it is read back, so report the
-  // milliseconds that were set.
-  if (level == SOL_SOCKET &&
-      (optname == SO_RCVTIMEO || optname == SO_SNDTIMEO) &&
-      *len >= sizeof(uint32_t)) {
-    const uint32_t timeout_ms =
-        optname == SO_RCVTIMEO ? receive_timeout_ms_ : send_timeout_ms_;
-    std::memcpy(value, &timeout_ms, sizeof(timeout_ms));
-    *len = sizeof(timeout_ms);
-    return 0;
-  }
-
-  if (level == SOL_SOCKET && optname == ~SO_LINGER &&
-      *len >= sizeof(uint32_t)) {
-    linger native_linger = {};
-    socklen_t linger_len = sizeof(native_linger);
-
-    if (getsockopt(native_handle_, SOL_SOCKET, SO_LINGER, &native_linger,
-                   &linger_len) < 0) {
-      return -1;
-    }
-
-    const uint32_t dont_linger = !native_linger.l_onoff;
-    std::memcpy(value, &dont_linger, sizeof(dont_linger));
-    *len = sizeof(dont_linger);
-    return 0;
-  }
-
-  if (level == SOL_SOCKET && optname == ~SO_REUSEADDR &&
-      *len >= sizeof(uint32_t)) {
-    const uint32_t exclusive = exclusive_address_use_;
-    std::memcpy(value, &exclusive, sizeof(exclusive));
-    *len = sizeof(exclusive);
-    return 0;
-  }
-
-  if (level == SOL_SOCKET && (optname == SO_RCVBUF || optname == SO_SNDBUF) &&
-      *len >= sizeof(uint32_t)) {
-    int size = 0;
-    socklen_t size_len = sizeof(size);
-
-    if (getsockopt(native_handle_, level, optname, &size, &size_len) < 0) {
-      return -1;
-    }
-
-    const uint32_t set_size = static_cast<uint32_t>(size) / 2;
-    std::memcpy(value, &set_size, sizeof(set_size));
-    *len = sizeof(set_size);
-    return 0;
-  }
-#endif
-
-  return getsockopt(native_handle_, level, optname, static_cast<char*>(value),
-                    len);
-}
-
-int XSocket::SetNativeOption(int level, int optname, const void* value,
-                             socklen_t len) {
-#if !XE_PLATFORM_WIN32
-  // Linux takes a timeval instead of milliseconds.
-  if (level == SOL_SOCKET &&
-      (optname == SO_RCVTIMEO || optname == SO_SNDTIMEO) &&
-      len == sizeof(uint32_t)) {
-    uint32_t timeout_ms = 0;
-    std::memcpy(&timeout_ms, value, sizeof(timeout_ms));
-
-    timeval timeout = {};
-    timeout.tv_sec = timeout_ms / 1000;
-    timeout.tv_usec = (timeout_ms % 1000) * 1000;
-
-    const int ret =
-        setsockopt(native_handle_, level, optname, &timeout, sizeof(timeout));
-    if (!ret) {
-      (optname == SO_RCVTIMEO ? receive_timeout_ms_ : send_timeout_ms_) =
-          timeout_ms;
-    }
-    return ret;
-  }
-
-  // SO_DONTLINGER turns SO_LINGER off, keeping its timeout.
-  if (level == SOL_SOCKET && optname == ~SO_LINGER && len >= sizeof(uint32_t)) {
-    uint32_t dont_linger = 0;
-    std::memcpy(&dont_linger, value, sizeof(dont_linger));
-
-    linger native_linger = {};
-    socklen_t linger_len = sizeof(native_linger);
-
-    if (getsockopt(native_handle_, SOL_SOCKET, SO_LINGER, &native_linger,
-                   &linger_len) < 0) {
-      return -1;
-    }
-
-    native_linger.l_onoff = !dont_linger;
-
-    return setsockopt(native_handle_, SOL_SOCKET, SO_LINGER, &native_linger,
-                      sizeof(native_linger));
-  }
-
-  // Linux never shares a port unless both sockets set SO_REUSEADDR, so
-  // SO_EXCLUSIVEADDRUSE only needs reporting back.
-  if (level == SOL_SOCKET && optname == ~SO_REUSEADDR &&
-      len >= sizeof(uint32_t)) {
-    uint32_t exclusive = 0;
-    std::memcpy(&exclusive, value, sizeof(exclusive));
-
-    exclusive_address_use_ = exclusive;
-    return 0;
-  }
-#endif
-
-  return setsockopt(native_handle_, level, optname,
-                    static_cast<const char*>(value), len);
 }
 
 X_STATUS XSocket::Listen(int backlog) {
@@ -692,19 +434,7 @@ X_STATUS XSocket::Listen(int backlog) {
     return X_STATUS_UNSUCCESSFUL;
   }
 
-  int ret = listen(native_handle_, backlog);
-  if (ret < 0) {
-#if !XE_PLATFORM_WIN32
-    // Linux reports listen on a connected socket as EINVAL.
-    sockaddr_storage peer = {};
-    socklen_t peer_len = sizeof(peer);
-
-    if (errno == EINVAL &&
-        getpeername(native_handle_, reinterpret_cast<sockaddr*>(&peer),
-                    &peer_len) == 0) {
-      XWSASetLastError(X_WSA_ERROR::X_WSAEISCONN);
-    }
-#endif
+  if (transport_->Listen(backlog) < 0) {
     return X_STATUS_UNSUCCESSFUL;
   }
 
@@ -722,8 +452,8 @@ object_ref<XSocket> XSocket::Accept(XSOCKADDR_IN* name, int* name_len) {
     addrlen = xe::byte_swap(*name_len);
   }
 
-  const uint64_t socket_handle = accept(native_handle_, name ? &sa : nullptr,
-                                        name_len ? &addrlen : nullptr);
+  const uint64_t socket_handle =
+      transport_->Accept(name ? &sa : nullptr, name_len ? &addrlen : nullptr);
   if (socket_handle == X_INVALID_SOCKET) {
     return nullptr;
   }
@@ -735,18 +465,16 @@ object_ref<XSocket> XSocket::Accept(XSOCKADDR_IN* name, int* name_len) {
 
   // Create a kernel object to represent the new socket, and copy parameters
   // over.
-  auto socket = object_ref<XSocket>(new XSocket(kernel_state_, socket_handle));
+  auto socket = object_ref<XSocket>(new XSocket(
+      kernel_state_,
+      std::make_unique<HostTransport>(socket_handle, type_ == X_SOCK_DGRAM)));
   socket->af_ = af_;
   socket->type_ = type_;
   socket->proto_ = proto_;
   socket->vdp_ = vdp_;
 
-#if !XE_PLATFORM_WIN32
-  socket->RememberPeer();
-#endif
-
   // Implicit Bind
-  socket->bound_port_ = bound_port_ = GetImplicitlyBoundPort();
+  socket->bound_port_ = bound_port_ = transport_->GetBoundPort();
   socket->bound_ = true;
 
   return socket;
@@ -757,7 +485,7 @@ int XSocket::Shutdown(int how) {
     how = 2;
   }
 
-  const int ret = shutdown(native_handle_, how);
+  const int ret = transport_->Shutdown(how);
 
   if (!ret && how != 1) {
     shutdown_receive_ = true;
@@ -778,21 +506,7 @@ int XSocket::Recv(uint8_t* buf, uint32_t buf_len, uint32_t flags) {
     return X_SOCKET_ERROR;
   }
 
-#if XE_PLATFORM_WIN32
-  return recv(native_handle_, reinterpret_cast<char*>(buf), buf_len, 0);
-#else
-  const int ret =
-      recv(native_handle_, buf, buf_len, type_ == X_SOCK_DGRAM ? MSG_TRUNC : 0);
-
-  ReportTimeout(ret, receive_timeout_ms_);
-
-  if (ret > static_cast<int>(buf_len)) {
-    XWSASetLastError(X_WSA_ERROR::X_WSAEMSGSIZE);
-    return X_SOCKET_ERROR;
-  }
-
-  return ret;
-#endif
+  return transport_->Recv(buf, buf_len);
 }
 
 int XSocket::RecvFrom(uint8_t* buf, uint32_t buf_len, uint32_t flags,
@@ -813,33 +527,17 @@ int XSocket::RecvFrom(uint8_t* buf, uint32_t buf_len, uint32_t flags,
     sa = from->to_host();
   }
 
-#if XE_PLATFORM_WIN32
-  int ret = recvfrom(native_handle_, reinterpret_cast<char*>(buf), buf_len, 0,
-                     from ? &sa : nullptr, from_len);
-#else
-  int ret = recvfrom(native_handle_, buf, buf_len,
-                     type_ == X_SOCK_DGRAM ? MSG_TRUNC : 0,
-                     from ? &sa : nullptr, from_len);
-
-  ReportTimeout(ret, receive_timeout_ms_);
-#endif
+  int ret = transport_->RecvFrom(buf, buf_len, from ? &sa : nullptr, from_len);
 
   // TCP receives report the peer's address, e.g. 555307EE reads the port.
   if (proto_ == X_IPPROTO_TCP) {
     socklen_t peer_addr_len = sizeof(sockaddr);
-    GetHostPeerName(&sa, &peer_addr_len);
+    transport_->GetPeerName(&sa, &peer_addr_len);
   }
 
   if (from) {
     from->to_guest(&sa);
   }
-
-#if !XE_PLATFORM_WIN32
-  if (ret > static_cast<int>(buf_len)) {
-    XWSASetLastError(X_WSA_ERROR::X_WSAEMSGSIZE);
-    return X_SOCKET_ERROR;
-  }
-#endif
 
   return ret;
 }
@@ -853,23 +551,8 @@ int XSocket::WSASelectWrite(bool wait, X_WSA_ERROR* error) {
   }
 
   do {
-    fd_set writefds = {};
-    FD_ZERO(&writefds);
-
-#if XE_PLATFORM_WIN32
-    SOCKET s = static_cast<SOCKET>(native_handle_);
-    FD_SET(s, &writefds);
-    int nfds = 0;
-#else
-    int s = static_cast<int>(native_handle_);
-    FD_SET(s, &writefds);
-    int nfds = s + 1;
-#endif
-
-    timeval tv = {};
-    tv.tv_usec = wait ? static_cast<long>(kOverlappedPollInterval.count()) : 0;
-
-    activity = select(nfds, nullptr, &writefds, nullptr, &tv);
+    activity = transport_->Select(
+        true, wait ? static_cast<long>(kOverlappedPollInterval.count()) : 0);
 
     if (cancel_overlapped_ || cancel_send_) {
       if (error) {
@@ -928,23 +611,13 @@ int XSocket::PollWSASendTo(bool wait, WSASendToData send_async_data,
     return X_SOCKET_ERROR;
   }
 
-#if XE_PLATFORM_WIN32
-  std::vector<WSABUF> buffers(send_async_data.num_buffers);
+  std::vector<HostBuffer> buffers(send_async_data.num_buffers);
 
   for (uint32_t i = 0; i < send_async_data.num_buffers; i++) {
     buffers[i].len = send_async_data.buffers[i].len;
-    buffers[i].buf = kernel_state()->memory()->TranslateVirtual<char*>(
+    buffers[i].data = kernel_state()->memory()->TranslateVirtual<char*>(
         send_async_data.buffers[i].buf_ptr);
   }
-#else
-  std::vector<iovec> buffers(send_async_data.num_buffers);
-
-  for (uint32_t i = 0; i < send_async_data.num_buffers; i++) {
-    buffers[i].iov_len = send_async_data.buffers[i].len;
-    buffers[i].iov_base = kernel_state()->memory()->TranslateVirtual<char*>(
-        send_async_data.buffers[i].buf_ptr);
-  }
-#endif
 
   sockaddr saddr = {};
   sockaddr* saddr_ptr = nullptr;
@@ -980,38 +653,14 @@ int XSocket::PollWSASendTo(bool wait, WSASendToData send_async_data,
 
   uint32_t bytes_sent = 0;
 
-  int result = 0;
-
-#if XE_PLATFORM_WIN32
-  result =
-      ::WSASendTo(native_handle_, buffers.data(), send_async_data.num_buffers,
-                  reinterpret_cast<DWORD*>(&bytes_sent), 0, &saddr, saddr_len,
-                  nullptr, nullptr);
-#else
-  msghdr message = {};
-
-  message.msg_name = &saddr;
-  message.msg_namelen = saddr_len;
-
-  // Set scatter-gather buffers (Equivalent to WSABUF array)
-  message.msg_iov = const_cast<iovec*>(buffers.data());
-  message.msg_iovlen = buffers.size();
-
-  ssize_t sent_bytes = sendmsg(native_handle_, &message, 0);
-
-  if (sent_bytes >= 0) {
-    bytes_sent = sent_bytes;
-    result = X_ERROR_SUCCESS;
-  } else {
-    result = X_SOCKET_ERROR;
-  }
-#endif
+  const int result =
+      transport_->SendBuffers(buffers, saddr_ptr, saddr_len, &bytes_sent);
 
   const uint32_t send_error = result == X_SOCKET_ERROR ? XWSAGetLastError() : 0;
 
   // Implicit Bind
   if (!bound_port_) {
-    bound_port_ = GetImplicitlyBoundPort();
+    bound_port_ = transport_->GetBoundPort();
     bound_ = true;
   }
 
@@ -1172,23 +821,8 @@ int XSocket::WSASelectRead(bool wait, X_WSA_ERROR* error) {
   }
 
   do {
-    fd_set readfds = {};
-    FD_ZERO(&readfds);
-
-#if XE_PLATFORM_WIN32
-    SOCKET s = static_cast<SOCKET>(native_handle_);
-    FD_SET(s, &readfds);
-    int nfds = 0;
-#else
-    int s = static_cast<int>(native_handle_);
-    FD_SET(s, &readfds);
-    int nfds = s + 1;
-#endif
-
-    timeval tv = {};
-    tv.tv_usec = wait ? static_cast<long>(kOverlappedPollInterval.count()) : 0;
-
-    activity = select(nfds, &readfds, nullptr, nullptr, &tv);
+    activity = transport_->Select(
+        false, wait ? static_cast<long>(kOverlappedPollInterval.count()) : 0);
 
     if (cancel_overlapped_ || cancel_receive_) {
       if (error) {
@@ -1246,19 +880,11 @@ int XSocket::PollWSARecvFrom(bool wait, WSARecvFromData receive_async_data) {
     return X_SOCKET_ERROR;
   }
 
-#if XE_PLATFORM_WIN32
-  WSABUF recv_buffer = {};
+  HostBuffer recv_buffer = {};
 
-  recv_buffer.buf = kernel_state()->memory()->TranslateVirtual<char*>(
+  recv_buffer.data = kernel_state()->memory()->TranslateVirtual<char*>(
       receive_async_data.buffers->buf_ptr);
   recv_buffer.len = receive_async_data.buffers->len;
-#else
-  iovec recv_buffer = {};
-
-  recv_buffer.iov_base = kernel_state()->memory()->TranslateVirtual<char*>(
-      receive_async_data.buffers->buf_ptr);
-  recv_buffer.iov_len = receive_async_data.buffers->len;
-#endif
 
   sockaddr saddr = {};
 
@@ -1279,37 +905,9 @@ int XSocket::PollWSARecvFrom(bool wait, WSARecvFromData receive_async_data) {
 
   // Only the first buffer is filled, the rest of a stream is left for the next
   // receive.
-  int result = 0;
-
-#if XE_PLATFORM_WIN32
-  result = ::WSARecvFrom(native_handle_, &recv_buffer, 1,
-                         reinterpret_cast<DWORD*>(&bytes_received),
-                         reinterpret_cast<DWORD*>(&flags),
-                         has_from ? &saddr : nullptr,
-                         has_from ? &from_len : nullptr, nullptr, nullptr);
-#else
-  sockaddr_in sender_addr = {};
-  msghdr message = {};
-
-  message.msg_name = has_from ? &saddr : nullptr;
-  message.msg_namelen = has_from ? from_len : 0;
-
-  // Setup scatter-gather destination buffers (Equivalent to WSABUF array)
-  message.msg_iov = &recv_buffer;
-  message.msg_iovlen = 1;
-
-  ssize_t received_bytes = recvmsg(native_handle_, &message, flags);
-
-  if (received_bytes >= 0 && (message.msg_flags & MSG_TRUNC)) {
-    XWSASetLastError(X_WSA_ERROR::X_WSAEMSGSIZE);
-    result = X_SOCKET_ERROR;
-  } else if (received_bytes >= 0) {
-    bytes_received = received_bytes;
-    result = X_ERROR_SUCCESS;
-  } else {
-    result = X_SOCKET_ERROR;
-  }
-#endif
+  const int result = transport_->ReceiveBuffer(
+      recv_buffer, has_from ? &saddr : nullptr, has_from ? &from_len : nullptr,
+      &bytes_received, &flags);
 
   const bool pending = XWSAGetLastError() == X_WSA_ERROR::X_WSA_IO_PENDING ||
                        XWSAGetLastError() == X_WSA_ERROR::X_WSAEWOULDBLOCK;
@@ -1346,7 +944,7 @@ int XSocket::PollWSARecvFrom(bool wait, WSARecvFromData receive_async_data) {
       // Copy behavior from recvfrom.
       if (proto_ == X_IPPROTO_TCP) {
         socklen_t peer_addar_len = sizeof(sockaddr);
-        GetHostPeerName(&saddr, &peer_addar_len);
+        transport_->GetPeerName(&saddr, &peer_addar_len);
       }
 
       receive_async_data.from->to_guest(&saddr);
@@ -1413,8 +1011,8 @@ int XSocket::WSARecvFrom(XWSABUF* buffers, uint32_t num_buffers,
     sockaddr_storage peer = {};
     socklen_t peer_len = sizeof(peer);
 
-    if (listening_ ||
-        GetHostPeerName(reinterpret_cast<sockaddr*>(&peer), &peer_len) != 0) {
+    if (listening_ || transport_->GetPeerName(
+                          reinterpret_cast<sockaddr*>(&peer), &peer_len) != 0) {
       XWSASetLastError(X_WSA_ERROR::X_WSAENOTCONN);
       return X_SOCKET_ERROR;
     }
@@ -1766,18 +1364,7 @@ int XSocket::WSACancelOverlappedIO() {
 // Send flags must be 0. They're accepted but ignored, e.g. MSG_OOB data is
 // sent as normal data, so don't pass them on.
 int XSocket::Send(const uint8_t* buf, uint32_t buf_len, uint32_t flags) {
-  const int ret =
-      send(native_handle_, reinterpret_cast<const char*>(buf), buf_len, 0);
-
-  ReportTimeout(ret, send_timeout_ms_);
-
-#if !XE_PLATFORM_WIN32
-  if (ret < 0 && errno == EPIPE && !shutdown_send_) {
-    XWSASetLastError(X_WSA_ERROR::X_WSAENOTCONN);
-  }
-#endif
-
-  return ret;
+  return transport_->Send(buf, buf_len);
 }
 
 int XSocket::SendTo(uint8_t* buf, uint32_t buf_len, uint32_t flags,
@@ -1820,16 +1407,14 @@ int XSocket::SendTo(uint8_t* buf, uint32_t buf_len, uint32_t flags,
 
   // The guest's length is ignored, the whole address is always read.
   // Flags are ignored, like send.
-  int ret = sendto(native_handle_, reinterpret_cast<char*>(buf), buf_len, 0,
-                   addr_ptr, to ? sizeof(sockaddr_in) : 0);
-
-  ReportTimeout(ret, send_timeout_ms_);
+  int ret =
+      transport_->SendTo(buf, buf_len, addr_ptr, to ? sizeof(sockaddr_in) : 0);
 
   const uint32_t send_error = ret < 0 ? XWSAGetLastError() : 0;
 
   // Implicit Bind
   if (!bound_port_) {
-    bound_port_ = GetImplicitlyBoundPort();
+    bound_port_ = transport_->GetBoundPort();
     bound_ = true;
   }
 
@@ -1843,10 +1428,7 @@ int XSocket::SendTo(uint8_t* buf, uint32_t buf_len, uint32_t flags,
 
 int XSocket::WSAEventSelect(uint32_t event_handle, uint64_t native_event_handle,
                             uint32_t flags) {
-#if XE_PLATFORM_WIN32
-  const HANDLE hEvent =
-      reinterpret_cast<HANDLE>(static_cast<uintptr_t>(native_event_handle));
-  const int ret = ::WSAEventSelect(native_handle_, hEvent, flags);
+  const int ret = transport_->EventSelect(native_event_handle, flags);
 
   if (ret == X_ERROR_SUCCESS) {
     event_select_handle_ = flags ? event_handle : 0;
@@ -1854,18 +1436,6 @@ int XSocket::WSAEventSelect(uint32_t event_handle, uint64_t native_event_handle,
   }
 
   return ret;
-#else
-  int non_blocking = 1;
-
-  if (ioctl(native_handle_, FIONBIO, &non_blocking) < 0) {
-    return X_SOCKET_ERROR;
-  }
-
-  event_select_handle_ = flags ? event_handle : 0;
-  event_select_flags_ = flags;
-
-  return X_ERROR_SUCCESS;
-#endif
 }
 
 bool XSocket::IsEventSelectPending(uint32_t event_handle) {
@@ -1899,7 +1469,7 @@ bool XSocket::QueuePacket(uint32_t src_ip, uint16_t src_port,
 X_STATUS XSocket::GetPeerName(XSOCKADDR_IN* name, socklen_t* name_len) {
   sockaddr addr = name->to_host();
 
-  int ret = GetHostPeerName(&addr, name_len);
+  int ret = transport_->GetPeerName(&addr, name_len);
   if (ret < 0) {
     return X_STATUS_UNSUCCESSFUL;
   }
@@ -1916,7 +1486,7 @@ X_STATUS XSocket::GetSockName(XSOCKADDR_IN* name, socklen_t* name_len) {
 
   sockaddr addr = name->to_host();
 
-  int ret = getsockname(native_handle_, &addr, name_len);
+  int ret = transport_->GetSockName(&addr, name_len);
   if (ret < 0) {
     return X_STATUS_UNSUCCESSFUL;
   }
@@ -2062,7 +1632,7 @@ uint32_t XSocket::XWSAGetLastError() {
   return last_error;
 }
 
-void XSocket::XWSASetLastError(uint32_t error) const {
+void XSocket::XWSASetLastError(uint32_t error) {
   bool known = XWSAIsKnownError(error);
 
 #ifdef XE_PLATFORM_WIN32

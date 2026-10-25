@@ -2,7 +2,7 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2015 Ben Vanik. All rights reserved.                             *
+ * Copyright 2026 Xenia Canary. All rights reserved.                          *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
@@ -18,24 +18,8 @@
 #include <vector>
 
 #include "xenia/base/byte_order.h"
+#include "xenia/kernel/host_transport.h"
 #include "xenia/kernel/xobject.h"
-
-#ifdef XE_PLATFORM_WIN32
-// clang-format off
-#include "xenia/base/platform.h"
-#include <WS2tcpip.h>
-#include <WinSock2.h>
-// clang-format on
-#else
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <netinet/ip.h>
-#include <netinet/tcp.h>
-#include <poll.h>
-#include <sys/ioctl.h>
-#include <sys/socket.h>
-#include <unistd.h>
-#endif
 
 namespace xe {
 namespace kernel {
@@ -188,7 +172,7 @@ class XSocket : public XObject {
   XSocket(KernelState* kernel_state);
   ~XSocket();
 
-  uint64_t native_handle() const { return native_handle_; }
+  uint64_t native_handle() const { return transport_->native_handle(); }
   uint16_t bound_port() const { return bound_port_; }
   Protocol protocol() const { return proto_; }
   bool IsBound() const { return bound_; }
@@ -253,6 +237,7 @@ class XSocket : public XObject {
   static bool XWSAIsKnownError(uint32_t error);
 
   static uint32_t XWSAGetLastError();
+  static void XWSASetLastError(uint32_t error);
 
   struct packet {
     // These values are in network byte order.
@@ -268,8 +253,8 @@ class XSocket : public XObject {
                    size_t len);
 
  private:
-  XSocket(KernelState* kernel_state, uint64_t native_handle);
-  uint64_t native_handle_ = X_INVALID_SOCKET;
+  XSocket(KernelState* kernel_state, std::unique_ptr<HostTransport> transport);
+  std::unique_ptr<HostTransport> transport_;
   bool socket_closed_ = false;
 
   AddressFamily af_;     // Address family
@@ -295,15 +280,6 @@ class XSocket : public XObject {
   uint32_t event_select_handle_ = 0;
   uint32_t event_select_flags_ = 0;
 
-  uint32_t receive_timeout_ms_ = 0;
-  uint32_t send_timeout_ms_ = 0;
-  // SO_EXCLUSIVEADDRUSE, which Linux doesn't have.
-  bool exclusive_address_use_ = false;
-
-  // The connected peer. Linux forgets it once the connection is reset.
-  sockaddr_storage peer_ = {};
-  socklen_t peer_len_ = 0;
-
   std::unique_ptr<xe::threading::Event> event_;
   std::mutex incoming_packet_mutex_;
   std::queue<uint8_t*> incoming_packets_;
@@ -313,16 +289,6 @@ class XSocket : public XObject {
 
   std::map<XWSAOVERLAPPED*, std::future<int32_t>> send_polling_tasks_;
   std::map<XWSAOVERLAPPED*, std::future<int32_t>> receive_polling_tasks_;
-
-  uint16_t GetImplicitlyBoundPort() const;
-
-  void RememberPeer();
-  int GetHostPeerName(sockaddr* addr, socklen_t* len);
-
-  void ReportTimeout(int ret, uint32_t timeout_ms) const;
-
-  int GetNativeOption(int level, int optname, void* value, socklen_t* len);
-  int SetNativeOption(int level, int optname, const void* value, socklen_t len);
 
   std::atomic<bool> cancel_overlapped_ = false;
   // Cancel only the pending receive or send.
@@ -340,8 +306,6 @@ class XSocket : public XObject {
   int WSASelectRead(bool wait, X_WSA_ERROR* error);
 
   int PollWSARecvFrom(bool wait, WSARecvFromData receive_async_data);
-
-  void XWSASetLastError(uint32_t error) const;
 };
 
 }  // namespace kernel
