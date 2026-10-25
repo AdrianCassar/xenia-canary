@@ -1428,7 +1428,9 @@ int XSocket::SendTo(uint8_t* buf, uint32_t buf_len, uint32_t flags,
 
 int XSocket::WSAEventSelect(uint32_t event_handle, uint64_t native_event_handle,
                             uint32_t flags) {
-  const int ret = transport_->EventSelect(native_event_handle, flags);
+  const int ret = transport_->EventSelect(
+      native_event_handle, flags,
+      [event_handle] { xboxkrnl::xeNtSetEvent(event_handle, nullptr); });
 
   if (ret == X_ERROR_SUCCESS) {
     event_select_handle_ = flags ? event_handle : 0;

@@ -11,6 +11,7 @@
 #define XENIA_KERNEL_SOCKET_TRANSPORT_H_
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <vector>
 
@@ -62,7 +63,10 @@ class SocketTransport {
                         socklen_t len) = 0;
   // cmd and *arg_ptr are the guest's values.
   virtual int IOControl(uint32_t cmd, uint32_t* arg_ptr) = 0;
-  virtual int EventSelect(uint64_t native_event_handle, uint32_t flags) = 0;
+  // signal sets the guest event. A transport calls it itself when the host
+  // can't signal native_event_handle directly.
+  virtual int EventSelect(uint64_t native_event_handle, uint32_t flags,
+                          std::function<void()> signal) = 0;
 
   virtual int Bind(const sockaddr* addr, socklen_t len) = 0;
   virtual int Connect(const sockaddr* addr) = 0;

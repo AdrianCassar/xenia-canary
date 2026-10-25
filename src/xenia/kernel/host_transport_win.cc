@@ -20,6 +20,8 @@ namespace kernel {
 HostTransport::HostTransport(uint64_t native_handle, bool datagram)
     : native_handle_(native_handle), datagram_(datagram) {}
 
+HostTransport::~HostTransport() = default;
+
 bool HostTransport::Open(int af, int type, int protocol) {
   datagram_ = type == XSocket::X_SOCK_DGRAM;
 
@@ -91,7 +93,9 @@ int HostTransport::IOControl(uint32_t cmd, uint32_t* arg_ptr) {
   return ret;
 }
 
-int HostTransport::EventSelect(uint64_t native_event_handle, uint32_t flags) {
+// The host signals the event itself.
+int HostTransport::EventSelect(uint64_t native_event_handle, uint32_t flags,
+                               std::function<void()>) {
   const HANDLE hEvent =
       reinterpret_cast<HANDLE>(static_cast<uintptr_t>(native_event_handle));
   const int ret = ::WSAEventSelect(native_handle_, hEvent, flags);
