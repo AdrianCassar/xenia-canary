@@ -10,6 +10,7 @@
 #include "xenia/kernel/host_transport.h"
 
 #include <fcntl.h>
+#include <linux/sock_diag.h>
 #include <algorithm>
 #include <cerrno>
 #include <chrono>
@@ -196,6 +197,7 @@ int HostTransport::EventSelect(uint64_t, uint32_t flags,
     read_armed_ = true;
     write_armed_ = true;
     close_armed_ = true;
+    last_queued_bytes_ = 0;
     stop_event_watcher_ = false;
 
     event_watcher_ = std::thread(&HostTransport::WatchEvents, this);
@@ -221,6 +223,14 @@ void HostTransport::WatchEvents() {
       if (!(revents & POLLIN)) {
         read_armed_ = true;
       } else if (read_armed_.exchange(false)) {
+        signal = true;
+      }
+    }
+
+    // More data arrived, even if nothing was received since the last signal.
+    if (event_flags_ & X_FD_READ) {
+      const uint64_t queued = QueuedReceiveBytes();
+      if (queued > last_queued_bytes_.exchange(queued)) {
         signal = true;
       }
     }
@@ -264,12 +274,19 @@ void HostTransport::WatchEvents() {
   }
 }
 
-void HostTransport::StopEventWatcher() {
-  stop_event_watcher_ = true;
+// Linux only reports the next datagram's size through FIONREAD, so use the
+// memory the receive queue holds.
+uint64_t HostTransport::QueuedReceiveBytes() const {
+#ifdef SO_MEMINFO
+  uint32_t meminfo[SK_MEMINFO_VARS] = {};
+  socklen_t len = sizeof(meminfo);
 
-  if (event_watcher_.joinable()) {
-    event_watcher_.join();
+  if (getsockopt(native_handle_, SOL_SOCKET, SO_MEMINFO, meminfo, &len) == 0) {
+    return meminfo[SK_MEMINFO_RMEM_ALLOC];
   }
+#endif
+
+  return 0;
 }
 
 int HostTransport::Bind(const sockaddr* addr, socklen_t len) {

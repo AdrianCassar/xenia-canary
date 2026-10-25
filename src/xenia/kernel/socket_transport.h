@@ -67,6 +67,9 @@ class SocketTransport {
   // can't signal native_event_handle directly.
   virtual int EventSelect(uint64_t native_event_handle, uint32_t flags,
                           std::function<void()> signal) = 0;
+  // The guest reset the selected event. Data already queued doesn't signal
+  // it again, only data that arrives afterwards.
+  virtual void EventReset() = 0;
 
   virtual int Bind(const sockaddr* addr, socklen_t len) = 0;
   virtual int Connect(const sockaddr* addr) = 0;

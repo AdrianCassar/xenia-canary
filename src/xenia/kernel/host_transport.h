@@ -37,6 +37,7 @@ class HostTransport final : public SocketTransport {
   int IOControl(uint32_t cmd, uint32_t* arg_ptr) override;
   int EventSelect(uint64_t native_event_handle, uint32_t flags,
                   std::function<void()> signal) override;
+  void EventReset() override;
 
   int Bind(const sockaddr* addr, socklen_t len) override;
   int Connect(const sockaddr* addr) override;
@@ -66,8 +67,12 @@ class HostTransport final : public SocketTransport {
  private:
   void ReportTimeout(int ret, uint32_t timeout_ms) const;
   void RememberPeer();
+
   void StopEventWatcher();
   void WatchEvents();
+
+  // How much data the host has queued to receive, or 0 if it can't tell.
+  uint64_t QueuedReceiveBytes() const;
 
   uint64_t native_handle_ = X_INVALID_SOCKET;
   bool datagram_ = false;
@@ -75,8 +80,11 @@ class HostTransport final : public SocketTransport {
   bool event_select_active_ = false;
   bool shutdown_send_ = false;
 
+  // The timeouts that were set. Linux rounds them when they're read back, and
+  // reports a timed out call like one that would block.
   uint32_t receive_timeout_ms_ = 0;
   uint32_t send_timeout_ms_ = 0;
+
   // SO_EXCLUSIVEADDRUSE, which Linux doesn't have.
   bool exclusive_address_use_ = false;
 
@@ -84,21 +92,33 @@ class HostTransport final : public SocketTransport {
   sockaddr_storage peer_ = {};
   socklen_t peer_len_ = 0;
 
-  // Linux has no WSAEventSelect, so a thread signals the event instead.
+  // A thread signals the guest event for what the host doesn't: everything on
+  // Linux, which has no WSAEventSelect, and more data arriving on Windows.
   std::thread event_watcher_;
   std::atomic<bool> stop_event_watcher_ = false;
   uint32_t event_flags_ = 0;
   std::function<void()> event_signal_;
+
   // Cleared once the event is signalled, and set again by a receive or once
   // the socket has nothing left to read.
   std::atomic<bool> read_armed_ = true;
+
   // Cleared once the event is signalled, and set again by a send that
   // couldn't complete.
   std::atomic<bool> write_armed_ = true;
+
   // Cleared once the peer's close is signalled.
   std::atomic<bool> close_armed_ = true;
+
+  // A non-blocking connect that hasn't finished yet, and whether the stream is
+  // connected, which FD_WRITE and FD_CLOSE wait for.
   std::atomic<bool> connect_pending_ = false;
   std::atomic<bool> connected_ = false;
+
+  // FD_READ is signalled again whenever more data arrives, even before a
+  // receive, which the hosts don't do. 494707E4 (Race Pro) resets its event
+  // after a timed out wait without receiving, and relies on this.
+  std::atomic<uint64_t> last_queued_bytes_ = 0;
 };
 
 }  // namespace kernel
