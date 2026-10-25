@@ -476,6 +476,12 @@ X_STATUS XSocket::Bind(const XSOCKADDR_IN* name, int name_len) {
 
   int ret = bind(native_handle_, &addr, name_len);
   if (ret < 0) {
+#if XE_PLATFORM_WIN32
+    // The host reports a port held with SO_EXCLUSIVEADDRUSE as WSAEACCES.
+    if (XWSAGetLastError() == X_WSA_ERROR::X_WSAEACCES) {
+      XWSASetLastError(X_WSA_ERROR::X_WSAEADDRINUSE);
+    }
+#endif
     return X_STATUS_UNSUCCESSFUL;
   }
 
@@ -1647,9 +1653,11 @@ int XSocket::WSACancelOverlappedIO() {
   return 0;
 }
 
+// Send flags must be 0. They're accepted but ignored, e.g. MSG_OOB data is
+// sent as normal data, so don't pass them on.
 int XSocket::Send(const uint8_t* buf, uint32_t buf_len, uint32_t flags) {
   const int ret =
-      send(native_handle_, reinterpret_cast<const char*>(buf), buf_len, flags);
+      send(native_handle_, reinterpret_cast<const char*>(buf), buf_len, 0);
 
 #if !XE_PLATFORM_WIN32
   if (ret < 0 && errno == EPIPE && !shutdown_send_) {
@@ -1699,7 +1707,8 @@ int XSocket::SendTo(uint8_t* buf, uint32_t buf_len, uint32_t flags,
   }
 
   // The guest's length is ignored, the whole address is always read.
-  int ret = sendto(native_handle_, reinterpret_cast<char*>(buf), buf_len, flags,
+  // Flags are ignored, like send.
+  int ret = sendto(native_handle_, reinterpret_cast<char*>(buf), buf_len, 0,
                    addr_ptr, to ? sizeof(sockaddr_in) : 0);
 
   const uint32_t send_error = ret < 0 ? XWSAGetLastError() : 0;
