@@ -149,7 +149,6 @@ struct WSASendToData {
   std::shared_ptr<XWSABUF[]> buffers;
   uint32_t num_buffers;
   XSOCKADDR_IN* to;
-  int to_len;
   XWSAOVERLAPPED* overlapped;
 };
 
@@ -288,6 +287,8 @@ class XSocket : public XObject {
 
   bool broadcast_socket_ = false;
   bool listening_ = false;
+  // Error from a connect that failed, reported again by listen.
+  uint32_t connect_error_ = 0;
   bool shutdown_receive_ = false;
   bool shutdown_send_ = false;
 

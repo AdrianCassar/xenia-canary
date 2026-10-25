@@ -414,7 +414,8 @@ X_STATUS XSocket::Connect(const XSOCKADDR_IN* name, int name_len) {
 
   sockaddr addr = sa_in.to_host();
 
-  int ret = connect(native_handle_, &addr, name_len);
+  // The guest's length is ignored, the whole address is always read.
+  int ret = connect(native_handle_, &addr, sizeof(sockaddr_in));
 
   const uint32_t connect_error = ret < 0 ? XWSAGetLastError() : 0;
 
@@ -425,6 +426,10 @@ X_STATUS XSocket::Connect(const XSOCKADDR_IN* name, int name_len) {
   }
 
   if (ret < 0) {
+    if (connect_error != X_WSA_ERROR::X_WSAEWOULDBLOCK) {
+      connect_error_ = connect_error;
+    }
+
     XWSASetLastError(connect_error);
     return X_STATUS_UNSUCCESSFUL;
   }
@@ -575,6 +580,11 @@ int XSocket::SetNativeOption(int level, int optname, const void* value,
 }
 
 X_STATUS XSocket::Listen(int backlog) {
+  if (connect_error_) {
+    XWSASetLastError(connect_error_);
+    return X_STATUS_UNSUCCESSFUL;
+  }
+
   if (!bound_ || type_ == X_SOCK_DGRAM) {
     XWSASetLastError(X_WSA_ERROR::X_WSAEINVAL);
     return X_STATUS_UNSUCCESSFUL;
@@ -848,7 +858,7 @@ int XSocket::PollWSASendTo(bool wait, WSASendToData send_async_data,
     }
 
     saddr_ptr = &saddr;
-    saddr_len = send_async_data.to_len;
+    saddr_len = sizeof(sockaddr_in);
   }
 
   uint32_t bytes_sent = 0;
@@ -880,10 +890,17 @@ int XSocket::PollWSASendTo(bool wait, WSASendToData send_async_data,
   }
 #endif
 
+  const uint32_t send_error = result == X_SOCKET_ERROR ? XWSAGetLastError() : 0;
+
   // Implicit Bind
   if (!bound_port_) {
     bound_port_ = GetImplicitlyBoundPort();
     bound_ = true;
+  }
+
+  // getsockname resets the last error.
+  if (result == X_SOCKET_ERROR) {
+    XWSASetLastError(send_error);
   }
 
   const bool pending = XWSAGetLastError() == X_WSA_ERROR::X_WSA_IO_PENDING ||
@@ -934,8 +951,7 @@ int XSocket::WSASendTo(XWSABUF* buffers, uint32_t num_buffers,
   std::lock_guard socket_lock(send_socket_mutex_);
 
   if (!buffers || !num_buffers || !num_bytes_sent_ptr || flags ||
-      to_ptr && (to_len < sizeof(XSOCKADDR_IN) ||
-                 to_ptr->address_family != X_AF_INET)) {
+      to_ptr && to_ptr->address_family != X_AF_INET) {
     XWSASetLastError(X_WSA_ERROR::X_WSA_INVALID_PARAMETER);
     return X_SOCKET_ERROR;
   }
@@ -955,7 +971,6 @@ int XSocket::WSASendTo(XWSABUF* buffers, uint32_t num_buffers,
 
   send_async_data.num_buffers = num_buffers;
   send_async_data.to = to_ptr;
-  send_async_data.to_len = to_len;
 
   send_async_data.overlapped = overlapped_ptr;
 
@@ -1145,14 +1160,16 @@ int XSocket::PollWSARecvFrom(bool wait, WSARecvFromData receive_async_data) {
   const bool has_from = receive_async_data.from && receive_async_data.from_len;
   int from_len = has_from ? receive_async_data.from_len->get() : 0;
 
+  // Only the first buffer is filled, the rest of a stream is left for the next
+  // receive.
   int result = 0;
 
 #if XE_PLATFORM_WIN32
-  result = ::WSARecvFrom(
-      native_handle_, &recv_buffer, receive_async_data.num_buffers,
-      reinterpret_cast<DWORD*>(&bytes_received),
-      reinterpret_cast<DWORD*>(&flags), has_from ? &saddr : nullptr,
-      has_from ? &from_len : nullptr, nullptr, nullptr);
+  result = ::WSARecvFrom(native_handle_, &recv_buffer, 1,
+                         reinterpret_cast<DWORD*>(&bytes_received),
+                         reinterpret_cast<DWORD*>(&flags),
+                         has_from ? &saddr : nullptr,
+                         has_from ? &from_len : nullptr, nullptr, nullptr);
 #else
   sockaddr_in sender_addr = {};
   msghdr message = {};
@@ -1162,7 +1179,7 @@ int XSocket::PollWSARecvFrom(bool wait, WSARecvFromData receive_async_data) {
 
   // Setup scatter-gather destination buffers (Equivalent to WSABUF array)
   message.msg_iov = &recv_buffer;
-  message.msg_iovlen = receive_async_data.num_buffers;
+  message.msg_iovlen = 1;
 
   ssize_t received_bytes = recvmsg(native_handle_, &message, flags);
 
@@ -1243,7 +1260,12 @@ int XSocket::PollWSARecvFrom(bool wait, WSARecvFromData receive_async_data) {
     // If no event handle is provided then title can check for completion via
     // internal on change.
     receive_async_data.overlapped->internal = X_WSA_ERROR::X_WSA_NO_ERROR;
+  }
 
+  // A pending receive also completes when it ends in an error, e.g. the peer
+  // resets the connection.
+  if (receive_async_data.overlapped &&
+      (result == X_ERROR_SUCCESS || (wait && !pending))) {
     xboxkrnl::xeNtSetEvent(receive_async_data.overlapped->event_handle,
                            nullptr);
   }
@@ -1267,6 +1289,19 @@ int XSocket::WSARecvFrom(XWSABUF* buffers, uint32_t num_buffers,
   if (!bound_) {
     XWSASetLastError(X_WSA_ERROR::X_WSAEINVAL);
     return X_SOCKET_ERROR;
+  }
+
+  // The host would leave a receive on an unconnected stream pending forever.
+  if (type_ == X_SOCK_STREAM) {
+    sockaddr_storage peer = {};
+    socklen_t peer_len = sizeof(peer);
+
+    if (listening_ ||
+        getpeername(native_handle_, reinterpret_cast<sockaddr*>(&peer),
+                    &peer_len) != 0) {
+      XWSASetLastError(X_WSA_ERROR::X_WSAENOTCONN);
+      return X_SOCKET_ERROR;
+    }
   }
 
   // Only one overlapped receive can be pending per socket.
@@ -1660,13 +1695,21 @@ int XSocket::SendTo(uint8_t* buf, uint32_t buf_len, uint32_t flags,
     addr_ptr = &addr;
   }
 
+  // The guest's length is ignored, the whole address is always read.
   int ret = sendto(native_handle_, reinterpret_cast<char*>(buf), buf_len, flags,
-                   addr_ptr, to ? to_len : 0);
+                   addr_ptr, to ? sizeof(sockaddr_in) : 0);
+
+  const uint32_t send_error = ret < 0 ? XWSAGetLastError() : 0;
 
   // Implicit Bind
   if (!bound_port_) {
     bound_port_ = GetImplicitlyBoundPort();
     bound_ = true;
+  }
+
+  // getsockname resets the last error.
+  if (ret < 0) {
+    XWSASetLastError(send_error);
   }
 
   return ret;
