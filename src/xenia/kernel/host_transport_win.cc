@@ -9,6 +9,7 @@
 
 #include "xenia/kernel/host_transport.h"
 
+#include <mstcpip.h>
 #include <mswsock.h>
 #include <chrono>
 
@@ -165,6 +166,20 @@ int HostTransport::Bind(const sockaddr* addr, socklen_t len) {
 }
 
 int HostTransport::Connect(const sockaddr* addr) {
+  // The host retries a refused connect for about 2 seconds, where the console
+  // fails straight away. A SYN to this machine can't be lost, so only skip
+  // the retries there.
+  const auto* addr_in = reinterpret_cast<const sockaddr_in*>(addr);
+  if (!datagram_ && (ntohl(addr_in->sin_addr.s_addr) >> 24) == 127) {
+    TCP_INITIAL_RTO_PARAMETERS rto = {};
+    rto.Rtt = TCP_INITIAL_RTO_UNSPECIFIED_RTT;
+    rto.MaxSynRetransmissions = TCP_INITIAL_RTO_NO_SYN_RETRANSMISSIONS;
+
+    DWORD bytes_returned = 0;
+    WSAIoctl(static_cast<SOCKET>(native_handle_), SIO_TCP_INITIAL_RTO, &rto,
+             sizeof(rto), nullptr, 0, &bytes_returned, nullptr, nullptr);
+  }
+
   // The guest's length is ignored, the whole address is always read.
   return connect(native_handle_, addr, sizeof(sockaddr_in));
 }
