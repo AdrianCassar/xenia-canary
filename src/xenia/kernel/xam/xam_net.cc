@@ -486,9 +486,17 @@ dword_result_t NetDll_WSAWaitForMultipleEvents_entry(dword_t num_events,
                                                      dword_t wait_all,
                                                      dword_t timeout,
                                                      dword_t alertable) {
-  if (num_events > 64) {
+  if (!num_events || num_events > 64) {
     XThread::SetLastError(X_WSA_ERROR::X_WSA_INVALID_PARAMETER);
     return -1;
+  }
+
+  // The kernel wait reports a handle it can't find as an invalid parameter.
+  for (uint32_t i = 0; i < num_events; i++) {
+    if (!kernel_state()->object_table()->LookupObject<XObject>(events[i])) {
+      XThread::SetLastError(X_WSA_ERROR::X_WSA_INVALID_HANDLE);
+      return -1;
+    }
   }
 
   uint64_t timeout_wait = 0;

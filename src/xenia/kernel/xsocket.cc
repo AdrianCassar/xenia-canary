@@ -1760,6 +1760,7 @@ bool XSocket::XWSAIsKnownError(uint32_t wsa_error) {
   // Xbox error codes might not match with what we receive from OS
   switch (wsa_error) {
     case X_WSA_ERROR::X_WSA_NO_ERROR:
+    case X_WSA_ERROR::X_WSA_INVALID_HANDLE:
     case X_WSA_ERROR::X_WSA_INVALID_PARAMETER:
     case X_WSA_ERROR::X_WSA_OPERATION_ABORTED:
     case X_WSA_ERROR::X_WSA_IO_INCOMPLETE:
