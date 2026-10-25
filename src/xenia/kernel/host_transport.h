@@ -22,7 +22,7 @@ class HostTransport final : public SocketTransport {
   // Wraps a socket returned by Accept.
   HostTransport(uint64_t native_handle, bool datagram);
 
-  uint64_t native_handle() const override { return native_handle_; }
+  uint64_t native_handle() const { return native_handle_; }
 
   bool Open(int af, int type, int protocol) override;
   int Close() override;

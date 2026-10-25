@@ -347,5 +347,28 @@ int HostTransport::Select(bool write, long timeout_us) {
                 &tv);
 }
 
+// Linux only checks descriptors below nfds. Winsock ignores it, so titles
+// usually pass 0.
+int TransportSelect::Wait(uint32_t, timeval* timeout) {
+  const int ret = select(highest_ + 1, use_read_ ? &read_ : nullptr,
+                         use_write_ ? &write_ : nullptr,
+                         use_except_ ? &except_ : nullptr, timeout);
+
+  // The host reports a refused connect as POLLERR rather than in the except
+  // set.
+  if (ret != X_SOCKET_ERROR) {
+    for (const uint64_t handle : except_handles_) {
+      pollfd poll_fd = {};
+      poll_fd.fd = static_cast<int>(handle);
+
+      if (poll(&poll_fd, 1, 0) > 0 && (poll_fd.revents & POLLERR)) {
+        FD_SET(poll_fd.fd, &errored_);
+      }
+    }
+  }
+
+  return ret;
+}
+
 }  // namespace kernel
 }  // namespace xe
