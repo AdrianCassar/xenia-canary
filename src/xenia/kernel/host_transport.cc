@@ -86,6 +86,10 @@ int HostTransport::SendTo(const uint8_t* buf, uint32_t len, const sockaddr* to,
   const int ret = sendto(native_handle_, reinterpret_cast<const char*>(buf),
                          len, 0, to, to_len);
 
+  if (ret < 0) {
+    write_armed_ = true;
+  }
+
   ReportTimeout(ret, send_timeout_ms_);
 
   return ret;
