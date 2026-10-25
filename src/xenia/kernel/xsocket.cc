@@ -1428,28 +1428,9 @@ int XSocket::SendTo(uint8_t* buf, uint32_t buf_len, uint32_t flags,
 
 int XSocket::WSAEventSelect(uint32_t event_handle, uint64_t native_event_handle,
                             uint32_t flags) {
-  const int ret = transport_->EventSelect(
-      native_event_handle, flags,
-      [event_handle] { xboxkrnl::xeNtSetEvent(event_handle, nullptr); });
-
-  if (ret == X_ERROR_SUCCESS) {
-    event_select_handle_ = flags ? event_handle : 0;
-    event_select_flags_ = flags;
-  }
-
-  return ret;
-}
-
-bool XSocket::IsEventSelectPending(uint32_t event_handle) {
-  constexpr uint32_t X_FD_READ = 0x01;
-  constexpr uint32_t X_FD_ACCEPT = 0x08;
-
-  if (socket_closed_ || !event_handle || event_select_handle_ != event_handle ||
-      !(event_select_flags_ & (X_FD_READ | X_FD_ACCEPT))) {
-    return false;
-  }
-
-  return WSASelectRead(false, nullptr) > 0;
+  return transport_->EventSelect(native_event_handle, flags, [event_handle] {
+    xboxkrnl::xeNtSetEvent(event_handle, nullptr);
+  });
 }
 
 bool XSocket::QueuePacket(uint32_t src_ip, uint16_t src_port,

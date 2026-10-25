@@ -553,15 +553,6 @@ dword_result_t NetDll_WSAResetEvent_entry(dword_t event_handle) {
     return 0;
   }
 
-  auto sockets = kernel_state()->object_table()->GetObjectsByType<XSocket>();
-
-  for (const auto& socket : sockets) {
-    if (socket->IsEventSelectPending(event_handle)) {
-      xboxkrnl::xeNtSetEvent(event_handle, nullptr);
-      break;
-    }
-  }
-
   return 1;
 }
 DECLARE_XAM_EXPORT1(NetDll_WSAResetEvent, kNetworking, kImplemented);

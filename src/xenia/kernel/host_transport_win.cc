@@ -63,8 +63,7 @@ int HostTransport::IOControl(uint32_t cmd, uint32_t* arg_ptr) {
   u_long param = initial_param;
 
   // The host refuses to make a socket blocking while WSAEventSelect is
-  // active, so cancel its association first. The guest event stays recorded
-  // for WSAResetEvent.
+  // active, so cancel its association first.
   if (cmd == X_FIONBIO && !param && event_select_active_) {
     ::WSAEventSelect(native_handle_, nullptr, 0);
   }
