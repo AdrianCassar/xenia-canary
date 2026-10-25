@@ -2610,14 +2610,18 @@ dword_result_t NetDll_getpeername_entry(dword_t caller, dword_t socket_handle,
     return -1;
   }
 
-  socklen_t native_len = *addrlen_ptr;
+  // The guest's length is ignored and may be null, the whole address is
+  // always written.
+  socklen_t native_len = sizeof(XSOCKADDR_IN);
   X_STATUS status = socket->GetPeerName(addr_ptr, &native_len);
   if (XFAILED(status)) {
     XThread::SetLastError(socket->XWSAGetLastError());
     return -1;
   }
 
-  *addrlen_ptr = native_len;
+  if (addrlen_ptr) {
+    *addrlen_ptr = native_len;
+  }
   return 0;
 }
 DECLARE_XAM_EXPORT1(NetDll_getpeername, kNetworking, kImplemented);
@@ -2637,14 +2641,18 @@ dword_result_t NetDll_getsockname_entry(dword_t caller, dword_t socket_handle,
     return -1;
   }
 
-  socklen_t native_len = *addrlen_ptr;
+  // The guest's length is ignored and may be null, the whole address is
+  // always written.
+  socklen_t native_len = sizeof(XSOCKADDR_IN);
   X_STATUS status = socket->GetSockName(addr_ptr, &native_len);
   if (XFAILED(status)) {
     XThread::SetLastError(socket->XWSAGetLastError());
     return -1;
   }
 
-  *addrlen_ptr = native_len;
+  if (addrlen_ptr) {
+    *addrlen_ptr = native_len;
+  }
   return 0;
 }
 DECLARE_XAM_EXPORT1(NetDll_getsockname, kNetworking, kImplemented);
