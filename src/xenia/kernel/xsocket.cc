@@ -1537,8 +1537,6 @@ bool XSocket::WSAGetOverlappedResult(XWSAOVERLAPPED* overlapped_ptr,
       *bytes_transferred = overlapped_ptr->internal_high;
       *flags_ptr = overlapped_ptr->offset;
 
-      xboxkrnl::xeNtSetEvent(overlapped_ptr->event_handle, nullptr);
-
       if (sending_io) {
         send_polling_tasks_.erase(overlapped_ptr);
       } else if (receiving_io) {
