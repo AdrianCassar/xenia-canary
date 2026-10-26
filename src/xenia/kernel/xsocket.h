@@ -193,20 +193,20 @@ class XSocket : public XObject {
     }
   }
 
-  X_STATUS Initialize(AddressFamily af, Type type, Protocol proto);
+  int Initialize(AddressFamily af, Type type, Protocol proto);
   int Close();
 
-  X_STATUS GetOption(uint32_t level, uint32_t optname, void* optval_ptr,
-                     uint32_t* optlen);
+  int GetOption(uint32_t level, uint32_t optname, void* optval_ptr,
+                uint32_t* optlen);
   int SetOption(uint32_t level, uint32_t optname, void* optval_ptr,
                 uint32_t optlen);
-  X_STATUS IOControl(uint32_t cmd, uint32_t* arg_ptr);
+  int IOControl(uint32_t cmd, uint32_t* arg_ptr);
 
-  X_STATUS Connect(const XSOCKADDR_IN* name, int name_len);
-  X_STATUS Bind(const XSOCKADDR_IN* name, int name_len);
-  X_STATUS Listen(int backlog);
-  X_STATUS GetPeerName(XSOCKADDR_IN* name, socklen_t* name_len);
-  X_STATUS GetSockName(XSOCKADDR_IN* name, socklen_t* name_len);
+  int Connect(const XSOCKADDR_IN* name, int name_len);
+  int Bind(const XSOCKADDR_IN* name, int name_len);
+  int Listen(int backlog);
+  int GetPeerName(XSOCKADDR_IN* name, socklen_t* name_len);
+  int GetSockName(XSOCKADDR_IN* name, socklen_t* name_len);
   object_ref<XSocket> Accept(XSOCKADDR_IN* name, int* name_len);
   int Shutdown(int how);
 

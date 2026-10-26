@@ -91,7 +91,7 @@ XSocket::~XSocket() {
   }
 }
 
-X_STATUS XSocket::Initialize(AddressFamily af, Type type, Protocol proto) {
+int XSocket::Initialize(AddressFamily af, Type type, Protocol proto) {
   af_ = af;
   type_ = type;
   proto_ = proto;
@@ -123,10 +123,10 @@ X_STATUS XSocket::Initialize(AddressFamily af, Type type, Protocol proto) {
   }
 
   if (!transport_->Open(af ? af : X_AF_INET, type_, proto_)) {
-    return X_STATUS_UNSUCCESSFUL;
+    return X_SOCKET_ERROR;
   }
 
-  return X_STATUS_SUCCESS;
+  return X_ERROR_SUCCESS;
 }
 
 int XSocket::Close() {
@@ -144,11 +144,11 @@ int XSocket::Close() {
   return ret;
 }
 
-X_STATUS XSocket::GetOption(uint32_t level, uint32_t optname, void* optval_ptr,
-                            uint32_t* optlen) {
+int XSocket::GetOption(uint32_t level, uint32_t optname, void* optval_ptr,
+                       uint32_t* optlen) {
   if (!supported_levels.contains(level)) {
     XWSASetLastError(X_WSA_ERROR::X_WSAEINVAL);
-    return X_STATUS_UNSUCCESSFUL;
+    return X_SOCKET_ERROR;
   }
 
   const auto& supported_options = level == X_SOL_SOCKET
@@ -157,7 +157,7 @@ X_STATUS XSocket::GetOption(uint32_t level, uint32_t optname, void* optval_ptr,
 
   if (!supported_options.contains(optname)) {
     XWSASetLastError(X_WSA_ERROR::X_WSAENOPROTOOPT);
-    return X_STATUS_UNSUCCESSFUL;
+    return X_SOCKET_ERROR;
   }
 
   // SO_LINGER and SO_DONTLINGER only apply to stream sockets.
@@ -165,7 +165,7 @@ X_STATUS XSocket::GetOption(uint32_t level, uint32_t optname, void* optval_ptr,
       (optname == X_SO_LINGER || optname == ~X_SO_LINGER) &&
       type_ == X_SOCK_DGRAM) {
     XWSASetLastError(X_WSA_ERROR::X_WSAENOPROTOOPT);
-    return X_STATUS_UNSUCCESSFUL;
+    return X_SOCKET_ERROR;
   }
 
   // LINGER is two 16-bit fields, and the Linux host uses ints, so convert
@@ -177,7 +177,7 @@ X_STATUS XSocket::GetOption(uint32_t level, uint32_t optname, void* optval_ptr,
 
     if (transport_->GetOption(SOL_SOCKET, SO_LINGER, &native_linger,
                               &native_linger_len) < 0) {
-      return X_STATUS_UNSUCCESSFUL;
+      return X_SOCKET_ERROR;
     }
 
     X_LINGER* x_linger = static_cast<X_LINGER*>(optval_ptr);
@@ -185,7 +185,7 @@ X_STATUS XSocket::GetOption(uint32_t level, uint32_t optname, void* optval_ptr,
     x_linger->l_linger = static_cast<uint16_t>(native_linger.l_linger);
     *optlen = sizeof(X_LINGER);
 
-    return X_STATUS_SUCCESS;
+    return X_ERROR_SUCCESS;
   }
 
   // A buffer shorter than the option gets the low byte, the rest of it is
@@ -197,14 +197,14 @@ X_STATUS XSocket::GetOption(uint32_t level, uint32_t optname, void* optval_ptr,
     if (transport_->GetOption(supported_levels.at(level),
                               supported_options.at(optname), &value,
                               &value_len) < 0) {
-      return X_STATUS_UNSUCCESSFUL;
+      return X_SOCKET_ERROR;
     }
 
     std::memset(optval_ptr, 0, *optlen);
     *static_cast<uint8_t*>(optval_ptr) = static_cast<uint8_t>(value);
     *optlen = 1;
 
-    return X_STATUS_SUCCESS;
+    return X_ERROR_SUCCESS;
   }
 
   int ret = transport_->GetOption(supported_levels.at(level),
@@ -212,7 +212,7 @@ X_STATUS XSocket::GetOption(uint32_t level, uint32_t optname, void* optval_ptr,
                                   reinterpret_cast<socklen_t*>(optlen));
 
   if (ret < 0) {
-    return X_STATUS_UNSUCCESSFUL;
+    return X_SOCKET_ERROR;
   }
 
   // Because values provided in optval_ptr are in LE we must to somehow save
@@ -234,7 +234,7 @@ X_STATUS XSocket::GetOption(uint32_t level, uint32_t optname, void* optval_ptr,
       break;
   }
 
-  return X_STATUS_SUCCESS;
+  return X_ERROR_SUCCESS;
 }
 
 int XSocket::SetOption(uint32_t level, uint32_t optname, void* optval_ptr,
@@ -317,28 +317,28 @@ int XSocket::SetOption(uint32_t level, uint32_t optname, void* optval_ptr,
   return X_ERROR_SUCCESS;
 }
 
-X_STATUS XSocket::IOControl(uint32_t cmd, uint32_t* arg_ptr) {
+int XSocket::IOControl(uint32_t cmd, uint32_t* arg_ptr) {
   if (!supported_controls.contains(cmd)) {
     XWSASetLastError(X_WSA_ERROR::X_WSAENOPROTOOPT);
-    return X_STATUS_UNSUCCESSFUL;
+    return X_SOCKET_ERROR;
   }
 
   if (transport_->IOControl(supported_controls.at(cmd), arg_ptr) < 0) {
-    return X_STATUS_UNSUCCESSFUL;
+    return X_SOCKET_ERROR;
   }
 
-  return X_STATUS_SUCCESS;
+  return X_ERROR_SUCCESS;
 }
 
-X_STATUS XSocket::Connect(const XSOCKADDR_IN* name, int name_len) {
+int XSocket::Connect(const XSOCKADDR_IN* name, int name_len) {
   if (listening_) {
     XWSASetLastError(X_WSA_ERROR::X_WSAEINVAL);
-    return X_STATUS_UNSUCCESSFUL;
+    return X_SOCKET_ERROR;
   }
 
   if (!name->address_ip.s_addr) {
     XWSASetLastError(X_WSA_ERROR::X_WSAEADDRNOTAVAIL);
-    return X_STATUS_UNSUCCESSFUL;
+    return X_SOCKET_ERROR;
   }
 
   XSOCKADDR_IN sa_in = *name;
@@ -366,16 +366,16 @@ X_STATUS XSocket::Connect(const XSOCKADDR_IN* name, int name_len) {
       connect_error_ = connect_error;
     }
 
-    return X_STATUS_UNSUCCESSFUL;
+    return X_SOCKET_ERROR;
   }
 
-  return X_STATUS_SUCCESS;
+  return X_ERROR_SUCCESS;
 }
 
-X_STATUS XSocket::Bind(const XSOCKADDR_IN* name, int name_len) {
+int XSocket::Bind(const XSOCKADDR_IN* name, int name_len) {
   if (type_ == X_SOCK_DGRAM && IsReservedDatagramPort(name->address_port)) {
     XWSASetLastError(X_WSA_ERROR::X_WSAEADDRINUSE);
-    return X_STATUS_UNSUCCESSFUL;
+    return X_SOCKET_ERROR;
   }
 
   XSOCKADDR_IN sa_in = *name;
@@ -410,7 +410,7 @@ X_STATUS XSocket::Bind(const XSOCKADDR_IN* name, int name_len) {
   }
 
   if (transport_->Bind(&addr, name_len) < 0) {
-    return X_STATUS_UNSUCCESSFUL;
+    return X_SOCKET_ERROR;
   }
 
   bound_port_ = sa_in.address_port;
@@ -421,27 +421,27 @@ X_STATUS XSocket::Bind(const XSOCKADDR_IN* name, int name_len) {
 
   bound_ = true;
 
-  return X_STATUS_SUCCESS;
+  return X_ERROR_SUCCESS;
 }
 
-X_STATUS XSocket::Listen(int backlog) {
+int XSocket::Listen(int backlog) {
   if (connect_error_) {
     XWSASetLastError(connect_error_);
-    return X_STATUS_UNSUCCESSFUL;
+    return X_SOCKET_ERROR;
   }
 
   if (!bound_ || type_ == X_SOCK_DGRAM) {
     XWSASetLastError(X_WSA_ERROR::X_WSAEINVAL);
-    return X_STATUS_UNSUCCESSFUL;
+    return X_SOCKET_ERROR;
   }
 
   if (transport_->Listen(backlog) < 0) {
-    return X_STATUS_UNSUCCESSFUL;
+    return X_SOCKET_ERROR;
   }
 
   listening_ = true;
 
-  return X_STATUS_SUCCESS;
+  return X_ERROR_SUCCESS;
 }
 
 object_ref<XSocket> XSocket::Accept(XSOCKADDR_IN* name, int* name_len) {
@@ -1415,33 +1415,33 @@ bool XSocket::QueuePacket(uint32_t src_ip, uint16_t src_port,
   return true;
 }
 
-X_STATUS XSocket::GetPeerName(XSOCKADDR_IN* name, socklen_t* name_len) {
+int XSocket::GetPeerName(XSOCKADDR_IN* name, socklen_t* name_len) {
   sockaddr addr = name->to_host();
 
   int ret = transport_->GetPeerName(&addr, name_len);
   if (ret < 0) {
-    return X_STATUS_UNSUCCESSFUL;
+    return X_SOCKET_ERROR;
   }
 
   name->to_guest(&addr);
-  return X_STATUS_SUCCESS;
+  return X_ERROR_SUCCESS;
 }
 
-X_STATUS XSocket::GetSockName(XSOCKADDR_IN* name, socklen_t* name_len) {
+int XSocket::GetSockName(XSOCKADDR_IN* name, socklen_t* name_len) {
   if (!bound_) {
     XWSASetLastError(X_WSA_ERROR::X_WSAEINVAL);
-    return X_STATUS_UNSUCCESSFUL;
+    return X_SOCKET_ERROR;
   }
 
   sockaddr addr = name->to_host();
 
   int ret = transport_->GetSockName(&addr, name_len);
   if (ret < 0) {
-    return X_STATUS_UNSUCCESSFUL;
+    return X_SOCKET_ERROR;
   }
 
   name->to_guest(&addr);
-  return X_STATUS_SUCCESS;
+  return X_ERROR_SUCCESS;
 }
 
 // The last error belongs to the calling thread, and is kept apart from the
