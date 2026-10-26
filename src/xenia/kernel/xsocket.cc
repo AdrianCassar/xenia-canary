@@ -353,8 +353,6 @@ X_STATUS XSocket::Connect(const XSOCKADDR_IN* name, int name_len) {
 
   int ret = transport_->Connect(&addr);
 
-  const uint32_t connect_error = ret < 0 ? XWSAGetLastError() : 0;
-
   // Implicit Bind
   if (!bound_port_) {
     bound_port_ = transport_->GetBoundPort();
@@ -362,11 +360,12 @@ X_STATUS XSocket::Connect(const XSOCKADDR_IN* name, int name_len) {
   }
 
   if (ret < 0) {
+    const uint32_t connect_error = XWSAGetLastError();
+
     if (connect_error != X_WSA_ERROR::X_WSAEWOULDBLOCK) {
       connect_error_ = connect_error;
     }
 
-    XWSASetLastError(connect_error);
     return X_STATUS_UNSUCCESSFUL;
   }
 
@@ -660,17 +659,10 @@ int XSocket::PollWSASendTo(bool wait, WSASendToData send_async_data,
   const int result =
       transport_->SendBuffers(buffers, saddr_ptr, saddr_len, &bytes_sent);
 
-  const uint32_t send_error = result == X_SOCKET_ERROR ? XWSAGetLastError() : 0;
-
   // Implicit Bind
   if (!bound_port_) {
     bound_port_ = transport_->GetBoundPort();
     bound_ = true;
-  }
-
-  // getsockname resets the last error.
-  if (result == X_SOCKET_ERROR) {
-    XWSASetLastError(send_error);
   }
 
   const bool pending = XWSAGetLastError() == X_WSA_ERROR::X_WSA_IO_PENDING ||
@@ -1379,17 +1371,10 @@ int XSocket::SendTo(uint8_t* buf, uint32_t buf_len, uint32_t flags,
   int ret =
       transport_->SendTo(buf, buf_len, addr_ptr, to ? sizeof(sockaddr_in) : 0);
 
-  const uint32_t send_error = ret < 0 ? XWSAGetLastError() : 0;
-
   // Implicit Bind
   if (!bound_port_) {
     bound_port_ = transport_->GetBoundPort();
     bound_ = true;
-  }
-
-  // getsockname resets the last error.
-  if (ret < 0) {
-    XWSASetLastError(send_error);
   }
 
   return ret;
@@ -1459,151 +1444,15 @@ X_STATUS XSocket::GetSockName(XSOCKADDR_IN* name, socklen_t* name_len) {
   return X_STATUS_SUCCESS;
 }
 
-bool XSocket::XWSAIsKnownError(uint32_t wsa_error) {
-  // Xbox error codes might not match with what we receive from OS
-  switch (wsa_error) {
-    case X_WSA_ERROR::X_WSA_NO_ERROR:
-    case X_WSA_ERROR::X_WSA_INVALID_HANDLE:
-    case X_WSA_ERROR::X_WSA_INVALID_PARAMETER:
-    case X_WSA_ERROR::X_WSA_OPERATION_ABORTED:
-    case X_WSA_ERROR::X_WSA_IO_INCOMPLETE:
-    case X_WSA_ERROR::X_WSA_IO_PENDING:
-    case X_WSA_ERROR::X_WSAEACCES:
-    case X_WSA_ERROR::X_WSAEFAULT:
-    case X_WSA_ERROR::X_WSAEINVAL:
-    case X_WSA_ERROR::X_WSAEWOULDBLOCK:
-    case X_WSA_ERROR::X_WSAEINPROGRESS:
-    case X_WSA_ERROR::X_WSAEALREADY:
-    case X_WSA_ERROR::X_WSAENOTSOCK:
-    case X_WSA_ERROR::X_WSAEMSGSIZE:
-    case X_WSA_ERROR::X_WSAENOPROTOOPT:
-    case X_WSA_ERROR::X_WSAEPROTONOSUPPORT:
-    case X_WSA_ERROR::X_WSAESOCKTNOSUPPORT:
-    case X_WSA_ERROR::X_WSAEAFNOSUPPORT:
-    case X_WSA_ERROR::X_WSAEADDRINUSE:
-    case X_WSA_ERROR::X_WSAEADDRNOTAVAIL:
-    case X_WSA_ERROR::X_WSAENETDOWN:
-    case X_WSA_ERROR::X_WSAECONNRESET:
-    case X_WSA_ERROR::X_WSAENOBUFS:
-    case X_WSA_ERROR::X_WSAEISCONN:
-    case X_WSA_ERROR::X_WSAENOTCONN:
-    case X_WSA_ERROR::X_WSAESHUTDOWN:
-    case X_WSA_ERROR::X_WSAETIMEDOUT:
-    case X_WSA_ERROR::X_WSAECONNREFUSED:
-    case X_WSA_ERROR::X_WSAEHOSTUNREACH:
-    case X_WSA_ERROR::X_WSASYSNOTREADY:
-    case X_WSA_ERROR::X_WSAVERNOTSUPPORTED:
-    case X_WSA_ERROR::X_WSANOTINITIALISED:
-    case X_WSA_ERROR::X_WSAECANCELLED:
-    case X_WSA_ERROR::X_WSASYSCALLFAILURE:
-    case X_WSA_ERROR::X_WSAHOST_NOT_FOUND:
-    case X_WSA_ERROR::X_WSATRY_AGAIN:
-    case X_WSA_ERROR::X_WSANO_DATA:
-      return true;
-      break;
-    default:
-      XELOGE("Unsupported X_WSA_ERROR: {}", wsa_error);
-      break;
-  }
+// The last error belongs to the calling thread, and is kept apart from the
+// host's so the host can't change it before it reaches the guest.
+namespace {
+thread_local uint32_t last_error = 0;
+}  // namespace
 
-  return false;
-}
+uint32_t XSocket::XWSAGetLastError() { return last_error; }
 
-uint32_t XSocket::XWSAGetLastError() {
-  uint32_t last_error = 0;
-
-#ifdef XE_PLATFORM_WIN32
-  last_error = WSAGetLastError();
-#else
-  last_error = errno;
-
-  switch (last_error) {
-    case EWOULDBLOCK:
-    case EINPROGRESS:
-      last_error = X_WSA_ERROR::X_WSAEWOULDBLOCK;
-      break;
-    case EALREADY:
-      last_error = X_WSA_ERROR::X_WSAEALREADY;
-      break;
-    case EACCES:
-      last_error = X_WSA_ERROR::X_WSAEACCES;
-      break;
-    case EFAULT:
-      last_error = X_WSA_ERROR::X_WSAEFAULT;
-      break;
-    case EINVAL:
-      last_error = X_WSA_ERROR::X_WSAEINVAL;
-      break;
-    case EBADF:
-    case ENOTSOCK:
-      last_error = X_WSA_ERROR::X_WSAENOTSOCK;
-      break;
-    case EMSGSIZE:
-      last_error = X_WSA_ERROR::X_WSAEMSGSIZE;
-      break;
-    case ENOPROTOOPT:
-      last_error = X_WSA_ERROR::X_WSAENOPROTOOPT;
-      break;
-    case EPROTONOSUPPORT:
-      last_error = X_WSA_ERROR::X_WSAEPROTONOSUPPORT;
-      break;
-    case ESOCKTNOSUPPORT:
-      last_error = X_WSA_ERROR::X_WSAESOCKTNOSUPPORT;
-      break;
-    case EAFNOSUPPORT:
-      last_error = X_WSA_ERROR::X_WSAEAFNOSUPPORT;
-      break;
-    case EADDRINUSE:
-      last_error = X_WSA_ERROR::X_WSAEADDRINUSE;
-      break;
-    case EADDRNOTAVAIL:
-      last_error = X_WSA_ERROR::X_WSAEADDRNOTAVAIL;
-      break;
-    case ENETDOWN:
-      last_error = X_WSA_ERROR::X_WSAENETDOWN;
-      break;
-    case ECONNRESET:
-      last_error = X_WSA_ERROR::X_WSAECONNRESET;
-      break;
-    case ENOBUFS:
-      last_error = X_WSA_ERROR::X_WSAENOBUFS;
-      break;
-    case EISCONN:
-      last_error = X_WSA_ERROR::X_WSAEISCONN;
-      break;
-    case ENOTCONN:
-    case EDESTADDRREQ:
-      last_error = X_WSA_ERROR::X_WSAENOTCONN;
-      break;
-    case ESHUTDOWN:
-    case EPIPE:
-      last_error = X_WSA_ERROR::X_WSAESHUTDOWN;
-      break;
-    case ETIMEDOUT:
-      last_error = X_WSA_ERROR::X_WSAETIMEDOUT;
-      break;
-    case ECONNREFUSED:
-      last_error = X_WSA_ERROR::X_WSAECONNREFUSED;
-      break;
-    case EHOSTUNREACH:
-      last_error = X_WSA_ERROR::X_WSAEHOSTUNREACH;
-      break;
-  }
-#endif
-
-  bool known = XWSAIsKnownError(last_error);
-
-  return last_error;
-}
-
-void XSocket::XWSASetLastError(uint32_t error) {
-  bool known = XWSAIsKnownError(error);
-
-#ifdef XE_PLATFORM_WIN32
-  WSASetLastError((int)error);
-#endif
-  errno = (int)error;
-}
+void XSocket::XWSASetLastError(uint32_t error) { last_error = error; }
 
 }  // namespace kernel
 }  // namespace xe

@@ -47,9 +47,8 @@ struct HostBuffer {
 // Carries an XSocket's traffic. XSocket keeps the behaviour the guest sees and
 // calls its transport for everything that reaches the network. Every call
 // works like its Winsock counterpart: it returns a negative value on failure
-// and leaves the error in the last error, where XSocket::XWSAGetLastError
-// reads it. Addresses are sockaddr_in and options use the host's SOL_ and SO_
-// values.
+// and sets the error with XSocket::XWSASetLastError. Addresses are sockaddr_in
+// and options use the host's SOL_ and SO_ values.
 class SocketTransport {
  public:
   virtual ~SocketTransport() = default;
@@ -81,7 +80,9 @@ class SocketTransport {
 
   virtual int GetPeerName(sockaddr* addr, socklen_t* len) = 0;
   virtual int GetSockName(sockaddr* addr, socklen_t* len) = 0;
-  // The bound port, in network byte order, or 0.
+  // The bound port, in network byte order, or 0. Unlike the other calls it
+  // never sets the last error, so XSocket can call it straight after a failed
+  // call for an implicit bind without losing that call's error.
   virtual uint16_t GetBoundPort() const = 0;
 
   virtual int Recv(uint8_t* buf, uint32_t len) = 0;

@@ -240,8 +240,6 @@ class XSocket : public XObject {
 
   int WSACancelOverlappedIO();
 
-  static bool XWSAIsKnownError(uint32_t error);
-
   static uint32_t XWSAGetLastError();
   static void XWSASetLastError(uint32_t error);
 

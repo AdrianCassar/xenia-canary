@@ -18,6 +18,12 @@
 namespace xe {
 namespace kernel {
 
+// The host's error for the call that just failed, as a guest error.
+uint32_t HostLastError();
+
+// Sets the last error from the host if its call failed, and passes ret on.
+int ReportHostError(int ret);
+
 // Carries an XSocket's traffic over a host socket.
 class HostTransport final : public SocketTransport {
  public:

@@ -26,6 +26,85 @@ using namespace std::chrono_literals;
 
 constexpr auto kEventWatchInterval = 10ms;
 
+uint32_t HostLastError() {
+  uint32_t last_error = errno;
+
+  switch (last_error) {
+    case EWOULDBLOCK:
+    case EINPROGRESS:
+      last_error = X_WSA_ERROR::X_WSAEWOULDBLOCK;
+      break;
+    case EALREADY:
+      last_error = X_WSA_ERROR::X_WSAEALREADY;
+      break;
+    case EACCES:
+      last_error = X_WSA_ERROR::X_WSAEACCES;
+      break;
+    case EFAULT:
+      last_error = X_WSA_ERROR::X_WSAEFAULT;
+      break;
+    case EINVAL:
+      last_error = X_WSA_ERROR::X_WSAEINVAL;
+      break;
+    case EBADF:
+    case ENOTSOCK:
+      last_error = X_WSA_ERROR::X_WSAENOTSOCK;
+      break;
+    case EMSGSIZE:
+      last_error = X_WSA_ERROR::X_WSAEMSGSIZE;
+      break;
+    case ENOPROTOOPT:
+      last_error = X_WSA_ERROR::X_WSAENOPROTOOPT;
+      break;
+    case EPROTONOSUPPORT:
+      last_error = X_WSA_ERROR::X_WSAEPROTONOSUPPORT;
+      break;
+    case ESOCKTNOSUPPORT:
+      last_error = X_WSA_ERROR::X_WSAESOCKTNOSUPPORT;
+      break;
+    case EAFNOSUPPORT:
+      last_error = X_WSA_ERROR::X_WSAEAFNOSUPPORT;
+      break;
+    case EADDRINUSE:
+      last_error = X_WSA_ERROR::X_WSAEADDRINUSE;
+      break;
+    case EADDRNOTAVAIL:
+      last_error = X_WSA_ERROR::X_WSAEADDRNOTAVAIL;
+      break;
+    case ENETDOWN:
+      last_error = X_WSA_ERROR::X_WSAENETDOWN;
+      break;
+    case ECONNRESET:
+      last_error = X_WSA_ERROR::X_WSAECONNRESET;
+      break;
+    case ENOBUFS:
+      last_error = X_WSA_ERROR::X_WSAENOBUFS;
+      break;
+    case EISCONN:
+      last_error = X_WSA_ERROR::X_WSAEISCONN;
+      break;
+    case ENOTCONN:
+    case EDESTADDRREQ:
+      last_error = X_WSA_ERROR::X_WSAENOTCONN;
+      break;
+    case ESHUTDOWN:
+    case EPIPE:
+      last_error = X_WSA_ERROR::X_WSAESHUTDOWN;
+      break;
+    case ETIMEDOUT:
+      last_error = X_WSA_ERROR::X_WSAETIMEDOUT;
+      break;
+    case ECONNREFUSED:
+      last_error = X_WSA_ERROR::X_WSAECONNREFUSED;
+      break;
+    case EHOSTUNREACH:
+      last_error = X_WSA_ERROR::X_WSAEHOSTUNREACH;
+      break;
+  }
+
+  return last_error;
+}
+
 HostTransport::HostTransport(uint64_t native_handle, bool datagram)
     : native_handle_(native_handle), datagram_(datagram) {
   RememberPeer();
@@ -38,12 +117,17 @@ bool HostTransport::Open(int af, int type, int protocol) {
   datagram_ = type == XSocket::X_SOCK_DGRAM;
 
   native_handle_ = socket(af, type, protocol);
-  return native_handle_ != X_INVALID_SOCKET;
+  if (native_handle_ == X_INVALID_SOCKET) {
+    ReportHostError(X_SOCKET_ERROR);
+    return false;
+  }
+
+  return true;
 }
 
 int HostTransport::Close() {
   StopEventWatcher();
-  return close(static_cast<int>(native_handle_));
+  return ReportHostError(close(static_cast<int>(native_handle_)));
 }
 
 int HostTransport::GetOption(int level, int optname, void* value,
@@ -67,7 +151,7 @@ int HostTransport::GetOption(int level, int optname, void* value,
 
     if (getsockopt(native_handle_, SOL_SOCKET, SO_LINGER, &native_linger,
                    &linger_len) < 0) {
-      return -1;
+      return ReportHostError(X_SOCKET_ERROR);
     }
 
     const uint32_t dont_linger = !native_linger.l_onoff;
@@ -90,7 +174,7 @@ int HostTransport::GetOption(int level, int optname, void* value,
     socklen_t size_len = sizeof(size);
 
     if (getsockopt(native_handle_, level, optname, &size, &size_len) < 0) {
-      return -1;
+      return ReportHostError(X_SOCKET_ERROR);
     }
 
     const uint32_t set_size = static_cast<uint32_t>(size) / 2;
@@ -99,7 +183,8 @@ int HostTransport::GetOption(int level, int optname, void* value,
     return 0;
   }
 
-  return getsockopt(native_handle_, level, optname, value, len);
+  return ReportHostError(
+      getsockopt(native_handle_, level, optname, value, len));
 }
 
 int HostTransport::SetOption(int level, int optname, const void* value,
@@ -115,8 +200,8 @@ int HostTransport::SetOption(int level, int optname, const void* value,
     timeout.tv_sec = timeout_ms / 1000;
     timeout.tv_usec = (timeout_ms % 1000) * 1000;
 
-    const int ret =
-        setsockopt(native_handle_, level, optname, &timeout, sizeof(timeout));
+    const int ret = ReportHostError(
+        setsockopt(native_handle_, level, optname, &timeout, sizeof(timeout)));
     if (!ret) {
       (optname == SO_RCVTIMEO ? receive_timeout_ms_ : send_timeout_ms_) =
           timeout_ms;
@@ -134,13 +219,13 @@ int HostTransport::SetOption(int level, int optname, const void* value,
 
     if (getsockopt(native_handle_, SOL_SOCKET, SO_LINGER, &native_linger,
                    &linger_len) < 0) {
-      return -1;
+      return ReportHostError(X_SOCKET_ERROR);
     }
 
     native_linger.l_onoff = !dont_linger;
 
-    return setsockopt(native_handle_, SOL_SOCKET, SO_LINGER, &native_linger,
-                      sizeof(native_linger));
+    return ReportHostError(setsockopt(native_handle_, SOL_SOCKET, SO_LINGER,
+                                      &native_linger, sizeof(native_linger)));
   }
 
   // Linux never shares a port unless both sockets set SO_REUSEADDR, so
@@ -154,13 +239,14 @@ int HostTransport::SetOption(int level, int optname, const void* value,
     return 0;
   }
 
-  return setsockopt(native_handle_, level, optname, value, len);
+  return ReportHostError(
+      setsockopt(native_handle_, level, optname, value, len));
 }
 
 int HostTransport::IOControl(uint32_t cmd, uint32_t* arg_ptr) {
   int param = static_cast<int>(xe::load_and_swap<uint32_t>(arg_ptr));
 
-  int ret = ioctl(native_handle_, cmd, &param);
+  int ret = ReportHostError(ioctl(native_handle_, cmd, &param));
 
   if (ret < 0) {
     return ret;
@@ -176,7 +262,7 @@ int HostTransport::EventSelect(uint64_t, uint32_t flags,
   int non_blocking = 1;
 
   if (ioctl(native_handle_, FIONBIO, &non_blocking) < 0) {
-    return X_SOCKET_ERROR;
+    return ReportHostError(X_SOCKET_ERROR);
   }
 
   StopEventWatcher();
@@ -282,12 +368,13 @@ uint64_t HostTransport::QueuedReceiveBytes() const {
 }
 
 int HostTransport::Bind(const sockaddr* addr, socklen_t len) {
-  return bind(native_handle_, addr, len);
+  return ReportHostError(bind(native_handle_, addr, len));
 }
 
 int HostTransport::Connect(const sockaddr* addr) {
   // The guest's length is ignored, the whole address is always read.
-  const int ret = connect(native_handle_, addr, sizeof(sockaddr_in));
+  const int ret =
+      ReportHostError(connect(native_handle_, addr, sizeof(sockaddr_in)));
 
   if (!ret) {
     RememberPeer();
@@ -301,7 +388,7 @@ int HostTransport::Connect(const sockaddr* addr) {
 }
 
 int HostTransport::Listen(int backlog) {
-  int ret = listen(native_handle_, backlog);
+  int ret = ReportHostError(listen(native_handle_, backlog));
 
   // Linux reports listen on a connected socket as EINVAL.
   if (ret < 0 && errno == EINVAL) {
@@ -318,7 +405,7 @@ int HostTransport::Listen(int backlog) {
 }
 
 int HostTransport::GetPeerName(sockaddr* addr, socklen_t* len) {
-  const int ret = getpeername(native_handle_, addr, len);
+  const int ret = ReportHostError(getpeername(native_handle_, addr, len));
 
   // A non-blocking connect only shows its peer once it completes.
   if (!ret) {
@@ -349,7 +436,8 @@ void HostTransport::ReportTimeout(int ret, uint32_t timeout_ms) const {
 int HostTransport::Recv(uint8_t* buf, uint32_t len) {
   read_armed_ = true;
 
-  const int ret = recv(native_handle_, buf, len, datagram_ ? MSG_TRUNC : 0);
+  const int ret = ReportHostError(
+      recv(native_handle_, buf, len, datagram_ ? MSG_TRUNC : 0));
 
   ReportTimeout(ret, receive_timeout_ms_);
 
@@ -365,8 +453,8 @@ int HostTransport::RecvFrom(uint8_t* buf, uint32_t len, sockaddr* from,
                             socklen_t* from_len) {
   read_armed_ = true;
 
-  const int ret = recvfrom(native_handle_, buf, len, datagram_ ? MSG_TRUNC : 0,
-                           from, from_len);
+  const int ret = ReportHostError(recvfrom(
+      native_handle_, buf, len, datagram_ ? MSG_TRUNC : 0, from, from_len));
 
   ReportTimeout(ret, receive_timeout_ms_);
 
@@ -379,7 +467,7 @@ int HostTransport::RecvFrom(uint8_t* buf, uint32_t len, sockaddr* from,
 }
 
 int HostTransport::Send(const uint8_t* buf, uint32_t len) {
-  const int ret = send(native_handle_, buf, len, 0);
+  const int ret = ReportHostError(send(native_handle_, buf, len, 0));
 
   if (ret < 0) {
     write_armed_ = true;
@@ -417,7 +505,7 @@ int HostTransport::SendBuffers(const std::vector<HostBuffer>& buffers,
 
   if (sent_bytes < 0) {
     write_armed_ = true;
-    return X_SOCKET_ERROR;
+    return ReportHostError(X_SOCKET_ERROR);
   }
 
   *bytes_sent = static_cast<uint32_t>(sent_bytes);
@@ -449,7 +537,7 @@ int HostTransport::ReceiveBuffer(const HostBuffer& buffer, sockaddr* from,
   }
 
   if (received_bytes < 0) {
-    return X_SOCKET_ERROR;
+    return ReportHostError(X_SOCKET_ERROR);
   }
 
   *bytes_received = static_cast<uint32_t>(received_bytes);
@@ -466,16 +554,17 @@ int HostTransport::Select(bool write, long timeout_us) {
   timeval tv = {};
   tv.tv_usec = timeout_us;
 
-  return select(s + 1, write ? nullptr : &fds, write ? &fds : nullptr, nullptr,
-                &tv);
+  return ReportHostError(select(s + 1, write ? nullptr : &fds,
+                                write ? &fds : nullptr, nullptr, &tv));
 }
 
 // Linux only checks descriptors below nfds. Winsock ignores it, so titles
 // usually pass 0.
 int TransportSelect::Wait(uint32_t, timeval* timeout) {
-  const int ret = select(highest_ + 1, use_read_ ? &read_ : nullptr,
-                         use_write_ ? &write_ : nullptr,
-                         use_except_ ? &except_ : nullptr, timeout);
+  const int ret =
+      ReportHostError(select(highest_ + 1, use_read_ ? &read_ : nullptr,
+                             use_write_ ? &write_ : nullptr,
+                             use_except_ ? &except_ : nullptr, timeout));
 
   // The host reports a refused connect as POLLERR rather than in the except
   // set.
