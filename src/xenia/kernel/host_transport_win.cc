@@ -246,8 +246,31 @@ int HostTransport::Select(bool write, long timeout_us) {
   tv.tv_usec = timeout_us;
 
   // Winsock ignores nfds.
-  return select(0, write ? nullptr : &fds, write ? &fds : nullptr, nullptr,
-                &tv);
+  const int ret =
+      select(0, write ? nullptr : &fds, write ? &fds : nullptr, nullptr, &tv);
+
+  if (ret || !write || datagram_) {
+    return ret;
+  }
+
+  // The host reports a reset connection as readable but never as writable,
+  // so a send waiting for room would never finish.
+  FD_SET(s, &fds);
+  tv = {};
+
+  if (select(0, &fds, nullptr, nullptr, &tv) > 0) {
+    char byte = 0;
+
+    if (recv(s, &byte, 1, MSG_PEEK) == SOCKET_ERROR) {
+      const int error = WSAGetLastError();
+
+      if (error == WSAECONNRESET || error == WSAECONNABORTED) {
+        return 1;
+      }
+    }
+  }
+
+  return 0;
 }
 
 int TransportSelect::Wait(uint32_t nfds, timeval* timeout) {

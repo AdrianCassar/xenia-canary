@@ -130,7 +130,8 @@ X_STATUS XSocket::Initialize(AddressFamily af, Type type, Protocol proto) {
 }
 
 int XSocket::Close() {
-  WSACancelOverlappedIO();
+  // A pending send ends with WSAESHUTDOWN rather than WSAECANCELLED.
+  CancelOverlappedIO(X_WSA_ERROR::X_WSAESHUTDOWN);
 
   int ret = transport_->Close();
 
@@ -594,7 +595,10 @@ int XSocket::PollWSASendTo(bool wait, WSASendToData send_async_data,
 
     XELOGE("WSASelectWrite failed with error {}", error);
 
-    if (send_async_data.overlapped) {
+    // A cancelled send keeps the error it was cancelled with, which closing
+    // the socket sets to WSAESHUTDOWN.
+    if (send_async_data.overlapped &&
+        poll_write_error != X_WSA_ERROR::X_WSAECANCELLED) {
       send_async_data.overlapped->internal = X_HRESULT_FROM_WIN32(error);
     }
 
@@ -703,7 +707,12 @@ int XSocket::PollWSASendTo(bool wait, WSASendToData send_async_data,
     // If no event handle is provided then title can check for completion via
     // internal on change.
     send_async_data.overlapped->internal = X_WSA_ERROR::X_WSA_NO_ERROR;
+  }
 
+  // A pending send also completes when it ends in an error, e.g. the peer
+  // resets the connection.
+  if (send_async_data.overlapped &&
+      (result == X_ERROR_SUCCESS || (wait && !pending))) {
     xboxkrnl::xeNtSetEvent(send_async_data.overlapped->event_handle, nullptr);
   }
 
@@ -1286,13 +1295,17 @@ bool XSocket::WSAGetOverlappedResult(XWSAOVERLAPPED* overlapped_ptr,
 }
 
 int XSocket::WSACancelOverlappedIO() {
+  return CancelOverlappedIO(X_WSA_ERROR::X_WSAECANCELLED);
+}
+
+int XSocket::CancelOverlappedIO(uint32_t send_error) {
   cancel_overlapped_ = true;
 
-  auto set_cancelled_state = [this](XWSAOVERLAPPED* overlapped_ptr) {
+  auto set_cancelled_state = [this](XWSAOVERLAPPED* overlapped_ptr,
+                                    uint32_t error) {
     xboxkrnl::xeNtSetEvent(overlapped_ptr->event_handle, nullptr);
 
-    overlapped_ptr->internal =
-        X_HRESULT_FROM_WIN32(X_WSA_ERROR::X_WSAECANCELLED);
+    overlapped_ptr->internal = X_HRESULT_FROM_WIN32(error);
 
     const uint32_t overlapped_address =
         kernel_state()->memory()->HostToGuestVirtual(
@@ -1312,7 +1325,7 @@ int XSocket::WSACancelOverlappedIO() {
     std::lock_guard receive_lock(receive_socket_mutex_);
 
     for (auto& [overlapped_ptr, task] : receive_polling_tasks_) {
-      set_cancelled_state(overlapped_ptr);
+      set_cancelled_state(overlapped_ptr, X_WSA_ERROR::X_WSAECANCELLED);
 
       receive_future_ptrs.emplace_back(&task);
     }
@@ -1335,7 +1348,7 @@ int XSocket::WSACancelOverlappedIO() {
     std::lock_guard send_lock(send_socket_mutex_);
 
     for (auto& [overlapped_ptr, task] : send_polling_tasks_) {
-      set_cancelled_state(overlapped_ptr);
+      set_cancelled_state(overlapped_ptr, send_error);
       send_future_ptrs.emplace_back(&task);
     }
   }
