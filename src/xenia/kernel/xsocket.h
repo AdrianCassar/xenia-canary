@@ -304,6 +304,9 @@ class XSocket : public XObject {
   std::set<uint32_t> cancelled_overlapped_io_;
   std::mutex cancelled_overlapped_io_mutex_;
 
+  // Pending receives complete with WSAECANCELLED and sends with send_error.
+  int CancelOverlappedIO(uint32_t send_error);
+
   int WSASelectWrite(bool wait, X_WSA_ERROR* error);
 
   int PollWSASendTo(bool wait, WSASendToData send_async_data,
