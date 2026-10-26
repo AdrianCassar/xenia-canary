@@ -311,9 +311,6 @@ class XSocket : public XObject {
   std::atomic<bool> cancel_receive_ = false;
   std::atomic<bool> cancel_send_ = false;
 
-  std::set<uint32_t> cancelled_overlapped_io_;
-  std::mutex cancelled_overlapped_io_mutex_;
-
   // Pending receives complete with WSAECANCELLED and sends with send_error.
   int CancelOverlappedIO(uint32_t send_error);
 
