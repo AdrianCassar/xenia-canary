@@ -1931,10 +1931,10 @@ dword_result_t NetDll_socket_entry(dword_t caller, dword_t af, dword_t type,
   }
 
   auto socket = object_ref<XSocket>(new XSocket(kernel_state()));
-  X_STATUS result = socket->Initialize(XSocket::AddressFamily((uint32_t)af),
-                                       XSocket::Type((uint32_t)type),
-                                       XSocket::Protocol((uint32_t)protocol));
-  if (XFAILED(result)) {
+  int result = socket->Initialize(XSocket::AddressFamily((uint32_t)af),
+                                  XSocket::Type((uint32_t)type),
+                                  XSocket::Protocol((uint32_t)protocol));
+  if (result == X_SOCKET_ERROR) {
     socket->ReleaseHandle();
 
     XThread::SetLastError(socket->XWSAGetLastError());
@@ -2034,8 +2034,8 @@ dword_result_t NetDll_getsockopt_entry(dword_t caller, dword_t socket_handle,
   }
 
   uint32_t native_len = *optlen;
-  X_STATUS status = socket->GetOption(level, optname, optval_ptr, &native_len);
-  if (XFAILED(status)) {
+  int status = socket->GetOption(level, optname, optval_ptr, &native_len);
+  if (status == X_SOCKET_ERROR) {
     XThread::SetLastError(socket->XWSAGetLastError());
     return -1;
   }
@@ -2055,8 +2055,8 @@ dword_result_t NetDll_ioctlsocket_entry(dword_t caller, dword_t socket_handle,
     return -1;
   }
 
-  X_STATUS status = socket->IOControl(cmd, arg_ptr.as<uint32_t*>());
-  if (XFAILED(status)) {
+  int status = socket->IOControl(cmd, arg_ptr.as<uint32_t*>());
+  if (status == X_SOCKET_ERROR) {
     XThread::SetLastError(socket->XWSAGetLastError());
     XELOGE("NetDll_ioctlsocket: failed with error {:08X}",
            socket->XWSAGetLastError());
@@ -2084,8 +2084,8 @@ dword_result_t NetDll_bind_entry(dword_t caller, dword_t socket_handle,
   const std::string local_ip =
       network_adapter->GetSelectedAdapterLocalIPString();
 
-  X_STATUS status = socket->Bind(name, namelen);
-  if (XFAILED(status)) {
+  int status = socket->Bind(name, namelen);
+  if (status == X_SOCKET_ERROR) {
     XThread::SetLastError(socket->XWSAGetLastError());
     XELOGNET("NetDll_bind: failed with error {:08X}",
              socket->XWSAGetLastError());
@@ -2133,8 +2133,8 @@ dword_result_t NetDll_connect_entry(dword_t caller, dword_t socket_handle,
     return -1;
   }
 
-  X_STATUS status = socket->Connect(name, namelen);
-  if (XFAILED(status)) {
+  int status = socket->Connect(name, namelen);
+  if (status == X_SOCKET_ERROR) {
     XThread::SetLastError(socket->XWSAGetLastError());
     return -1;
   }
@@ -2152,8 +2152,8 @@ dword_result_t NetDll_listen_entry(dword_t caller, dword_t socket_handle,
     return -1;
   }
 
-  X_STATUS status = socket->Listen(backlog);
-  if (XFAILED(status)) {
+  int status = socket->Listen(backlog);
+  if (status == X_SOCKET_ERROR) {
     XThread::SetLastError(socket->XWSAGetLastError());
     return -1;
   }
@@ -2532,8 +2532,8 @@ dword_result_t NetDll_getpeername_entry(dword_t caller, dword_t socket_handle,
   // The guest's length is ignored and may be null, the whole address is
   // always written.
   socklen_t native_len = sizeof(XSOCKADDR_IN);
-  X_STATUS status = socket->GetPeerName(addr_ptr, &native_len);
-  if (XFAILED(status)) {
+  int status = socket->GetPeerName(addr_ptr, &native_len);
+  if (status == X_SOCKET_ERROR) {
     XThread::SetLastError(socket->XWSAGetLastError());
     return -1;
   }
@@ -2563,8 +2563,8 @@ dword_result_t NetDll_getsockname_entry(dword_t caller, dword_t socket_handle,
   // The guest's length is ignored and may be null, the whole address is
   // always written.
   socklen_t native_len = sizeof(XSOCKADDR_IN);
-  X_STATUS status = socket->GetSockName(addr_ptr, &native_len);
-  if (XFAILED(status)) {
+  int status = socket->GetSockName(addr_ptr, &native_len);
+  if (status == X_SOCKET_ERROR) {
     XThread::SetLastError(socket->XWSAGetLastError());
     return -1;
   }
