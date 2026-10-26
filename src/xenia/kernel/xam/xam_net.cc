@@ -400,7 +400,7 @@ dword_result_t NetDll_WSARecvFrom_entry(
     XELOGNET("NetDll_WSARecvFrom: Received {} bytes from: {}:{}({})",
              static_cast<uint32_t>(*num_bytes_recv_ptr),
              ip_to_string(from_ptr->address_ip), from_ptr->address_port.get(),
-             socket->GetProtocolUPnPString());
+             socket->GetUPnPProtocol());
   }
 
   return ret;
@@ -459,7 +459,7 @@ dword_result_t NetDll_WSASendTo_entry(
     XELOGNET("NetDll_WSASendTo: Send {} bytes to: {}:{}({})",
              static_cast<uint32_t>(*num_bytes_sent),
              ip_to_string(to_ptr->address_ip), to_ptr->address_port.get(),
-             socket->GetProtocolUPnPString());
+             socket->GetUPnPProtocol());
   }
 
   return result;
@@ -1964,9 +1964,9 @@ dword_result_t NetDll_closesocket_entry(dword_t caller, dword_t socket_handle) {
   if (upnp) {
     CleanupUPnPActions();
 
-    if (socket->IsBound()) {
+    if (socket->is_bound()) {
       auto remove_port = upnp->RemovePortAsync(socket->bound_port(),
-                                               socket->GetProtocolUPnPString());
+                                               socket->GetUPnPProtocol());
       upnp_actions_.push_back(std::move(remove_port));
     }
   }
@@ -2104,7 +2104,7 @@ dword_result_t NetDll_bind_entry(dword_t caller, dword_t socket_handle,
       upnp_internal_port = mapped_internal_port;
     }
 
-    const std::string protocol = socket->GetProtocolUPnPString();
+    const std::string protocol = socket->GetUPnPProtocol();
 
     if (upnp->IsActive()) {
       CleanupUPnPActions();
@@ -2182,7 +2182,7 @@ dword_result_t NetDll_accept_entry(dword_t caller, dword_t socket_handle,
     return -1;
   } else if (addr_ptr && !cvars::log_mask_ips) {
     XELOGI("NetDll_accept: {}:{}({})", ip_to_string(addr_ptr->address_ip),
-           addr_ptr->address_port.get(), socket->GetProtocolUPnPString());
+           addr_ptr->address_port.get(), socket->GetUPnPProtocol());
   }
 
   return new_socket->handle();
@@ -2381,7 +2381,7 @@ dword_result_t NetDll_recv_entry(dword_t caller, dword_t socket_handle,
     XThread::SetLastError(socket->XWSAGetLastError());
   } else if (ret >= 0 && !cvars::log_mask_ips) {
     XELOGNET("NetDll_recv: Received {} bytes from: Any:{}({})", ret,
-             socket->bound_port(), socket->GetProtocolUPnPString());
+             socket->bound_port(), socket->GetUPnPProtocol());
   }
 
   return ret;
@@ -2415,7 +2415,7 @@ dword_result_t NetDll_recvfrom_entry(dword_t caller, dword_t socket_handle,
   } else if (ret >= 0 && !cvars::log_mask_ips && from_ptr) {
     XELOGI("NetDll_recvfrom: Received {} bytes from: {}:{}({})", ret,
            ip_to_string(from_ptr->address_ip), from_ptr->address_port.get(),
-           socket->GetProtocolUPnPString());
+           socket->GetUPnPProtocol());
   }
 
   return ret;
@@ -2437,7 +2437,7 @@ dword_result_t NetDll_send_entry(dword_t caller, dword_t socket_handle,
     XThread::SetLastError(socket->XWSAGetLastError());
   } else if (ret >= 0 && !cvars::log_mask_ips) {
     XELOGNET("NetDll_send: Send {} bytes to: Any:{}({})", ret,
-             socket->bound_port(), socket->GetProtocolUPnPString());
+             socket->bound_port(), socket->GetUPnPProtocol());
   }
 
   return ret;
@@ -2462,7 +2462,7 @@ dword_result_t NetDll_sendto_entry(dword_t caller, dword_t socket_handle,
   } else if (ret >= 0 && to_ptr && !cvars::log_mask_ips) {
     XELOGNET("NetDll_sendto: Send {} bytes to: {}:{}({})", ret,
              ip_to_string(to_ptr->address_ip), to_ptr->address_port.get(),
-             socket->GetProtocolUPnPString());
+             socket->GetUPnPProtocol());
   }
 
   return ret;
