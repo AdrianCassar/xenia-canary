@@ -294,7 +294,17 @@ class XSocket : public XObject {
   std::mutex receive_socket_mutex_;
 
   std::map<XWSAOVERLAPPED*, std::future<int32_t>> send_polling_tasks_;
-  std::map<XWSAOVERLAPPED*, std::future<int32_t>> receive_polling_tasks_;
+
+  // Only one overlapped receive can be pending, so only the latest is kept.
+  // An earlier one has finished and is read from its overlapped struct.
+  XWSAOVERLAPPED* receive_overlapped_ = nullptr;
+  std::future<int32_t> receive_task_;
+
+  bool ReceivePending() const {
+    return receive_task_.valid() &&
+           receive_task_.wait_for(std::chrono::seconds(0)) !=
+               std::future_status::ready;
+  }
 
   std::atomic<bool> cancel_overlapped_ = false;
   // Cancel only the pending receive or send.
