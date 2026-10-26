@@ -996,9 +996,6 @@ dword_result_t NetDll_XNetDnsLookup_entry(dword_t caller, lpstring_t host,
 
     if (status != 0 || !addr_info) {
       XELOGI("DNS Lookup: Failed ({})", status);
-#if XE_PLATFORM_WIN32
-      dns->status = XSocket::XWSAGetLastError();
-#else
       switch (status) {
         case EAI_AGAIN:
           dns->status = X_WSA_ERROR::X_WSATRY_AGAIN;
@@ -1010,7 +1007,6 @@ dword_result_t NetDll_XNetDnsLookup_entry(dword_t caller, lpstring_t host,
           dns->status = X_WSA_ERROR::X_WSANO_DATA;
           break;
       }
-#endif
       xboxkrnl::xeNtSetEvent(event_handle, nullptr);
       if (addr_info) {
         freeaddrinfo(addr_info);
@@ -1032,7 +1028,8 @@ dword_result_t NetDll_XNetDnsLookup_entry(dword_t caller, lpstring_t host,
     }
 
     dns->cina = address_index;
-    dns->status = XSocket::XWSAGetLastError();
+    dns->status =
+        address_index ? X_ERROR_SUCCESS : X_WSA_ERROR::X_WSAHOST_NOT_FOUND;
 
     freeaddrinfo(addr_info);
 
