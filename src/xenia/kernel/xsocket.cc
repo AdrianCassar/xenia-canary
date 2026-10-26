@@ -595,7 +595,7 @@ int XSocket::PollWSASendTo(bool wait, WSASendToData send_async_data,
     XELOGE("WSASelectWrite failed with error {}", error);
 
     if (send_async_data.overlapped) {
-      send_async_data.overlapped->internal = error;
+      send_async_data.overlapped->internal = X_HRESULT_FROM_WIN32(error);
     }
 
     return X_SOCKET_ERROR;
@@ -680,7 +680,8 @@ int XSocket::PollWSASendTo(bool wait, WSASendToData send_async_data,
     if (pending) {
       send_async_data.overlapped->internal = X_STATUS_PENDING;
     } else {
-      send_async_data.overlapped->internal = XWSAGetLastError();
+      send_async_data.overlapped->internal =
+          X_HRESULT_FROM_WIN32(XWSAGetLastError());
     }
   }
 
@@ -785,9 +786,10 @@ int XSocket::WSASendTo(XWSABUF* buffers, uint32_t num_buffers,
 
   // Perform overlapped completion.
 
-  const uint32_t wsa_error = send_async_data.overlapped->internal;
+  const uint32_t wsa_error =
+      X_WIN32_FROM_HRESULT(send_async_data.overlapped->internal.get());
 
-  if (overlapped_ptr && wsa_error == X_STATUS_PENDING) {
+  if (wsa_error == X_STATUS_PENDING) {
     xboxkrnl::xeNtClearEvent(overlapped_ptr->event_handle);
 
     send_polling_tasks_[send_async_data.overlapped] =
@@ -800,13 +802,7 @@ int XSocket::WSASendTo(XWSABUF* buffers, uint32_t num_buffers,
 
     XWSASetLastError(wsa_error);
 
-    // An error occurred that's not X_STATUS_PENDING
     XELOGI("{}:: failed with error code {}", __func__, wsa_error);
-
-    if (wsa_error == X_WSA_ERROR::X_WSAECANCELLED) {
-      XELOGD("{}:: Operation Cancelled!", __func__);
-      XWSASetLastError(X_WSA_ERROR::X_WSAECANCELLED);
-    }
   }
 
   return result;
@@ -1058,6 +1054,9 @@ int XSocket::WSARecvFrom(XWSABUF* buffers, uint32_t num_buffers,
     cancelled_overlapped_io_.erase(overlapped_address);
   }
 
+  const uint32_t previous_internal =
+      overlapped_ptr ? overlapped_ptr->internal.get() : 0;
+
   // Check for immediate completion.
   int result = PollWSARecvFrom(false, receive_async_data);
 
@@ -1085,15 +1084,14 @@ int XSocket::WSARecvFrom(XWSABUF* buffers, uint32_t num_buffers,
 
     XWSASetLastError(X_WSA_ERROR::X_WSA_IO_PENDING);
   } else {
+    // Only a truncated datagram is reported through the overlapped struct.
+    if (wsa_error != X_WSA_ERROR::X_WSAEMSGSIZE) {
+      overlapped_ptr->internal = previous_internal;
+    }
+
     XWSASetLastError(wsa_error);
 
-    // An error occurred that's not X_STATUS_PENDING
     XELOGI("{}:: failed with error code {}", __func__, wsa_error);
-
-    if (wsa_error == X_WSA_ERROR::X_WSAECANCELLED) {
-      XELOGD("{}:: Operation Cancelled!", __func__);
-      XWSASetLastError(X_WSA_ERROR::X_WSAECANCELLED);
-    }
   }
 
   return result;
