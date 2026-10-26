@@ -262,13 +262,15 @@ class XSocket : public XObject {
   std::unique_ptr<SocketTransport> transport_;
   bool socket_closed_ = false;
 
-  AddressFamily af_;     // Address family
-  Type type_;            // Type (DGRAM/Stream/etc)
-  Protocol proto_;       // Protocol (TCP/UDP/etc)
-  bool vdp_;             // VDP Protocol
-  bool secure_ = false;  // Secure socket (encryption enabled)
+  AddressFamily af_ = {};  // Address family
+  Type type_ = {};         // Type (DGRAM/Stream/etc)
+  Protocol proto_ = {};    // Protocol (TCP/UDP/etc)
+  bool vdp_ = false;       // VDP Protocol
+  bool secure_ = false;    // Secure socket (encrypted traffic)
 
-  bool bound_ = false;  // Explicitly bound to an IP address?
+  // Has a local address, either from bind or implicitly from connect, accept
+  // or the first send.
+  bool bound_ = false;
 
   // Special exception for port!
   // port is always stored in NBO (Network byte order).
