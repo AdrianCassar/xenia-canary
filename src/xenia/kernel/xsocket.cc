@@ -761,10 +761,6 @@ int XSocket::WSASendTo(XWSABUF* buffers, uint32_t num_buffers,
       XELOGNETD("{} overlapped task {:08X} is pending!", __func__,
                 overlapped_address);
     }
-
-    // Overlapped is being reused for a new request.
-    std::lock_guard lock(cancelled_overlapped_io_mutex_);
-    cancelled_overlapped_io_.erase(overlapped_address);
   }
 
   uint32_t num_bytes_sent = 0;
@@ -1048,10 +1044,6 @@ int XSocket::WSARecvFrom(XWSABUF* buffers, uint32_t num_buffers,
             std::to_address(overlapped_ptr));
 
     XELOGNETD("{} new overlapped task {:08X}", __func__, overlapped_address);
-
-    // Overlapped is being reused for a new request.
-    std::lock_guard lock(cancelled_overlapped_io_mutex_);
-    cancelled_overlapped_io_.erase(overlapped_address);
   }
 
   const uint32_t previous_internal =
@@ -1105,10 +1097,6 @@ bool XSocket::WSAGetOverlappedResult(XWSAOVERLAPPED* overlapped_ptr,
     return false;
   }
 
-  const uint32_t overlapped_address =
-      kernel_state()->memory()->HostToGuestVirtual(
-          std::to_address(overlapped_ptr));
-
   std::unique_lock<std::mutex> task_mutex;
 
   bool sending_io = false;
@@ -1131,17 +1119,7 @@ bool XSocket::WSAGetOverlappedResult(XWSAOVERLAPPED* overlapped_ptr,
     task_mutex = std::unique_lock(receive_socket_mutex_);
   }
 
-  {
-    std::lock_guard lock(cancelled_overlapped_io_mutex_);
-    if (cancelled_overlapped_io_.contains(overlapped_address)) {
-      XELOGD("{}:: Operation Cancelled!", __func__);
-      const uint32_t internal_result =
-          X_WIN32_FROM_HRESULT(overlapped_ptr->internal.get());
-      XWSASetLastError(internal_result);
-      return false;
-    }
-  }
-
+  // A cancelled request has no task left, and its error is read from Internal.
   const bool pending_io = sending_io || receiving_io;
 
   // 4D530808 does this.
@@ -1208,11 +1186,6 @@ bool XSocket::WSAGetOverlappedResult(XWSAOVERLAPPED* overlapped_ptr,
 
       overlapped_ptr->internal =
           X_HRESULT_FROM_WIN32(X_WSA_ERROR::X_WSAECANCELLED);
-
-      {
-        std::lock_guard lock(cancelled_overlapped_io_mutex_);
-        cancelled_overlapped_io_.insert(overlapped_address);
-      }
 
       XWSASetLastError(X_WSA_ERROR::X_WSAECANCELLED);
       return false;
@@ -1298,23 +1271,14 @@ int XSocket::WSACancelOverlappedIO() {
 int XSocket::CancelOverlappedIO(uint32_t send_error) {
   cancel_overlapped_ = true;
 
-  auto set_cancelled_state = [this](XWSAOVERLAPPED* overlapped_ptr,
-                                    uint32_t error) {
+  // The tasks are removed, so WSAGetOverlappedResult reads the error from
+  // Internal.
+  auto set_cancelled_state = [](XWSAOVERLAPPED* overlapped_ptr,
+                                uint32_t error) {
     xboxkrnl::xeNtSetEvent(overlapped_ptr->event_handle, nullptr);
 
     overlapped_ptr->internal = X_HRESULT_FROM_WIN32(error);
-
-    const uint32_t overlapped_address =
-        kernel_state()->memory()->HostToGuestVirtual(
-            std::to_address(overlapped_ptr));
-
-    std::lock_guard lock(cancelled_overlapped_io_mutex_);
-    cancelled_overlapped_io_.insert(overlapped_address);
   };
-
-  // Future pointers are safe because WSAGetOverlappedResult will not erase
-  // entries instead it returns early if overlapped address is in
-  // cancelled_overlapped_io_.
 
   std::future<int32_t> receive_task;
 
@@ -1335,26 +1299,27 @@ int XSocket::CancelOverlappedIO(uint32_t send_error) {
     receive_task.wait();
   }
 
-  std::vector<std::future<int32_t>*> send_future_ptrs;
+  std::map<XWSAOVERLAPPED*, std::future<int32_t>> send_tasks;
 
   {
     std::lock_guard send_lock(send_socket_mutex_);
 
     for (auto& [overlapped_ptr, task] : send_polling_tasks_) {
-      set_cancelled_state(overlapped_ptr, send_error);
-      send_future_ptrs.emplace_back(&task);
+      // A send that already finished keeps its result.
+      if (task.valid() && task.wait_for(0s) != std::future_status::ready) {
+        set_cancelled_state(overlapped_ptr, send_error);
+      }
     }
-  }
 
-  for (auto* task_ptr : send_future_ptrs) {
-    if (task_ptr && task_ptr->valid()) {
-      task_ptr->wait();
-    }
-  }
-
-  {
-    std::lock_guard send_lock(send_socket_mutex_);
+    send_tasks = std::move(send_polling_tasks_);
     send_polling_tasks_.clear();
+  }
+
+  // The tasks take the mutex to finish.
+  for (auto& [overlapped_ptr, task] : send_tasks) {
+    if (task.valid()) {
+      task.wait();
+    }
   }
 
   // Only pending requests are cancelled, allow new requests.
