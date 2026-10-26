@@ -181,16 +181,10 @@ class XSocket : public XObject {
   SocketTransport* transport() const { return transport_.get(); }
   uint16_t bound_port() const { return bound_port_; }
   Protocol protocol() const { return proto_; }
-  bool IsBound() const { return bound_; }
-  bool IsVDPProtocol() const { return vdp_; }
-  std::string GetProtocolUPnPString() const {
-    if (proto_ == X_IPPROTO_UDP || proto_ == X_IPPROTO_VDP) {
-      return "UDP";
-    } else if (proto_ == X_IPPROTO_TCP) {
-      return "TCP";
-    } else {
-      return "UDP";
-    }
+  bool is_bound() const { return bound_; }
+  bool is_vdp() const { return vdp_; }
+  std::string GetUPnPProtocol() const {
+    return proto_ == X_IPPROTO_TCP ? "TCP" : "UDP";
   }
 
   int Initialize(AddressFamily af, Type type, Protocol proto);
