@@ -23,6 +23,9 @@ using namespace std::chrono_literals;
 
 constexpr auto kEventWatchInterval = 10ms;
 
+// Winsock's errors are the guest's.
+uint32_t HostLastError() { return WSAGetLastError(); }
+
 HostTransport::HostTransport(uint64_t native_handle, bool datagram)
     : native_handle_(native_handle), datagram_(datagram) {}
 
@@ -33,6 +36,7 @@ bool HostTransport::Open(int af, int type, int protocol) {
 
   native_handle_ = socket(af, type, protocol);
   if (native_handle_ == X_INVALID_SOCKET) {
+    ReportHostError(X_SOCKET_ERROR);
     return false;
   }
 
@@ -50,19 +54,19 @@ bool HostTransport::Open(int af, int type, int protocol) {
 
 int HostTransport::Close() {
   StopEventWatcher();
-  return closesocket(static_cast<SOCKET>(native_handle_));
+  return ReportHostError(closesocket(static_cast<SOCKET>(native_handle_)));
 }
 
 int HostTransport::GetOption(int level, int optname, void* value,
                              socklen_t* len) {
-  return getsockopt(native_handle_, level, optname, static_cast<char*>(value),
-                    len);
+  return ReportHostError(getsockopt(native_handle_, level, optname,
+                                    static_cast<char*>(value), len));
 }
 
 int HostTransport::SetOption(int level, int optname, const void* value,
                              socklen_t len) {
-  return setsockopt(native_handle_, level, optname,
-                    static_cast<const char*>(value), len);
+  return ReportHostError(setsockopt(native_handle_, level, optname,
+                                    static_cast<const char*>(value), len));
 }
 
 int HostTransport::IOControl(uint32_t cmd, uint32_t* arg_ptr) {
@@ -75,7 +79,7 @@ int HostTransport::IOControl(uint32_t cmd, uint32_t* arg_ptr) {
     ::WSAEventSelect(native_handle_, nullptr, 0);
   }
 
-  int ret = ioctlsocket(native_handle_, cmd, &param);
+  int ret = ReportHostError(ioctlsocket(native_handle_, cmd, &param));
 
   // The host counts every queued datagram. Report only the size of the next
   // one, which is what a single receive returns.
@@ -105,7 +109,8 @@ int HostTransport::EventSelect(uint64_t native_event_handle, uint32_t flags,
                                std::function<void()> signal) {
   const HANDLE hEvent =
       reinterpret_cast<HANDLE>(static_cast<uintptr_t>(native_event_handle));
-  const int ret = ::WSAEventSelect(native_handle_, hEvent, flags);
+  const int ret =
+      ReportHostError(::WSAEventSelect(native_handle_, hEvent, flags));
 
   if (ret != X_ERROR_SUCCESS) {
     return ret;
@@ -153,7 +158,7 @@ uint64_t HostTransport::QueuedReceiveBytes() const {
 }
 
 int HostTransport::Bind(const sockaddr* addr, socklen_t len) {
-  int ret = bind(native_handle_, addr, len);
+  int ret = ReportHostError(bind(native_handle_, addr, len));
 
   // The host reports a port held with SO_EXCLUSIVEADDRUSE as WSAEACCES.
   if (ret < 0 && XSocket::XWSAGetLastError() == X_WSA_ERROR::X_WSAEACCES) {
@@ -179,32 +184,34 @@ int HostTransport::Connect(const sockaddr* addr) {
   }
 
   // The guest's length is ignored, the whole address is always read.
-  return connect(native_handle_, addr, sizeof(sockaddr_in));
+  return ReportHostError(connect(native_handle_, addr, sizeof(sockaddr_in)));
 }
 
 int HostTransport::Listen(int backlog) {
-  return listen(native_handle_, backlog);
+  return ReportHostError(listen(native_handle_, backlog));
 }
 
 int HostTransport::GetPeerName(sockaddr* addr, socklen_t* len) {
-  return getpeername(native_handle_, addr, len);
+  return ReportHostError(getpeername(native_handle_, addr, len));
 }
 
 // The host already reports a timed out receive or send as WSAETIMEDOUT.
 void HostTransport::ReportTimeout(int, uint32_t) const {}
 
 int HostTransport::Recv(uint8_t* buf, uint32_t len) {
-  return recv(native_handle_, reinterpret_cast<char*>(buf), len, 0);
+  return ReportHostError(
+      recv(native_handle_, reinterpret_cast<char*>(buf), len, 0));
 }
 
 int HostTransport::RecvFrom(uint8_t* buf, uint32_t len, sockaddr* from,
                             socklen_t* from_len) {
-  return recvfrom(native_handle_, reinterpret_cast<char*>(buf), len, 0, from,
-                  from_len);
+  return ReportHostError(recvfrom(native_handle_, reinterpret_cast<char*>(buf),
+                                  len, 0, from, from_len));
 }
 
 int HostTransport::Send(const uint8_t* buf, uint32_t len) {
-  return send(native_handle_, reinterpret_cast<const char*>(buf), len, 0);
+  return ReportHostError(
+      send(native_handle_, reinterpret_cast<const char*>(buf), len, 0));
 }
 
 int HostTransport::SendBuffers(const std::vector<HostBuffer>& buffers,
@@ -217,10 +224,10 @@ int HostTransport::SendBuffers(const std::vector<HostBuffer>& buffers,
     host_buffers[i].buf = buffers[i].data;
   }
 
-  return ::WSASendTo(native_handle_, host_buffers.data(),
-                     static_cast<DWORD>(host_buffers.size()),
-                     reinterpret_cast<DWORD*>(bytes_sent), 0, to, to_len,
-                     nullptr, nullptr);
+  return ReportHostError(::WSASendTo(native_handle_, host_buffers.data(),
+                                     static_cast<DWORD>(host_buffers.size()),
+                                     reinterpret_cast<DWORD*>(bytes_sent), 0,
+                                     to, to_len, nullptr, nullptr));
 }
 
 int HostTransport::ReceiveBuffer(const HostBuffer& buffer, sockaddr* from,
@@ -230,9 +237,9 @@ int HostTransport::ReceiveBuffer(const HostBuffer& buffer, sockaddr* from,
   recv_buffer.buf = buffer.data;
   recv_buffer.len = buffer.len;
 
-  return ::WSARecvFrom(
+  return ReportHostError(::WSARecvFrom(
       native_handle_, &recv_buffer, 1, reinterpret_cast<DWORD*>(bytes_received),
-      reinterpret_cast<DWORD*>(flags), from, from_len, nullptr, nullptr);
+      reinterpret_cast<DWORD*>(flags), from, from_len, nullptr, nullptr));
 }
 
 int HostTransport::Select(bool write, long timeout_us) {
@@ -246,8 +253,8 @@ int HostTransport::Select(bool write, long timeout_us) {
   tv.tv_usec = timeout_us;
 
   // Winsock ignores nfds.
-  const int ret =
-      select(0, write ? nullptr : &fds, write ? &fds : nullptr, nullptr, &tv);
+  const int ret = ReportHostError(
+      select(0, write ? nullptr : &fds, write ? &fds : nullptr, nullptr, &tv));
 
   if (ret || !write || datagram_) {
     return ret;
@@ -274,9 +281,9 @@ int HostTransport::Select(bool write, long timeout_us) {
 }
 
 int TransportSelect::Wait(uint32_t nfds, timeval* timeout) {
-  return select(nfds, use_read_ ? &read_ : nullptr,
-                use_write_ ? &write_ : nullptr,
-                use_except_ ? &except_ : nullptr, timeout);
+  return ReportHostError(select(nfds, use_read_ ? &read_ : nullptr,
+                                use_write_ ? &write_ : nullptr,
+                                use_except_ ? &except_ : nullptr, timeout));
 }
 
 }  // namespace kernel

@@ -12,6 +12,7 @@
 #include <algorithm>
 
 #include "xenia/base/byte_order.h"
+#include "xenia/kernel/xsocket.h"
 
 // The calls that differ between hosts are in host_transport_win.cc and
 // host_transport_posix.cc.
@@ -33,10 +34,19 @@ bool IsSet(uint64_t handle, const fd_set& set) {
 
 }  // namespace
 
+int ReportHostError(int ret) {
+  if (ret < 0) {
+    XSocket::XWSASetLastError(HostLastError());
+  }
+
+  return ret;
+}
+
 std::unique_ptr<SocketTransport> HostTransport::Accept(sockaddr* addr,
                                                        socklen_t* len) {
   const uint64_t accepted = accept(native_handle_, addr, len);
   if (accepted == X_INVALID_SOCKET) {
+    ReportHostError(X_SOCKET_ERROR);
     return nullptr;
   }
 
@@ -44,7 +54,7 @@ std::unique_ptr<SocketTransport> HostTransport::Accept(sockaddr* addr,
 }
 
 int HostTransport::Shutdown(int how) {
-  const int ret = shutdown(native_handle_, how);
+  const int ret = ReportHostError(shutdown(native_handle_, how));
 
   if (!ret && how != 0) {
     shutdown_send_ = true;
@@ -54,7 +64,7 @@ int HostTransport::Shutdown(int how) {
 }
 
 int HostTransport::GetSockName(sockaddr* addr, socklen_t* len) {
-  return getsockname(native_handle_, addr, len);
+  return ReportHostError(getsockname(native_handle_, addr, len));
 }
 
 void HostTransport::RememberPeer() {
@@ -66,6 +76,8 @@ void HostTransport::RememberPeer() {
   }
 }
 
+// getsockname is called directly, not through ReportHostError, so the last
+// error is left alone.
 uint16_t HostTransport::GetBoundPort() const {
   sockaddr_storage storage = {};
   socklen_t addr_len = sizeof(storage);
@@ -83,8 +95,8 @@ uint16_t HostTransport::GetBoundPort() const {
 
 int HostTransport::SendTo(const uint8_t* buf, uint32_t len, const sockaddr* to,
                           socklen_t to_len) {
-  const int ret = sendto(native_handle_, reinterpret_cast<const char*>(buf),
-                         len, 0, to, to_len);
+  const int ret = ReportHostError(sendto(
+      native_handle_, reinterpret_cast<const char*>(buf), len, 0, to, to_len));
 
   if (ret < 0) {
     write_armed_ = true;
