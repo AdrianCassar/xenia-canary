@@ -1136,12 +1136,13 @@ const std::vector<std::unique_ptr<SessionObjectJSON>> XLiveAPI::SessionSearch(
   std::vector<xam::Property> property_filters;
   std::vector<std::string> serialized_property_filters;
 
-  for (const auto& guest_context : guest_contexts) {
-    const xam::Property context(guest_context.context_id, guest_context.value);
+  // 584113F3 and 58410982 pass INT32 properties in the contexts array.
+  for (auto& guest_context : guest_contexts) {
+    const xam::Property context(
+        guest_context.context_id.get(), sizeof(guest_context.value),
+        reinterpret_cast<uint8_t*>(&guest_context.value));
 
-    if (context.IsContext()) {
-      property_filters.push_back(context);
-    }
+    property_filters.push_back(context);
   }
 
   for (auto& guest_property : guest_properties) {
@@ -1149,9 +1150,7 @@ const std::vector<std::unique_ptr<SessionObjectJSON>> XLiveAPI::SessionSearch(
         guest_property.property_id.get(), sizeof(xam::X_USER_DATA),
         reinterpret_cast<uint8_t*>(&guest_property.data.data));
 
-    if (!property.IsContext()) {
-      property_filters.push_back(property);
-    }
+    property_filters.push_back(property);
   }
 
   for (const auto& property : property_filters) {
