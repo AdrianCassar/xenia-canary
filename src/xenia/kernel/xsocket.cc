@@ -538,7 +538,8 @@ int XSocket::RecvFrom(uint8_t* buf, uint32_t buf_len, uint32_t flags,
   int ret = transport_->RecvFrom(buf, buf_len, from ? &sa : nullptr, from_len);
 
   // TCP receives report the peer's address, e.g. 555307EE reads the port.
-  if (proto_ == X_IPPROTO_TCP) {
+  // A failed receive keeps its own error.
+  if (proto_ == X_IPPROTO_TCP && ret >= 0) {
     socklen_t peer_addr_len = sizeof(sockaddr);
     transport_->GetPeerName(&sa, &peer_addr_len);
   }
