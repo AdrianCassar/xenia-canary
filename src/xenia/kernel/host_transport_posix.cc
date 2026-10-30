@@ -561,21 +561,46 @@ int HostTransport::Select(bool write, long timeout_us) {
 // Linux only checks descriptors below nfds. Winsock ignores it, so titles
 // usually pass 0.
 int TransportSelect::Wait(uint32_t, timeval* timeout) {
-  const int ret =
-      ReportHostError(select(highest_ + 1, use_read_ ? &read_ : nullptr,
-                             use_write_ ? &write_ : nullptr,
-                             use_except_ ? &except_ : nullptr, timeout));
-
   // The host reports a refused connect as POLLERR rather than in the except
   // set.
-  if (ret != X_SOCKET_ERROR) {
+  const auto mark_errored = [this] {
+    bool errored = false;
+
     for (const uint64_t handle : except_handles_) {
       pollfd poll_fd = {};
       poll_fd.fd = static_cast<int>(handle);
 
       if (poll(&poll_fd, 1, 0) > 0 && (poll_fd.revents & POLLERR)) {
         FD_SET(poll_fd.fd, &errored_);
+        errored = true;
       }
+    }
+
+    return errored;
+  };
+
+  // select doesn't end the wait for an error in the except set, so don't wait
+  // when one is already there.
+  const bool errored = mark_errored();
+  timeval no_wait = {};
+
+  int ret = ReportHostError(select(highest_ + 1, use_read_ ? &read_ : nullptr,
+                                   use_write_ ? &write_ : nullptr,
+                                   use_except_ ? &except_ : nullptr,
+                                   errored ? &no_wait : timeout));
+
+  if (ret == X_SOCKET_ERROR) {
+    return ret;
+  }
+
+  if (!errored) {
+    mark_errored();
+  }
+
+  // Count the errored sockets the host left out of the except set.
+  for (const uint64_t handle : except_handles_) {
+    if (FD_ISSET(handle, &errored_) && !FD_ISSET(handle, &except_)) {
+      ret++;
     }
   }
 
