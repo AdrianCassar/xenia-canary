@@ -477,6 +477,14 @@ object_ref<XSocket> XSocket::Accept(XSOCKADDR_IN* name, int* name_len) {
   socket->bound_port_ = bound_port_ = transport_->GetBoundPort();
   socket->bound_ = true;
 
+  // The accepted socket keeps the listening socket's event and network
+  // events. Windows already copies them to the host socket, but the transport
+  // still has to watch for what the host doesn't signal.
+  if (event_select_handle_) {
+    socket->WSAEventSelect(event_select_handle_, event_select_native_handle_,
+                           event_select_flags_);
+  }
+
   return socket;
 }
 
@@ -1389,6 +1397,8 @@ int XSocket::WSAEventSelect(uint32_t event_handle, uint64_t native_event_handle,
 
   if (ret == X_ERROR_SUCCESS) {
     event_select_handle_ = flags ? event_handle : 0;
+    event_select_native_handle_ = flags ? native_event_handle : 0;
+    event_select_flags_ = flags;
   }
 
   return ret;
