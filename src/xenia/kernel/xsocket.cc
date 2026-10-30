@@ -1264,12 +1264,13 @@ int XSocket::CancelOverlappedIO(uint32_t send_error) {
   cancel_overlapped_ = true;
 
   // The tasks are removed, so WSAGetOverlappedResult reads the error from
-  // Internal.
+  // Internal. It is written before the event is signalled, so a waiter never
+  // wakes to find the request still pending.
   auto set_cancelled_state = [](XWSAOVERLAPPED* overlapped_ptr,
                                 uint32_t error) {
-    xboxkrnl::xeNtSetEvent(overlapped_ptr->event_handle, nullptr);
-
     overlapped_ptr->internal = X_HRESULT_FROM_WIN32(error);
+
+    xboxkrnl::xeNtSetEvent(overlapped_ptr->event_handle, nullptr);
   };
 
   std::future<int32_t> receive_task;
