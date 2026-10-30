@@ -44,6 +44,9 @@ int ReportHostError(int ret) {
 
 std::unique_ptr<SocketTransport> HostTransport::Accept(sockaddr* addr,
                                                        socklen_t* len) {
+  // FD_ACCEPT is signalled again for the next pending connection.
+  read_armed_ = true;
+
   const uint64_t accepted = accept(native_handle_, addr, len);
   if (accepted == X_INVALID_SOCKET) {
     ReportHostError(X_SOCKET_ERROR);
