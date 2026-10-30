@@ -405,7 +405,7 @@ int HostTransport::Listen(int backlog) {
 }
 
 int HostTransport::GetPeerName(sockaddr* addr, socklen_t* len) {
-  const int ret = ReportHostError(getpeername(native_handle_, addr, len));
+  const int ret = getpeername(native_handle_, addr, len);
 
   // A non-blocking connect only shows its peer once it completes.
   if (!ret) {
@@ -414,14 +414,14 @@ int HostTransport::GetPeerName(sockaddr* addr, socklen_t* len) {
   }
 
   // Linux fails with ENOTCONN once the connection is reset, but the peer is
-  // still reported.
+  // still reported, and the last error is left alone.
   if (ret < 0 && errno == ENOTCONN && peer_len_) {
     std::memcpy(addr, &peer_, std::min(*len, peer_len_));
     *len = peer_len_;
     return 0;
   }
 
-  return ret;
+  return ReportHostError(ret);
 }
 
 void HostTransport::ReportTimeout(int ret, uint32_t timeout_ms) const {
