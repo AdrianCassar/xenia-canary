@@ -279,6 +279,9 @@ class XSocket : public XObject {
   bool shutdown_send_ = false;
 
   uint32_t event_select_handle_ = 0;
+  // Passed on to the sockets accept returns.
+  uint64_t event_select_native_handle_ = 0;
+  uint32_t event_select_flags_ = 0;
 
   std::unique_ptr<xe::threading::Event> event_;
   std::mutex incoming_packet_mutex_;
