@@ -288,7 +288,21 @@ void HostTransport::WatchEvents() {
   while (!stop_event_watcher_) {
     pollfd poll_fd = {};
     poll_fd.fd = static_cast<int>(native_handle_);
-    poll_fd.events = POLLIN | POLLOUT | POLLRDHUP;
+
+    // Only wait for what's selected, and for a close or room to write only
+    // until it's signalled. Both stay set, so poll would never block.
+    if (event_flags_ & (X_FD_READ | X_FD_ACCEPT)) {
+      poll_fd.events |= POLLIN;
+    }
+
+    if ((event_flags_ & X_FD_CLOSE) && close_armed_) {
+      poll_fd.events |= POLLRDHUP;
+    }
+
+    if (connect_pending_ || ((event_flags_ & X_FD_WRITE) && write_armed_ &&
+                             (datagram_ || connected_))) {
+      poll_fd.events |= POLLOUT;
+    }
 
     const int ready =
         poll(&poll_fd, 1, static_cast<int>(kEventWatchInterval.count()));
