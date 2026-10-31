@@ -15,10 +15,9 @@
 #include "xenia/base/platform.h"
 #include "xenia/kernel/host_transport.h"
 #include "xenia/kernel/kernel_state.h"
+#include "xenia/kernel/util/net_utils.h"
 #include "xenia/kernel/xam/xam_module.h"
 #include "xenia/kernel/xboxkrnl/xboxkrnl_threading.h"
-
-DECLARE_bool(bind_interface);
 
 using namespace std::chrono_literals;
 
@@ -73,6 +72,17 @@ constexpr bool IsReservedDatagramPort(uint16_t port) {
 // destination). The host may accept it.
 static bool IsAnyAddressDatagram(XSocket::Type type, const XSOCKADDR_IN* to) {
   return type == XSocket::X_SOCK_DGRAM && to && !to->address_ip.s_addr;
+}
+
+// A socket bound to the selected interface can't reach 127.0.0.1, so traffic
+// for this machine goes to the interface's address instead.
+static void RouteLoopbackToBoundInterface(sockaddr* addr) {
+  sockaddr_in* addr_in = reinterpret_cast<sockaddr_in*>(addr);
+  const std::optional<in_addr> interface_addr = GetBoundInterfaceAddress();
+
+  if (interface_addr && addr_in->sin_addr.s_addr == xe::byte_swap(LOOPBACK)) {
+    addr_in->sin_addr = *interface_addr;
+  }
 }
 
 constexpr std::chrono::microseconds kOverlappedPollInterval = 10ms;
@@ -388,21 +398,14 @@ int XSocket::Bind(const XSOCKADDR_IN* name, int name_len) {
   sockaddr addr = sa_in.to_host();
 
   // Force socket to bind to the IP of the selected interface
-  if (cvars::bind_interface) {
-    sockaddr_in* addr_in = reinterpret_cast<sockaddr_in*>(&addr);
-
-    const auto network_adapter =
-        kernel_state()->emulator()->GetNetworkAdapterManager();
-
-    const in_addr interface_addr =
-        network_adapter->GetSelectedAdapterLocalIP().sin_addr;
-
+  if (const std::optional<in_addr> interface_addr =
+          GetBoundInterfaceAddress()) {
     // Title wants to bind to and interface but is it our bound interface?
     if (name->address_ip.s_addr) {
-      assert_true(name->address_ip.s_addr == interface_addr.s_addr);
+      assert_true(name->address_ip.s_addr == interface_addr->s_addr);
     }
 
-    addr_in->sin_addr = interface_addr;
+    reinterpret_cast<sockaddr_in*>(&addr)->sin_addr = *interface_addr;
   } else {
     // Check if title tried to bind an interface
     assert_zero(name->address_ip.s_addr);
@@ -652,18 +655,7 @@ int XSocket::PollWSASendTo(bool wait, WSASendToData send_async_data,
     }
 
     saddr = target.to_host();
-    sockaddr_in* addr_in = reinterpret_cast<sockaddr_in*>(&saddr);
-
-    // Ensure the bound interface can route to the loopback interface/itself
-    if (cvars::bind_interface) {
-      if (addr_in->sin_addr.s_addr == xe::byte_swap(LOOPBACK)) {
-        const auto network_adapter =
-            kernel_state()->emulator()->GetNetworkAdapterManager();
-
-        addr_in->sin_addr =
-            network_adapter->GetSelectedAdapterLocalIP().sin_addr;
-      }
-    }
+    RouteLoopbackToBoundInterface(&saddr);
 
     saddr_ptr = &saddr;
     saddr_len = sizeof(sockaddr_in);
@@ -1361,19 +1353,7 @@ int XSocket::SendTo(uint8_t* buf, uint32_t buf_len, uint32_t flags,
     }
 
     addr = target.to_host();
-
-    // Ensure the bound interface can route to the loopback interface/itself
-    if (cvars::bind_interface) {
-      sockaddr_in* addr_in = reinterpret_cast<sockaddr_in*>(&addr);
-
-      if (addr_in->sin_addr.s_addr == xe::byte_swap(LOOPBACK)) {
-        const auto network_adapter =
-            kernel_state()->emulator()->GetNetworkAdapterManager();
-
-        addr_in->sin_addr =
-            network_adapter->GetSelectedAdapterLocalIP().sin_addr;
-      }
-    }
+    RouteLoopbackToBoundInterface(&addr);
 
     addr_ptr = &addr;
   }
