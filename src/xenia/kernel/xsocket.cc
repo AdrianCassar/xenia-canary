@@ -353,11 +353,7 @@ int XSocket::Connect(const XSOCKADDR_IN* name, int name_len) {
 
   int ret = transport_->Connect(&addr);
 
-  // Implicit Bind
-  if (!bound_port_) {
-    bound_port_ = transport_->GetBoundPort();
-    bound_ = true;
-  }
+  BindImplicitly();
 
   if (ret < 0) {
     const uint32_t connect_error = XWSAGetLastError();
@@ -382,6 +378,9 @@ int XSocket::Bind(const XSOCKADDR_IN* name, int name_len) {
 
   const auto upnp = kernel_state()->emulator()->GetUPnP();
 
+  // TODO: A UPnP port mapping binds a different port on the host, and the
+  // guest then sees host ports from getsockname, recvfrom, getpeername and
+  // accept rather than its own.
   if (upnp) {
     sa_in.address_port = upnp->GetMappedBindPort(name->address_port);
   }
@@ -422,6 +421,13 @@ int XSocket::Bind(const XSOCKADDR_IN* name, int name_len) {
   bound_ = true;
 
   return X_ERROR_SUCCESS;
+}
+
+void XSocket::BindImplicitly() {
+  if (!bound_port_) {
+    bound_port_ = transport_->GetBoundPort();
+    bound_ = true;
+  }
 }
 
 int XSocket::Listen(int backlog) {
@@ -668,11 +674,7 @@ int XSocket::PollWSASendTo(bool wait, WSASendToData send_async_data,
   const int result =
       transport_->SendBuffers(buffers, saddr_ptr, saddr_len, &bytes_sent);
 
-  // Implicit Bind
-  if (!bound_port_) {
-    bound_port_ = transport_->GetBoundPort();
-    bound_ = true;
-  }
+  BindImplicitly();
 
   const bool pending = XWSAGetLastError() == X_WSA_ERROR::X_WSA_IO_PENDING ||
                        XWSAGetLastError() == X_WSA_ERROR::X_WSAEWOULDBLOCK;
@@ -1381,11 +1383,7 @@ int XSocket::SendTo(uint8_t* buf, uint32_t buf_len, uint32_t flags,
   int ret =
       transport_->SendTo(buf, buf_len, addr_ptr, to ? sizeof(sockaddr_in) : 0);
 
-  // Implicit Bind
-  if (!bound_port_) {
-    bound_port_ = transport_->GetBoundPort();
-    bound_ = true;
-  }
+  BindImplicitly();
 
   return ret;
 }
