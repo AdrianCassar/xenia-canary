@@ -52,8 +52,6 @@ DECLARE_bool(log_mask_ips);
 
 DECLARE_int32(network_mode);
 
-DECLARE_bool(bind_interface);
-
 namespace xe {
 namespace kernel {
 namespace xam {
@@ -776,15 +774,9 @@ dword_result_t NetDll_XNetXnAddrToInAddr_entry(dword_t caller,
   if (GetConsoleMacAddress() == MacAddress(xn_addr->abEnet)) {
     XELOGI("Resolving XNetXnAddrToInAddr to LOOPBACK!");
 
-    if (cvars::bind_interface) {
-      const auto network_adapter =
-          kernel_state()->emulator()->GetNetworkAdapterManager();
-
-      in_addr->s_addr =
-          network_adapter->GetSelectedAdapterLocalIP().sin_addr.s_addr;
-    } else {
-      in_addr->s_addr = xe::byte_swap(LOOPBACK);
-    }
+    const std::optional<::in_addr> interface_addr = GetBoundInterfaceAddress();
+    in_addr->s_addr =
+        interface_addr ? interface_addr->s_addr : xe::byte_swap(LOOPBACK);
 
     return X_ERROR_SUCCESS;
   }
@@ -820,20 +812,13 @@ dword_result_t NetDll_XNetInAddrToXnAddr_entry(dword_t caller, dword_t in_addr,
     XELOGI("Resolving XnAddr via LOOPBACK!");
   }
 
-  bool bound_interface = false;
-
   // 4E4D07D1
-  if (cvars::bind_interface) {
-    const auto network_adapter =
-        kernel_state()->emulator()->GetNetworkAdapterManager();
+  const std::optional<::in_addr> interface_addr = GetBoundInterfaceAddress();
+  const bool bound_interface =
+      interface_addr && in_addr == xe::byte_swap(interface_addr->s_addr);
 
-    const uint32_t interface_ip = xe::byte_swap(
-        network_adapter->GetSelectedAdapterLocalIP().sin_addr.s_addr);
-
-    if (in_addr == interface_ip) {
-      bound_interface = true;
-      XELOGI("Resolving XnAddr via Interface!");
-    }
+  if (bound_interface) {
+    XELOGI("Resolving XnAddr via Interface!");
   }
 
   if (in_addr == LOOPBACK || bound_interface || in_addr == BROADCAST) {

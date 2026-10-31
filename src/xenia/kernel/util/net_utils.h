@@ -11,6 +11,7 @@
 #define XENIA_KERNEL_UTIL_NET_UTILS_H_
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -76,6 +77,10 @@ uint64_t GetMachineId(const uint64_t mac_address);
 uint64_t GetLocalMachineId(const MacAddress mac_address);
 
 MacAddress GetConsoleMacAddress();
+
+// The selected interface's address while bind_interface is set, which sockets
+// bind to instead of any address.
+std::optional<in_addr> GetBoundInterfaceAddress();
 
 MacAddress GenerateMacAddress();
 
