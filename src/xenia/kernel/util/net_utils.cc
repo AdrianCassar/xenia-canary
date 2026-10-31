@@ -11,9 +11,13 @@
 
 #include "xenia/base/cvar.h"
 #include "xenia/base/logging.h"
+#include "xenia/emulator.h"
 #include "xenia/kernel/util/net_utils.h"
+#include "xenia/kernel/util/network_adapter_manager_interface.h"
 #include "xenia/kernel/util/shim_utils.h"
 #include "xenia/kernel/xconfig.h"
+
+DECLARE_bool(bind_interface);
 
 namespace xe {
 namespace kernel {
@@ -158,6 +162,17 @@ MacAddress GetConsoleMacAddress() {
       XCONFIG_SECURED_CATEGORY, XCONFIG_SECURED_MAC_ADDRESS, &mac_address);
 
   return MacAddress(mac_address);
+}
+
+std::optional<in_addr> GetBoundInterfaceAddress() {
+  if (!cvars::bind_interface) {
+    return std::nullopt;
+  }
+
+  const auto network_adapter =
+      kernel_state()->emulator()->GetNetworkAdapterManager();
+
+  return network_adapter->GetSelectedAdapterLocalIP().sin_addr;
 }
 
 MacAddress GenerateMacAddress() {
