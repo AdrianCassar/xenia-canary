@@ -163,6 +163,10 @@ inline std::string remove_eol(const std::string& value) {
   return result;
 }
 
+inline std::string to_hex_string(uint8_t value) {
+  return fmt::format("{:02X}", value);
+}
+
 inline std::string to_hex_string(uint32_t value) {
   return fmt::format("{:08X}", value);
 }
@@ -188,6 +192,23 @@ inline std::string to_hex_string(double value) {
 inline std::string to_hex_string(const vec128_t& value) {
   return fmt::format("[{:08X} {:08X} {:08X} {:08X}]", value.u32[0],
                      value.u32[1], value.u32[2], value.u32[3]);
+}
+
+// Hex-encodes the raw bytes of an array, in memory order
+template <typename T>
+inline std::string to_hex_string(const T* data, size_t count) {
+  static_assert(std::is_trivially_copyable_v<T>,
+                "T must be a trivially copyable type");
+
+  std::string result;
+  result.reserve(sizeof(T) * count * 2);
+  const auto* bytes = reinterpret_cast<const uint8_t*>(data);
+
+  for (size_t i = 0; i < sizeof(T) * count; ++i) {
+    result += to_hex_string(bytes[i]);
+  }
+
+  return result;
 }
 
 template <typename T>

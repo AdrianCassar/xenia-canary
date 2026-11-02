@@ -24,7 +24,6 @@
 #include "xenia/base/profiling.h"
 #include "xenia/base/threading.h"
 #include "xenia/config.h"
-#include "xenia/debug/gdb/gdbstub.h"
 #include "xenia/debug/ui/debug_window.h"
 #include "xenia/emulator.h"
 #include "xenia/kernel/xam/xam_module.h"
@@ -45,6 +44,7 @@
 #endif  // !XE_PLATFORM_ANDROID
 #if XE_PLATFORM_WIN32
 #include "xenia/apu/xaudio2/xaudio2_audio_system.h"
+#include "xenia/debug/gdb/gdbstub.h"
 #endif  // XE_PLATFORM_WIN32
 
 // Available graphics systems:

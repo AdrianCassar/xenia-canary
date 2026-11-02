@@ -49,6 +49,16 @@ class GDBStub : public cpu::DebugListener {
     FPSCR = 70
   };
 
+  static constexpr int kRegisterCount = int(RegisterIndex::FPSCR) + 1;
+  static constexpr int kFPRCount =
+      int(RegisterIndex::PC) - int(RegisterIndex::FPR0);
+  // Hex nibbles per register in g/G packets
+  static constexpr size_t kRegister32HexLength = 8;
+  static constexpr size_t kRegister64HexLength = 16;
+  static constexpr size_t kAllRegistersHexLength =
+      (kRegisterCount - kFPRCount) * kRegister32HexLength +
+      kFPRCount * kRegister64HexLength;
+
  public:
   virtual ~GDBStub();
 
@@ -168,4 +178,4 @@ class GDBStub : public cpu::DebugListener {
 }  // namespace debug
 }  // namespace xe
 
-#endif  // XENIA_DEBUG_UI_DEBUG_WINDOW_H_
+#endif  // XENIA_DEBUG_GDB_GDBSTUB_H_

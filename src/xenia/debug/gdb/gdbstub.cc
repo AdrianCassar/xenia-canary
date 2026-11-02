@@ -12,7 +12,6 @@
 #include <condition_variable>
 #include <iostream>
 #include <mutex>
-#include <sstream>
 #include <string>
 #include <thread>
 
@@ -42,6 +41,7 @@ using xe::kernel::XThread;
 
 constexpr const char* kGdbReplyOK = "OK";
 constexpr const char* kGdbReplyError = "E01";
+constexpr const char* kGdbReplyPaused = "S05";
 
 // must start with l for debugger to accept it
 constexpr char kMemoryMapXml[] =
@@ -143,45 +143,6 @@ constexpr char kTargetXml[] =
 </target>
 )";
 
-// TODO: move these to string_util.h?
-std::string to_hexbyte(uint8_t i) {
-  std::string result = "00";
-  uint8_t i1 = i & 0xF;
-  uint8_t i2 = i >> 4;
-  result[0] = i2 > 9 ? 'a' + i2 - 10 : '0' + i2;
-  result[1] = i1 > 9 ? 'a' + i1 - 10 : '0' + i1;
-  return result;
-}
-
-// Convert a hex char (0-9, a-f, A-F) to a byte
-uint8_t from_hexchar(char c) {
-  if (c >= '0' && c <= '9') {
-    return c - '0';
-  } else if (c >= 'a' && c <= 'f') {
-    return c - 'a' + 10;
-  } else if (c >= 'A' && c <= 'F') {
-    return c - 'A' + 10;
-  }
-  return 0;
-}
-
-template <typename T>
-inline std::string to_hex_string(const T* data, size_t count) {
-  // Ensure that T is trivially copyable
-  static_assert(std::is_trivially_copyable<T>::value,
-                "T must be a trivially copyable type");
-
-  static const char hex_chars[] = "0123456789ABCDEF";
-  std::string result;
-  result.reserve(sizeof(T) * count * 2);
-  const auto* bytes = reinterpret_cast<const std::uint8_t*>(data);
-  for (size_t i = 0; i < sizeof(T) * count; ++i) {
-    result += hex_chars[bytes[i] >> 4];
-    result += hex_chars[bytes[i] & 0x0F];
-  }
-  return result;
-}
-
 GDBStub::GDBStub(Emulator* emulator, int listen_port)
     : emulator_(emulator),
       processor_(emulator->processor()),
@@ -265,8 +226,8 @@ void GDBStub::Listen(GDBClient& client) {
           debugging::DebugPrint("GDBStub: Sending debug print\n");
 #endif
 
-          SendPacket(client,
-                     "O" + to_hex_string(message.c_str(), message.length()));
+          SendPacket(client, "O" + string_util::to_hex_string(
+                                       message.c_str(), message.length()));
           cache_.notify_debug_prints.pop();
         }
       }
@@ -278,16 +239,14 @@ void GDBStub::Listen(GDBClient& client) {
 }
 
 void GDBStub::SendPacket(GDBClient& client, const std::string& data) {
-  std::stringstream ss;
-  ss << char(ControlCode::PacketStart) << data << char(ControlCode::PacketEnd);
-
   uint8_t checksum = 0;
   for (char c : data) {
     checksum += c;
   }
 
-  ss << std::hex << std::setw(2) << std::setfill('0') << (checksum & 0xff);
-  std::string packet = ss.str();
+  const std::string packet =
+      fmt::format("{}{}{}{:02x}", char(ControlCode::PacketStart), data,
+                  char(ControlCode::PacketEnd), checksum);
 
   client.socket->Send(packet.c_str(), packet.size());
 }
@@ -407,9 +366,9 @@ bool GDBStub::ParsePacket(const std::string& packet, GDBCommand& out_cmd) {
     if (buffer_index + 2 > packet.size()) {
       return 0;
     }
-    char high = packet[buffer_index++];
-    char low = packet[buffer_index++];
-    return (from_hexchar(high) << 4) | from_hexchar(low);
+    const std::string_view hex_byte(packet.data() + buffer_index, 2);
+    buffer_index += 2;
+    return static_cast<char>(string_util::from_string<uint8_t>(hex_byte, true));
   };
 
   // Read the first character from the buffer
@@ -529,7 +488,7 @@ std::string GDBStub::RegisterRead(xe::cpu::ThreadDebugInfo* thread,
       // X64 host addr) might not match expected BP addr
       if (cache_.notify_bp_guest_address != -1) {
         auto ret = string_util::to_hex_string(
-            (uint32_t)cache_.notify_bp_guest_address);
+            static_cast<uint32_t>(cache_.notify_bp_guest_address));
         cache_.notify_bp_guest_address = -1;
         return ret;
       }
@@ -537,19 +496,24 @@ std::string GDBStub::RegisterRead(xe::cpu::ThreadDebugInfo* thread,
       // about host
       for (auto& frame : thread->frames) {
         if (frame.guest_pc != 0) {
-          return string_util::to_hex_string((uint32_t)frame.guest_pc);
+          return string_util::to_hex_string(
+              static_cast<uint32_t>(frame.guest_pc));
         }
       }
-      return string_util::to_hex_string((uint32_t)0);
+      return string_util::to_hex_string(static_cast<uint32_t>(0));
     }
     case RegisterIndex::MSR:
-      return string_util::to_hex_string((uint32_t)thread->guest_context.msr);
+      return string_util::to_hex_string(
+          static_cast<uint32_t>(thread->guest_context.msr));
     case RegisterIndex::CR:
-      return string_util::to_hex_string((uint32_t)thread->guest_context.cr());
+      return string_util::to_hex_string(
+          static_cast<uint32_t>(thread->guest_context.cr()));
     case RegisterIndex::LR:
-      return string_util::to_hex_string((uint32_t)thread->guest_context.lr);
+      return string_util::to_hex_string(
+          static_cast<uint32_t>(thread->guest_context.lr));
     case RegisterIndex::CTR:
-      return string_util::to_hex_string((uint32_t)thread->guest_context.ctr);
+      return string_util::to_hex_string(
+          static_cast<uint32_t>(thread->guest_context.ctr));
     case RegisterIndex::XER:
       return std::string(8, 'x');
     case RegisterIndex::FPSCR:
@@ -566,7 +530,8 @@ std::string GDBStub::RegisterRead(xe::cpu::ThreadDebugInfo* thread,
   }
 
   // gpr
-  return string_util::to_hex_string((uint32_t)thread->guest_context.r[rid]);
+  return string_util::to_hex_string(
+      static_cast<uint32_t>(thread->guest_context.r[rid]));
 }
 
 std::string GDBStub::RegisterWrite(xe::cpu::ThreadDebugInfo* thread,
@@ -651,8 +616,8 @@ std::string GDBStub::RegisterReadAll() {
     return kGdbReplyError;
   }
   std::string result;
-  result.reserve((39 * 8) + (32 * 16));
-  for (int i = 0; i < 71; ++i) {
+  result.reserve(kAllRegistersHexLength);
+  for (int i = 0; i < kRegisterCount; ++i) {
     result += RegisterRead(thread, i);
   }
   return result;
@@ -664,17 +629,16 @@ std::string GDBStub::RegisterWriteAll(const std::string& data) {
     return kGdbReplyError;
   }
 
-  int expected_size = (39 * 8) + (32 * 16);
-  if (data.length() != expected_size) {
+  if (data.length() != kAllRegistersHexLength) {
     return kGdbReplyError;
   }
 
-  int string_offset = 0;
-  for (int i = 0; i < 71; ++i) {
-    int reg_size = 8;  // 8 hex-nibbles per 32-bit register
-    if (i > 31 && i < 64) {
-      reg_size = 16;  // 16 hex-nibbles for 64-bit FPR registers
-    }
+  size_t string_offset = 0;
+  for (int i = 0; i < kRegisterCount; ++i) {
+    const bool is_fpr =
+        i >= int(RegisterIndex::FPR0) && i < int(RegisterIndex::PC);
+    const size_t reg_size =
+        is_fpr ? kRegister64HexLength : kRegister32HexLength;
 
     std::string_view reg_data(data.data() + string_offset, reg_size);
     RegisterWrite(thread, i, reg_data);  // TODO: check return value
@@ -723,19 +687,16 @@ std::string GDBStub::ExecutionStep() {
 }
 
 std::string GDBStub::MemoryRead(const std::string& data) {
-  auto len_sep = data.find(',');
+  const auto len_sep = data.find(',');
 
   if (len_sep == std::string::npos) {
     return kGdbReplyError;
   }
 
-  uint32_t addr =
+  const uint32_t addr =
       string_util::from_string<uint32_t>(data.substr(0, len_sep), true);
-  uint32_t len =
+  const uint32_t len =
       string_util::from_string<uint32_t>(data.substr(len_sep + 1), true);
-
-  std::string result;
-  result.reserve(len * 2);
 
   auto global_lock = global_critical_region_.Acquire();
 
@@ -750,11 +711,8 @@ std::string GDBStub::MemoryRead(const std::string& data) {
     return kGdbReplyError;
   }
 
-  auto* mem = processor_->memory()->TranslateVirtual(addr);
-  for (uint32_t i = 0; i < len; ++i) {
-    result += to_hexbyte(*mem);
-    mem++;
-  }
+  const auto* mem = processor_->memory()->TranslateVirtual(addr);
+  const std::string result = string_util::to_hex_string(mem, len);
 
   if (len && result.empty()) {
     return kGdbReplyError;  // nothing read
@@ -764,16 +722,16 @@ std::string GDBStub::MemoryRead(const std::string& data) {
 }
 
 std::string GDBStub::MemoryWrite(const std::string& data) {
-  auto len_sep = data.find(',');
-  auto mem_sep = data.find(':');
+  const auto len_sep = data.find(',');
+  const auto mem_sep = data.find(':');
 
   if (len_sep == std::string::npos || mem_sep == std::string::npos) {
     return kGdbReplyError;
   }
 
-  uint32_t addr =
+  const uint32_t addr =
       string_util::from_string<uint32_t>(data.substr(0, len_sep), true);
-  uint32_t len = string_util::from_string<uint32_t>(
+  const uint32_t len = string_util::from_string<uint32_t>(
       data.substr(len_sep + 1, mem_sep - (len_sep + 1)), true);
 
   auto global_lock = global_critical_region_.Acquire();
@@ -869,7 +827,7 @@ std::string GDBStub::GetThreadStateReply(uint32_t thread_id,
                        uint32_t(pc_value), int(RegisterIndex::LR),
                        uint32_t(thread->guest_context.lr), thread_id);
   }
-  return "S05";
+  return kGdbReplyPaused;
 }
 
 bool GDBStub::CreateCodeBreakpoint(uint64_t address) {
@@ -878,7 +836,7 @@ bool GDBStub::CreateCodeBreakpoint(uint64_t address) {
 #endif
   std::unique_lock<std::mutex> lock(mtx_);
 
-  auto* exe_addr = processor_->LookupFunction((uint32_t)address);
+  auto* exe_addr = processor_->LookupFunction(static_cast<uint32_t>(address));
   if (!exe_addr) {
     return false;  // TODO: move this check to Breakpoint?
   }
@@ -1061,10 +1019,7 @@ std::string GDBStub::HandleGDBCommand(GDBClient& client,
       command_map = {
           // "sent when connection is first established to query the reason the
           // target halted"
-          {"?",
-           [&](const GDBCommand& cmd) {
-             return "S05";  // tell debugger we're currently paused
-           }},
+          {"?", [&](const GDBCommand& cmd) { return kGdbReplyPaused; }},
 
           // Detach
           {"D",
@@ -1123,7 +1078,7 @@ std::string GDBStub::HandleGDBCommand(GDBClient& client,
 
           // Attach to specific process ID - IDA used to send this, but doesn't
           // after some changes?
-          {"vAttach", [&](const GDBCommand& cmd) { return "S05"; }},
+          {"vAttach", [&](const GDBCommand& cmd) { return kGdbReplyPaused; }},
 
           // Get current debugger thread ID
           {"qC",
@@ -1209,7 +1164,9 @@ std::string GDBStub::HandleGDBCommand(GDBClient& client,
              std::unique_lock<std::mutex> lock(mtx_);
              std::string result;
              for (auto& thread : cache_.thread_debug_infos) {
-               if (!result.empty()) result += ",";
+               if (!result.empty()) {
+                 result += ",";
+               }
                result += std::to_string(thread->thread_id);
              }
              return "m" + result;
