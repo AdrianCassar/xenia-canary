@@ -3035,8 +3035,16 @@ std::optional<std::smatch> XLiveBaseApp::ParseGuestServerPath(
       pattern = std::regex(R"(^//xestats/u:(.{16})/(.{8})/(.*)$)");
     } break;
     case X_STORAGE_FACILITY::FACILITY_PER_TITLE: {
-      // //title.ffffffff/t:ffffffff/File.bin
-      pattern = std::regex(R"(^//title.(.{8})/t:(.{8})/(.*)$)");
+      std::string prefix = "//title/t:";
+
+      if (xe::utf8::equal_case(server_path.substr(0, prefix.size()), prefix)) {
+        // //title/t:ffffffff/File.bin
+        // Blades uses a different path so use different pattern.
+        pattern = std::regex(R"(^//title/t:(.{8})/(.*)$)");
+      } else {
+        // //title.ffffffff/t:ffffffff/File.bin
+        pattern = std::regex(R"(^//title.(.{8})/t:(.{8})/(.*)$)");
+      }
     } break;
     case X_STORAGE_FACILITY::FACILITY_PER_USER_TITLE: {
       // //tuser.ffffffff/u:0009000000000000/ffffffff/File.bin
@@ -3070,6 +3078,10 @@ std::string XLiveBaseApp::ConvertGuestServerPathToHostServerPath(
 
   switch (GetStorageFacilityTypeFromGuestServerPath(server_path)) {
     case X_STORAGE_FACILITY::FACILITY_GAME_CLIP: {
+      if (matches.size() != 4) {
+        return "";
+      }
+
       const uint64_t xuid =
           xe::string_util::from_string<uint64_t>(matches[1].str(), true);
       const uint32_t title_id =
@@ -3081,15 +3093,34 @@ std::string XLiveBaseApp::ConvertGuestServerPathToHostServerPath(
                                      title_id, xuid, leadereboard_id);
     } break;
     case X_STORAGE_FACILITY::FACILITY_PER_TITLE: {
-      const uint32_t title_id_1 =
+      if (matches.size() != 4 && matches.size() != 3) {
+        return "";
+      }
+
+      uint32_t title_id_1 = 0;
+      uint32_t title_id_2 = 0;
+      std::string filename;
+
+      title_id_1 =
           xe::string_util::from_string<uint32_t>(matches[1].str(), true);
-      const uint32_t title_id_2 =
-          xe::string_util::from_string<uint32_t>(matches[2].str(), true);
-      const std::string filename = matches[3].str();
+
+      if (matches.size() == 3) {
+        filename = matches[2].str();
+      }
+
+      if (matches.size() == 4) {
+        title_id_2 =
+            xe::string_util::from_string<uint32_t>(matches[2].str(), true);
+        filename = matches[3].str();
+      }
 
       host_server_path = fmt::format("title/{:08X}/{}", title_id_1, filename);
     } break;
     case X_STORAGE_FACILITY::FACILITY_PER_USER_TITLE: {
+      if (matches.size() != 5) {
+        return "";
+      }
+
       const uint32_t title_id_1 =
           xe::string_util::from_string<uint32_t>(matches[1].str(), true);
       const uint64_t xuid =
