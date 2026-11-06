@@ -117,6 +117,9 @@ class UserTracker {
   std::pair<uint32_t, uint32_t> GetUserSubscriptionData(
       UserProfile* user) const;
 
+  X_RESULT CheckUserPrivilege(uint32_t user_index, uint32_t privilege_type,
+                              bool& is_granted) const;
+
   // Titles
   void AddTitleToPlayedList();
   void RemoveTitleFromPlayedList(uint64_t xuid, uint32_t title_id);

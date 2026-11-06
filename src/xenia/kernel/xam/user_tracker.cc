@@ -1054,6 +1054,64 @@ std::pair<uint32_t, uint32_t> UserTracker::GetUserSubscriptionData(
   return data;
 }
 
+X_RESULT UserTracker::CheckUserPrivilege(uint32_t user_index,
+                                         uint32_t privilege_type,
+                                         bool& is_granted) const {
+  is_granted = false;
+
+  const auto xam_state = kernel_state()->xam_state();
+
+  if (user_index == XUserIndexAny) {
+    // Every user signed in to Live must hold the privilege, local users are
+    // skipped.
+    bool is_user_signed_in = false;
+    bool is_user_signed_in_to_live = false;
+
+    for (uint32_t i = 0; i < XUserMaxUserCount; ++i) {
+      if (!xam_state->IsUserSignedIn(i)) {
+        continue;
+      }
+
+      is_user_signed_in = true;
+
+      if (!xam_state->GetUserProfile(i)->IsSignedInToLive()) {
+        continue;
+      }
+
+      is_user_signed_in_to_live = true;
+
+      const X_RESULT result = CheckUserPrivilege(i, privilege_type, is_granted);
+
+      if (!is_granted) {
+        return result;
+      }
+    }
+
+    if (is_user_signed_in_to_live) {
+      return X_ERROR_SUCCESS;
+    }
+
+    return is_user_signed_in ? X_ERROR_NOT_LOGGED_ON : X_ERROR_NO_SUCH_USER;
+  }
+
+  if (user_index >= XUserMaxUserCount) {
+    return X_ERROR_INVALID_PARAMETER;
+  }
+
+  if (!xam_state->IsUserSignedIn(user_index)) {
+    return X_ERROR_NO_SUCH_USER;
+  }
+
+  if (!xam_state->GetUserProfile(user_index)->IsSignedInToLive()) {
+    return X_ERROR_NOT_LOGGED_ON;
+  }
+
+  is_granted = privilege_type >= XPRIVILEGE_SESSIONS &&
+               privilege_type <= XPRIVILEGE_ADD_FRIEND;
+
+  return X_ERROR_SUCCESS;
+}
+
 void UserTracker::UpdateContext(uint64_t xuid, uint32_t id, uint32_t value) {
   if (!IsUserTracked(xuid)) {
     return;
@@ -1765,11 +1823,6 @@ void UserTracker::SetupDefaultProfileSettings(uint64_t xuid) {
     return;
   }
 
-  // TODO:
-  // We should properly set the flags for:
-  // XPROFILE_PERMISSIONS
-  // XPROFILE_USER_PREFERENCES
-
   const int32_t controller_vibration = 3;
   const int32_t gamercard_region = user->GetCountry();
   const int32_t voice_volume = 100;
@@ -1837,7 +1890,7 @@ void UserTracker::SetupDefaultProfileSettings(uint64_t xuid) {
   UserSetting Subscription_Payment_Type(
       UserSettingId::XPROFILE_SUBSCRIPTION_PAYMENT_TYPE, int32_t(0));
   UserSetting User_Preferences(UserSettingId::XPROFILE_USER_PREFERENCES,
-                               int32_t(0));
+                               int32_t(3));
   UserSetting Xbox_One_Gamerscore(UserSettingId::XPROFILE_XBOXONE_GAMERSCORE,
                                   int32_t(0));
   UserSetting Email_Format(UserSettingId::WEB_EMAIL_FORMAT,

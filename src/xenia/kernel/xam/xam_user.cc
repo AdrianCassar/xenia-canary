@@ -649,46 +649,22 @@ dword_result_t XamUserWriteProfileSettings_entry(
 }
 DECLARE_XAM_EXPORT1(XamUserWriteProfileSettings, kUserProfiles, kImplemented);
 
-dword_result_t XamUserCheckPrivilege_entry(dword_t user_index, dword_t mask,
+dword_result_t XamUserCheckPrivilege_entry(dword_t user_index,
+                                           dword_t privilege_type,
                                            lpdword_t out_value) {
   // 41560855 - XUserGetAccountInfoCheck
-  // XPRIVILEGE_PII_ACCESS == 221
 
-  *out_value = 0;
+  bool is_granted = false;
 
-  if (user_index == XUserIndexAny) {
-    for (uint8_t i = 0; i < XUserMaxUserCount; ++i) {
-      const auto result = XamUserCheckPrivilege_entry(i, mask, out_value);
-      if (result != X_ERROR_NO_SUCH_USER) {
-        return result;
-      }
-    }
+  const X_RESULT result =
+      kernel_state()->xam_state()->user_tracker()->CheckUserPrivilege(
+          user_index, privilege_type, is_granted);
 
-    return X_ERROR_NO_SUCH_USER;
-  }
+  *out_value = is_granted;
 
-  if (user_index >= XUserMaxUserCount) {
-    return X_ERROR_INVALID_PARAMETER;
-  }
-
-  if (!kernel_state()->xam_state()->IsUserSignedIn(user_index)) {
-    return X_ERROR_NO_SUCH_USER;
-  }
-
-  if (!kernel_state()
-           ->xam_state()
-           ->GetUserProfile(user_index)
-           ->IsSignedInToLive()) {
-    return X_ERROR_NOT_LOGGED_ON;
-  }
-
-  // Check Permissions settings in Dashboard GPD?
-
-  // Allow all privileges including multiplayer.
-  *out_value = 1;
-  return X_ERROR_SUCCESS;
+  return result;
 }
-DECLARE_XAM_EXPORT1(XamUserCheckPrivilege, kUserProfiles, kStub);
+DECLARE_XAM_EXPORT1(XamUserCheckPrivilege, kUserProfiles, kSketchy);
 
 dword_result_t XamUserContentRestrictionGetFlags_entry(dword_t user_index,
                                                        lpdword_t out_flags) {
@@ -1543,8 +1519,8 @@ dword_result_t XamUserIsUnsafeProgrammingAllowed_entry(dword_t user_index,
     return X_ERROR_NOT_LOGGED_ON;
   }
   // ExGetXConfigSetting(3,0xf,&pc_flags,1,*size_out);
-  // uint32_t result = XamUserCheckPrivilege_entry(user_index, 0xD4u,
-  // result_ptr);
+  // uint32_t result = XamUserCheckPrivilege_entry(
+  //     user_index, XPRIVILEGE_UNSAFE_PROGRAMMING, result_ptr);
 
   *result_ptr = 1;
 
