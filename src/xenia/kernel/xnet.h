@@ -53,6 +53,7 @@ using namespace xe::literals;
 #define X_ONLINE_E_SESSION_INSUFFICIENT_BUFFER              static_cast<X_HRESULT>(0x80155207L)
 #define X_ONLINE_E_SESSION_JOIN_ILLEGAL                     static_cast<X_HRESULT>(0x8015520AL)
 #define X_ONLINE_E_SESSION_NOT_FOUND                        static_cast<X_HRESULT>(0x80155200L)
+#define X_ONLINE_E_SESSION_INSUFFICIENT_PRIVILEGES          static_cast<X_HRESULT>(0x80155201L)
 #define X_ONLINE_E_SESSION_INVALID_FLAGS                    static_cast<X_HRESULT>(0x80155204L)
 #define X_ONLINE_E_SESSION_REQUIRES_ARBITRATION             static_cast<X_HRESULT>(0x80155205L)
 #define X_ONLINE_E_SESSION_NOT_LOGGED_ON                    static_cast<X_HRESULT>(0x80155209L)

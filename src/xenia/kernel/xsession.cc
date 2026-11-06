@@ -78,16 +78,25 @@ X_RESULT XSession::CreateSession(uint32_t user_index, uint8_t public_slots,
   // Set early so utility functions can check flags
   local_details_.Flags = flags;
 
-  // Check we have privileges to create sessions.
-  // XPRIVILEGE_MULTIPLAYER_SESSIONS = 254
-  // XPRIVILEGE_SESSIONS = 189
-
   // 58410889
   // If a session requires online features but we're offline then we must fail.
   // e.g. Trying to create a SINGLEPLAYER_WITH_STATS session while not connected
   // to live.
-  if (IsXboxLiveSession() && !user_profile->IsSignedInToLive()) {
+  if (RequiresLiveLogon(static_cast<SessionFlags>(flags)) &&
+      !user_profile->IsSignedInToLive()) {
     return X_ONLINE_E_SESSION_NOT_LOGGED_ON;
+  }
+
+  // Check we have privileges to create sessions.
+  if (flags & PEER_NETWORK && IsXboxLiveSession()) {
+    bool is_granted = false;
+
+    const X_RESULT result = user_tracker->CheckUserPrivilege(
+        user_index, xam::XPRIVILEGE_MULTIPLAYER_SESSIONS, is_granted);
+
+    if (result != X_ERROR_SUCCESS || !is_granted) {
+      return X_ONLINE_E_SESSION_INSUFFICIENT_PRIVILEGES;
+    }
   }
 
   // Hosting a system link session registers its key with XNet.

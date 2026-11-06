@@ -58,6 +58,10 @@ inline bool IsXboxLiveSession(const SessionFlags flags) {
   return !IsOfflineSession(flags) && flags & SessionFlags::LIVE_FEATURES;
 }
 
+inline bool RequiresLiveLogon(const SessionFlags flags) {
+  return (flags & (PRESENCE | STATS | MATCHMAKING)) != 0;
+}
+
 inline bool IsSystemlinkSession(const SessionFlags flags) {
   return !IsOfflineSession(flags) && !IsXboxLiveSession(flags) &&
          flags & SessionFlags::SYSTEMLINK_FEATURES;
