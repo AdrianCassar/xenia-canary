@@ -420,6 +420,10 @@ X_HRESULT XgiApp::HandleMessage(uint32_t message, uint32_t buffer_ptr,
           data->user_index, data->num_slots_public, data->num_slots_private,
           data->flags, data->session_info_ptr, data->nonce_ptr);
 
+      if (!session->IsCreated()) {
+        session->ReleaseHandle();
+      }
+
       kernel_state()->GetXboxLiveAPI()->clearXnaddrCache();
       return result;
     }

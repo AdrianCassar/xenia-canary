@@ -272,6 +272,10 @@ X_RESULT XSession::JoinExistingSession(XSESSION_INFO* session_info) {
 X_RESULT XSession::DeleteSession(XGI_SESSION_STATE* state) {
   // Begin XNetUnregisterKey?
 
+  if (!IsCreated()) {
+    return X_E_INVALIDARG;
+  }
+
   if (IsDeleted()) {
     return X_ONLINE_E_SESSION_WRONG_STATE;
   }
