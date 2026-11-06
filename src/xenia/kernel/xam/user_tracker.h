@@ -124,6 +124,9 @@ class UserTracker {
                                uint32_t& value) const;
   X_HRESULT WriteUserPreference(uint64_t xuid, uint32_t mask, uint32_t value);
 
+  X_RESULT CheckUserPrivilege(uint32_t user_index, uint32_t privilege_type,
+                              bool& is_granted) const;
+
   // Titles
   void AddTitleToPlayedList();
   void RemoveTitleFromPlayedList(uint64_t xuid, uint32_t title_id);

@@ -603,8 +603,9 @@ class UserSetting : public UserData {
   }
 };
 
-const static std::array<UserSetting, 3> default_setting_values = {
+const static std::array<UserSetting, 4> default_setting_values = {
     UserSetting(UserSettingId::XPROFILE_OPTION_CONTROLLER_VIBRATION, 3),
+    UserSetting(UserSettingId::XPROFILE_USER_PREFERENCES, 3),
     UserSetting(
         UserSettingId::XPROFILE_GAMER_TIER,
         X_XAMACCOUNTINFO::AccountSubscriptionTier::kSubscriptionTierGold),
