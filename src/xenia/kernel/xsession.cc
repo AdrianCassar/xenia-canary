@@ -25,6 +25,8 @@ XSession::XSession(KernelState* kernel_state)
     : XObject(kernel_state, Type::Session) {
   session_id_ = -1;
   owner_xuid_ = 0;
+  local_details_.UserIndexHost = XUserIndexNone;
+  local_details_.GameType = X_CONTEXT_GAME_TYPE_STANDARD;
 }
 
 X_STATUS XSession::Initialize() {
@@ -115,8 +117,6 @@ X_RESULT XSession::CreateSession(uint32_t user_index, uint8_t public_slots,
   xe::be<uint64_t>* Nonce_ptr =
       kernel_state_->memory()->TranslateVirtual<xe::be<uint64_t>*>(nonce_ptr);
 
-  local_details_.UserIndexHost = XUserIndexNone;
-
   // CSGO only uses STATS flag to create a session to POST stats pre round.
   // Minecraft and Portal 2 use flags HOST + STATS.
   //
@@ -156,7 +156,6 @@ X_RESULT XSession::CreateSession(uint32_t user_index, uint8_t public_slots,
   local_details_.ActualMemberCount = 0;
   local_details_.ReturnedMemberCount = 0;
   local_details_.eState = XSESSION_STATE::LOBBY;
-  local_details_.Nonce = *Nonce_ptr;
   local_details_.sessionInfo = *SessionInfo_ptr;
   local_details_.xnkidArbitration = XNKID{};
   local_details_.SessionMembers_ptr = 0;
@@ -174,15 +173,18 @@ X_RESULT XSession::CreateHostSession(XSESSION_INFO* session_info,
                                      uint8_t private_slots, uint32_t flags) {
   state_ |= STATE_FLAGS_HOST;
 
-  local_details_.UserIndexHost = user_index;
+  if (HasSessionFlag(static_cast<SessionFlags>(flags), HOST)) {
+    local_details_.UserIndexHost = user_index;
+
+    std::random_device rd;
+    std::uniform_int_distribution<uint64_t> dist(0, -1);
+    *nonce_ptr = dist(rd);
+    local_details_.Nonce = *nonce_ptr;
+  }
 
   if (!cvars::upnp) {
     XELOGI("Hosting while UPnP is disabled!");
   }
-
-  std::random_device rd;
-  std::uniform_int_distribution<uint64_t> dist(0, -1);
-  *nonce_ptr = dist(rd);
 
   XGI_SESSION_CREATE session_data = {};
   session_data.user_index = user_index;
@@ -314,8 +316,7 @@ X_RESULT XSession::JoinSession(XGI_SESSION_MANAGE* data) {
   }
 
   // Joining a started session is only allowed when join in progress is.
-  if (local_details_.eState.get() == XSESSION_STATE::INGAME &&
-      local_details_.Flags & (ARBITRATION | JOIN_IN_PROGRESS_DISABLED)) {
+  if (IsJoinInProgressBlocked()) {
     return X_ONLINE_E_SESSION_FULL;
   }
 
@@ -667,6 +668,10 @@ X_RESULT XSession::ModifySession(XGI_SESSION_MODIFY* data) {
 X_RESULT XSession::GetSessionDetails(XGI_SESSION_DETAILS* data) {
   // 4E4D085C checks ReturnedMemberCount when creating a session
 
+  if (!IsCreated()) {
+    return X_E_INVALIDARG;
+  }
+
   if (!data->session_details_ptr || !data->details_buffer_size) {
     return X_E_INVALIDARG;
   }
@@ -683,11 +688,15 @@ X_RESULT XSession::GetSessionDetails(XGI_SESSION_DETAILS* data) {
     return X_E_INVALIDARG;
   }
 
+  if (local_details_.eState.get() == XSESSION_STATE::LOBBY) {
+    UpdateGameMode();
+  }
+
   *local_details_ptr = local_details_;
 
-  // Offline and system link sessions report no available slots, before and
-  // after members join.
-  if (!IsXboxLiveSession()) {
+  // Only matchmaking sessions that can still be joined report available slots.
+  if (!(local_details_.Flags & MATCHMAKING) || IsDeleted() ||
+      IsJoinInProgressBlocked()) {
     local_details_ptr->AvailablePublicSlots = 0;
     local_details_ptr->AvailablePrivateSlots = 0;
   }
@@ -844,6 +853,10 @@ X_RESULT XSession::ModifySkill(XGI_SESSION_MODIFYSKILL* data) {
 
   if (!is_matchmaking_session) {
     return X_ONLINE_E_SESSION_INVALID_FLAGS;
+  }
+
+  if (local_details_.eState.get() == XSESSION_STATE::LOBBY) {
+    UpdateGameMode();
   }
 
   const uint32_t game_mode = local_details_.GameMode;
@@ -1074,6 +1087,10 @@ X_RESULT XSession::StartSession(XGI_SESSION_STATE* state) {
   if (session_state != XSESSION_STATE::LOBBY &&
       session_state != XSESSION_STATE::REGISTRATION) {
     return X_ONLINE_E_SESSION_WRONG_STATE;
+  }
+
+  if (local_details_.Flags & STATS) {
+    UpdateGameMode();
   }
 
   // Arbitrated sessions must be registered before they can start.
@@ -1364,6 +1381,17 @@ bool XSession::IsJoinInProgressEnabled() const {
 
 bool XSession::IsInvitesEnabled() const {
   return !(local_details_.Flags & INVITES_DISABLED);
+}
+
+bool XSession::IsJoinInProgressBlocked() const {
+  return local_details_.eState.get() == XSESSION_STATE::INGAME &&
+         local_details_.Flags & (ARBITRATION | JOIN_IN_PROGRESS_DISABLED);
+}
+
+void XSession::UpdateGameMode() {
+  local_details_.GameMode =
+      kernel_state()->xam_state()->user_tracker()->GetGameModeValue(
+          owner_xuid_);
 }
 
 bool XSession::IsSessionStarted() const {
