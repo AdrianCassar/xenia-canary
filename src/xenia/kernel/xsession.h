@@ -257,6 +257,10 @@ class XSession : public XObject {
     return (flags & checked_flag) == checked_flag;
   };
 
+  bool IsJoinInProgressBlocked() const;
+
+  void UpdateGameMode();
+
   static void FillSessionSearchResult(const SessionObjectJSON session_info,
                                       XSESSION_SEARCHRESULT* result);
 
