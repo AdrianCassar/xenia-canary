@@ -16,6 +16,7 @@
 #include "xenia/kernel/title_id_utils.h"
 #include "xenia/kernel/user_module.h"
 #include "xenia/kernel/util/shim_utils.h"
+#include "xenia/kernel/xam/xam_live_hive.h"
 #include "xenia/kernel/xam/xam_module.h"
 #include "xenia/kernel/xam/xam_private.h"
 #include "xenia/kernel/xboxkrnl/xboxkrnl_error.h"
@@ -74,176 +75,117 @@ dword_result_t XamGetOnlineSchema_entry() {
 }
 DECLARE_XAM_EXPORT1(XamGetOnlineSchema, kNone, kImplemented);
 
-dword_result_t XamQueryLiveHiveA_entry(
-    lpstring_t feature_name, lpstring_t value_ptr, dword_t value_buffer_size,
-    pointer_t<XAM_OVERLAPPED> overlapped_ptr) {
-  if (!feature_name || !value_ptr || !value_buffer_size) {
+template <typename Query>
+static uint32_t CompleteLiveHiveQuery(Query query, uint32_t overlapped_ptr) {
+  if (!overlapped_ptr) {
+    return query();
+  }
+
+  kernel_state()->CompleteOverlappedDeferredEx(
+      [query](uint32_t& extended_error, uint32_t& length) -> X_RESULT {
+        extended_error = query();
+        length = 0;
+        return X_ERROR_SUCCESS;
+      },
+      overlapped_ptr);
+
+  return X_E_PENDING;
+}
+
+static uint32_t QueryLiveHiveA(const char* name, char* value,
+                               uint32_t value_size, uint32_t overlapped_ptr) {
+  if (!name || !value || !value_size) {
     return X_E_INVALIDARG;
   }
 
-  auto run = [=](uint32_t& extended_error, uint32_t& length) {
-    extended_error = X_ERROR_SUCCESS;
-    length = 0;
+  auto query = [name = std::string(name), value, value_size]() -> uint32_t {
+    std::memset(value, 0, value_size);
 
-    std::memset(value_ptr, 0, value_buffer_size);
+    const auto data = GetLiveHiveValue(name);
 
-    std::string value = "";
-
-    if (feature_name.value() == "SearchKillSwitch") {
-      value = "";
-    } else if (feature_name.value() == "SearchOnlineRecUnavailableLocales") {
-      // value = "fr-ch,de-ch";
-    } else if (feature_name.value() == "SearchUnavailableLocales") {
-      value = "";
-    } else if (feature_name.value() == "SearchSpeechURL") {
-      value = "https://ssl.bing.com/speechreco/xbox/query";
-    } else if (feature_name.value() == "DisplayCurrencyBalanceOnDash") {
-      value = "1";
-    } else if (feature_name.value() == "TFAEnabled") {
-      value = "1";
-    } else if (feature_name.value() == "CatalogUriRoot") {
-      value = "http://catalog.xboxlive.com";
-    } else if (feature_name.value() == "CatalogCDNUriRoot") {
-      value = "http://catalog-cdn.xboxlive.com";
-    } else if (feature_name.value() == "CatalogCDNUriPort") {
-      value = "80";
-    } else if (feature_name.value() == "NielsenSoundEnabled") {
-      value = "1";
-    } else {
-      assert_always();
-      XELOGI("Unknown Feature: {}", feature_name.value());
+    if (!data) {
+      XELOGI("Unknown Live hive value: {}", name);
+      return X_S_FALSE;
     }
 
-    xe::string_util::copy_truncating(value_ptr, value, value_buffer_size);
+    if (value_size < data->size() + 1) {
+      return X_E_INSUFFICIENT_BUFFER;
+    }
 
-    return X_ERROR_SUCCESS;
+    xe::string_util::copy_truncating(value, *data, value_size);
+
+    return X_E_SUCCESS;
   };
 
-  if (!overlapped_ptr) {
-    uint32_t extended_error, length;
-    X_RESULT result = run(extended_error, length);
+  return CompleteLiveHiveQuery(std::move(query), overlapped_ptr);
+}
 
-    return result == X_ERROR_SUCCESS ? result : extended_error;
+// value_size is in characters.
+static uint32_t QueryLiveHiveW(const char16_t* name, char16_t* value,
+                               uint32_t value_size, uint32_t overlapped_ptr) {
+  if (!name || !value || !value_size) {
+    return X_E_INVALIDARG;
   }
 
-  kernel_state()->CompleteOverlappedDeferredEx(run, overlapped_ptr);
-  return X_ERROR_IO_PENDING;
+  const std::string native_name =
+      xe::to_utf8(xe::string_util::read_u16string_and_swap(name));
+
+  auto query = [native_name, value, value_size]() -> uint32_t {
+    std::memset(value, 0, value_size * sizeof(char16_t));
+
+    const auto data = GetLiveHiveValue(native_name);
+
+    if (!data) {
+      XELOGI("Unknown Live hive value: {}", native_name);
+      return X_S_FALSE;
+    }
+
+    const std::u16string data_u16 = xe::to_utf16(*data);
+
+    if (value_size < data_u16.size() + 1) {
+      return X_E_INSUFFICIENT_BUFFER;
+    }
+
+    xe::string_util::copy_and_swap_truncating(value, data_u16, value_size);
+
+    return X_E_SUCCESS;
+  };
+
+  return CompleteLiveHiveQuery(std::move(query), overlapped_ptr);
 }
-DECLARE_XAM_EXPORT1(XamQueryLiveHiveA, kMisc, kStub);
+
+dword_result_t XamQueryLiveHiveA_entry(
+    lpstring_t feature_name, lpstring_t value_ptr, dword_t value_buffer_size,
+    pointer_t<XAM_OVERLAPPED> overlapped_ptr) {
+  return QueryLiveHiveA(feature_name, value_ptr, value_buffer_size,
+                        overlapped_ptr.guest_address());
+}
+DECLARE_XAM_EXPORT1(XamQueryLiveHiveA, kMisc, kImplemented);
+
+dword_result_t XamQueryLiveHiveW_entry(
+    lpu16string_t feature_name, lpu16string_t value_ptr,
+    dword_t value_buffer_size, pointer_t<XAM_OVERLAPPED> overlapped_ptr) {
+  return QueryLiveHiveW(feature_name, value_ptr, value_buffer_size,
+                        overlapped_ptr.guest_address());
+}
+DECLARE_XAM_EXPORT1(XamQueryLiveHiveW, kMisc, kImplemented);
 
 dword_result_t XamGetLiveHiveValueA_entry(
     lpstring_t feature_name, lpstring_t value_ptr, dword_t value_buffer_size,
     dword_t unk, pointer_t<XAM_OVERLAPPED> overlapped_ptr) {
-  if (!feature_name || !value_ptr || !value_buffer_size) {
-    return X_E_INVALIDARG;
-  }
-
-  auto run = [=](uint32_t& extended_error, uint32_t& length) {
-    extended_error = X_ERROR_SUCCESS;
-    length = 0;
-
-    std::memset(value_ptr, 0, value_buffer_size);
-
-    std::string data;
-
-    if (feature_name.value() == "AvatarPhotoBoothEnabled") {
-      data = "1";
-    } else if (feature_name.value() == "AvatarMarketplaceEnabled") {
-      data = "0";
-    } else if (feature_name.value() == "AvatarAssetRefreshFrequency") {
-      data = "100";
-    } else if (feature_name.value() == "CompanionBlacklist") {
-      // 58411457
-      // List?
-    } else if (feature_name.value() == "UseDashGamertagChangeApp") {
-      data = "1";
-    } else if (feature_name.value() == "SysExtRevocationList") {
-      data = "00D8B517FD2E27C62C866B041492CCD391085C3B";
-    } else {
-      assert_always();
-      XELOGI("Unknown Feature: {}", feature_name.value());
-    }
-
-    xe::string_util::copy_truncating(value_ptr, data, value_buffer_size);
-
-    return X_ERROR_SUCCESS;
-  };
-
-  if (!overlapped_ptr) {
-    uint32_t extended_error, length;
-    X_RESULT result = run(extended_error, length);
-
-    return result == X_ERROR_SUCCESS ? result : extended_error;
-  }
-
-  kernel_state()->CompleteOverlappedDeferredEx(run, overlapped_ptr);
-  return X_ERROR_IO_PENDING;
+  return QueryLiveHiveA(feature_name, value_ptr, value_buffer_size,
+                        overlapped_ptr.guest_address());
 }
-DECLARE_XAM_EXPORT1(XamGetLiveHiveValueA, kMisc, kStub);
+DECLARE_XAM_EXPORT1(XamGetLiveHiveValueA, kMisc, kImplemented);
 
 dword_result_t XamGetLiveHiveValueW_entry(
     lpu16string_t feature_name, lpu16string_t value_ptr,
     dword_t value_buffer_size, dword_t unk,
     pointer_t<XAM_OVERLAPPED> overlapped_ptr) {
-  if (!feature_name || !value_ptr || !value_buffer_size) {
-    return X_E_INVALIDARG;
-  }
-
-  auto run = [=](uint32_t& extended_error, uint32_t& length) {
-    extended_error = X_ERROR_SUCCESS;
-    length = 0;
-
-    std::memset(value_ptr, 0, value_buffer_size);
-
-    const std::u16string native_feature_name =
-        xe::string_util::read_u16string_and_swap(feature_name);
-
-    std::u16string data;
-
-    if (native_feature_name == u"GameImageAssetUriRoot") {
-      data = u"http://tiles.xbox.com/consoleAssets";
-    } else if (native_feature_name == u"EpixReportingEnabled") {
-      data = u"1";
-    } else if (native_feature_name == u"EpixFailSafeEnabled") {
-      data = u"0";
-    } else if (native_feature_name == u"EpixShallowEnabled") {
-      data = u"0";
-    } else if (native_feature_name == u"EpixPollFrequencyInMinutes") {
-      data = u"240";
-    } else if (native_feature_name == u"EpixManifestUriPath") {
-      data = u"/epix/$locale/";
-    } else if (native_feature_name == u"EpixPreviewUriRoot") {
-      data = u"http://epix-preview.xbox.com";
-    } else if (native_feature_name == u"EpixUriRoot") {
-      data = u"http://epix.xbox.com";
-    } else if (native_feature_name == u"EpixAvatarConfigPath") {
-      data = u"/consoleassets/vm_ems/avatarbitmask.txt";
-    } else if (native_feature_name == u"XSignerMinimumVersion") {
-      data = u"0";
-    } else if (native_feature_name == u"MarketplaceLibraryEnabled") {
-      data = u"1";
-    } else {
-      assert_always();
-      XELOGI("Unknown Feature: {}", xe::to_utf8(native_feature_name));
-    }
-
-    xe::string_util::copy_and_swap_truncating(value_ptr, data,
-                                              value_buffer_size);
-
-    return X_ERROR_SUCCESS;
-  };
-
-  if (!overlapped_ptr) {
-    uint32_t extended_error, length;
-    X_RESULT result = run(extended_error, length);
-
-    return result == X_ERROR_SUCCESS ? result : extended_error;
-  }
-
-  kernel_state()->CompleteOverlappedDeferredEx(run, overlapped_ptr);
-  return X_ERROR_IO_PENDING;
+  return QueryLiveHiveW(feature_name, value_ptr, value_buffer_size,
+                        overlapped_ptr.guest_address());
 }
-DECLARE_XAM_EXPORT1(XamGetLiveHiveValueW, kMisc, kStub);
+DECLARE_XAM_EXPORT1(XamGetLiveHiveValueW, kMisc, kImplemented);
 
 dword_result_t XamGetErrorStringFromWebService_entry(
     dword_t status_code_desc_address, dword_t buffer_size, dword_t status_code,
@@ -691,13 +633,6 @@ dword_result_t XamAllocEx_entry(dword_t phys_flags, dword_t flags, dword_t size,
   return result ? 0 : 0x8007000E;
 }
 DECLARE_XAM_EXPORT1(XamAllocEx, kMemory, kImplemented);
-
-dword_result_t XamQueryLiveHiveW_entry(lpu16string_t name, lpvoid_t out_buf,
-                                       dword_t out_size,
-                                       dword_t type /* guess */) {
-  return X_STATUS_INVALID_PARAMETER_1;
-}
-DECLARE_XAM_EXPORT1(XamQueryLiveHiveW, kNone, kStub);
 
 dword_result_t XamFree_entry(lpdword_t ptr) {
   kernel_state()->memory()->SystemHeapFree(ptr.guest_address());
