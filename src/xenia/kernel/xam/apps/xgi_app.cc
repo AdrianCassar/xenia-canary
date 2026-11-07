@@ -289,12 +289,8 @@ X_HRESULT XgiApp::HandleMessage(uint32_t message, uint32_t buffer_ptr,
       const XGI_XUSER_SET_CONTEXT* xgi_context =
           reinterpret_cast<const XGI_XUSER_SET_CONTEXT*>(buffer);
 
-      const bool is_property =
-          xam::UserData::get_type(xgi_context->context.context_id) !=
-          xam::X_USER_DATA_TYPE::CONTEXT;
-
-      // 555307F0
-      assert_false(is_property);
+      const auto data_type =
+          xam::UserData::get_type(xgi_context->context.context_id);
 
       XELOGD("XGIUserSetContext({:08X}, ID: {:08X}, Value: {:08X})",
              xgi_context->user_index.get(),
@@ -307,6 +303,19 @@ X_HRESULT XgiApp::HandleMessage(uint32_t message, uint32_t buffer_ptr,
       } else {
         user =
             kernel_state_->xam_state()->GetUserProfile(xgi_context->user_index);
+      }
+
+      // 555307F0 sets a property using XUserSetContext.
+      if (user && data_type != xam::X_USER_DATA_TYPE::CONTEXT) {
+        if (data_type == xam::X_USER_DATA_TYPE::INT32) {
+          Property property(xgi_context->context.context_id,
+                            static_cast<int32_t>(xgi_context->context.value));
+
+          kernel_state_->xam_state()->user_tracker()->AddProperty(user->xuid(),
+                                                                  &property);
+        }
+
+        return X_E_SUCCESS;
       }
 
       if (user) {
