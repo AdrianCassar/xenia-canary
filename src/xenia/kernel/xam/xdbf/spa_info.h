@@ -306,6 +306,8 @@ class SpaInfo : public XdbfFile {
 
   const PropertyBag* GetMatchCollection() const { return &matchmaking_; }
 
+  const PropertyBag* GetPropertyBag() const { return &property_bag_; }
+
   const XdbfContextTableEntry* GetContext(uint32_t id);
   const XdbfPropertyTableEntry* GetProperty(uint32_t id);
   const std::optional<ViewTable> GetStatsView(uint32_t id);
@@ -338,6 +340,7 @@ class SpaInfo : public XdbfFile {
   std::vector<ViewTable> stats_views_;
   PresenceTableEntry presence_;
   PropertyBag matchmaking_;
+  PropertyBag property_bag_;
 
   using XdbfLanguageStrings = std::map<uint16_t, std::string>;
 
@@ -354,6 +357,7 @@ class SpaInfo : public XdbfFile {
   void LoadStatsViews();
   void LoadPresenceModes();
   void LoadMatchmaking();
+  void LoadPropertyBag();
 
   template <typename T>
   static T GetSpaEntry(std::vector<T>& container, uint32_t id);
