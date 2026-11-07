@@ -82,6 +82,7 @@ class UserTracker {
   // Context
   void UpdateContext(uint64_t xuid, uint32_t id, uint32_t value);
   std::optional<uint32_t> GetUserContext(uint64_t xuid, uint32_t id) const;
+  bool IsDefaultContext(uint64_t xuid, uint32_t id) const;
   uint32_t GetContextValue(const uint64_t xuid, const uint32_t id) const;
   uint32_t GetGameModeValue(const uint64_t xuid) const;
   uint32_t GetGameTypeValue(const uint64_t xuid) const;
