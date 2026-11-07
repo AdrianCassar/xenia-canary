@@ -266,15 +266,25 @@ void UserTracker::AddDefaultProperties(uint64_t xuid) {
                static_cast<int64_t>(user->account_info_.GetOnlineXUID()));
   Property GAMER_HOST_NAME = Property(XPROPERTY_GAMER_HOSTNAME, gamertag);
   Property GAMER_NAME = Property(XPROPERTY_GAMERNAME, gamertag);
+
+  const auto gamercard_zone =
+      GetSetting(user, kDashboardID,
+                 static_cast<uint32_t>(UserSettingId::XPROFILE_GAMERCARD_ZONE));
+
+  const auto gamercard_rep =
+      GetSetting(user, kDashboardID,
+                 static_cast<uint32_t>(UserSettingId::XPROFILE_GAMERCARD_REP));
+
   Property GAMER_ZONE = Property(
       XPROPERTY_GAMER_ZONE,
-      static_cast<int32_t>(GAMERCARD_ZONE_OPTIONS::GAMERCARD_ZONE_PRO));
-  Property GAMER_RATING = Property(XPROPERTY_GAMER_RATING,
-                                   static_cast<float>(0));  // Keep value <= 51?
+      gamercard_zone ? std::get<int32_t>(gamercard_zone->get_host_data()) : 0);
+  Property GAMER_RATING = Property(
+      XPROPERTY_GAMER_RATING,
+      gamercard_rep ? gamercard_rep->get_data()->data.f32.get() : 0.0f);
   Property GAMER_COUNTRY = Property(XPROPERTY_GAMER_COUNTRY,
-                                    static_cast<int32_t>(user->GetLanguage()));
+                                    static_cast<int32_t>(user->GetCountry()));
   Property GAMER_LANGUAGE = Property(XPROPERTY_GAMER_LANGUAGE,
-                                     static_cast<int32_t>(user->GetCountry()));
+                                     static_cast<int32_t>(user->GetLanguage()));
   Property PLATFORM_TYPE = Property(
       XPROPERTY_PLATFORM_TYPE, static_cast<int32_t>(PLATFORM_TYPE::Xbox360));
   Property GAMER_MU = Property(XPROPERTY_GAMER_MU,
@@ -282,12 +292,9 @@ void UserTracker::AddDefaultProperties(uint64_t xuid) {
   Property GAMER_SIGMA = Property(
       XPROPERTY_GAMER_SIGMA, static_cast<double>(X_STATS_SKILL_SIGMA_DEFAULT));
 
-  // Normally matchmaking query returns would handle ordering.
-
   // Required
   // 4D5308AB XMAT doesn't mark this as a matchmaking property but expects it
   // for discovering sessions.
-  // 58410A59 expects this property first, otherwise crashes.
   AddProperty(xuid, &GAMER_HOST_NAME);
 
   // Required
@@ -299,11 +306,8 @@ void UserTracker::AddDefaultProperties(uint64_t xuid) {
   AddProperty(xuid, &GAMER_ZONE);
   AddProperty(xuid, &GAMER_COUNTRY);
   AddProperty(xuid, &GAMER_LANGUAGE);
-
-  // 4D5307D5 does not expect these in XSessionSearch results.
   AddProperty(xuid, &GAMER_MU);
   AddProperty(xuid, &GAMER_SIGMA);
-
   AddProperty(xuid, &PLATFORM_TYPE);
 }
 
