@@ -107,6 +107,8 @@ X_RESULT XSession::CreateSession(uint32_t user_index, uint8_t public_slots,
     return X_ONLINE_E_SESSION_REGISTER_KEY_FAILED;
   }
 
+  user_tracker->AddDefaultProperties();
+
   XSESSION_INFO* SessionInfo_ptr =
       kernel_state_->memory()->TranslateVirtual<XSESSION_INFO*>(
           session_info_ptr);
