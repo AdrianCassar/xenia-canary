@@ -26,6 +26,7 @@ void SpaInfo::Load() {
   LoadContexts();
   LoadPresenceModes();
   LoadMatchmaking();
+  LoadPropertyBag();
   LoadStatsViews();
 }
 
@@ -362,6 +363,37 @@ void SpaInfo::LoadMatchmaking() {
 
   for (uint32_t i = 0; i < property_bag_header_ptr->properties_count; i++) {
     matchmaking_.properties.insert(properties_ptr[i]);
+  }
+}
+
+void SpaInfo::LoadPropertyBag() {
+  auto property_bag_table =
+      GetEntry(static_cast<uint16_t>(SpaSection::kMetadata), kXdbfIdXpbm);
+  if (!property_bag_table) {
+    return;
+  }
+
+  auto xpbm_head = reinterpret_cast<const XdbfSectionHeader*>(
+      property_bag_table->data.data());
+
+  assert_true(xpbm_head->magic == kXdbfSignatureXpbm);
+  assert_true(xpbm_head->version == 1);
+
+  const PropertyBagEntry* property_bag_header_ptr =
+      reinterpret_cast<const PropertyBagEntry*>(xpbm_head + 1);
+
+  auto contexts_ptr =
+      reinterpret_cast<const xe::be<uint32_t>*>(property_bag_header_ptr + 1);
+
+  auto properties_ptr = reinterpret_cast<const xe::be<uint32_t>*>(
+      contexts_ptr + property_bag_header_ptr->contexts_count);
+
+  for (uint32_t i = 0; i < property_bag_header_ptr->contexts_count; i++) {
+    property_bag_.contexts.insert(contexts_ptr[i]);
+  }
+
+  for (uint32_t i = 0; i < property_bag_header_ptr->properties_count; i++) {
+    property_bag_.properties.insert(properties_ptr[i]);
   }
 }
 
