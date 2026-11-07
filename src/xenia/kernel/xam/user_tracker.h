@@ -99,6 +99,7 @@ class UserTracker {
                                       const uint32_t id) const;
   std::vector<AttributeKey> GetUserPropertyIds(uint64_t xuid) const;
   std::u16string GetPropertyDescription(uint32_t id) const;
+  void ClearProperties();
   void AddDefaultProperties();
 
   // Settings
