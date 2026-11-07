@@ -253,6 +253,18 @@ void UserTracker::AddDefaultProperties() {
   }
 }
 
+void UserTracker::ClearProperties() {
+  for (const uint64_t xuid : tracked_xuids_) {
+    auto user = kernel_state()->xam_state()->GetUserProfile(xuid);
+    if (!user) {
+      continue;
+    }
+
+    std::lock_guard prop_lock(user->prop_mutex);
+    user->properties_.clear();
+  }
+}
+
 void UserTracker::AddDefaultProperties(uint64_t xuid) {
   auto user = kernel_state()->xam_state()->GetUserProfile(xuid);
   if (!user) {
