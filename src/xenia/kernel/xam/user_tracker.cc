@@ -334,48 +334,34 @@ void UserTracker::AddDefaultContexts() {
 }
 
 void UserTracker::AddDefaultContexts(uint64_t xuid) {
+  auto user = kernel_state()->xam_state()->GetUserProfile(xuid);
+  if (!user) {
+    return;
+  }
+
+  const auto& contexts = spa_data_->GetPropertyBag()->contexts;
+
+  {
+    std::lock_guard prop_lock(user->prop_mutex);
+
+    user->default_contexts_ =
+        std::set<uint32_t>(contexts.cbegin(), contexts.cend());
+  }
+
   Property GAME_MODE = Property(XCONTEXT_GAME_MODE, static_cast<uint32_t>(0));
   Property GAME_TYPE = Property(XCONTEXT_GAME_TYPE, static_cast<uint32_t>(0));
 
-  const util::XLast* xlast =
-      kernel_state()->emulator()->game_info_database()->GetXLast();
-
-  if (xlast) {
-    // System contexts
-    std::optional<uint32_t> game_type_default =
-        xlast->GetContextsQuery()->GetContextDefaultValue(XCONTEXT_GAME_TYPE);
-    std::optional<uint32_t> game_mode_default =
-        xlast->GetGameModeQuery()->GetGameModeDefaultValue();
-
-    if (game_type_default.has_value()) {
-      GAME_TYPE = Property(XCONTEXT_GAME_TYPE, game_type_default.value());
-    }
-
-    if (game_mode_default.has_value()) {
-      GAME_MODE = Property(XCONTEXT_GAME_MODE, game_mode_default.value());
-    }
-  }
-
-  // Ordered!
-  // Normally matchmaking query returns would handle ordering.
+  // System contexts can be missing from the SPA.
   AddProperty(xuid, &GAME_TYPE);
   AddProperty(xuid, &GAME_MODE);
 
-  bool initialize_all_contexts = false;
+  for (const uint32_t context_id : contexts) {
+    const auto context = spa_data_->GetContext(context_id);
 
-  // Initialize all contexts to default values
-  if (xlast && initialize_all_contexts) {
-    for (const uint32_t& context_id :
-         xlast->GetContextsQuery()->GetContextsIDs()) {
-      std::optional<uint32_t> default_value =
-          xlast->GetContextsQuery()->GetContextDefaultValue(context_id);
+    Property default_context =
+        Property(context_id, context ? context->default_value.get() : 0u);
 
-      if (default_value.has_value()) {
-        Property prop = Property(context_id, default_value.value());
-
-        AddProperty(xuid, &prop);
-      }
-    }
+    AddProperty(xuid, &default_context);
   }
 }
 
@@ -1138,16 +1124,18 @@ void UserTracker::UpdateContext(uint64_t xuid, uint32_t id, uint32_t value) {
     return;
   }
 
-  const auto& context_data = spa_data_->GetContext(id);
-  if (!context_data) {
+  if (!spa_data_->GetPropertyBag()->contexts.contains(id)) {
     return;
   }
 
-  if (value > context_data->max_value) {
+  const auto& context_data = spa_data_->GetContext(id);
+  if (value > (context_data ? context_data->max_value.get() : 0u)) {
     return;
   }
 
   std::lock_guard prop_lock(user->prop_mutex);
+
+  user->default_contexts_.erase(id);
 
   const auto entry = std::ranges::find_if(
       user->properties_, [id](const Property& property_data) {
@@ -1174,8 +1162,7 @@ std::optional<uint32_t> UserTracker::GetUserContext(uint64_t xuid,
     return std::nullopt;
   }
 
-  const auto& context_data = spa_data_->GetContext(id);
-  if (!context_data) {
+  if (!spa_data_->GetPropertyBag()->contexts.contains(id)) {
     return std::nullopt;
   }
 
@@ -1192,6 +1179,17 @@ std::optional<uint32_t> UserTracker::GetUserContext(uint64_t xuid,
   }
 
   return entry->get_data()->data.u32;
+}
+
+bool UserTracker::IsDefaultContext(uint64_t xuid, uint32_t id) const {
+  auto user = kernel_state()->xam_state()->GetUserProfile(xuid);
+  if (!user) {
+    return false;
+  }
+
+  std::lock_guard prop_lock(user->prop_mutex);
+
+  return user->default_contexts_.contains(id);
 }
 
 uint32_t UserTracker::GetContextValue(uint64_t xuid, uint32_t id) const {

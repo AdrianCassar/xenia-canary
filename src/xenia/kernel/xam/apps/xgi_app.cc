@@ -683,11 +683,15 @@ X_HRESULT XgiApp::HandleMessage(uint32_t message, uint32_t buffer_ptr,
                 user->xuid(), context->context_id);
 
         if (!context_value) {
-          return X_E_INVALIDARG;
+          return X_E_NOTFOUND;
         }
 
         context->value = context_value.value();
-        return X_E_SUCCESS;
+
+        return kernel_state_->xam_state()->user_tracker()->IsDefaultContext(
+                   user->xuid(), context->context_id)
+                   ? X_S_FALSE
+                   : X_E_SUCCESS;
       }
 
       if (!xgi_property->property_size_ptr || !xgi_property->property_address) {
