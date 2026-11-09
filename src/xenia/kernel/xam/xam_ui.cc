@@ -1263,19 +1263,8 @@ bool xeDrawAddFriend(xe::ui::ImGuiDrawer* imgui_drawer, UserProfile* profile,
 
     ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * 1.05f);
 
-    const ImVec2 btn_size =
-        ImVec2(ImGui::GetContentRegionAvail().x, ui::kFriendsButtonHeight);
-
     const bool max_friends = kernel_state()->friends_manager()->GetFriendsCount(
                                  profile->xuid()) >= X_ONLINE_MAX_FRIENDS;
-
-    if (max_friends) {
-      ImGui::Text("Max Friends Reached!");
-      ImGui::Separator();
-    } else if (args.are_friends) {
-      ImGui::Text("Friend Added!");
-      ImGui::Separator();
-    }
 
     const std::string xuid_string = std::string(args.add_xuid_);
 
@@ -1284,29 +1273,24 @@ bool xeDrawAddFriend(xe::ui::ImGuiDrawer* imgui_drawer, UserProfile* profile,
     args.valid_xuid = false;
     args.are_friends = false;
 
-    if (xuid_string.length() == 16) {
-      if (xuid_string.starts_with("0009")) {
-        xuid = string_util::from_string<uint64_t>(xuid_string, true);
+    bool is_self = false;
 
-        args.valid_xuid = IsOnlineXUID(xuid);
+    if (xuid_string.length() == 16) {
+      xuid = string_util::from_string<uint64_t>(xuid_string, true);
+
+      args.valid_xuid = IsOnlineXUID(xuid);
+
+      if (args.valid_xuid) {
+        is_self = xuid == profile->GetOnlineXUID();
         args.are_friends =
             kernel_state()->friends_manager()->IsFriend(profile->xuid(), xuid);
       }
-
-      if (!args.valid_xuid) {
-        ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(240, 50, 50, 255));
-        if (xuid_string.starts_with("E")) {
-          ImGui::Text("This is an offline XUID!");
-        } else {
-          ImGui::Text("Invalid XUID!");
-        }
-        ImGui::PopStyleColor();
-
-        ImGui::Separator();
-      }
     }
 
-    ImGui::Text("Friend's Online XUID:");
+    const bool can_add =
+        args.valid_xuid && !args.are_friends && !is_self && !max_friends;
+
+    ImGui::TextUnformatted("Friend's Online XUID:");
 
     ImGui::SameLine();
 
@@ -1316,22 +1300,28 @@ bool xeDrawAddFriend(xe::ui::ImGuiDrawer* imgui_drawer, UserProfile* profile,
     ImGui::SetCursorPosX((ImGui::GetCursorPosX() + window_width -
                           ImGui::CalcTextSize(friends_total.c_str()).x));
 
-    ImGui::TextUnformatted(friends_total.c_str());
+    if (max_friends) {
+      ImGui::TextColored(ImColor(ui::kAddFriendErrorColor), "%s",
+                         friends_total.c_str());
+    } else {
+      ImGui::TextDisabled("%s", friends_total.c_str());
+    }
 
     if (!args.add_friend_first_draw && args.add_xuid_[0] == '\0') {
       args.add_friend_first_draw = true;
       ImGui::SetKeyboardFocusHere();
     }
 
-    ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x);
-    ImGui::InputTextWithHint("##AddFriend", "0009XXXXXXXXXXXX", args.add_xuid_,
-                             sizeof(args.add_xuid_),
-                             ImGuiInputTextFlags_CharsHexadecimal |
-                                 ImGuiInputTextFlags_CharsUppercase);
-    ImGui::PopItemWidth();
+    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+    const bool submitted =
+        ImGui::InputTextWithHint("##AddFriend", "0009XXXXXXXXXXXX",
+                                 args.add_xuid_, sizeof(args.add_xuid_),
+                                 ImGuiInputTextFlags_CharsHexadecimal |
+                                     ImGuiInputTextFlags_CharsUppercase |
+                                     ImGuiInputTextFlags_EnterReturnsTrue);
 
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
-      ImGui::SetTooltip("Right Click/Gamepad A");
+      ImGui::SetTooltip("Right click or press A to paste/clear");
     }
 
     if (ImGui::IsItemFocused() &&
@@ -1345,9 +1335,10 @@ bool xeDrawAddFriend(xe::ui::ImGuiDrawer* imgui_drawer, UserProfile* profile,
       if (ImGui::MenuItem("Paste")) {
         const char* clipboard = ImGui::GetClipboardText();
 
-        if (clipboard) {
-          xe::string_util::copy_truncating(args.add_xuid_, clipboard,
-                                           sizeof(args.add_xuid_));
+        if (!clipboard ||
+            !ui::PasteXUID(args.add_xuid_, sizeof(args.add_xuid_), clipboard)) {
+          ui::ShowFriendNotification(imgui_drawer, "Paste Failed",
+                                     "Clipboard doesn't contain a valid XUID");
         }
       }
 
@@ -1362,13 +1353,45 @@ bool xeDrawAddFriend(xe::ui::ImGuiDrawer* imgui_drawer, UserProfile* profile,
       args.add_friend_context_open = false;
     }
 
-    ImGui::BeginDisabled(!args.valid_xuid || args.are_friends || max_friends);
-    if (ImGui::Button("Add", btn_size)) {
+    // Always reserve the status line so the dialog doesn't resize while typing.
+    if (max_friends) {
+      ImGui::TextColored(ImColor(ui::kAddFriendErrorColor),
+                         "Your friends list is full.");
+    } else if (xuid_string.empty()) {
+      ImGui::TextDisabled("Enter a 16 digit online XUID.");
+    } else if (xuid_string.length() < 16) {
+      ImGui::TextDisabled("%zu/16 digits", xuid_string.length());
+    } else if (IsOfflineXUID(xuid)) {
+      ImGui::TextColored(ImColor(ui::kAddFriendErrorColor),
+                         "This is an offline XUID.");
+    } else if (!args.valid_xuid) {
+      ImGui::TextColored(ImColor(ui::kAddFriendErrorColor),
+                         "Online XUIDs start with 0009.");
+    } else if (is_self) {
+      ImGui::TextColored(ImColor(ui::kAddFriendWarningColor),
+                         "You can't add yourself.");
+    } else if (args.are_friends) {
+      ImGui::TextColored(ImColor(ui::kAddFriendWarningColor),
+                         "Already on your friends list.");
+    } else {
+      ImGui::TextColored(ImColor(ui::kAddFriendValidColor), "Ready to add.");
+    }
+
+    const ImVec2 btn_size =
+        ImVec2(ImGui::GetContentRegionAvail().x, ui::kFriendsButtonHeight);
+
+    ImGui::BeginDisabled(!can_add);
+    if (ImGui::Button("Add", btn_size) || (submitted && can_add)) {
       args.added_friend =
           kernel_state()->friends_manager()->AddFriend(profile->xuid(), xuid);
 
       ui::ShowFriendNotification(imgui_drawer, "Added Friend",
                                  args.added_friend ? xuid_string : "Failed!");
+
+      if (args.added_friend) {
+        memset(args.add_xuid_, 0, sizeof(args.add_xuid_));
+        args.add_friend_first_draw = false;
+      }
     }
     ImGui::EndDisabled();
 
