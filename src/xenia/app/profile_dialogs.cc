@@ -7,8 +7,10 @@
  ******************************************************************************
  */
 
-#include "xenia/app/profile_dialogs.h"
+#include <algorithm>
+
 #include "xenia/app/emulator_window.h"
+#include "xenia/app/profile_dialogs.h"
 #include "xenia/base/png_utils.h"
 #include "xenia/base/system.h"
 #include "xenia/kernel/XLiveAPI.h"
@@ -19,6 +21,7 @@
 
 #include <xenia/vfs/devices/host_path_entry.h>
 #include "xenia/kernel/xam/ui/create_profile_ui.h"
+#include "xenia/kernel/xam/ui/friends_ui_util.h"
 #include "xenia/kernel/xam/ui/gamercard_ui.h"
 #include "xenia/kernel/xam/ui/signin_ui.h"
 #include "xenia/kernel/xam/ui/title_info_ui.h"
@@ -466,6 +469,69 @@ void ProfileConfigDialog::OnDraw(ImGuiIO& io) {
   ImGui::End();
 }
 
+bool ManagerDialog::DrawEntry(const char* id, const char* title,
+                              const char* description, bool enabled,
+                              const char* error) {
+  ImFont* font = ImGui::GetFont();
+  const float font_size = ImGui::GetFontSize();
+  const float title_size = font_size * kEntryTitleScale;
+  const float line_spacing = 2.0f;
+
+  const ImVec2 size =
+      ImVec2(ImGui::GetContentRegionAvail().x,
+             title_size + line_spacing + font_size + kEntryPadding.y * 2);
+
+  ImGui::BeginDisabled(!enabled);
+  const bool pressed =
+      ImGui::InvisibleButton(id, size, ImGuiButtonFlags_EnableNav);
+  const bool hovered = ImGui::IsItemHovered();
+  const bool active = ImGui::IsItemActive();
+  ImGui::EndDisabled();
+
+  const ImVec2 min = ImGui::GetItemRectMin();
+  const ImVec2 max = ImGui::GetItemRectMax();
+
+  ImDrawList* draw_list = ImGui::GetWindowDrawList();
+
+  ImU32 card_color = kernel::xam::ui::kFriendCardColor;
+  if (enabled && active) {
+    card_color = kernel::xam::ui::kFriendCardActiveColor;
+  } else if (enabled && hovered) {
+    card_color = kernel::xam::ui::kFriendCardHoveredColor;
+  }
+
+  draw_list->AddRectFilled(min, max, card_color,
+                           kernel::xam::ui::kFriendCardRounding);
+
+  const float alpha = enabled ? 1.0f : ImGui::GetStyle().DisabledAlpha;
+
+  const ImVec2 title_pos =
+      ImVec2(min.x + kEntryPadding.x, min.y + kEntryPadding.y);
+  draw_list->AddText(font, title_size, title_pos,
+                     ImGui::GetColorU32(ImGuiCol_Text, alpha), title);
+
+  draw_list->AddText(
+      font, font_size,
+      ImVec2(title_pos.x, title_pos.y + title_size + line_spacing),
+      ImGui::GetColorU32(ImGuiCol_TextDisabled, alpha), description);
+
+  if (error) {
+    draw_list->AddRect(min, max, kErrorColor,
+                       kernel::xam::ui::kFriendCardRounding, 0, 2.0f);
+
+    const ImVec2 error_size =
+        font->CalcTextSizeA(font_size, FLT_MAX, 0.0f, error);
+
+    // Vertically align the error with the title.
+    draw_list->AddText(font, font_size,
+                       ImVec2(max.x - kEntryPadding.x - error_size.x,
+                              title_pos.y + (title_size - font_size) * 0.5f),
+                       kErrorColor, error);
+  }
+
+  return pressed && enabled;
+}
+
 void ManagerDialog::Initialize(ui::ImGuiDrawer* imgui_drawer,
                                uint32_t user_index) {
   emulator_ = emulator_window_->emulator();
@@ -511,73 +577,93 @@ void ManagerDialog::OnDraw(ImGuiIO& io) {
       emulator_->kernel_state()->xam_state()->GetUserProfile(user_index);
 
   const bool is_signed_in = profile != nullptr;
+  const bool is_connected = emulator_->GetXboxLiveAPI()->IsConnectedToServer();
+  const bool is_xuid_mismatched =
+      emulator_->GetXboxLiveAPI()->IsXUIDMismatched();
 
   ImGuiViewport* viewport = ImGui::GetMainViewport();
   ImVec2 center = viewport->GetCenter();
 
   ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+  ImGui::SetNextWindowSizeConstraints(ImVec2(kWidth, -1), ImVec2(kWidth, -1));
   if (ImGui::BeginPopupModal("Manager", &manager_opened_,
                              ImGuiWindowFlags_AlwaysAutoResize)) {
-    ImVec2 btn_size = ImVec2(200, 40);
-
-    if (!is_signed_in) {
-      ImGui::Text("You're not logged into a profile!");
-      ImGui::Separator();
+    // Only close when the manager itself is focused, not one of its popups.
+    if (ImGui::IsWindowFocused() &&
+        ImGui::IsKeyPressed(ImGuiKey::ImGuiKey_GamepadFaceRight, false)) {
+      manager_opened_ = false;
+      ImGui::CloseCurrentPopup();
     }
 
-    ImGui::SetWindowFontScale(1.2f);
+    // Header: signed in profile on the left, server status on the right.
+    {
+      if (is_signed_in) {
+        ImGui::TextDisabled("Signed in as");
+        ImGui::SameLine();
+        ImGui::TextUnformatted(profile->name().c_str());
+      } else {
+        ImGui::TextColored(ImColor(kWarningColor), "Not signed in");
+      }
 
-    ImGui::BeginDisabled(!is_signed_in);
-    if (ImGui::Button("Friends", btn_size)) {
+      const char* server_label = is_connected ? "Connected" : "Offline";
+      const ImU32 server_color = is_connected ? kOnlineColor : kErrorColor;
+
+      ImGui::SameLine();
+      ImGui::SetCursorPosX(std::max(ImGui::GetCursorPosX(),
+                                    ImGui::GetCursorPosX() +
+                                        ImGui::GetContentRegionAvail().x -
+                                        ImGui::CalcTextSize(server_label).x));
+      ImGui::TextColored(ImColor(server_color), "%s", server_label);
+    }
+
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    if (DrawEntry("##Friends", "Friends",
+                  is_signed_in ? "View friends and their presence."
+                               : "Sign in to a profile to view friends.",
+                  is_signed_in)) {
       friends_ui_args_.content_args.friends_open = true;
       friends_ui_args_.content_args.first_draw = true;
 
-      if (emulator_->kernel_state()->GetXboxLiveAPI()->IsConnectedToServer()) {
+      if (is_connected) {
         friends_ui_args_.content_args.filter_offline = true;
       }
 
       ImGui::OpenPopup("Friends");
     }
-    ImGui::EndDisabled();
 
-    ImGui::SameLine();
+    const char* sessions_description = "Browse your hosted sessions.";
+    if (!is_signed_in) {
+      sessions_description = "Sign in to a profile to view sessions.";
+    } else if (!is_connected) {
+      sessions_description = "Requires a connection to the server.";
+    }
 
-    ImGui::BeginDisabled(!is_signed_in ||
-                         !emulator_->GetXboxLiveAPI()->IsConnectedToServer());
-    if (ImGui::Button("Sessions", btn_size)) {
+    if (DrawEntry("##Sessions", "Sessions", sessions_description,
+                  is_signed_in && is_connected)) {
       sessions_args.sessions_open = true;
       ImGui::OpenPopup("Sessions");
     }
-    ImGui::EndDisabled();
 
-    if (emulator_->GetXboxLiveAPI()->IsXUIDMismatched()) {
-      ImVec2 button_pos = ImGui::GetCursorScreenPos();
-      ImVec2 button_end =
-          ImVec2(button_pos.x + btn_size.x, button_pos.y + btn_size.y);
-
-      ImDrawList* draw_list = ImGui::GetWindowDrawList();
-
-      draw_list->AddRect(button_pos, button_end, IM_COL32(255, 0, 0, 255), 0.0f,
-                         0, 3.0f);
-    }
-
-    if (ImGui::Button("Delete Netplay Profiles", btn_size)) {
-      ImGui::OpenPopup("Delete Profiles");
-    }
-
-    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
-      ImGui::SetTooltip("Delete profiles to fix XUID mismatch error.");
-    }
-
-    ImGui::SameLine();
-
-    if (ImGui::Button("UPnP and Ports", btn_size)) {
+    if (DrawEntry("##UPnPAndPorts", "UPnP and Ports",
+                  "Toggle UPnP and check port forwarding.", true)) {
       upnp_and_ports_args.first_draw = true;
       upnp_and_ports_args.dialog_open = true;
       ImGui::OpenPopup("UPnP and Ports");
     }
 
-    ImGui::SetWindowFontScale(1.0f);
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    if (DrawEntry("##DeleteProfiles", "Delete Netplay Profiles",
+                  is_xuid_mismatched
+                      ? "Delete profiles to fix the XUID mismatch."
+                      : "Remove profiles registered with the server.",
+                  true, is_xuid_mismatched ? "XUID mismatch" : nullptr)) {
+      ImGui::OpenPopup("Delete Profiles");
+    }
 
     if (!sessions_args.sessions_open) {
       sessions_args.first_draw = false;
