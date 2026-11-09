@@ -61,6 +61,75 @@ std::optional<GamerPictureKey> CreateProfileUI::GetDefaultGamerPictureKey() {
   return gamerpic_key;
 }
 
+// Applies default settings and gamerpic, temporarily signing in the profile
+// if needed.
+void ApplyNewProfileDefaults(KernelState* kernel_state, uint64_t xuid,
+                             bool signed_in, CreateProfileUIArgs& args) {
+  auto xam_state = kernel_state->xam_state();
+  auto profile_manager = xam_state->profile_manager();
+  auto user_tracker = xam_state->user_tracker();
+
+  uint64_t evicted_xuid = 0;
+
+  if (!signed_in) {
+    if (profile_manager->SignedInProfilesCount() == XUserMaxUserCount) {
+      constexpr uint8_t last_user_index = XUserMaxUserCount - 1;
+
+      evicted_xuid = profile_manager->GetProfile(last_user_index)->xuid();
+      profile_manager->Logout(last_user_index);
+    }
+
+    profile_manager->Login(xuid);
+  }
+
+  if (args.live_enabled) {
+    user_tracker->SetupDefaultProfileSettings(xuid);
+  }
+
+  if (args.gamerpic_key && args.downloaded_gamerpics.valid()) {
+    const gamerpics_pair& gamerpics = args.downloaded_gamerpics.get();
+    const GamerPictureKey& key = *args.gamerpic_key;
+
+    user_tracker->UpdateUserGamerpic(xuid, key.GetTitleId(), key.GetBigTileId(),
+                                     key.GetSmallTileId(), gamerpics.second,
+                                     gamerpics.first);
+  }
+
+  if (!signed_in) {
+    profile_manager->Logout(
+        xam_state->GetUserIndexAssignedToProfileFromXUID(xuid));
+
+    if (evicted_xuid) {
+      profile_manager->Login(evicted_xuid);
+    }
+  }
+}
+
+void CreateProfileFromArgs(Emulator* emulator, CreateProfileUIArgs& args) {
+  auto kernel_state = emulator->kernel_state();
+  auto profile_manager = kernel_state->xam_state()->profile_manager();
+
+  // The first profile is signed in automatically.
+  const bool autologin = profile_manager->GetAccountCount() == 0;
+
+  const uint32_t reserved_flags =
+      args.live_enabled ? X_XAMACCOUNTINFO::AccountReservedFlags::kLiveEnabled
+                        : 0;
+
+  uint64_t xuid = 0;
+
+  if (!profile_manager->CreateProfile(std::string(args.gamertag), autologin,
+                                      args.migration, reserved_flags, &xuid)) {
+    return;
+  }
+
+  if (args.migration) {
+    emulator->DataMigration(xuid);
+  }
+
+  ApplyNewProfileDefaults(kernel_state, xuid, autologin, args);
+}
+
 bool xeDrawCreateProfile(xe::ui::ImGuiDrawer* imgui_drawer, Emulator* emulator,
                          CreateProfileUIArgs& args) {
   auto profile_manager =
@@ -80,12 +149,10 @@ bool xeDrawCreateProfile(xe::ui::ImGuiDrawer* imgui_drawer, Emulator* emulator,
       (window_width * 0.5f) - (ImGui::GetStyle().ItemSpacing.x * 0.5f);
   ImVec2 half_width_btn = ImVec2(btn_width, btn_height);
 
-  if (args.downloaded_gamerpics.valid() &&
+  if (!args.big_gamerpic_texture && args.downloaded_gamerpics.valid() &&
       args.downloaded_gamerpics.wait_for(0s) == std::future_status::ready) {
-    const std::pair<std::vector<uint8_t>, std::vector<uint8_t>> gamerpics =
-        args.downloaded_gamerpics.get();
-
-    args.big_gamerpic_texture = imgui_drawer->LoadImGuiIcon(gamerpics.first);
+    args.big_gamerpic_texture =
+        imgui_drawer->LoadImGuiIcon(args.downloaded_gamerpics.get().first);
   }
 
   ImTextureID gamerpic =
@@ -121,85 +188,17 @@ bool xeDrawCreateProfile(xe::ui::ImGuiDrawer* imgui_drawer, Emulator* emulator,
   ImGui::EndGroup();
 
   ImGui::BeginDisabled(!args.valid_gamertag);
-  if (ImGui::Button("Create", half_width_btn) ||
-      (enter_pressed && args.valid_gamertag)) {
-    bool autologin = (profile_manager->GetAccountCount() == 0);
-
-    uint32_t reserved_flags = 0;
-
-    if (args.live_enabled) {
-      reserved_flags |= X_XAMACCOUNTINFO::AccountReservedFlags::kLiveEnabled;
-    }
-
-    uint64_t created_profile_xuid = 0;
-
-    bool created = profile_manager->CreateProfile(
-        std::string(args.gamertag), autologin, args.migration, reserved_flags,
-        &created_profile_xuid);
-
-    if (created && args.migration) {
-      emulator->DataMigration(0xB13EBABEBABEBABE);
-    }
-
-    // Update gamerpic on profile creation.
-    // If 4 profiles are signed in then we must sign out last profile in order
-    // to update newly created profile gamerpic.
-    if (created) {
-      uint64_t last_user_profile_xuid = 0;
-      const uint8_t last_user_index = XUserMaxUserCount - 1;
-
-      if (profile_manager->SignedInProfilesCount() == XUserMaxUserCount) {
-        auto last_user_profile = profile_manager->GetProfile(last_user_index);
-
-        last_user_profile_xuid = last_user_profile->xuid();
-
-        profile_manager->Logout(last_user_index);
-        last_user_profile = nullptr;
-      }
-
-      profile_manager->Login(created_profile_xuid);
-
-      const auto created_user_profile =
-          profile_manager->GetProfile(created_profile_xuid);
-
-      if (args.live_enabled) {
-        kernel_state()
-            ->xam_state()
-            ->user_tracker()
-            ->SetupDefaultProfileSettings(created_profile_xuid);
-      }
-
-      if (args.downloaded_gamerpics.valid() && args.gamerpic_key.has_value()) {
-        const gamerpics_pair gamerpics = args.downloaded_gamerpics.get();
-        const GamerPictureKey key = args.gamerpic_key.value();
-
-        const auto user_tracker = kernel_state()->xam_state()->user_tracker();
-
-        user_tracker->UpdateUserGamerpic(
-            created_user_profile->xuid(), key.GetTitleId(), key.GetBigTileId(),
-            key.GetSmallTileId(), gamerpics.first, gamerpics.second);
-
-        if (!autologin) {
-          const uint8_t created_user_index =
-              emulator->kernel_state()
-                  ->xam_state()
-                  ->GetUserIndexAssignedToProfileFromXUID(created_profile_xuid);
-
-          profile_manager->Logout(created_user_index);
-        }
-      }
-
-      if (last_user_profile_xuid) {
-        profile_manager->Login(last_user_profile_xuid);
-      }
-    }
-    std::ranges::fill(args.gamertag, '\0');
-    ImGui::CloseCurrentPopup();
-  }
+  const bool create_pressed = ImGui::Button("Create", half_width_btn) ||
+                              (enter_pressed && args.valid_gamertag);
   ImGui::EndDisabled();
   ImGui::SameLine();
+  const bool cancel_pressed = ImGui::Button("Cancel", half_width_btn);
 
-  if (ImGui::Button("Cancel", half_width_btn)) {
+  if (create_pressed) {
+    CreateProfileFromArgs(emulator, args);
+  }
+
+  if (create_pressed || cancel_pressed) {
     std::ranges::fill(args.gamertag, '\0');
     ImGui::CloseCurrentPopup();
   }
