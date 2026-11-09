@@ -1535,7 +1535,11 @@ bool xeDrawFriendsContent(
     ImGui::Separator();
     ImGui::Spacing();
 
-    for (uint32_t index = 0; auto& presence : presences) {
+    uint64_t removed_xuid_ = 0;
+    uint64_t previous_xuid = 0;
+    uint64_t next_xuid = 0;
+
+    for (const auto& presence : presences) {
       bool filter_gamertags = args.filter.PassFilter(presence.Gamertag);
       bool filter_xuid = args.filter.PassFilter(
           fmt::format("{:016X}", presence.xuid.get()).c_str());
@@ -1568,22 +1572,41 @@ bool xeDrawFriendsContent(
           gamerpic = immediate_gamerpics.at(presence.xuid.get());
         }
 
+        if (removed_xuid_ && !next_xuid) {
+          next_xuid = presence.xuid.get();
+        }
+
+        if (presence.xuid.get() == args.refocus_xuid) {
+          ImGui::SetKeyboardFocusHere();
+        }
+
         uint64_t selected_xuid_ = 0;
-        uint64_t removed_xuid_ = 0;
         xeDrawFriendContent(imgui_drawer, profile, gamerpic, presence,
                             &selected_xuid_, &removed_xuid_);
 
-        if (removed_xuid_) {
-          presences.erase(presences.begin() + index);
-          removed_xuid_ = 0;
+        if (!removed_xuid_) {
+          previous_xuid = presence.xuid.get();
         }
 
         ImGui::Separator();
         ImGui::Spacing();
         ImGui::Spacing();
       }
+    }
 
-      index++;
+    // The focused Remove button is gone after removing a friend, move focus to
+    // the next card, or the previous one if it was the last.
+    args.refocus_xuid = 0;
+
+    if (removed_xuid_ && ImGui::GetIO().NavVisible) {
+      args.refocus_xuid = next_xuid ? next_xuid : previous_xuid;
+    }
+
+    // Erase after iterating, erasing inside the range-for invalidates it.
+    if (removed_xuid_) {
+      std::erase_if(presences, [removed_xuid_](const X_ONLINE_FRIEND& p) {
+        return p.xuid.get() == removed_xuid_;
+      });
     }
 
     ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
