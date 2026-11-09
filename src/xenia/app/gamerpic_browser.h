@@ -138,6 +138,7 @@ class TitleGamerpicBrowser final : public ui::ImGuiDialog {
   void RetryFailedRequests();
 
   void DrawStatus();
+  void DrawProfileCard();
 
   std::future<std::set<uint32_t>> GetSupportedTitlesAsync();
 
