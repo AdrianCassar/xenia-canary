@@ -8,6 +8,7 @@
  */
 
 #include "xenia/kernel/xam/ui/gamercard_from_xuid_ui.h"
+#include "xenia/base/async.h"
 #include "xenia/kernel/XLiveAPI.h"
 
 namespace xe {
@@ -54,8 +55,7 @@ GamercardFromXUIDUI::GamercardFromXUIDUI(xe::ui::ImGuiDrawer* imgui_drawer,
         kernel_state()->presence_manager()->GetFriendsPresence(profile_->xuid(),
                                                                {xuid_});
 
-    immediate_gamerpic_ = std::async(std::launch::async, [xuid,
-                                                          imgui_drawer]() {
+    immediate_gamerpic_ = RunDetachedAsync([xuid, imgui_drawer]() {
       const auto gamerpic =
           kernel_state()->GetXboxLiveAPI()->GetUserGamerpicTile(xuid, false);
 
@@ -81,13 +81,12 @@ GamercardFromXUIDUI::GamercardFromXUIDUI(xe::ui::ImGuiDrawer* imgui_drawer,
                               ->xam_state()
                               ->GetUserProfile(profile_->xuid())
                               ->GetProfileIcon(XTileType::kGamerTile);
-    immediate_gamerpic_ =
-        std::async(std::launch::async, [gamerpic, imgui_drawer]() {
-          std::shared_ptr<xe::ui::ImmediateTexture> shared_gamerpic =
-              std::move(imgui_drawer->LoadImGuiIcon({gamerpic}));
+    immediate_gamerpic_ = RunDetachedAsync([gamerpic, imgui_drawer]() {
+      std::shared_ptr<xe::ui::ImmediateTexture> shared_gamerpic =
+          std::move(imgui_drawer->LoadImGuiIcon({gamerpic}));
 
-          return shared_gamerpic;
-        });
+      return shared_gamerpic;
+    });
   }
 }
 
