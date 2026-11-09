@@ -167,8 +167,6 @@ void TitleGamerpicBrowser::OnDraw(ImGuiIO& io) {
     ImGui::OpenPopup("Gamerpic Browser");
   }
 
-  ImVec2 source_group_size = {};
-
   float btn_height_padding = ImGui::GetStyle().FramePadding.x * 2.5f;
   float btn_width_padding = ImGui::GetStyle().FramePadding.x * 5.0f;
 
@@ -204,76 +202,20 @@ void TitleGamerpicBrowser::OnDraw(ImGuiIO& io) {
 
       ImGui::TableNextColumn();
 
-      const uint32_t combo_item_width = 200;
-
-      ImGui::SetNextItemWidth(combo_item_width);
-      if (ImGui::Combo("##Profiles", &selected_profile_, item_getter,
-                       reinterpret_cast<void*>(&profiles_),
-                       static_cast<int>(profiles_.size()))) {
-        uint64_t xuid = xuids_[selected_profile_];
-
-        if (kernel_state_->xam_state()->IsUserSignedIn(xuid)) {
-          profile_ = kernel_state_->xam_state()->GetUserProfile(xuid);
-          picture_key_setting_ = GetGamerPictureKey();
-          LoadGamerpic();
-        }
-      }
-
-      ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-      ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                            ImVec4(0.2f, 0.5f, 1.0f, 0.4f));
-      ImGui::PushStyleColor(ImGuiCol_ButtonActive,
-                            ImVec4(0.1f, 0.4f, 0.9f, 0.8f));
-      if (ImGui::ImageButton("##ProfileIcon",
-                             reinterpret_cast<ImTextureID>(profile_icon_),
-                             xe::ui::default_image_icon_size)) {
-        if (downloaded_dash_gamerpics) {
-          selected_title_gamerpics_ =
-              GetDashboardTitleResult(dashboard_title_, max_retry_count_);
-          gamerpic_args_.browser_open = true;
-        }
-      }
-      ImGui::PopStyleColor(3);
-
-      if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip(downloaded_dash_gamerpics
-                              ? "Xbox 360 Dashboard"
-                              : "Xbox 360 Dashboard (Unavailable)");
-      }
+      DrawProfileCard();
 
       ImGui::TableNextColumn();
-      std::string lbl_actual_source = "https://xboxgamer.pics/";
-
-      ImVec2 actual_source_size =
-          ImGui::CalcTextSize(lbl_actual_source.c_str());
-
-      const ImVec2 pos = ImGui::GetCursorPos();
-
-      ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetColumnWidth() -
-                           actual_source_size.x);
-
-      // We need to use a separate thread otherwise window will freeze.
-      if (ImGui::TextLink(lbl_actual_source.c_str())) {
-        std::jthread open_link(LaunchWebBrowser, lbl_actual_source);
-        open_link.detach();
-      }
-      ImGui::SetCursorPos(pos);
-
-      ImGui::NewLine();
 
       std::string lbl_games_pre_page = "Games Per Page:";
       ImVec2 size_games_pre_page =
           ImGui::CalcTextSize(lbl_games_pre_page.c_str());
 
-      const uint32_t item_width = 200;
+      const float item_width = 220.0f;
 
-      ImVec2 current_pos = ImGui::GetCursorPos();
-
+      // Right align the filters, three rows tall to match the profile card.
       ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetColumnWidth() -
                            (size_games_pre_page.x + item_width +
                             ImGui::GetStyle().ItemSpacing.x));
-      ImGui::SetCursorPosY(ImGui::GetCursorPosY() +
-                           ImGui::GetStyle().ItemSpacing.y);
       if (ImGui::BeginTable("##Select Type Table", 2)) {
         ImGui::TableSetupColumn("LabelCol", ImGuiTableColumnFlags_WidthFixed);
         ImGui::TableSetupColumn("ComboCol", ImGuiTableColumnFlags_WidthFixed);
@@ -281,7 +223,7 @@ void TitleGamerpicBrowser::OnDraw(ImGuiIO& io) {
         ImGui::TableNextRow();
 
         ImGui::TableNextColumn();
-
+        ImGui::AlignTextToFramePadding();
         ImGui::Text(lbl_games_pre_page.c_str());
 
         ImGui::TableNextColumn();
@@ -310,15 +252,8 @@ void TitleGamerpicBrowser::OnDraw(ImGuiIO& io) {
         ImGui::TableNextRow();
 
         ImGui::TableNextColumn();
+        ImGui::AlignTextToFramePadding();
         ImGui::Text("Content Types:");
-
-        std::vector<std::string> types = {};
-
-        for (size_t i = 0; i < std::size(title_type_filter_state_); i++) {
-          if (title_type_filter_state_[i]) {
-            types.push_back(title_type_filter_[i]);
-          }
-        }
 
         std::string types_preview = "";
         bool first_type = true;
@@ -367,6 +302,12 @@ void TitleGamerpicBrowser::OnDraw(ImGuiIO& io) {
           }
         }
 
+        ImGui::TableNextRow();
+
+        ImGui::TableNextColumn();
+        ImGui::AlignTextToFramePadding();
+        ImGui::Text("Title ID:");
+
         ImGui::TableNextColumn();
 
         bool supported_title = false;
@@ -387,43 +328,11 @@ void TitleGamerpicBrowser::OnDraw(ImGuiIO& io) {
 
         const bool opening_title = open_title_.valid();
 
-        ImGui::BeginDisabled(!supported_title || opening_title);
-        if (ImGui::Button(opening_title ? "Loading...###OpenTitle"
-                                        : "Open Title###OpenTitle",
-                          ImVec2(-1, 0))) {
-          open_title_failed_ = false;
+        const float open_btn_width = ImGui::CalcTextSize("Loading...").x +
+                                     ImGui::GetStyle().FramePadding.x * 2.0f;
 
-          if (title_id == xe::kernel::kDashboardID &&
-              downloaded_dash_gamerpics) {
-            selected_title_gamerpics_ =
-                GetDashboardTitleResult(dashboard_title_, max_retry_count_);
-            gamerpic_args_.browser_open = true;
-          } else {
-            const auto& titles = current_page_.GetTitles();
-
-            // Check if page contains the current title lookup
-            const auto title =
-                std::find_if(titles.cbegin(), titles.cend(),
-                             [title_id](xe::kernel::GameTitle game) {
-                               return game.id == title_id;
-                             });
-
-            if (title != titles.cend()) {
-              selected_title_gamerpics_ = *title;
-              gamerpic_args_.browser_open = true;
-            } else {
-              // Opened by ProcessOpenTitleResult once loaded.
-              open_title_ = LoadTitleAsync(title_id);
-            }
-          }
-        }
-        ImGui::EndDisabled();
-
-        ImGui::SetItemTooltip("Show Gamerpics");
-
-        ImGui::SetNextItemWidth(item_width);
-        ImGui::TableNextColumn();
-
+        ImGui::SetNextItemWidth(item_width - open_btn_width -
+                                ImGui::GetStyle().ItemSpacing.x);
         DrawInputTextBoxWithHint("##SearchTitleGamerpics", "415608CB",
                                  title_id_, sizeof(title_id_),
                                  [this](std::span<const char> data) {
@@ -469,10 +378,44 @@ void TitleGamerpicBrowser::OnDraw(ImGuiIO& io) {
           ImGui::EndPopup();
         }
 
+        ImGui::SameLine();
+
+        ImGui::BeginDisabled(!supported_title || opening_title);
+        if (ImGui::Button(
+                opening_title ? "Loading...###OpenTitle" : "Open###OpenTitle",
+                ImVec2(open_btn_width, 0))) {
+          open_title_failed_ = false;
+
+          if (title_id == xe::kernel::kDashboardID &&
+              downloaded_dash_gamerpics) {
+            selected_title_gamerpics_ =
+                GetDashboardTitleResult(dashboard_title_, max_retry_count_);
+            gamerpic_args_.browser_open = true;
+          } else {
+            const auto& titles = current_page_.GetTitles();
+
+            // Check if page contains the current title lookup
+            const auto title =
+                std::find_if(titles.cbegin(), titles.cend(),
+                             [title_id](xe::kernel::GameTitle game) {
+                               return game.id == title_id;
+                             });
+
+            if (title != titles.cend()) {
+              selected_title_gamerpics_ = *title;
+              gamerpic_args_.browser_open = true;
+            } else {
+              // Opened by ProcessOpenTitleResult once loaded.
+              open_title_ = LoadTitleAsync(title_id);
+            }
+          }
+        }
+        ImGui::EndDisabled();
+
+        ImGui::SetItemTooltip("Show Gamerpics");
+
         ImGui::EndTable();
       }
-
-      ImGui::SetCursorPos(current_pos);
 
       ImGui::EndTable();
     }
@@ -682,6 +625,23 @@ void TitleGamerpicBrowser::OnDraw(ImGuiIO& io) {
     ImGui::EndDisabled();
 
     ImGui::SetItemTooltip("Last Page");
+
+    const std::string lbl_actual_source = "https://xboxgamer.pics/";
+    const ImVec2 actual_source_size =
+        ImGui::CalcTextSize(lbl_actual_source.c_str());
+
+    ImGui::SameLine();
+    ImGui::SetCursorPosX(ImGui::GetCursorPosX() +
+                         ImGui::GetContentRegionAvail().x -
+                         actual_source_size.x);
+    ImGui::SetCursorPosY(ImGui::GetCursorPosY() +
+                         (last_btn_size.y - actual_source_size.y) / 2);
+
+    // We need to use a separate thread otherwise window will freeze.
+    if (ImGui::TextLink(lbl_actual_source.c_str())) {
+      std::jthread open_link(LaunchWebBrowser, lbl_actual_source);
+      open_link.detach();
+    }
 
     // Manage opening gamerpics browser dialog
     if (gamerpic_args_.browser_open && !gamerpic_args_.first_draw) {
@@ -1187,6 +1147,89 @@ void TitleGamerpicBrowser::RetryFailedRequests() {
   open_title_failed_ = false;
 }
 
+// Gamerpic on the left with the profile selector and dashboard gamerpics
+// button stacked beside it, bottom aligned.
+void TitleGamerpicBrowser::DrawProfileCard() {
+  const ImGuiStyle& style = ImGui::GetStyle();
+  const ImVec2 icon_size = xe::ui::default_image_icon_size;
+  const float controls_width = 220.0f;
+
+  // Image() pads the image by ImageBorderSize on each side.
+  const ImVec2 icon_item_size =
+      ImVec2(icon_size.x + style.ImageBorderSize * 2.0f,
+             icon_size.y + style.ImageBorderSize * 2.0f);
+
+  const ImVec2 card_start = ImGui::GetCursorPos();
+
+  // Controls are drawn first so their real height can be measured, the
+  // gamerpic is then placed to the left of them.
+  // Rows are offset and spaced like the filters table on the right (cell
+  // padding above each row) so both sides line up.
+  const float cell_padding_y = style.CellPadding.y;
+
+  ImGui::SetCursorPos(
+      ImVec2(card_start.x + icon_item_size.x + style.ItemSpacing.x,
+             card_start.y + cell_padding_y));
+
+  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
+                      ImVec2(style.ItemSpacing.x, cell_padding_y * 2.0f));
+  ImGui::BeginGroup();
+
+  ImGui::AlignTextToFramePadding();
+  ImGui::TextDisabled("Profile");
+
+  ImGui::SetNextItemWidth(controls_width);
+  ImGui::BeginDisabled(profile_ == nullptr);
+  if (ImGui::Combo("##Profiles", &selected_profile_, item_getter,
+                   reinterpret_cast<void*>(&profiles_),
+                   static_cast<int>(profiles_.size()))) {
+    const uint64_t xuid = xuids_[selected_profile_];
+
+    if (kernel_state_->xam_state()->IsUserSignedIn(xuid)) {
+      profile_ = kernel_state_->xam_state()->GetUserProfile(xuid);
+      picture_key_setting_ = GetGamerPictureKey();
+      LoadGamerpic();
+    }
+  }
+  ImGui::EndDisabled();
+
+  ImGui::BeginDisabled(!downloaded_dash_gamerpics);
+  if (ImGui::Button(downloaded_dash_gamerpics
+                        ? "Dashboard Gamerpics###DashboardGamerpics"
+                        : "Loading Dashboard...###DashboardGamerpics",
+                    ImVec2(controls_width, 0))) {
+    selected_title_gamerpics_ =
+        GetDashboardTitleResult(dashboard_title_, max_retry_count_);
+    gamerpic_args_.browser_open = true;
+  }
+  ImGui::EndDisabled();
+
+  ImGui::SetItemTooltip("Show Xbox 360 Dashboard Gamerpics");
+
+  ImGui::EndGroup();
+  ImGui::PopStyleVar();
+
+  // Bottom of the gamerpic ends level with the dashboard gamerpics button.
+  const float controls_bottom =
+      ImGui::GetItemRectMax().y - ImGui::GetWindowPos().y + ImGui::GetScrollY();
+
+  ImGui::SetCursorPos(
+      ImVec2(card_start.x,
+             std::max(card_start.y, controls_bottom - icon_item_size.y)));
+  ImGui::Image(reinterpret_cast<ImTextureID>(profile_icon_), icon_size);
+
+  if (ImGui::IsItemHovered() && picture_key_setting_.has_value()) {
+    const auto host_data = picture_key_setting_->get_host_data();
+
+    if (const auto key = std::get_if<std::u16string>(&host_data);
+        key && key->size() >= 8) {
+      const std::string title_id = xe::to_utf8(key->substr(0, 8));
+
+      ImGui::SetTooltip("From title %s", title_id.c_str());
+    }
+  }
+}
+
 void TitleGamerpicBrowser::DrawStatus() {
   const bool dashboard_failed =
       !downloaded_dash_gamerpics && IsFutureReady(dashboard_title_) &&
@@ -1368,7 +1411,6 @@ void TitleGamerpicBrowser::LoadGameImages(
 
   for (const auto& title : page_info.GetTitles()) {
     if (stoken.stop_requested()) {
-      XELOGD(fmt::format("{} - {}: Stop Requested!", __func__, title.name));
       return;
     }
 
@@ -1378,8 +1420,6 @@ void TitleGamerpicBrowser::LoadGameImages(
     }
 
     if (cached_images && cached_images->contains(title.id)) {
-      XELOGD(fmt::format("{} - Loading Icon: {}", __func__, title.name));
-
       created_images[title.id] =
           imgui_drawer->LoadImGuiIcon(cached_images->at(title.id));
 
@@ -1493,7 +1533,6 @@ void TitleGamerpicBrowser::LoadGamerpics(
           immediate_title_gamerpics->load(std::memory_order_acquire);
 
       if (stoken.stop_requested()) {
-        XELOGD(fmt::format("{} - {}: Stop Requested!", __func__, game.name));
         return;
       }
 
@@ -1506,9 +1545,6 @@ void TitleGamerpicBrowser::LoadGamerpics(
 
       if (gamerpics && gamerpics->contains(game.id)) {
         if (gamerpics->at(game.id).contains(gamerpic.big_tile_id)) {
-          XELOGD(fmt::format("{} - {}: Loading Gamerpic {:08X}", __func__,
-                             game.name, gamerpic.big_tile_id));
-
           std::shared_ptr<xe::ui::ImmediateTexture> icon =
               imgui_drawer->LoadImGuiIcon(
                   gamerpics->at(game.id).at(gamerpic.big_tile_id));
@@ -1529,9 +1565,7 @@ void TitleGamerpicBrowser::LoadGamerpics(
     begin = next_end;
   }
 
-  if (stoken.stop_requested()) {
-    XELOGD(fmt::format("{} - {}: Stop Requested!", __func__, game.name));
-  } else {
+  if (!stoken.stop_requested()) {
     XELOGD(fmt::format("{} - {} Completed!", __func__, game.name));
   }
 }
