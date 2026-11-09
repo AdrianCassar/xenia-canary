@@ -1004,74 +1004,116 @@ bool xeDrawFriendContent(xe::ui::ImGuiDrawer* imgui_drawer,
                          std::shared_ptr<xe::ui::ImmediateTexture> icon_texture,
                          const X_ONLINE_FRIEND& presence,
                          uint64_t* selected_xuid_, uint64_t* removed_xuid_) {
-  if (icon_texture) {
-    ImGui::Image(reinterpret_cast<ImTextureID>(icon_texture.get()),
-                 xe::ui::default_image_icon_size);
-    ImGui::SameLine();
-  } else {
-    ImGui::Image(
-        reinterpret_cast<ImTextureID>(imgui_drawer->GetLoadingTileIcon()),
-        xe::ui::default_image_icon_size);
-    ImGui::SameLine();
-  }
-
-  ImVec2 start_drawing_position = ImGui::GetCursorPos();
-
-  ImGui::TextUnformatted(presence.Gamertag);
-
-  uint32_t index = 1;
-
-  const uint32_t title_id = presence.title_id.get();
-
-  if (title_id) {
-    ImGui::SameLine();
-    ImGui::SetCursorPos(start_drawing_position);
-    ImGui::SetCursorPosY(start_drawing_position.y + ImGui::GetTextLineHeight());
-
-    if (title_id == kernel_state()->title_id()) {
-      ImGui::TextUnformatted(
-          fmt::format("Game: {}", kernel_state()->emulator()->title_name())
-              .c_str());
-    } else {
-      ImGui::TextUnformatted(fmt::format("Title ID: {}", title_id).c_str());
-    }
-
-    index++;
-  }
-
-  ImGui::SameLine();
-  ImGui::SetCursorPos(start_drawing_position);
-  ImGui::SetCursorPosY(start_drawing_position.y +
-                       index * ImGui::GetTextLineHeight());
-
   const uint64_t friend_xuid = presence.xuid.get();
   const std::string friend_xuid_str = fmt::format("{:016X}", friend_xuid);
+  const uint32_t title_id = presence.title_id.get();
 
-  ImGui::TextUnformatted(
-      fmt::format("Online XUID: {:016X}\n", friend_xuid).c_str());
-  index++;
+  const ImVec2 row_start_position = ImGui::GetCursorPos();
 
-  const std::u16string rich_presence = xe::string_util::read_u16string_and_swap(
-      reinterpret_cast<const char16_t*>(presence.wszRichPresence));
+  const xe::ui::ImmediateTexture* icon =
+      icon_texture ? icon_texture.get() : imgui_drawer->GetLoadingTileIcon();
+  ImGui::Image(reinterpret_cast<ImTextureID>(icon),
+               xe::ui::default_image_icon_size);
+  ImGui::SameLine();
 
-  if (!rich_presence.empty()) {
-    ImGui::SameLine();
-    ImGui::SetCursorPos(start_drawing_position);
-    ImGui::SetCursorPosY(start_drawing_position.y +
-                         index * ImGui::GetTextLineHeight());
+  const ImVec2 info_start_position = ImGui::GetCursorPos();
+  const float info_width = ImGui::GetContentRegionAvail().x;
 
-    std::string presense_string =
-        xe::string_util::trim(xe::to_utf8(rich_presence));
+  // Draw the text on the top channel so the selectable highlight, which is
+  // submitted afterwards (its size depends on the text), renders behind it.
+  ImDrawList* draw_list = ImGui::GetWindowDrawList();
+  ImDrawListSplitter splitter;
+  splitter.Split(draw_list, 2);
+  splitter.SetCurrentChannel(draw_list, 1);
 
-    presense_string =
-        std::regex_replace(presense_string, std::regex("\\n"), ", ");
+  ImGui::BeginGroup();
+  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
+                      ImVec2(ImGui::GetStyle().ItemSpacing.x, 0.0f));
+  {
+    ImGui::TextUnformatted(presence.Gamertag);
 
-    ImGui::TextWrapped(fmt::format("Status: {}", presense_string).c_str());
+    if (title_id) {
+      if (title_id == kernel_state()->title_id()) {
+        ImGui::TextUnformatted(
+            fmt::format("Game: {}", kernel_state()->emulator()->title_name())
+                .c_str());
+      } else {
+        ImGui::TextUnformatted(fmt::format("Title ID: {}", title_id).c_str());
+      }
+    }
 
-    index++;
+    ImGui::TextUnformatted(
+        fmt::format("Online XUID: {:016X}", friend_xuid).c_str());
+
+    const std::u16string rich_presence =
+        xe::string_util::read_u16string_and_swap(
+            reinterpret_cast<const char16_t*>(presence.wszRichPresence));
+
+    if (!rich_presence.empty()) {
+      std::string presense_string =
+          xe::string_util::trim(xe::to_utf8(rich_presence));
+
+      presense_string =
+          std::regex_replace(presense_string, std::regex("\\n"), ", ");
+
+      ImGui::TextWrapped("Status: %s", presense_string.c_str());
+    }
+  }
+  ImGui::PopStyleVar();
+  ImGui::EndGroup();
+
+  const float info_height = std::max(ImGui::GetItemRectSize().y,
+                                     xe::ui::default_image_icon_size.y);
+
+  splitter.SetCurrentChannel(draw_list, 0);
+
+  if (selected_xuid_) {
+    const std::string selectable_label =
+        std::format("##Selectable{}", friend_xuid_str);
+    const std::string context_label =
+        std::format("Friend Menu##{}", friend_xuid_str);
+
+    ImGui::SetCursorPos(info_start_position);
+
+    // Selectable grows its highlight by ItemSpacing.x (half on each side),
+    // remove the right overhang so it ends flush with the buttons below.
+    const float spacing_x = ImGui::GetStyle().ItemSpacing.x;
+    const float spacing_right = spacing_x - std::floor(spacing_x * 0.5f);
+    const float selectable_width = info_width - spacing_right;
+
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, IM_COL32(50, 100, 200, 50));
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, IM_COL32(50, 100, 200, 80));
+    if (ImGui::Selectable(selectable_label.c_str(),
+                          *selected_xuid_ == friend_xuid,
+                          ImGuiSelectableFlags_NoAutoClosePopups,
+                          ImVec2(selectable_width, info_height))) {
+      *selected_xuid_ = friend_xuid;
+    }
+    ImGui::PopStyleColor(2);
+
+    if (ImGui::BeginPopupContextItem(context_label.c_str())) {
+      if (ImGui::BeginMenu("Copy")) {
+        if (ImGui::MenuItem("Gamertag")) {
+          ImGui::SetClipboardText(presence.Gamertag);
+        }
+
+        ImGui::Separator();
+
+        if (ImGui::MenuItem("XUID Online")) {
+          ImGui::SetClipboardText(friend_xuid_str.c_str());
+        }
+
+        ImGui::EndMenu();
+      }
+      ImGui::EndPopup();
+    }
   }
 
-  const ImVec2 friend_info_drawing_end_position = ImGui::GetCursorPos();
+  splitter.Merge(draw_list);
+
+  ImGui::SetCursorPos(ImVec2(
+      row_start_position.x,
+      info_start_position.y + info_height + ImGui::GetStyle().ItemSpacing.y));
 
   ImGui::BeginGroup();
 
@@ -1184,51 +1226,6 @@ bool xeDrawFriendContent(xe::ui::ImGuiDrawer* imgui_drawer,
     }
   }
   ImGui::EndGroup();
-
-  ImVec2 buttons_row_size = ImGui::GetItemRectSize();
-  ImVec2 drawing_end_position = ImGui::GetCursorPos();
-
-  if (selected_xuid_) {
-    ImGui::SetCursorPos(
-        ImVec2(start_drawing_position.x + 2, start_drawing_position.y));
-
-    const std::string selectable_label =
-        std::format("##Selectable{}", friend_xuid_str);
-    const std::string context_label =
-        std::format("Friend Menu##{}", friend_xuid_str);
-
-    auto selectable_area =
-        ImVec2(buttons_row_size.x - (xe::ui::default_image_icon_size.x + 14),
-               friend_info_drawing_end_position.y - start_drawing_position.y);
-
-    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, IM_COL32(50, 100, 200, 50));
-    ImGui::PushStyleColor(ImGuiCol_HeaderActive, IM_COL32(0, 0, 0, 0));
-    if (ImGui::Selectable(selectable_label.c_str(), false,
-                          ImGuiSelectableFlags_NoAutoClosePopups,
-                          selectable_area)) {
-      *selected_xuid_ = friend_xuid;
-    }
-    ImGui::PopStyleColor(2);
-
-    if (ImGui::BeginPopupContextItem(context_label.c_str())) {
-      if (ImGui::BeginMenu("Copy")) {
-        if (ImGui::MenuItem("Gamertag")) {
-          ImGui::SetClipboardText(presence.Gamertag);
-        }
-
-        ImGui::Separator();
-
-        if (ImGui::MenuItem("XUID Online")) {
-          ImGui::SetClipboardText(fmt::format("{:016X}", friend_xuid).c_str());
-        }
-
-        ImGui::EndMenu();
-      }
-      ImGui::EndPopup();
-    }
-
-    ImGui::SetCursorPos(drawing_end_position);
-  }
 
   return true;
 }
