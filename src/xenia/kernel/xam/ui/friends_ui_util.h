@@ -25,6 +25,20 @@ namespace xam {
 namespace ui {
 
 constexpr float kFriendsButtonHeight = 25.0f;
+constexpr float kFriendCardRounding = 4.0f;
+constexpr ImVec2 kFriendCardPadding = ImVec2(6.0f, 4.0f);
+
+constexpr ImU32 kFriendCardColor = IM_COL32(255, 255, 255, 12);
+constexpr ImU32 kFriendCardHoveredColor = IM_COL32(50, 100, 200, 60);
+constexpr ImU32 kFriendCardActiveColor = IM_COL32(50, 100, 200, 90);
+
+struct FriendStatus {
+  bool online;
+  const char* label;
+  ImU32 color;
+};
+
+FriendStatus GetFriendStatus(uint32_t state);
 
 ImVec2 HalfWidthButtonSize();
 
