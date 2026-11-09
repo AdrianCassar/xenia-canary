@@ -9,6 +9,7 @@
 
 #include <ranges>
 
+#include "xenia/base/async.h"
 #include "xenia/base/logging.h"
 #include "xenia/emulator.h"
 #include "xenia/kernel/util/presence_string_builder.h"
@@ -439,8 +440,7 @@ PresenceSynced PresenceManager::GetPresenceSyncState(uint64_t xuid) const {
 }
 
 std::future<void> PresenceManager::SyncPresenceAsync(uint64_t xuid) const {
-  return std::async(std::launch::async, &PresenceManager::SyncPresence, this,
-                    xuid);
+  return RunDetachedAsync([this, xuid]() { SyncPresence(xuid); });
 }
 
 void PresenceManager::SyncPresence(uint64_t xuid) const {
