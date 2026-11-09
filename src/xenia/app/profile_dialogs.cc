@@ -510,7 +510,7 @@ void ManagerDialog::OnDraw(ImGuiIO& io) {
   auto profile =
       emulator_->kernel_state()->xam_state()->GetUserProfile(user_index);
 
-  const bool is_profile_signed_in = profile == nullptr;
+  const bool is_signed_in = profile != nullptr;
 
   ImGuiViewport* viewport = ImGui::GetMainViewport();
   ImVec2 center = viewport->GetCenter();
@@ -520,14 +520,14 @@ void ManagerDialog::OnDraw(ImGuiIO& io) {
                              ImGuiWindowFlags_AlwaysAutoResize)) {
     ImVec2 btn_size = ImVec2(200, 40);
 
-    if (is_profile_signed_in) {
+    if (!is_signed_in) {
       ImGui::Text("You're not logged into a profile!");
       ImGui::Separator();
     }
 
     ImGui::SetWindowFontScale(1.2f);
 
-    ImGui::BeginDisabled(is_profile_signed_in);
+    ImGui::BeginDisabled(!is_signed_in);
     if (ImGui::Button("Friends", btn_size)) {
       friends_ui_args_.content_args.friends_open = true;
       friends_ui_args_.content_args.first_draw = true;
@@ -542,7 +542,7 @@ void ManagerDialog::OnDraw(ImGuiIO& io) {
 
     ImGui::SameLine();
 
-    ImGui::BeginDisabled(is_profile_signed_in ||
+    ImGui::BeginDisabled(!is_signed_in ||
                          !emulator_->GetXboxLiveAPI()->IsConnectedToServer());
     if (ImGui::Button("Sessions", btn_size)) {
       sessions_args.sessions_open = true;
@@ -618,7 +618,7 @@ void ManagerDialog::OnDraw(ImGuiIO& io) {
       ImGui::SetCursorPosX((ImGui::GetWindowWidth() - desc_size.x) * 0.5f);
       ImGui::Text(desc.c_str());
 
-      if (!is_profile_signed_in) {
+      if (is_signed_in) {
         ImGui::Spacing();
 
         ImGui::SetCursorPosX((ImGui::GetWindowWidth() - desc2_size.x) * 0.5f);
@@ -628,7 +628,7 @@ void ManagerDialog::OnDraw(ImGuiIO& io) {
       ImGui::Separator();
 
       if (ImGui::Button("Yes", btn_size)) {
-        if (!is_profile_signed_in) {
+        if (is_signed_in) {
           std::map<uint8_t, uint64_t> xuids;
 
           kernel::xam::XamState* xam_state =
