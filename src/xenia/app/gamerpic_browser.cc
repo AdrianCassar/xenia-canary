@@ -18,6 +18,7 @@
 
 #include "xenia/app/emulator_window.h"
 #include "xenia/app/gamerpic_browser.h"
+#include "xenia/base/async.h"
 #include "xenia/base/jpeg_utils.h"
 #include "xenia/base/logging.h"
 #include "xenia/base/png_utils.h"
@@ -47,27 +48,6 @@ void PushButtonStyle() {
 }
 
 void PopButtonStyle() { ImGui::PopStyleColor(3); }
-
-// Unlike std::async the returned future doesn't block when it's destroyed or
-// replaced, so a slow or unreachable API can't stall the UI thread.
-// func must not capture the browser as it may outlive it.
-template <typename F>
-std::future<std::invoke_result_t<F>> RunDetachedAsync(F&& func) {
-  using Result = std::invoke_result_t<F>;
-
-  auto promise = std::make_shared<std::promise<Result>>();
-  auto future = promise->get_future();
-
-  std::thread([promise, func = std::forward<F>(func)]() mutable {
-    try {
-      promise->set_value(func());
-    } catch (...) {
-      promise->set_exception(std::current_exception());
-    }
-  }).detach();
-
-  return future;
-}
 
 // Copy-on-write update which retries if another thread published a new map in
 // the meantime, so concurrent loaders can't discard each other's entries.

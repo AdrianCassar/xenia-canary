@@ -16,6 +16,7 @@
 #include "third_party/libcurl/include/curl/curl.h"
 // clang-format on
 
+#include "xenia/base/async.h"
 #include "xenia/base/cvar.h"
 #include "xenia/base/logging.h"
 #include "xenia/base/string_util.h"
@@ -564,6 +565,8 @@ std::unique_ptr<HTTPResponseObjectJSON> XLiveAPI::Post(std::string endpoint,
   if (result != CURLE_OK) {
     XELOGE("XLiveAPI::Post: CURL Error Code: {}",
            static_cast<uint32_t>(result));
+    curl_easy_cleanup(curl_handle);
+    curl_slist_free_all(headers);
     return PraseResponse(chunk);
   }
 
@@ -1951,8 +1954,6 @@ std::unique_ptr<FriendsPresenceObjectJSON> XLiveAPI::GetFriendsPresence(
 
   if (response->StatusCode() != HTTP_STATUS_CODE::HTTP_CREATED) {
     XELOGE("FriendsPresence error message: {}", response->Message());
-    assert_always();
-
     return friends;
   }
 
@@ -2632,7 +2633,7 @@ XLiveAPI::GetFriendsGamerpicsAsync(uint64_t xuid,
     return {};
   }
 
-  return std::async(std::launch::async, [this, xuid, imgui_drawer]() {
+  return RunDetachedAsync([this, xuid, imgui_drawer]() {
     const auto friends_xuids =
         kernel_state()->friends_manager()->GetFriendsXUIDs(xuid);
 
