@@ -24,6 +24,21 @@ namespace kernel {
 namespace xam {
 namespace ui {
 
+FriendStatus GetFriendStatus(uint32_t state) {
+  if (!(state & X_ONLINE_FRIENDSTATE_FLAG_ONLINE)) {
+    return {false, "Offline", IM_COL32(140, 140, 140, 255)};
+  }
+
+  switch (state & X_ONLINE_FRIENDSTATE_MASK_USER_STATE) {
+    case X_ONLINE_FRIENDSTATE_ENUM_AWAY:
+      return {true, "Away", IM_COL32(230, 180, 60, 255)};
+    case X_ONLINE_FRIENDSTATE_ENUM_BUSY:
+      return {true, "Busy", IM_COL32(220, 80, 70, 255)};
+    default:
+      return {true, "Online", IM_COL32(110, 200, 90, 255)};
+  }
+}
+
 ImVec2 HalfWidthButtonSize() {
   return ImVec2((ImGui::GetContentRegionAvail().x * 0.5f) -
                     (ImGui::GetStyle().ItemSpacing.x * 0.5f),

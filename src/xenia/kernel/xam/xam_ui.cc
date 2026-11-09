@@ -1009,42 +1009,70 @@ bool xeDrawFriendContent(xe::ui::ImGuiDrawer* imgui_drawer,
   const std::string friend_xuid_str = fmt::format("{:016X}", friend_xuid);
   const uint32_t title_id = presence.title_id.get();
 
+  const ImGuiStyle& style = ImGui::GetStyle();
+  const ImVec2 icon_size = xe::ui::default_image_icon_size;
+  const ui::FriendStatus status = ui::GetFriendStatus(presence.state.get());
+
+  ImDrawList* draw_list = ImGui::GetWindowDrawList();
+
   const ImVec2 row_start_position = ImGui::GetCursorPos();
 
-  const xe::ui::ImmediateTexture* icon =
-      icon_texture ? icon_texture.get() : imgui_drawer->GetLoadingTileIcon();
-  ImGui::Image(reinterpret_cast<ImTextureID>(icon),
-               xe::ui::default_image_icon_size);
+  {
+    const xe::ui::ImmediateTexture* icon =
+        icon_texture ? icon_texture.get() : imgui_drawer->GetLoadingTileIcon();
+    const ImVec2 icon_min = ImGui::GetCursorScreenPos();
+    const ImVec2 icon_max =
+        ImVec2(icon_min.x + icon_size.x, icon_min.y + icon_size.y);
+
+    draw_list->AddImageRounded(
+        reinterpret_cast<ImTextureID>(icon), icon_min, icon_max,
+        ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f),
+        status.online ? IM_COL32_WHITE : IM_COL32(255, 255, 255, 128),
+        ui::kFriendCardRounding);
+    ImGui::Dummy(icon_size);
+  }
   ImGui::SameLine();
 
   const ImVec2 info_start_position = ImGui::GetCursorPos();
+  const ImVec2 info_min = ImGui::GetCursorScreenPos();
   const float info_width = ImGui::GetContentRegionAvail().x;
+  const float info_text_right =
+      info_start_position.x + info_width - ui::kFriendCardPadding.x;
 
-  // Draw the text on the top channel so the selectable highlight, which is
+  // Draw the text on the top channel so the card background, which is
   // submitted afterwards (its size depends on the text), renders behind it.
-  ImDrawList* draw_list = ImGui::GetWindowDrawList();
   ImDrawListSplitter splitter;
   splitter.Split(draw_list, 2);
   splitter.SetCurrentChannel(draw_list, 1);
 
+  ImGui::SetCursorPos(ImVec2(info_start_position.x + ui::kFriendCardPadding.x,
+                             info_start_position.y + ui::kFriendCardPadding.y));
+
   ImGui::BeginGroup();
   ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
-                      ImVec2(ImGui::GetStyle().ItemSpacing.x, 0.0f));
+                      ImVec2(style.ItemSpacing.x, 0.0f));
+  ImGui::PushTextWrapPos(info_text_right);
   {
     ImGui::TextUnformatted(presence.Gamertag);
 
+    ImGui::SameLine();
+    ImGui::SetCursorPosX(
+        std::max(ImGui::GetCursorPosX(),
+                 info_text_right - ImGui::CalcTextSize(status.label).x));
+    ImGui::PushStyleColor(ImGuiCol_Text, status.color);
+    ImGui::TextUnformatted(status.label);
+    ImGui::PopStyleColor();
+
+    ImGui::PushStyleColor(ImGuiCol_Text, style.Colors[ImGuiCol_TextDisabled]);
     if (title_id) {
       if (title_id == kernel_state()->title_id()) {
-        ImGui::TextUnformatted(
-            fmt::format("Game: {}", kernel_state()->emulator()->title_name())
-                .c_str());
+        ImGui::TextWrapped("Playing %s",
+                           kernel_state()->emulator()->title_name().c_str());
       } else {
-        ImGui::TextUnformatted(fmt::format("Title ID: {}", title_id).c_str());
+        ImGui::Text("Playing title %08X", title_id);
       }
     }
-
-    ImGui::TextUnformatted(
-        fmt::format("Online XUID: {:016X}", friend_xuid).c_str());
+    ImGui::PopStyleColor();
 
     const std::u16string rich_presence =
         xe::string_util::read_u16string_and_swap(
@@ -1060,16 +1088,26 @@ bool xeDrawFriendContent(xe::ui::ImGuiDrawer* imgui_drawer,
         }
       }
 
-      ImGui::TextWrapped("Status: %s", presence_string.c_str());
+      ImGui::TextWrapped("%s", presence_string.c_str());
     }
+
+    ImGui::PushStyleColor(ImGuiCol_Text, style.Colors[ImGuiCol_TextDisabled]);
+    ImGui::Text("XUID %s", friend_xuid_str.c_str());
+    ImGui::PopStyleColor();
   }
+  ImGui::PopTextWrapPos();
   ImGui::PopStyleVar();
   ImGui::EndGroup();
 
-  const float info_height = std::max(ImGui::GetItemRectSize().y,
-                                     xe::ui::default_image_icon_size.y);
+  const float info_height =
+      std::max(ImGui::GetItemRectSize().y + ui::kFriendCardPadding.y * 2.0f,
+               icon_size.y);
+  const ImVec2 info_max =
+      ImVec2(info_min.x + info_width, info_min.y + info_height);
 
   splitter.SetCurrentChannel(draw_list, 0);
+
+  ImU32 card_color = ui::kFriendCardColor;
 
   if (selected_xuid_) {
     const std::string selectable_label =
@@ -1079,21 +1117,22 @@ bool xeDrawFriendContent(xe::ui::ImGuiDrawer* imgui_drawer,
 
     ImGui::SetCursorPos(info_start_position);
 
-    // Selectable grows its highlight by ItemSpacing.x (half on each side),
-    // remove the right overhang so it ends flush with the buttons below.
-    const float spacing_x = ImGui::GetStyle().ItemSpacing.x;
-    const float spacing_right = spacing_x - std::floor(spacing_x * 0.5f);
-    const float selectable_width = info_width - spacing_right;
-
-    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, IM_COL32(50, 100, 200, 50));
-    ImGui::PushStyleColor(ImGuiCol_HeaderActive, IM_COL32(50, 100, 200, 80));
-    if (ImGui::Selectable(selectable_label.c_str(),
-                          *selected_xuid_ == friend_xuid,
+    // Selectable only provides interaction, the rounded card is drawn below.
+    ImGui::PushStyleColor(ImGuiCol_Header, IM_COL32(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, IM_COL32(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, IM_COL32(0, 0, 0, 0));
+    if (ImGui::Selectable(selectable_label.c_str(), false,
                           ImGuiSelectableFlags_NoAutoClosePopups,
-                          ImVec2(selectable_width, info_height))) {
+                          ImVec2(info_width, info_height))) {
       *selected_xuid_ = friend_xuid;
     }
-    ImGui::PopStyleColor(2);
+    ImGui::PopStyleColor(3);
+
+    if (ImGui::IsItemActive() || ImGui::IsPopupOpen(context_label.c_str())) {
+      card_color = ui::kFriendCardActiveColor;
+    } else if (ImGui::IsItemHovered()) {
+      card_color = ui::kFriendCardHoveredColor;
+    }
 
     if (ImGui::BeginPopupContextItem(context_label.c_str())) {
       if (ImGui::BeginMenu("Copy")) {
@@ -1112,6 +1151,9 @@ bool xeDrawFriendContent(xe::ui::ImGuiDrawer* imgui_drawer,
       ImGui::EndPopup();
     }
   }
+
+  draw_list->AddRectFilled(info_min, info_max, card_color,
+                           ui::kFriendCardRounding);
 
   splitter.Merge(draw_list);
 
@@ -1471,6 +1513,7 @@ bool xeDrawFriendsContent(
     uint64_t removed_xuid_ = 0;
     uint64_t previous_xuid = 0;
     uint64_t next_xuid = 0;
+    uint32_t drawn_friends = 0;
 
     for (const auto& presence : presences) {
       const uint64_t friend_xuid = presence.xuid.get();
@@ -1528,6 +1571,8 @@ bool xeDrawFriendsContent(
       ImGui::Separator();
       ImGui::Spacing();
       ImGui::Spacing();
+
+      drawn_friends++;
     }
 
     // The focused Remove button is gone after removing a friend, move focus to
@@ -1536,6 +1581,19 @@ bool xeDrawFriendsContent(
 
     if (removed_xuid_ && ImGui::GetIO().NavVisible) {
       args.refocus_xuid = next_xuid ? next_xuid : previous_xuid;
+    }
+
+    if (!drawn_friends) {
+      const char* empty_text = !friends_count
+                                   ? "No friends added yet."
+                                   : "No friends match the current filters.";
+
+      ImGui::Spacing();
+      ImGui::SetCursorPosX(ImGui::GetCursorPosX() +
+                           (window_width - ImGui::CalcTextSize(empty_text).x) *
+                               0.5f);
+      ImGui::TextDisabled("%s", empty_text);
+      ImGui::Spacing();
     }
 
     // Erase after iterating, erasing inside the range-for invalidates it.
