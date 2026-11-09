@@ -53,6 +53,11 @@ class CreateProfileUI final : public XamDialog {
   CreateProfileUIArgs create_profile_args_ = {};
 };
 
+void ApplyNewProfileDefaults(KernelState* kernel_state, uint64_t xuid,
+                             bool signed_in, CreateProfileUIArgs& args);
+
+void CreateProfileFromArgs(Emulator* emulator, CreateProfileUIArgs& args);
+
 bool xeDrawCreateProfile(xe::ui::ImGuiDrawer* imgui_drawer, Emulator* emulator,
                          CreateProfileUIArgs& args);
 
