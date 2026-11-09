@@ -81,9 +81,22 @@ class ManagerDialog final : public ui::ImGuiDialog {
   void Initialize(ui::ImGuiDrawer* imgui_drawer, uint32_t user_index);
 
  private:
+  static constexpr float kWidth = 380.0f;
+  static constexpr float kEntryTitleScale = 1.15f;
+  static constexpr ImVec2 kEntryPadding = ImVec2(10.0f, 8.0f);
+
+  static constexpr ImU32 kOnlineColor = IM_COL32(110, 200, 90, 255);
+  static constexpr ImU32 kWarningColor = IM_COL32(230, 180, 60, 255);
+  static constexpr ImU32 kErrorColor = IM_COL32(240, 80, 70, 255);
+
+  // Draws a full width card with a title and a dimmed description. An error
+  // label is drawn on the right and the card is outlined. Returns true when the
+  // card is activated.
+  static bool DrawEntry(const char* id, const char* title,
+                        const char* description, bool enabled,
+                        const char* error = nullptr);
+
   bool manager_opened_ = false;
-  uint64_t selected_xuid_ = 0;
-  uint64_t removed_xuid_ = 0;
   Emulator* emulator_;
   xe::kernel::xam::ui::FriendsUIArgs friends_ui_args_;
   xe::kernel::xam::ui::SessionsContentArgs sessions_args = {};
