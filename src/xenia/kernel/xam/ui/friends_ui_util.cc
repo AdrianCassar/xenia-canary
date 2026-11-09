@@ -9,8 +9,13 @@
 
 #include "xenia/kernel/xam/ui/friends_ui_util.h"
 
+#include <algorithm>
+#include <cctype>
+
 #include "third_party/fmt/include/fmt/format.h"
 
+#include "xenia/base/string_util.h"
+#include "xenia/base/utf8.h"
 #include "xenia/emulator.h"
 #include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/util/shim_utils.h"
@@ -49,6 +54,23 @@ std::string FriendsCountString(uint64_t xuid) {
   return fmt::format("{}/{}",
                      kernel_state()->friends_manager()->GetFriendsCount(xuid),
                      X_ONLINE_MAX_FRIENDS);
+}
+
+bool PasteXUID(char* buffer, size_t buffer_size, const char* text) {
+  std::string xuid = string_util::trim(text);
+
+  if (xuid.starts_with("0x") || xuid.starts_with("0X")) {
+    xuid.erase(0, 2);
+  }
+
+  if (xuid.empty() || xuid.length() >= buffer_size ||
+      !std::ranges::all_of(xuid,
+                           [](unsigned char c) { return std::isxdigit(c); })) {
+    return false;
+  }
+
+  string_util::copy_truncating(buffer, utf8::upper_ascii(xuid), buffer_size);
+  return true;
 }
 
 void ShowFriendNotification(xe::ui::ImGuiDrawer* imgui_drawer,
