@@ -18,44 +18,44 @@ namespace xam {
 namespace ui {
 
 struct AddFriendArgs {
-  bool add_friend_open;
-  bool add_friend_first_draw;
-  bool search_filter_context_open;
-  bool add_friend_context_open;
-  bool added_friend;
-  bool are_friends;
-  bool valid_xuid;
-  char add_xuid_[17];
+  bool add_friend_open = false;
+  bool add_friend_first_draw = false;
+  bool search_filter_context_open = false;
+  bool add_friend_context_open = false;
+  bool added_friend = false;
+  bool are_friends = false;
+  bool valid_xuid = false;
+  char add_xuid_[17] = {};
 };
 
 struct FriendsContentArgs {
-  bool first_draw;
-  bool friends_open;
-  bool filter_joinable;
-  bool filter_title;
-  bool filter_offline;
-  bool refresh_presence;
+  bool first_draw = false;
+  bool friends_open = false;
+  bool filter_joinable = false;
+  bool filter_title = false;
+  bool filter_offline = false;
+  bool refresh_presence = false;
   uint64_t refocus_xuid = 0;
   AddFriendArgs add_friend_args = {};
   ImGuiTextFilter filter = {};
 };
 
 struct SessionsContentArgs {
-  bool first_draw;
-  bool sessions_open;
-  bool filter_own;
-  bool refresh_sessions;
-  bool refresh_sessions_sync;
+  bool first_draw = false;
+  bool sessions_open = false;
+  bool filter_own = false;
+  bool refresh_sessions = false;
+  bool refresh_sessions_sync = false;
 };
 
 struct MyDeletedProfilesArgs {
-  bool first_draw;
-  bool deleted_profiles_open;
+  bool first_draw = false;
+  bool deleted_profiles_open = false;
 };
 
 struct UPnPAndPortsArgs {
-  bool first_draw;
-  bool dialog_open;
+  bool first_draw = false;
+  bool dialog_open = false;
 };
 
 }  // namespace ui
