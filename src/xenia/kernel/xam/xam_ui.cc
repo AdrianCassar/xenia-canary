@@ -1531,7 +1531,7 @@ bool xeDrawFriendsContent(
     xeDrawAddFriend(imgui_drawer, profile, args.add_friend_args);
 
     if (args.add_friend_args.added_friend) {
-      args.refresh_presence = true;
+      args.queue_refresh_presence = true;
       args.add_friend_args.added_friend = false;
     }
 
