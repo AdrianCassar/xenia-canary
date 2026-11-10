@@ -55,15 +55,32 @@ bool xeDrawFriendsUI(xe::ui::ImGuiDrawer* imgui_drawer, UserProfile* profile,
       kernel_state()->xam_state()->presence_manager()->GetFriendsPresenceSorted(
           profile->xuid());
 
-  if (friends_ui_args.content_args.refresh_presence) {
-    friends_ui_args.content_args.refresh_presence = false;
+  const auto in_progress = [](const auto& future) {
+    return future.valid() && future.wait_for(0s) != std::future_status::ready;
+  };
 
-    friends_ui_args.friends_presence_sync =
-        kernel_state()->presence_manager()->SyncPresenceAsync(profile->xuid());
+  const bool refresh_in_progress =
+      in_progress(friends_ui_args.friends_presence_sync) ||
+      in_progress(friends_ui_args.immediate_gamerpics);
 
-    friends_ui_args.immediate_gamerpics =
-        kernel_state()->GetXboxLiveAPI()->GetFriendsGamerpicsAsync(
-            profile->xuid(), imgui_drawer);
+  auto& content_args = friends_ui_args.content_args;
+
+  // Refresh requests are dropped while a refresh is in progress, queued ones
+  // (e.g. after adding a friend) wait for it to finish.
+  if (content_args.refresh_presence || content_args.queue_refresh_presence) {
+    if (!refresh_in_progress) {
+      content_args.queue_refresh_presence = false;
+
+      friends_ui_args.friends_presence_sync =
+          kernel_state()->presence_manager()->SyncPresenceAsync(
+              profile->xuid());
+
+      friends_ui_args.immediate_gamerpics =
+          kernel_state()->GetXboxLiveAPI()->GetFriendsGamerpicsAsync(
+              profile->xuid(), imgui_drawer);
+    }
+
+    content_args.refresh_presence = false;
   }
 
   if (friends_ui_args.immediate_gamerpics.valid()) {
