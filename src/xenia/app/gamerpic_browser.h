@@ -178,10 +178,10 @@ class TitleGamerpicBrowser final : public ui::ImGuiDialog {
       std::shared_ptr<AtomicImmediateTitleGamerpics> immediate_title_gamerpics,
       std::shared_ptr<ui::ImGuiDrawer> imgui_drawer);
 
-  xe::kernel::xam::UserProfile* profile_;
-  EmulatorWindow* emulator_window_;
-  const xe::kernel::KernelState* kernel_state_;
-  xe::ui::ImmediateTexture* profile_icon_;
+  xe::kernel::xam::UserProfile* profile_ = nullptr;
+  EmulatorWindow* emulator_window_ = nullptr;
+  const xe::kernel::KernelState* kernel_state_ = nullptr;
+  xe::ui::ImmediateTexture* profile_icon_ = nullptr;
   std::optional<kernel::xam::UserSetting> picture_key_setting_;
 
   TitleGamerpicBrowserArgs titles_args_ = {};

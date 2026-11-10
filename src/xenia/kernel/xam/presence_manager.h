@@ -36,8 +36,8 @@ namespace kernel {
 namespace xam {
 
 struct PresenceSyncState {
-  bool friends;
-  bool subscribers;
+  bool friends = false;
+  bool subscribers = false;
 
   bool IsOutOfSync() const { return friends || subscribers; }
 };

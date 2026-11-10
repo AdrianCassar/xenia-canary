@@ -71,7 +71,7 @@ struct Player {
   xe::be<uint64_t> xuid;
   std::string hostAddress;
   xe::be<uint64_t> machineId;
-  uint16_t port;
+  uint16_t port = 0;
   xe::be<uint64_t> macAddress;  // 6 Bytes
   xe::be<uint64_t> sessionId;
 };
@@ -266,7 +266,7 @@ class XSession : public XObject {
 
   void NotifySessionCreationWarning(uint32_t user_index) const;
 
-  uint64_t owner_xuid_;
+  uint64_t owner_xuid_ = 0;
 
   std::vector<xam::Property> live_properties_;
 
