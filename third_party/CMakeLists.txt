@@ -847,6 +847,9 @@ if(WIN32 OR LINUX)
   if(WIN32)
     # Only the static library is built, so skip the shared object target.
     set(SHARE_LIB_OBJECT OFF)
+    # curl compiles a test file on every configure to read _WIN32_WINNT, only
+    # to reject targets older than Vista. Defining the result skips that.
+    set(HAVE_WIN32_WINNT "")
     set(CURL_USE_SCHANNEL ON CACHE BOOL "" FORCE)
     set(CURL_WINDOWS_SSPI ON CACHE BOOL "" FORCE)
     set(CURL_USE_WOLFSSL OFF CACHE BOOL "" FORCE)
