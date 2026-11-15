@@ -498,7 +498,8 @@ dword_result_t NetDll_WSAWaitForMultipleEvents_entry(dword_t num_events,
   }
 
   uint64_t timeout_wait = 0;
-  const bool wait_all_ = !static_cast<bool>(wait_all);
+  const uint32_t wait_type =
+      wait_all ? X_KWAIT_REASON::WaitAll : X_KWAIT_REASON::WaitAny;
 
   if (timeout != -1) {
     timeout_wait = -10000LL * static_cast<uint64_t>(timeout);
@@ -508,7 +509,7 @@ dword_result_t NetDll_WSAWaitForMultipleEvents_entry(dword_t num_events,
 
   while (true) {
     result = xboxkrnl::xeNtWaitForMultipleObjectsEx(
-        num_events, events, wait_all_, 1, alertable,
+        num_events, events, wait_type, 1, alertable,
         timeout != -1 ? &timeout_wait : nullptr);
 
     if (XFAILED(result)) {
