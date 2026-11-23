@@ -606,69 +606,88 @@ X_RESULT XSession::LeaveSession(XGI_SESSION_MANAGE* data) {
 X_RESULT XSession::ModifySession(XGI_SESSION_MODIFY* data) {
   XELOGI("Modifying session {:016X}", session_id_);
 
-  XGI_SESSION_MODIFY modify = *data;
-
   const uint32_t flags = data->flags;
+  const uint32_t old_flags = local_details_.Flags;
 
-  // Mutually exclusive
-  if (flags & JOIN_VIA_PRESENCE_DISABLED &&
-      flags & JOIN_VIA_PRESENCE_FRIENDS_ONLY) {
-    return X_ERROR_INVALID_PARAMETER;
-  }
-
-  constexpr uint32_t modifiable =
-      ARBITRATION | INVITES_DISABLED | JOIN_VIA_PRESENCE_DISABLED |
+  constexpr uint32_t modifiers_mask =
+      INVITES_DISABLED | JOIN_VIA_PRESENCE_DISABLED |
       JOIN_IN_PROGRESS_DISABLED | JOIN_VIA_PRESENCE_FRIENDS_ONLY;
-  if ((flags ^ local_details_.Flags) & ~modifiable) {
+
+  // Only the modifiers and arbitration can be changed.
+  if ((flags ^ old_flags) & ~(modifiers_mask | ARBITRATION)) {
     return X_ONLINE_E_SESSION_INVALID_FLAGS;
   }
 
-  uint32_t modifiers = flags & modifiable;
-
-  // If RegisterArbitration is already completed then arbitration flag cannot be
-  // removed.
-  bool is_arbitration_registered =
-      static_cast<uint32_t>(local_details_.eState.get()) &
-      static_cast<uint32_t>(XSESSION_STATE::REGISTRATION);
-
-  // If session is ranked then modify cannot remove arbitration flag, otherwise
-  // standard/unranked sessions can modify this flag before RegisterArbitration.
-  if (!(modifiers & ARBITRATION) &&
-      (!local_details_.GameType || is_arbitration_registered)) {
-    modifiers |= ARBITRATION;
+  if (IsDeleted()) {
+    return X_ONLINE_E_SESSION_WRONG_STATE;
   }
 
-  local_details_.Flags &= ~modifiable;
-  local_details_.Flags |= modifiers;
+  X_RESULT result = X_ERROR_SUCCESS;
+  bool changed = false;
 
-  modify.flags = local_details_.Flags;
+  if (local_details_.GameType == X_CONTEXT_GAME_TYPE_RANKED) {
+    // Ranked sessions cannot change any flags.
+    if (flags != old_flags) {
+      result = X_ONLINE_E_SESSION_INVALID_FLAGS;
+    }
+  } else {
+    uint32_t changed_flags = flags ^ old_flags;
+
+    // Arbitration can only be changed in the lobby.
+    if (local_details_.eState.get() == XSESSION_STATE::LOBBY) {
+      changed_flags &= ~ARBITRATION;
+    }
+
+    if (changed_flags & ~modifiers_mask) {
+      result = X_ONLINE_E_SESSION_INVALID_FLAGS;
+    } else if (flags != old_flags) {
+      local_details_.Flags = flags;
+      changed = true;
+    }
+  }
+
+  if (XSUCCEEDED(result)) {
+    const uint32_t used_private_slots =
+        std::max<int32_t>(0, local_details_.MaxPrivateSlots -
+                                 local_details_.AvailablePrivateSlots);
+    const uint32_t used_public_slots = std::max<int32_t>(
+        0, local_details_.MaxPublicSlots - local_details_.AvailablePublicSlots);
+
+    // Flags stay modified when the slots are rejected.
+    if (data->maxPrivateSlots < used_private_slots ||
+        data->maxPublicSlots < used_public_slots) {
+      result = X_ONLINE_E_SESSION_FULL;
+    } else if (local_details_.MaxPrivateSlots != data->maxPrivateSlots ||
+               local_details_.MaxPublicSlots != data->maxPublicSlots) {
+      local_details_.MaxPrivateSlots = data->maxPrivateSlots;
+      local_details_.MaxPublicSlots = data->maxPublicSlots;
+
+      local_details_.AvailablePrivateSlots =
+          data->maxPrivateSlots - used_private_slots;
+      local_details_.AvailablePublicSlots =
+          data->maxPublicSlots - used_public_slots;
+
+      changed = true;
+    }
+  }
+
+  if (!changed) {
+    return result;
+  }
 
   PrintSessionType(static_cast<SessionFlags>(local_details_.Flags.get()));
-
-  const uint32_t num_private_slots = std::max<int32_t>(
-      0, local_details_.MaxPrivateSlots - local_details_.AvailablePrivateSlots);
-
-  const uint32_t num_public_slots = std::max<int32_t>(
-      0, local_details_.MaxPublicSlots - local_details_.AvailablePublicSlots);
-
-  data->maxPrivateSlots = std::max<int32_t>(0, data->maxPrivateSlots);
-  data->maxPublicSlots = std::max<int32_t>(0, data->maxPublicSlots);
-
-  local_details_.MaxPrivateSlots = data->maxPrivateSlots;
-  local_details_.MaxPublicSlots = data->maxPublicSlots;
-
-  local_details_.AvailablePrivateSlots =
-      std::max<int32_t>(0, local_details_.MaxPrivateSlots - num_private_slots);
-  local_details_.AvailablePublicSlots =
-      std::max<int32_t>(0, local_details_.MaxPublicSlots - num_public_slots);
-
   PrintSessionDetails();
 
   if (IsHost() && IsXboxLiveSession()) {
+    XGI_SESSION_MODIFY modify = *data;
+    modify.flags = local_details_.Flags;
+    modify.maxPrivateSlots = local_details_.MaxPrivateSlots;
+    modify.maxPublicSlots = local_details_.MaxPublicSlots;
+
     kernel_state()->GetXboxLiveAPI()->SessionModify(session_id_, &modify);
   }
 
-  return X_ERROR_SUCCESS;
+  return result;
 }
 
 X_RESULT XSession::GetSessionDetails(XGI_SESSION_DETAILS* data) {
