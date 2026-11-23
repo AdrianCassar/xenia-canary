@@ -330,6 +330,10 @@ class KernelState {
 
   bool CancelOverlapped(uint32_t overlapped_ptr, bool wait);
 
+  // Runs fn on the dispatch thread after the work already queued, keeping it
+  // ordered with later deferred overlapped requests.
+  void QueueDispatch(std::function<void()> fn);
+
   bool Save(ByteStream* stream);
   bool Restore(ByteStream* stream);
 

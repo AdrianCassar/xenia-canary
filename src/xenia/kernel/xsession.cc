@@ -456,8 +456,14 @@ X_RESULT XSession::JoinSession(XGI_SESSION_MANAGE* data) {
   local_details_.ActualMemberCount = GetMembersCount();
   local_details_.ReturnedMemberCount = GetMembersCount();
 
+  // 55530816 fails the join if it is still pending on its next network tick.
+  const uint64_t session_id = session_id_;
+  const auto xbox_live_api = kernel_state()->GetXboxLiveAPI();
+
   if (!members.empty() && IsHost() && IsXboxLiveSession()) {
-    kernel_state()->GetXboxLiveAPI()->SessionJoinRemote(session_id_, members);
+    kernel_state()->QueueDispatch([xbox_live_api, session_id, members]() {
+      xbox_live_api->SessionJoinRemote(session_id, members);
+    });
   } else if (!members.empty() && !IsOfflineSession()) {
     // To improve XNetInAddrToXnAddr stability each members session id
     // must match host. This is a workaround and should be fixed properly.
@@ -467,7 +473,9 @@ X_RESULT XSession::JoinSession(XGI_SESSION_MANAGE* data) {
     const auto keys = std::views::keys(members);
     std::set<uint64_t> xuids{keys.begin(), keys.end()};
 
-    kernel_state()->GetXboxLiveAPI()->SessionPreJoin(session_id_, xuids);
+    kernel_state()->QueueDispatch([xbox_live_api, session_id, xuids]() {
+      xbox_live_api->SessionPreJoin(session_id, xuids);
+    });
   }
 
   // XamUserAddRecentPlayer -> XPresenceSubscribe
@@ -597,7 +605,12 @@ X_RESULT XSession::LeaveSession(XGI_SESSION_MANAGE* data) {
   local_details_.ReturnedMemberCount = GetMembersCount();
 
   if (!xuids.empty() && IsHost() && IsXboxLiveSession()) {
-    kernel_state()->GetXboxLiveAPI()->SessionLeaveRemote(session_id_, xuids);
+    const uint64_t session_id = session_id_;
+    const auto xbox_live_api = kernel_state()->GetXboxLiveAPI();
+
+    kernel_state()->QueueDispatch([xbox_live_api, session_id, xuids]() {
+      xbox_live_api->SessionLeaveRemote(session_id, xuids);
+    });
   }
 
   return X_ERROR_SUCCESS;
@@ -684,7 +697,13 @@ X_RESULT XSession::ModifySession(XGI_SESSION_MODIFY* data) {
     modify.maxPrivateSlots = local_details_.MaxPrivateSlots;
     modify.maxPublicSlots = local_details_.MaxPublicSlots;
 
-    kernel_state()->GetXboxLiveAPI()->SessionModify(session_id_, &modify);
+    const uint64_t session_id = session_id_;
+    const auto xbox_live_api = kernel_state()->GetXboxLiveAPI();
+
+    kernel_state()->QueueDispatch(
+        [xbox_live_api, session_id, modify]() mutable {
+          xbox_live_api->SessionModify(session_id, &modify);
+        });
   }
 
   return result;

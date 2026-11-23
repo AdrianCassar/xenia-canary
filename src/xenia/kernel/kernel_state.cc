@@ -1334,6 +1334,12 @@ void KernelState::CompleteOverlappedDeferredEx(
   dispatch_cond_.notify_all();
 }
 
+void KernelState::QueueDispatch(std::function<void()> fn) {
+  auto global_lock = global_critical_region_.Acquire();
+  dispatch_queue_.push_back(std::move(fn));
+  dispatch_cond_.notify_all();
+}
+
 bool KernelState::CancelOverlapped(uint32_t overlapped_ptr, bool wait) {
   auto global_lock = global_critical_region_.Acquire();
 
