@@ -13,6 +13,7 @@
 #include <string_view>
 
 #include "xenia/base/byte_order.h"
+#include "xenia/base/memory.h"
 #include "xenia/base/string.h"
 #include "xenia/xbox.h"
 
@@ -42,8 +43,8 @@ struct X_XAMACCOUNTINFO {
 
   enum AccountXboxLiveServiceProvider {
     LiveDisabled = 0,
-    ProductionNet = 0x50524F44,
-    PartnerNet = 0x50415254
+    ProductionNet = make_fourcc("PROD"),
+    PartnerNet = make_fourcc("PART")
   };
 
   enum AccountSubscriptionTier {
