@@ -1038,7 +1038,8 @@ response_data XLiveAPI::QoSGet(uint64_t sessionId) {
   return response->RawResponse();
 }
 
-void XLiveAPI::SessionModify(uint64_t sessionId, XGI_SESSION_MODIFY* data) {
+void XLiveAPI::SessionModify(uint64_t sessionId,
+                             const XGI_SESSION_MODIFY& data) {
   std::string endpoint =
       BuildEndpoint(fmt::format("title/{:08X}/sessions/{:016x}/modify",
                                 kernel_state()->title_id(), sessionId));
@@ -1046,9 +1047,9 @@ void XLiveAPI::SessionModify(uint64_t sessionId, XGI_SESSION_MODIFY* data) {
   Document doc;
   doc.SetObject();
 
-  doc.AddMember("flags", data->flags, doc.GetAllocator());
-  doc.AddMember("publicSlotsCount", data->maxPublicSlots, doc.GetAllocator());
-  doc.AddMember("privateSlotsCount", data->maxPrivateSlots, doc.GetAllocator());
+  doc.AddMember("flags", data.flags, doc.GetAllocator());
+  doc.AddMember("publicSlotsCount", data.maxPublicSlots, doc.GetAllocator());
+  doc.AddMember("privateSlotsCount", data.maxPrivateSlots, doc.GetAllocator());
 
   rapidjson::StringBuffer buffer;
   PrettyWriter<rapidjson::StringBuffer> writer(buffer);

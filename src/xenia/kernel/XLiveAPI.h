@@ -133,7 +133,7 @@ class XLiveAPI {
 
   response_data QoSGet(uint64_t sessionId);
 
-  void SessionModify(uint64_t sessionId, XGI_SESSION_MODIFY* data);
+  void SessionModify(uint64_t sessionId, const XGI_SESSION_MODIFY& data);
 
   std::vector<std::unique_ptr<SessionObjectJSON>> GetTitleSessions(
       uint32_t title_id = 0);
