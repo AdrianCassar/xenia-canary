@@ -509,7 +509,7 @@ dword_result_t NetDll_WSAWaitForMultipleEvents_entry(dword_t num_events,
 
   while (true) {
     result = xboxkrnl::xeNtWaitForMultipleObjectsEx(
-        num_events, events, wait_type, 1, alertable,
+        num_events, events, wait_type, X_KPROCESSOR_MODE::UserMode, alertable,
         timeout != -1 ? &timeout_wait : nullptr);
 
     if (XFAILED(result)) {
