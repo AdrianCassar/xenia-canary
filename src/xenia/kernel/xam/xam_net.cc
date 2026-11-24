@@ -497,20 +497,20 @@ dword_result_t NetDll_WSAWaitForMultipleEvents_entry(dword_t num_events,
     }
   }
 
-  uint64_t timeout_wait = 0;
   const uint32_t wait_type =
       wait_all ? X_KWAIT_REASON::WaitAll : X_KWAIT_REASON::WaitAny;
 
-  if (timeout != -1) {
-    timeout_wait = -10000LL * static_cast<uint64_t>(timeout);
-  }
+  const auto timeout_ticks = XObject::MsToTimeoutTicks(timeout);
+  uint64_t timeout_wait =
+      timeout_ticks ? static_cast<uint64_t>(*timeout_ticks) : 0;
+  uint64_t* timeout_ptr = timeout_ticks ? &timeout_wait : nullptr;
 
   X_STATUS result = 0;
 
   while (true) {
     result = xboxkrnl::xeNtWaitForMultipleObjectsEx(
         num_events, events, wait_type, X_KPROCESSOR_MODE::UserMode, alertable,
-        timeout != -1 ? &timeout_wait : nullptr);
+        timeout_ptr);
 
     if (XFAILED(result)) {
       uint32_t error = xboxkrnl::xeRtlNtStatusToDosError(result);
